@@ -1,0 +1,38 @@
+# Bot 能力标定（设计文档 §6.2）。
+# 切 profile 不改代码：业务层 read 这个文件。
+
+profile: default
+
+actions:
+  apm_cap: 120
+  reaction_latency_ms: 300
+
+build_discipline:
+  supply_tolerance: 2
+  worker_cap_per_base: 22
+  supply_block_recovery_s: 5
+
+micro:
+  focus_fire: enabled
+  stutter_step: enabled
+  blink_retreat: enabled
+  blink_harass: disabled
+  immortal_barrier: enabled
+
+  # 默认 OFF，留给玩家手动下指令
+  force_field: disabled
+  psi_storm: defensive_only_min_4
+  phoenix_lift: disabled
+  disruptor_nova: disabled
+  feedback: enabled_low_priority
+
+strategy_default:
+  initial_opening: 1g_robo_immortal
+  default_midgame: iac_2base
+  default_lategame: skytoss
+  attack_decision: defer_to_player
+
+scouting:
+  initial_probe_scout: enabled
+  observer_at_main_choke: enabled
+  recurring_air_scout: disabled

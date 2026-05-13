@@ -1,0 +1,46 @@
+kind: opening_build
+id: 1g_robo_immortal
+display_name_zh: "1门Robo 不朽开"
+aliases: ["1门Robo", "速不朽", "1G Robo", "1门机械"]
+matchup: [PvT, PvZ, PvP]
+
+phases:
+  - id: opening
+    display: "开局"
+    subtitle: "13 农 BG"
+  - id: tech
+    display: "上折跃"
+    subtitle: "WG 研究"
+  - id: rallying
+    display: "集结追猎"
+    subtitle: "14 追猎"
+  - id: executing
+    display: "出发压制"
+    subtitle: "6:00 出门"
+
+steps:
+  - "13 build Pylon"
+  - "14 build Gateway"
+  - "14 build Assimilator"
+  - "16 build Pylon"
+  - "17 build CyberneticsCore"
+  - "20 build Nexus"
+  - "21 build Assimilator"
+  - "22 research WarpGateResearch @chrono"
+  - "24 build RoboticsFacility"
+  - "32 train Observer"
+  - "34 train Immortal"
+
+scout_at: "17 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.units.phoenix.count >= 2"
+    then: "transition:1g_stargate"
+  - sees: "enemy.units.zergling.count >= 8 AND game.time < '3:00'"
+    then: "transition:4_gateway_pressure"
+
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+  - midgame_id: iac_2base
+    when: "enemy.has_mech_units"

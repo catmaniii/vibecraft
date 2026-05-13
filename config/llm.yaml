@@ -1,0 +1,13 @@
+# LLM provider 配置（设计文档 §7.4）
+#
+# API key 放 .env / 环境变量，不要 commit。
+
+provider: anthropic
+model: claude-sonnet-4-6
+fallback_provider: null   # M0 不接 fallback；M1+ 可设 openai
+fallback_model: null
+timeout_s: 3.0
+max_retries: 1
+confidence_threshold: 0.6
+max_directives_per_call: 10
+use_prompt_cache: true

@@ -1,0 +1,43 @@
+kind: midgame_stance
+id: iac_2base
+display_name_zh: "双矿 IAC 重装地面"
+aliases: ["叉光", "IAC", "重装地面", "叉光不朽推"]
+
+enter_when:
+  - "self.tech.warpgate.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [1g_robo_immortal, 4_gateway_pressure]"
+
+commitments:
+  units:
+    stalker: 8
+    sentry: 4
+    immortal: 3
+    archon: 3
+    zealot: 8
+  tech: [WarpGateResearch, Charge, ProtossGroundWeapons]
+  structures:
+    gateway: 6
+    robo: 2
+    twilight: 1
+    templar_archives: 1
+  expansions: 2
+
+attack_window:
+  open_at: "9:30"
+  close_at: "11:30"
+  target_priority: [army, third_base, production]
+
+micro_doctrine:
+  - "archon focus_fire bio_clumps"
+  - "immortal target high_hp_armored"
+  - "if has_sentry_energy: forcefield split_enemy_army"
+
+expire_action:
+  - "transition: skytoss"
+
+lategame_transitions:
+  - lategame_id: skytoss
+    when: "default"
+  - lategame_id: skytoss
+    when: "enemy.lategame_composition"

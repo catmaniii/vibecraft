@@ -1,0 +1,412 @@
+"""IntentParser + prompt 拼装 + provider 抽象的单测。
+
+策略：用 MockLLMProvider 注入响应，所有路径 mock —— 不调真实 API。
+
+覆盖：
+- 正常路径：strategy_set / production_override / 复合句多 directive
+- 错误路径：timeout / provider exception / 无效 JSON shape / unknown_strategy / directive invalid
+- AmbiguousParse：confidence < 阈值
+- prompt 拼装：system / catalog / few_shot / dynamic_context 包含关键内容
+"""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from voicecraft.directives.models import (
+    EngagementConstraintPayload,
+    ProductionOverridePayload,
+    StrategySetPayload,
+)
+from voicecraft.directives.types import DirectiveType, StageKind
+from voicecraft.llm import (
+    AmbiguousParse,
+    IntentParser,
+    IntentParseResult,
+    MockLLMProvider,
+    ParseContext,
+    ParseError,
+    ParseErrorKind,
+    ParserConfig,
+    ProviderResponse,
+    build_dynamic_context,
+    build_few_shot,
+    build_strategy_catalog,
+    build_system_prompt,
+)
+from voicecraft.strategy import StrategyLibrary
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(scope="module")
+def library() -> StrategyLibrary:
+    return StrategyLibrary.from_directories(
+        strategies_dir=PROJECT_ROOT / "strategies",
+        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+    )
+
+
+@pytest.fixture
+def default_ctx() -> ParseContext:
+    return ParseContext(
+        game_time=245.0,
+        current_stage=StageKind.OPENING,
+        active_strategies={
+            StageKind.OPENING: "1g_robo_immortal",
+            StageKind.MIDGAME: None,
+            StageKind.LATEGAME: None,
+        },
+        minerals=600,
+        gas=200,
+        supply_used=28,
+        supply_cap=30,
+        expansion_count=2,
+        army_summary={"Stalker": 8, "Sentry": 3},
+        recent_commands=["13 探机出门侦察"],
+    )
+
+
+# =========================================================================
+# Prompt 拼装
+# =========================================================================
+
+
+class TestPromptBuilders:
+    def test_system_prompt_includes_aliases(self, library: StrategyLibrary) -> None:
+        sp = build_system_prompt(library.aliases)
+        assert "BG" in sp  # 至少一个 building hotkey
+        assert "VR" in sp  # ambiguous case
+        assert "verb 消歧" in sp
+
+    def test_strategy_catalog_lists_all_ids(self, library: StrategyLibrary) -> None:
+        cat = build_strategy_catalog(library)
+        assert "1g_robo_immortal" in cat
+        assert "iac_2base" in cat
+        assert "skytoss" in cat
+        assert "opening_build" in cat
+        assert "midgame_stance" in cat
+        assert "lategame_doctrine" in cat
+
+    def test_few_shot_has_examples(self) -> None:
+        fs = build_few_shot()
+        assert "strategy_set" in fs
+        assert "production_override" in fs
+        assert "unit_claim" in fs
+
+    def test_dynamic_context_includes_game_time(self, default_ctx: ParseContext) -> None:
+        d = build_dynamic_context(default_ctx)
+        assert "4:05" in d  # 245.0 秒 = 4:05
+        assert "晶矿 600" in d
+        assert "1g_robo_immortal" in d
+        assert "Stalker:8" in d
+
+
+# =========================================================================
+# IntentParser 正常路径
+# =========================================================================
+
+
+def _provider_response_for(raw: dict, latency_ms: float = 50.0) -> ProviderResponse:
+    return ProviderResponse(
+        raw=raw,
+        input_tokens=4000,
+        output_tokens=80,
+        cache_hit=True,
+        latency_ms=latency_ms,
+        model="mock-model",
+        provider="mock",
+    )
+
+
+class TestIntentParserHappyPath:
+    @pytest.mark.asyncio
+    async def test_strategy_set(self, library: StrategyLibrary, default_ctx: ParseContext) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切换到双矿 IAC 重装地面",
+                        "confidence": 0.95,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "midgame",
+                                    "strategy_id": "iac_2base",
+                                },
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("切到 IAC", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        assert outcome.confidence == 0.95
+        assert len(outcome.directives) == 1
+        assert outcome.directives[0].type == DirectiveType.STRATEGY_SET
+        payload = outcome.directives[0].payload
+        assert isinstance(payload, StrategySetPayload)
+        assert payload.strategy_id == "iac_2base"
+        # source_text 应被填回原话
+        assert outcome.directives[0].source_text == "切到 IAC"
+
+    @pytest.mark.asyncio
+    async def test_compound_command_multiple_directives(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切剧本 + 守家",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "midgame",
+                                    "strategy_id": "iac_2base",
+                                },
+                            },
+                            {
+                                "type": "engagement_constraint",
+                                "payload": {"stance": "defend"},
+                            },
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("切到 IAC，然后守家", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        assert len(outcome.directives) == 2
+        assert isinstance(outcome.directives[0].payload, StrategySetPayload)
+        assert isinstance(outcome.directives[1].payload, EngagementConstraintPayload)
+        assert outcome.directives[1].payload.stance == "defend"
+
+    @pytest.mark.asyncio
+    async def test_production_override_with_priority(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "下个 BG 出俩哨兵",
+                        "confidence": 0.85,
+                        "directives": [
+                            {
+                                "type": "production_override",
+                                "payload": {"unit_type": "Sentry", "count": 2},
+                                "priority": 70,
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("下个 BG 出俩哨兵", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        d = outcome.directives[0]
+        assert d.priority == 70
+        assert isinstance(d.payload, ProductionOverridePayload)
+        assert d.payload.unit_type == "Sentry"
+        assert d.payload.count == 2
+
+
+# =========================================================================
+# IntentParser 错误路径
+# =========================================================================
+
+
+class TestIntentParserErrors:
+    @pytest.mark.asyncio
+    async def test_timeout(self, library: StrategyLibrary, default_ctx: ParseContext) -> None:
+        async def slow_handler(**_kwargs: object) -> ProviderResponse:
+            await asyncio.sleep(5.0)
+            return _provider_response_for({})
+
+        provider = MockLLMProvider(handler=slow_handler)
+        parser = IntentParser(provider, library, config=ParserConfig(timeout_s=0.05))
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_provider_exception_wrapped(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        def fail_handler(**_kwargs: object) -> ProviderResponse:
+            raise RuntimeError("API down")
+
+        provider = MockLLMProvider(handler=fail_handler)
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.PROVIDER_ERROR
+        assert "API down" in outcome.message
+
+    @pytest.mark.asyncio
+    async def test_missing_required_fields(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(scripted=[_provider_response_for({"directives": []})])
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.SCHEMA_MISMATCH
+
+    @pytest.mark.asyncio
+    async def test_unknown_strategy_id(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切到不存在的剧本",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "midgame",
+                                    "strategy_id": "iac_2bass",  # typo
+                                },
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("切到 IAC", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.UNKNOWN_STRATEGY
+        # 应有 fuzzy 候选
+        assert "iac_2base" in outcome.candidates
+
+    @pytest.mark.asyncio
+    async def test_invalid_directive_payload(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "...",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "production_override",
+                                "payload": {"foo": "bar"},  # 缺 unit_type
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.DIRECTIVE_INVALID
+
+    @pytest.mark.asyncio
+    async def test_too_many_directives(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "...",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "production_override",
+                                "payload": {"unit_type": "Stalker"},
+                            }
+                        ]
+                        * 20,
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library, config=ParserConfig(max_directives_per_call=10))
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.SCHEMA_MISMATCH
+
+
+# =========================================================================
+# Ambiguous
+# =========================================================================
+
+
+class TestAmbiguous:
+    @pytest.mark.asyncio
+    async def test_low_confidence_becomes_ambiguous(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "不确定",
+                        "confidence": 0.4,
+                        "directives": [
+                            {
+                                "type": "production_override",
+                                "payload": {"unit_type": "Stalker", "count": 1},
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library, config=ParserConfig(confidence_threshold=0.6))
+        outcome = await parser.parse("...", default_ctx)
+        assert isinstance(outcome, AmbiguousParse)
+        assert outcome.result.confidence == 0.4
+
+
+# =========================================================================
+# Logging integration
+# =========================================================================
+
+
+class TestParserLogging:
+    @pytest.mark.asyncio
+    async def test_logs_llm_call_to_session(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        from voicecraft.logging_ import GameSession, GameSessionConfig
+
+        session = GameSession(GameSessionConfig(use_null_sinks=True))
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "ok",
+                        "confidence": 0.9,
+                        "directives": [],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library, session=session)
+        await parser.parse("test", default_ctx)
+        # 即使 null sink，counter 也应该 +1
+        assert parser.session is session
+        # 重新跑应 +2：直接通过 session 计数
+        seq = session.log_llm_call({})  # 加一条
+        assert seq >= 2
+        session.close()
