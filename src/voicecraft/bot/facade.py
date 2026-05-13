@@ -20,9 +20,13 @@ from typing import Protocol
 
 
 class UnitRole(str, Enum):
-    """ares-sc2 unit role 枚举的子集。
+    """voicecraft 内部的 unit role；运行时由 `ares_adapter` 映射到真实
+    `ares.consts.UnitRole` 成员。
 
-    `LLM_CONTROLLED` 是 voicecraft 的核心定制：base bot 默认 skip 该 role 单位。
+    **重要**：ares 的 UnitRole 是固定 StrEnum，无法动态加成员。
+    `LLM_CONTROLLED` 实际映射到 ares 的 `CONTROL_GROUP_ONE`（ares
+    自身注释："use for anything not specified"，且无任何 ares Manager
+    内部使用它）—— 这就是设计文档 §3.4 假设的 role 排除机制的载体。
     """
 
     LLM_CONTROLLED = "LLM_CONTROLLED"

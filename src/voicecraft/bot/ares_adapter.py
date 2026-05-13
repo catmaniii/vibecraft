@@ -43,10 +43,23 @@ def make_bot_class(director_factory: Any) -> type:
     """
     try:
         from ares import AresBot
+        from ares.consts import UnitRole as AresUnitRole
     except ImportError as e:
         raise ImportError(
             '未装 ares-sc2。`uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`'
         ) from e
+
+    # 把 voicecraft 的 UnitRole 映射到 ares 真实成员。
+    # LLM_CONTROLLED → CONTROL_GROUP_ONE：ares 留给用户的空槽，
+    # ares 源码里没有任何 Manager 使用它，正是 §3.4 想要的"排除单元"载体。
+    role_map = {
+        UnitRole.LLM_CONTROLLED: AresUnitRole.CONTROL_GROUP_ONE,
+        UnitRole.IDLE: AresUnitRole.IDLE,
+        UnitRole.ARMY: AresUnitRole.ATTACKING,
+        UnitRole.DEFENDER: AresUnitRole.DEFENDING,
+        UnitRole.HARASSER: AresUnitRole.HARASSING,
+        UnitRole.SCOUT: AresUnitRole.SCOUTING,
+    }
 
     class _AresFacade:
         """Sc2Facade 的 ares 实现。"""
@@ -76,8 +89,8 @@ def make_bot_class(director_factory: Any) -> type:
             pass
 
         def set_unit_role(self, unit_tag: int, role: UnitRole) -> None:
-            # ares unit role API：bot.mediator.assign_role(tag, role)
-            self.bot.mediator.assign_role(tag=unit_tag, role=role.value)
+            ares_role = role_map[role]
+            self.bot.mediator.assign_role(tag=unit_tag, role=ares_role)
 
         def execute_unit_action(
             self,

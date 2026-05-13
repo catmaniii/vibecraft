@@ -1,20 +1,23 @@
-"""M0 端到端 smoke：验证 ares Manager 是否真的 respect LLM_CONTROLLED role。
+"""M0 端到端 smoke：验证 ares Manager 是否真的 respect 一个用户定义的 role。
 
 设计文档 §3.4 / §12.1 M0 出口标准：
 - 在真实 SC2 客户端里启 bot
-- bot 把若干探机置入 LLM_CONTROLLED role
-- 持续记录这些探机的 role / 行动指令
-- 验收：30 秒内 base bot 的 ArmyManager / OffensiveManager / DefensiveManager
-  / ProductionManager 都不主动改它们的 role，也不下达行动指令
-- demo 看点："不动的叉子"
+- bot 把若干探机置入"voicecraft 自己用的 role"（实际映射到 ares 的
+  `UnitRole.CONTROL_GROUP_ONE`：ares 留给用户的空槽，无 Manager 内部引用它）
+- 监测窗口期内每秒采样：
+  * `mediator.get_units_from_role(role=CONTROL_GROUP_ONE, unit_type=PROBE)`
+    应一直包含我们置入的所有 tag
+  * 每个探机的 `orders` 应一直为空（没被 base bot 下令去做事）
+  * 探机的 position 几乎不变
+- 验收：30+ 秒内零异常 → "不动的叉子"，role 排除机制成立
 
 本脚本仅在装了 ares-sc2 + 真实 SC2 客户端的 Windows 环境跑。
 依赖安装：见 `docs/m0-smoke-runbook.md`。
 
-使用：
-    uv run python scripts/smoke_test.py \
-        --map "Goldenaura LE" \
-        --opponent-difficulty Easy \
+用法：
+    uv run python scripts/smoke_test.py \\
+        --map "Goldenaura LE" \\
+        --opponent-difficulty Easy \\
         --observation-seconds 60
 
 输出落到 `logs/<game_id>/smoke_report.json` + `events.jsonl`。
@@ -29,7 +32,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from voicecraft.bot.facade import UnitRole
 from voicecraft.logging_ import (
     Event,
     EventKind,
@@ -45,7 +47,7 @@ from voicecraft.logging_ import (
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="VoiceCraft M0 smoke test")
-    p.add_argument("--map", default="Goldenaura LE", help="SC2 地图名")
+    p.add_argument("--map", default="Goldenaura LE", help="SC2 地图名（地图文件名去掉 .SC2Map）")
     p.add_argument(
         "--opponent-difficulty",
         default="Easy",
@@ -66,7 +68,7 @@ def parse_args() -> argparse.Namespace:
         "--llm-controlled-probes",
         type=int,
         default=2,
-        help="开局后 5 秒置入 LLM_CONTROLLED 的探机数量",
+        help="开局后 5 秒置入受控 role 的探机数量",
     )
     p.add_argument(
         "--report-path",
@@ -88,19 +90,25 @@ def build_bot_class(
 ) -> type:
     """工厂：在 import ares 之后构造 bot 类。"""
     try:
-        from ares import AresBot  # type: ignore[import-untyped]
+        from ares import AresBot
+        from ares.consts import UnitRole as AresUnitRole
+        from sc2.ids.unit_typeid import UnitTypeId
     except ImportError as e:
         print(
-            "[smoke] 未安装 ares-sc2。请先：\n"
+            "[smoke] 未安装 ares-sc2 / burnysc2。请先：\n"
             '  uv pip install "git+https://github.com/AresSC2/ares-sc2@main"',
             file=sys.stderr,
         )
         raise SystemExit(1) from e
 
-    class SmokeBot(AresBot):  # type: ignore[misc,valid-type]
+    # 这就是我们的"LLM_CONTROLLED" 在 ares 里的真实身份。
+    LLM_ROLE = AresUnitRole.CONTROL_GROUP_ONE
+
+    class SmokeBot(AresBot):  # type: ignore[misc]
         def __init__(self) -> None:
             super().__init__()
             self.protected_tags: set[int] = set()
+            self.initial_positions: dict[int, tuple[float, float]] = {}
             self.snapshots: list[dict[str, Any]] = []
             self.anomalies: list[dict[str, Any]] = []
             self.started_observation_at: float | None = None
@@ -112,7 +120,7 @@ def build_bot_class(
                 Event(
                     ts=float(self.time),
                     kind=EventKind.STRATEGY_SET,
-                    payload={"smoke_started": True},
+                    payload={"smoke_started": True, "ares_role": LLM_ROLE.value},
                 )
             )
 
@@ -120,7 +128,7 @@ def build_bot_class(
             await super().on_step(iteration)
             now = float(self.time)
 
-            # 5 秒后挑 N 个探机入 LLM_CONTROLLED
+            # 5 秒后挑 N 个探机入受控 role
             if self.started_observation_at is None and now >= 5.0:
                 self._enroll_probes(llm_controlled_count, now)
                 self.started_observation_at = now
@@ -129,7 +137,7 @@ def build_bot_class(
             if (
                 self.started_observation_at is not None
                 and not self.ended
-                and iteration % 22 == 0  # ~1s @ 22 ticks/s
+                and iteration % 22 == 0  # ~1s @ 22.4 ticks/s
             ):
                 self._snapshot(now)
 
@@ -140,25 +148,24 @@ def build_bot_class(
                 and now - self.started_observation_at >= observation_seconds
             ):
                 self._finalize(now)
-                # 用 leave 退出（python-sc2 提供）
                 await self.client.leave()
 
         # ------------------------------------------------------------------
 
         def _enroll_probes(self, count: int, now: float) -> None:
-            workers = list(self.workers)  # type: ignore[attr-defined]
+            workers = list(self.workers)
             chosen = workers[:count]
             for w in chosen:
-                self.protected_tags.add(int(w.tag))
+                tag = int(w.tag)
+                self.protected_tags.add(tag)
+                self.initial_positions[tag] = (float(w.position.x), float(w.position.y))
                 try:
-                    self.mediator.assign_role(  # type: ignore[attr-defined]
-                        tag=int(w.tag), role=UnitRole.LLM_CONTROLLED.value
-                    )
+                    self.mediator.assign_role(tag=tag, role=LLM_ROLE)
                 except Exception as e:
                     self.anomalies.append(
                         {
                             "ts": now,
-                            "tag": int(w.tag),
+                            "tag": tag,
                             "kind": "assign_role_failed",
                             "detail": f"{type(e).__name__}: {e}",
                         }
@@ -169,54 +176,67 @@ def build_bot_class(
                     ts=now,
                     kind=EventKind.UNIT_ROLE_CHANGED,
                     payload={
-                        "tags": [int(w.tag) for w in chosen],
-                        "to_role": "LLM_CONTROLLED",
+                        "tags": sorted(self.protected_tags),
+                        "to_role": LLM_ROLE.value,
                     },
                 )
             )
+            print(
+                f"[smoke] t={now:.1f}s: enrolled {len(chosen)} probes into "
+                f"{LLM_ROLE.value} role: {sorted(self.protected_tags)}"
+            )
 
         def _snapshot(self, now: float) -> None:
+            # 反查：现在 role 池里有哪些 tag
+            controlled = self.mediator.get_units_from_role(
+                role=LLM_ROLE, unit_type=UnitTypeId.PROBE
+            )
+            controlled_tags = {int(u.tag) for u in controlled}
+
             snapshot: dict[str, Any] = {"ts": now, "probes": []}
-            for tag in list(self.protected_tags):
-                unit = self.units.find_by_tag(tag)  # type: ignore[attr-defined]
+            for tag in sorted(self.protected_tags):
+                unit = self.units.find_by_tag(tag)
+                still_in_role = tag in controlled_tags
+
                 if unit is None:
-                    snapshot["probes"].append({"tag": tag, "alive": False})
+                    snapshot["probes"].append({"tag": tag, "alive": False, "in_role": False})
                     self.anomalies.append({"ts": now, "tag": tag, "kind": "probe_died"})
                     continue
 
-                # 当前 role
-                try:
-                    current_role = self.mediator.get_unit_role(tag=tag)  # type: ignore[attr-defined]
-                except Exception:
-                    current_role = "?"
-
-                # 当前是否有 active orders
                 orders = [
                     {"ability": str(o.ability.id), "target": str(o.target)}
                     for o in getattr(unit, "orders", [])
                 ]
+                pos = (float(unit.position.x), float(unit.position.y))
+                initial = self.initial_positions.get(tag, pos)
+                dx = pos[0] - initial[0]
+                dy = pos[1] - initial[1]
+                drift = (dx * dx + dy * dy) ** 0.5
+
                 snapshot["probes"].append(
                     {
                         "tag": tag,
                         "alive": True,
-                        "role": str(current_role),
-                        "position": [unit.position.x, unit.position.y],
+                        "in_role": still_in_role,
+                        "position": pos,
+                        "drift_from_initial": round(drift, 3),
                         "order_count": len(orders),
                         "orders": orders,
                     }
                 )
 
-                # 异常：role 不再是 LLM_CONTROLLED
-                if str(current_role) != UnitRole.LLM_CONTROLLED.value:
+                if not still_in_role:
                     self.anomalies.append(
                         {
                             "ts": now,
                             "tag": tag,
                             "kind": "role_changed_away",
-                            "detail": f"role 变为 {current_role!r}",
+                            "detail": (
+                                f"tag {tag} 不再属于 {LLM_ROLE.value}；"
+                                f"被 base bot 抢回了"
+                            ),
                         }
                     )
-                # 异常：base bot 给了 orders
                 if orders:
                     self.anomalies.append(
                         {
@@ -224,6 +244,15 @@ def build_bot_class(
                             "tag": tag,
                             "kind": "received_orders",
                             "detail": orders,
+                        }
+                    )
+                if drift > 3.0:
+                    self.anomalies.append(
+                        {
+                            "ts": now,
+                            "tag": tag,
+                            "kind": "moved_significantly",
+                            "detail": f"距初始 {drift:.2f}",
                         }
                     )
 
@@ -243,6 +272,10 @@ def build_bot_class(
                     },
                 )
             )
+            print(
+                f"[smoke] t={now:.1f}s: finalize verdict={verdict} "
+                f"anomalies={len(self.anomalies)}"
+            )
 
     return SmokeBot
 
@@ -256,9 +289,9 @@ def main() -> int:
     args = parse_args()
 
     try:
-        from sc2.data import Difficulty, Race  # type: ignore[import-untyped]
-        from sc2.main import run_game  # type: ignore[import-untyped]
-        from sc2.player import Bot, Computer  # type: ignore[import-untyped]
+        from sc2.data import Difficulty, Race
+        from sc2.main import run_game
+        from sc2.player import Bot, Computer
     except ImportError:
         print(
             "[smoke] 未装 burnysc2 / python-sc2。请先：\n"
@@ -269,6 +302,11 @@ def main() -> int:
 
     session = GameSession(GameSessionConfig())
     print(f"[smoke] 日志目录：{session.dir}")
+    print(f"[smoke] 地图：{args.map}  对手：{args.opponent_race} {args.opponent_difficulty}")
+    print(
+        f"[smoke] 受控探机 {args.llm_controlled_probes} 个，"
+        f"观察窗口 {args.observation_seconds}s"
+    )
 
     SmokeBot = build_bot_class(
         session=session,
@@ -276,8 +314,8 @@ def main() -> int:
         observation_seconds=args.observation_seconds,
     )
 
+    bot = SmokeBot()
     try:
-        bot = SmokeBot()
         run_game(
             args.map,
             [
@@ -300,17 +338,20 @@ def main() -> int:
         return 2
 
     # 落 report
-    report_path = Path(args.report_path) if args.report_path else session.dir / "smoke_report.json"
+    report_path = (
+        Path(args.report_path) if args.report_path else session.dir / "smoke_report.json"
+    )
     report = {
         "verdict": "pass" if not bot.anomalies else "fail",
         "anomaly_count": len(bot.anomalies),
         "anomalies": bot.anomalies,
-        "snapshots": bot.snapshots,
         "anomalies_by_kind": _count_by(bot.anomalies, key="kind"),
+        "snapshots": bot.snapshots,
         "observation_seconds": args.observation_seconds,
         "llm_controlled_probes": args.llm_controlled_probes,
         "map": args.map,
         "opponent": f"{args.opponent_race} {args.opponent_difficulty}",
+        "ares_role_used": "CONTROL_GROUP_ONE",
     }
     report_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
@@ -318,7 +359,9 @@ def main() -> int:
     )
     session.close()
 
-    print(f"[smoke] verdict: {report['verdict']}  anomalies: {report['anomaly_count']}")
+    print(f"\n[smoke] verdict: {report['verdict']}  anomalies: {report['anomaly_count']}")
+    if report["anomalies_by_kind"]:
+        print(f"[smoke] 异常分布：{report['anomalies_by_kind']}")
     print(f"[smoke] 报告：{report_path}")
     print(f"[smoke] 事件流：{session.dir / LogStream.EVENTS.value}.jsonl")
     return 0 if report["verdict"] == "pass" else 3

@@ -19,6 +19,15 @@ VoiceCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-voicecr
 
 ## [Unreleased]
 
+### 修正 (Fixed)
+
+- **`LLM_CONTROLLED` 映射到 ares 的 `CONTROL_GROUP_ONE`**：ares 的 `UnitRole`
+  是固定 StrEnum 无法动态加成员；先前假设可以直接传字符串 `"LLM_CONTROLLED"`
+  会立即挂。`ares_adapter` 现内置 voicecraft UnitRole → ares UnitRole 映射表。
+- **`scripts/smoke_test.py` 用真实 ares API**：`mediator.assign_role(tag=, role=)`
+  + `mediator.get_units_from_role(role=, unit_type=)`（按 role 反查池），且 role
+  传 ares 真实 enum 而非字符串。
+
 待 M0c 端到端 smoke 通过后释放 `0.1.0a2`。
 
 ---

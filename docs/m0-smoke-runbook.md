@@ -1,9 +1,16 @@
 # M0 Smoke Test 运行手册
 
 **目的**：在真实 SC2 + ares-sc2 环境里，验证一个核心假设——
-**当我们把若干探机置入 `LLM_CONTROLLED` role 后，ares 的所有 Manager（ArmyManager / OffensiveManager / DefensiveManager / ProductionManager）都会跳过这些单位，既不改它们的 role，也不下达行动指令**。
+**当我们把若干探机置入一个 "voicecraft 自用 role" 后，ares 的所有 Manager 都会跳过这些单位，既不改它们的 role，也不下达行动指令**。
 
-设计文档 §3.4 把这个假设列为 M0 的"唯一存疑点"。本测试通过了，整个 ares hook C 方案才成立；不通过则需要回退到 Manager wrap 或继承子类的方案。
+实现细节：ares 的 `UnitRole` 是固定 StrEnum（无法动态加成员），所以我们把
+"LLM_CONTROLLED" 实际**映射到 ares 的 `UnitRole.CONTROL_GROUP_ONE`**——这是
+ares 源码注释里明确"留给用户的空槽"（`# control groups, use for anything not
+specified`），且 ares 源码 grep 验证过：**没有任何 Manager 内部引用它**。
+ares 官方教程 `docs/tutorials/unit_squads_group_behaviors.md` 也是这个用法。
+
+设计文档 §3.4 把这个假设列为 M0 的"唯一存疑点"。本测试通过了，整个 ares hook C
+方案才成立；不通过则需要回退到 Manager wrap 或继承子类的方案。
 
 预期看点：**两个不动的叉子**全程站在初始位置不动，没有去采矿、没有去防守、没有 attack。
 
