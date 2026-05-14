@@ -63,6 +63,10 @@ class LLMConfig(BaseModel):
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     max_directives_per_call: int = Field(default=10, ge=1, le=50)
     use_prompt_cache: bool = Field(default=True, description="是否给静态段打 cache_control")
+    disable_thinking: bool = Field(
+        default=False,
+        description="是否禁用思考模式（DeepSeek v4 默认思考，不兼容 tool_choice 强制）",
+    )
     max_tokens: int = Field(default=1024, ge=64, le=8192)
 
     # ------------------------------------------------------------------ #
@@ -115,4 +119,5 @@ class LLMConfig(BaseModel):
             use_prompt_cache=self.use_prompt_cache,
             base_url=base_url,
             provider_name=self.provider,
+            disable_thinking=self.disable_thinking,
         )

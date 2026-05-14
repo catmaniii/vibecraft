@@ -236,7 +236,7 @@ def _build_bot_class(
     _src_dir = _src_vc_dir.parent  # src/
     _project_root = _src_dir.parent  # 项目根
     strategies_dir = _project_root / "strategies"
-    aliases_path = _project_root / "aliases" / "aliases.yaml"
+    aliases_path = _project_root / "aliases" / "protoss.yaml"
 
     strategy_library: StrategyLibrary
     if strategies_dir.exists() and aliases_path.exists():

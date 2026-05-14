@@ -57,6 +57,7 @@ class AnthropicProvider:
         use_prompt_cache: bool = True,
         base_url: str | None = None,
         provider_name: str = "anthropic",
+        disable_thinking: bool = False,
     ) -> None:
         """
         Args:
@@ -69,6 +70,10 @@ class AnthropicProvider:
                 `https://api.deepseek.com/anthropic`。
             provider_name: provider 标识，写进 ProviderResponse.provider + 日志。
                 走 DeepSeek 兼容端点时传 "deepseek"。
+            disable_thinking: 是否显式禁用思考模式。DeepSeek v4 在 Anthropic
+                兼容端点默认走思考模式（= deepseek-reasoner），思考模式不兼容
+                `tool_choice` 强制指定 tool。IntentParser 是结构化输出任务、
+                不需要推理，DeepSeek 走该端点时应置 True（见 ADR 0005）。
         """
         try:
             from anthropic import AsyncAnthropic
@@ -86,6 +91,7 @@ class AnthropicProvider:
         self.use_prompt_cache = use_prompt_cache
         self.base_url = base_url
         self.name = provider_name
+        self.disable_thinking = disable_thinking
 
     async def parse(
         self,
@@ -147,18 +153,22 @@ class AnthropicProvider:
 
         t0 = time.monotonic()
 
-        # Anthropic SDK 用 TypedDict 约束 system/messages/tools，
-        # 我们用 dict 字面值在结构上等价，但 mypy 重载匹配通不过。
-        # 集中在这里标 ignore，避免 mypy 报错蔓延到其他地方。
-        msg: Message = await self.client.messages.create(  # type: ignore[call-overload]
-            model=self.model,
-            max_tokens=self.max_tokens,
-            system=[system_block],
-            messages=messages,
-            tools=[tool_schema],
-            tool_choice={"type": "tool", "name": tool_schema["name"]},
-            timeout=timeout_s,
-        )
+        # 用 dict 收集 kwargs：system/messages/tools 用 dict 字面值（与 SDK 的
+        # TypedDict 结构等价），**dict[str, Any] 解包让 mypy 跳过 overload 检查。
+        create_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "system": [system_block],
+            "messages": messages,
+            "tools": [tool_schema],
+            "tool_choice": {"type": "tool", "name": tool_schema["name"]},
+            "timeout": timeout_s,
+        }
+        # DeepSeek v4 在 Anthropic 兼容端点默认走思考模式，思考模式不兼容
+        # tool_choice 强制指定 tool —— 显式禁用（见 ADR 0005）。
+        if self.disable_thinking:
+            create_kwargs["thinking"] = {"type": "disabled"}
+        msg: Message = await self.client.messages.create(**create_kwargs)
         latency_ms = (time.monotonic() - t0) * 1000
 
         # ---- 解析 tool_use block（强制 tool_choice 所以正常只有这一种） ----

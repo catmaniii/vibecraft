@@ -29,13 +29,14 @@
 - **M1.6 由 Sonnet subagent 实现**（worktree 隔离），Opus review 过、清掉一处死代码
   （`game_process._build_bot_class` 里未使用的 echo 包装函数 + 思考过程注释块）
 - **LLM provider**：已从官方 Claude 切到 **DeepSeek V4**（走 Anthropic 兼容端点，
-  `deepseek-v4-flash`，见 ADR 0005 + `config/llm.yaml`）。API key 走
-  `DEEPSEEK_API_KEY` 环境变量。`cache_control` / `tool_choice` 强制 JSON 在
-  DeepSeek 端点的兼容性待真实 API 验证（已默认关 prompt cache 兜底）
-- **下一步：真实 SC2 端到端验证 —— 需用户在场 + `DEEPSEEK_API_KEY`**：
+  `deepseek-v4-flash`，见 ADR 0005）。API key 走 `DEEPSEEK_API_KEY` 环境变量。
+  **真实 API 冒烟已通过**（`scripts/llm_smoke.py`：「切1门Robo」→ `strategy_set`
+  directive，置信度 0.9）—— 关键修正：DeepSeek v4 在该端点默认走思考模式、不兼容
+  `tool_choice` 强制，须 `disable_thinking: true`；`cache_control` 被端点忽略
+- **下一步：真实 SC2 端到端验证 —— 需用户在场**：
   启 bot service（`uv run voicecraft serve`）→ 手机扫码 → 点开始对局 →
   说「切1门Robo」→ 看 SC2 是否切到 `1g_robo_immortal` build + 手机收到
-  `command_echo`。**这一步同时验掉 M1.4 的真实 LLM API（DeepSeek V4）**（一直挂着没验）。
+  `command_echo`。LLM 那一环已单独验过，这步主要验 SC2 子进程 + 串通链路。
   详细清单见 M1.6 subagent 报告
 - **可能失败点**：`DEEPSEEK_API_KEY` 未设 → echo 显示 `[解析失败]`；环境只跑了
   `uv sync --extra dev`（没带 `--extra sc2`）→ 退回 `_M12Bot` stub，command
@@ -47,6 +48,9 @@
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
   - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
   - `.venv` = Python 3.11.14
+  - `DEEPSEEK_API_KEY` 已设为 user-level 永久环境变量（LLM = DeepSeek V4）。
+    ⚠️ 已运行的进程不会刷新环境块 —— 新开 shell 才继承；当前 shell 可用
+    `$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable("DEEPSEEK_API_KEY","User")` 刷
   - **ares 全家桶已写进 `pyproject.toml` 的 `sc2` extra + `[tool.uv.sources]`**：
     `uv sync --extra dev --extra sc2` 一条命令装 / 恢复。⚠️ `uv sync` / `uv run`
     不带 `--extra sc2` 会**卸载** ares 全家桶 —— M1.6 测试也走 ares 分支，跑

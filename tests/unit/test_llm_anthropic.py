@@ -85,6 +85,7 @@ def _fake_message(
 def _make_provider(
     use_prompt_cache: bool = True,
     model: str = "claude-sonnet-4-6",
+    disable_thinking: bool = False,
 ) -> AnthropicProvider:
     """构造 provider，mock 掉 AsyncAnthropic 构造。
 
@@ -97,6 +98,7 @@ def _make_provider(
             model=model,
             max_tokens=1024,
             use_prompt_cache=use_prompt_cache,
+            disable_thinking=disable_thinking,
         )
 
 
@@ -249,6 +251,53 @@ class TestPromptCacheControl:
 
         user_content: list[dict[str, Any]] = call_kwargs["messages"][0]["content"]
         assert "cache_control" not in user_content[0]
+
+
+# ======================================================================
+# thinking 模式开关（ADR 0005：DeepSeek v4 默认思考，不兼容 tool_choice 强制）
+# ======================================================================
+
+
+class TestThinkingMode:
+    @pytest.mark.asyncio
+    async def test_thinking_disabled_passes_param(self) -> None:
+        """disable_thinking=True → messages.create 收到 thinking={"type":"disabled"}。"""
+        provider = _make_provider(disable_thinking=True)
+        raw_data: dict[str, Any] = {"interpretation_zh": "x", "confidence": 0.8, "directives": []}
+        fake_msg = _fake_message([_fake_tool_use_block(raw_data)])
+        create_mock = AsyncMock(return_value=fake_msg)
+        provider.client.messages.create = create_mock  # type: ignore[attr-defined]
+
+        await provider.parse(
+            system="s",
+            few_shot="f",
+            dynamic_context="d",
+            user_text="test",
+            tool_schema=_SAMPLE_TOOL_SCHEMA,
+            timeout_s=3.0,
+        )
+
+        assert create_mock.call_args.kwargs["thinking"] == {"type": "disabled"}
+
+    @pytest.mark.asyncio
+    async def test_thinking_not_passed_when_enabled(self) -> None:
+        """disable_thinking=False（默认）→ 不传 thinking 参数（保持端点原生默认）。"""
+        provider = _make_provider(disable_thinking=False)
+        raw_data: dict[str, Any] = {"interpretation_zh": "x", "confidence": 0.8, "directives": []}
+        fake_msg = _fake_message([_fake_tool_use_block(raw_data)])
+        create_mock = AsyncMock(return_value=fake_msg)
+        provider.client.messages.create = create_mock  # type: ignore[attr-defined]
+
+        await provider.parse(
+            system="s",
+            few_shot="f",
+            dynamic_context="d",
+            user_text="test",
+            tool_schema=_SAMPLE_TOOL_SCHEMA,
+            timeout_s=3.0,
+        )
+
+        assert "thinking" not in create_mock.call_args.kwargs
 
 
 # ======================================================================
@@ -602,6 +651,7 @@ class TestLLMConfig:
         assert cfg.api_key_env == "DEEPSEEK_API_KEY"
         assert cfg.timeout_s == 3.0
         assert cfg.use_prompt_cache is False
+        assert cfg.disable_thinking is True
 
     def test_from_yaml_or_defaults_missing_file(self, tmp_path: Path) -> None:
         """文件不存在 → 使用默认值，不抛异常。"""
@@ -730,6 +780,14 @@ class TestLLMConfigDeepSeek:
         assert provider.base_url == "https://api.deepseek.com/anthropic"
         assert provider.model == "deepseek-v4-flash"
 
+    def test_disable_thinking_propagates(self) -> None:
+        """LLMConfig.disable_thinking → AnthropicProvider.disable_thinking。"""
+        cfg = LLMConfig(provider="deepseek", model="deepseek-v4-flash", disable_thinking=True)
+        with patch("anthropic.AsyncAnthropic"):
+            provider = cfg.build_provider(api_key="sk-ds")
+        assert isinstance(provider, AnthropicProvider)
+        assert provider.disable_thinking is True
+
 
 # ======================================================================
 # AnthropicProvider：constructor（不需要真实 key）
@@ -768,6 +826,12 @@ class TestAnthropicProviderConstructor:
         mock_cls.assert_called_once_with(api_key="x")
         assert p.name == "anthropic"
         assert p.base_url is None
+
+    def test_disable_thinking_default_false(self) -> None:
+        """disable_thinking 默认 False（保持官方 Anthropic 原生行为）。"""
+        with patch("anthropic.AsyncAnthropic"):
+            p = AnthropicProvider(api_key="x")
+        assert p.disable_thinking is False
 
     def test_import_error_raises_llm_error(self) -> None:
         """anthropic SDK 未安装 → LLMError（不是 ImportError）。"""

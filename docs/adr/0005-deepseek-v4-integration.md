@@ -47,9 +47,27 @@ repo 里恒存在，`from_yaml_or_defaults` 的 defaults 分支实际很少触�
 
 **选择**：`config/llm.yaml` 设 `use_prompt_cache: false`。
 
-**理由**：给 DeepSeek 端点传 Anthropic 特有的 `cache_control` 字段，兼容性未验证
-（可能报错）。DeepSeek 自带 prefix 上下文自动缓存，不需要显式 `cache_control` 也能
-省成本。真实 API 验证确认兼容后可改回 true。
+**理由**：DeepSeek 文档明确 `cache_control` 为 "Ignored"（传了不报错也不生效）。
+DeepSeek 自带 prefix 上下文自动缓存，不需要显式 `cache_control` 也能省成本。保持
+`false` 即可，不必再传一个会被忽略的字段。
+
+## 决策 4：禁用思考模式（真实 API 冒烟后的修正）
+
+**问题**：真实调用 DeepSeek 端点返回 `400 - deepseek-reasoner does not support
+this tool_choice`。`deepseek-v4-flash` 在 Anthropic 兼容端点**默认走思考模式**
+（legacy 名 `deepseek-reasoner`），思考模式不兼容 `tool_choice` 强制指定 tool
+（与 Anthropic 官方 extended thinking 的限制一致）。
+
+**选择**：`AnthropicProvider` 加 `disable_thinking` 开关，为 True 时给
+`messages.create` 传 `thinking={"type": "disabled"}`。`config/llm.yaml` 的 deepseek
+配置设 `disable_thinking: true`。
+
+**理由**：IntentParser 是结构化输出任务（玩家话语 → directives JSON），不需要推理。
+禁用思考模式既解决 `tool_choice` 冲突，又更快、更便宜，完全契合 3s 超时 + 实时性
+要求。`disable_thinking` 默认 False，不影响官方 Anthropic 路径。
+
+**验证**：禁用思考后 `scripts/llm_smoke.py` 真实调用通过 —— "切1门Robo" →
+`strategy_set` directive（`strategy_id=1g_robo_immortal`），置信度 0.9。
 
 ## API key
 
@@ -57,8 +75,14 @@ repo 里恒存在，`from_yaml_or_defaults` 的 defaults 分支实际很少触�
 `api_key_env` 显式覆盖）。secret 不进 git、不进 yaml。spawn 子进程继承父进程
 env，bot 子进程能拿到。
 
-## 待验证（M1.6 真实 SC2 端到端时一起做）
+## 已验证（scripts/llm_smoke.py 真实 API 冒烟，2026-05-15）
 
-- `tool_choice` 强制指定 `emit_directives` tool 在 DeepSeek 兼容端点是否生效
-- `cache_control` 传过去是报错还是被忽略
-- `deepseek-v4-flash` 在 3s 超时内的解析质量 / 准确率（不够再换 `deepseek-v4-pro`）
+- ✅ `tool_choice` 强制指定 `emit_directives` tool —— 禁用思考模式后生效（见决策 4）
+- ✅ `cache_control` —— DeepSeek 文档明确为 "Ignored"（已设 `use_prompt_cache: false`）
+- ✅ `deepseek-v4-flash` 基础解析质量 —— 单条指令解析正确、中文 interpretation
+  准确、置信度合理
+
+## 待验证（M1.6 真实 SC2 端到端时）
+
+- 多指令 / 模糊指令 / 错误剧本名等复杂 case 的解析质量
+- 真实游戏节奏下 3s 超时是否够（含网络往返）

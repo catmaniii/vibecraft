@@ -14,5 +14,7 @@ timeout_s: 3.0
 max_retries: 1
 confidence_threshold: 0.6
 max_directives_per_call: 10
-use_prompt_cache: false   # DeepSeek 兼容端点 cache_control 兼容性未经真实验证；
-                          # DeepSeek 自带 prefix 自动缓存兜底。验证兼容后可改 true
+use_prompt_cache: false   # DeepSeek 兼容端点对 cache_control 是 Ignored（传了不报错也不生效）
+disable_thinking: true    # DeepSeek v4 在 Anthropic 端点默认走思考模式（= reasoner），
+                          # 思考模式不兼容 tool_choice 强制；IntentParser 是结构化输出
+                          # 任务不需要推理，显式禁用（见 ADR 0005）
