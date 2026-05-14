@@ -75,6 +75,12 @@ class IntentParser:
     async def parse(self, user_text: str, context: ParseContext) -> ParseOutcome:
         dynamic = build_dynamic_context(context)
         system_full = self._system_prompt + "\n\n" + self._strategy_catalog
+        # 保存本次 prompt 快照（供 _log_call 写入 llm_calls/call_NNN.json）
+        self._last_prompts: dict[str, Any] = {
+            "system": system_full,
+            "few_shot": self._few_shot,
+            "dynamic_context": dynamic,
+        }
 
         t0 = time.monotonic()
         try:
@@ -240,15 +246,35 @@ class IntentParser:
             payload["confidence"] = outcome.result.confidence
             payload["directive_count"] = len(outcome.result.directives)
 
+        # llm_calls/call_NNN.json 全量保留（设计文档 §11.4）：
+        # 包含 prompt 全文 / 响应 / 耗时 / token / 解析后 directives
+        prompts = getattr(self, "_last_prompts", {})
         seq = self.session.log_llm_call(
             {
+                "ts": context.game_time,
+                "provider": self.provider.name,
+                "model": getattr(self.provider, "model", "?"),
+                # ---- prompt 全文 ----
+                "system_prompt": prompts.get("system", ""),
+                "few_shot": prompts.get("few_shot", ""),
+                "dynamic_context": prompts.get("dynamic_context", ""),
+                "user_text": user_text,
+                # ---- 请求上下文摘要 ----
                 "request": {
-                    "user_text": user_text,
                     "context": context.model_dump(mode="json"),
                 },
+                # ---- 响应 ----
                 "response_raw": response.raw if response is not None else None,
-                "outcome": outcome.model_dump(mode="json"),
+                "raw_text": response.raw_text if response is not None else None,
+                # ---- token / cache / latency ----
+                "input_tokens": response.input_tokens if response is not None else None,
+                "output_tokens": response.output_tokens if response is not None else None,
+                "cache_hit": response.cache_hit if response is not None else None,
                 "latency_ms": latency_ms,
+                "extra": response.extra if response is not None else {},
+                # ---- 解析结果 ----
+                "outcome": outcome.model_dump(mode="json"),
+                "outcome_kind": type(outcome).__name__,
             }
         )
         payload["call_seq"] = seq
