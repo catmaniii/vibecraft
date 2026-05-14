@@ -75,6 +75,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="report json 输出路径；默认 logs/<game_id>/smoke_report.json",
     )
+    p.add_argument(
+        "--realtime",
+        action="store_true",
+        help="以 1x 实时速度跑（窗口正常显示，肉眼可看）；默认 False = 最高速空转，"
+        "整局几秒跑完，适合 CI",
+    )
     return p.parse_args()
 
 
@@ -328,7 +334,7 @@ def main() -> int:
                 Bot(Race.Protoss, bot, name="VoiceCraftSmoke"),
                 Computer(Race[args.opponent_race], Difficulty[args.opponent_difficulty]),
             ],
-            realtime=False,
+            realtime=args.realtime,
         )
     except Exception as e:
         print(f"[smoke] 对局失败：{type(e).__name__}: {e}", file=sys.stderr)
