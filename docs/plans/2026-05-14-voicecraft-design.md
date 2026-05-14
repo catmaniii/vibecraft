@@ -140,6 +140,34 @@
 - **依赖锁定**：`burnysc2==<commit>`，Blizzard patch 后可能需要手动同步上游修复
 - **EULA 风险**：仅自定义房间 / 局域网，绝不接 Battle.net 天梯，规避反作弊
 
+#### 启动时序（两阶段）
+
+玩家全程只需双击 **一个脚本**，其余都在手机 UI 完成。SC2 客户端**不是** bot
+service 一启动就拉起，而是分两阶段 —— 这样 WS 连接能在 SC2 启动前建好，启动
+进度 / 失败原因才推得到手机。
+
+```
+阶段 1：玩家双击一键脚本
+  → 起 bot service：HTTP（PWA 静态资源）+ WS endpoint
+  → PC 屏幕弹窗 / 极简本地页显示二维码 + IP:port 明文（扫码失败可手输）
+  → 此时 SC2 还没启动
+
+阶段 2：玩家手机扫码 → PWA 连上 WS → UI 显示「已连接」
+  → 玩家在 UI 里点「开始对局」（上行 start_game 帧）
+  → bot service 调 python-sc2 run_game() 拉起 SC2（独立子进程）
+  → 启动阶段实时上行 game_status 帧（见 §9.3）：launching → in_game → playing
+```
+
+要点：
+- **WS 必须在 SC2 启动前建好** —— 否则 SC2 冷启动那十几秒的进度 / 失败原因
+  （路径错 / 地图缺 / 版本不匹配）推不到手机，玩家只能干等。
+- **`run_game()` 阻塞整局** —— bot service 在独立进程 / 线程跑游戏循环，WS
+  server 主循环不被它卡住；游戏结束 / 崩溃要能被检测并上报。
+- **对局配置**（地图 / 对手种族 / 难度）：MVP 走 `config/` YAML，UI 只有一个
+  「开始」按钮；配置入口在 UI 里预留（灰掉），v0.5 做配置界面。
+- **玩家碰 PC 的唯一接触点** = 双击脚本 + 看一眼二维码扫码。物理上无法归零
+  （扫码前手机还没连上），但已压到最小。
+
 ### 3.4 关键风险（M0 必须验证）
 
 **ares Manager 默认是否真的 respect role exclusion？**
@@ -843,19 +871,25 @@ ares + python-sc2 提供所有需要的原语：
 分发: Bot 服务的 HTTP server 提供静态资源
 ```
 
-### 9.2 连接 / 配对
+### 9.2 连接 / 配对 / 开局
+
+完整冷启动两阶段见 §3.3「启动时序」。配对 + 开局链路：
 
 ```
-Bot Service 启动
+玩家双击一键脚本 → bot service 起（HTTP + WS）
   ↓ 生成 room_token
-PC 屏幕打印 QR 码:
+PC 屏幕显示 QR 码 + IP:port 明文:
   http://192.168.x.x:8080/?room=<token>
   ↓
 玩家手机扫码 → 浏览器加载 PWA → 建立 WS:
   GET ws://192.168.x.x:8080/ws?room=<token>
   ↓
-Bot 验 token → 推 snapshot 帧
+Bot 验 token → UI 显示「已连接」，推 idle snapshot（SC2 尚未启动）
   ↓
+玩家在 UI 点「开始对局」→ 上行 start_game 帧
+  ↓
+bot service 调 run_game() 拉起 SC2（独立进程）
+  ↓ 启动阶段实时上行 game_status: launching → in_game → playing
 [正常对话]
   ↓
 心跳 5s 无响应 → 自动重连，指数退避 1-8s
@@ -869,6 +903,11 @@ MVP：一 token 同时仅一活跃连接（重连顶旧）。
 #### 上行（手机 → Bot）
 
 ```jsonc
+// 0. start_game — 玩家在 UI 点「开始对局」，触发 bot service 拉起 SC2
+//    MVP：config 可省略，缺省读 config/ YAML；UI 配置界面是 v0.5
+{ "type": "start_game",
+  "config": { "map": "...", "opponent_race": "Random", "opponent_difficulty": "Easy" } }
+
 // 1. command (rate-limited 10s)
 { "type": "command", "client_id": "c_91f", "issued_at": 345.0, "text": "切到双矿凤凰" }
 
@@ -935,6 +974,13 @@ MVP：一 token 同时仅一活跃连接（重连顶旧）。
 
 // 7. ping
 { "type": "ping", "ts": 350.0 }
+
+// 8. game_status — SC2 启动阶段 + 三段式系统状态链（见 §9.6）
+{ "type": "game_status", "ts": 12.0,
+  "link": "connected",
+  "sc2": "idle|launching|in_game|playing|ended|crashed",
+  "bot": "idle|running|error",
+  "detail": "..." }   // sc2/bot 异常时 detail 给具体原因（路径错 / 地图缺 / ...）
 ```
 
 ### 9.4 事件 taxonomy
@@ -986,25 +1032,44 @@ MVP：一 token 同时仅一活跃连接（重连顶旧）。
 - **就绪**：图标常亮蓝色
 - **空闲**：图标灰色 placeholder
 
+状态条最右的 `🟢` 是**三段式系统状态链**的折叠指示（手机 → 服务端 → SC2 →
+Bot，见 §9.6）：全绿时折叠成一个点；任一段异常变红 + 自动展开成一行
+`手机●━服务端●━SC2●━Bot●`，点哪一段红的看该层错误详情（连接层 / SC2 启动层 /
+运行时层）。开局前（SC2 未启动）SC2 段显示 idle 灰点，属正常。
+
 ### 9.6 状态管理 / 重连
 
 ```js
 state = {
-  connection: "connected" | "reconnecting" | "disconnected",
+  // 三段式系统状态链：手机 → 服务端 → SC2 → Bot，任一段异常 UI 一眼可见
+  status: {
+    link: "connecting" | "connected" | "reconnecting" | "disconnected", // 手机↔服务端 WS
+    sc2:  "idle" | "launching" | "in_game" | "playing" | "ended" | "crashed", // 服务端↔SC2
+    bot:  "idle" | "running" | "error"                                  // bot 运行态
+  },
   game, strategy, overlays, standing_orders,
   recent_decisions, recent_commands, minimap_units,
   saved_recipes, cooldown_remaining_s, pending_echo
 }
 
-on snapshot:    state = parse(snapshot)
-on event:       apply patch by kind
-on minimap:     update minimap state
-on echo:        state.pending_echo = echo + start 1.5s timer
-on disconnect:  state.connection = reconnecting, show overlay
-on reconnect:   re-send token, wait for new snapshot
+on snapshot:     state = parse(snapshot)
+on event:        apply patch by kind
+on game_status:  state.status = parse(game_status)  // SC2 启动 / 崩溃 / 阶段切换
+on minimap:      update minimap state
+on echo:         state.pending_echo = echo + start 1.5s timer
+on disconnect:   state.status.link = reconnecting, show overlay
+on reconnect:    re-send token, wait for new snapshot
 ```
 
 重连策略：指数退避 1→2→4→8→8s。保留最后 snapshot 渲染不闪烁。
+
+**错误分三层定位**（对应 §11.1 错误处理全景，UI 按层给不同文案）：
+- **连接层**（`link` 异常）：WiFi 抖动 / IP 错 / 端口占用 / 防火墙 → 提示「检查
+  手机和 PC 是否同一 WiFi」
+- **SC2 启动层**（`sc2 = crashed` 且未进对局）：路径 / 地图 / 版本不匹配 → 显示
+  `detail` 里的具体原因 + 修复指引
+- **运行时层**（`bot = error`）：LLM 解析失败 / directive 下发失败 → bot 状态
+  不变（§2.3 原则 3），提示「指令没生效，重说一次」
 
 ---
 
@@ -1027,6 +1092,7 @@ on reconnect:   re-send token, wait for new snapshot
 | LLM 输出歧义 | confidence < 0.6 | `parse_ambiguous` + 候选 | 模态二次确认 |
 | Directive 执行 | 单位已死 / 位置非法 | `directive.failed` | echo 标灰 + 原因 |
 | Bot → SC2 | python-sc2 连接断 | 30s 内重连尝试 | "bot 离线" 红条 |
+| SC2 启动 | 路径错 / 地图缺 / 版本不匹配 | 结构化错误上行，不进对局 | UI 显示具体缺什么 + 修复指引 |
 | SC2 客户端 | 闪退 | 检测 + 重启 | 该场中止 |
 | Bot 服务进程崩 | Python 异常 | 外部 supervisor 重启 | 手机断连后重连 |
 | 彻底无响应 | 死锁 / 宕机 | watchdog 10s 判定 | "服务无响应" + 指引 |
