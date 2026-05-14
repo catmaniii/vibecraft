@@ -807,3 +807,44 @@ class TestOnEndWaitsForTasks:
         assert task_finished.is_set()
         # status_callback 应已调
         assert "ended" in status_calls
+
+
+# ---------------------------------------------------------------------------
+# auto-pilot：_register_auto_pilot 两阶段注册（ADR 0006）
+# ---------------------------------------------------------------------------
+
+
+class TestAutoPilot:
+    """_register_auto_pilot：opening 未跑完只注册 Mining/AutoSupply，
+    跑完后追加 5 个会造东西 / 出兵的 controller。"""
+
+    def _make_instance(self, build_completed: bool) -> Any:
+        FakeAresBot, _ = _inject_fake_ares()
+        from voicecraft.bot.ares_adapter import make_bot_class
+
+        BotClass = make_bot_class(director_factory=lambda facade: MagicMock())
+        instance = object.__new__(BotClass)
+        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        instance.build_order_runner.build_completed = build_completed
+        instance.register_behavior = MagicMock()
+        return instance
+
+    def test_phase_one_registers_mining_autosupply_only(self) -> None:
+        """opening 未跑完（build_completed=False）：只注册 Mining + AutoSupply。"""
+        instance = self._make_instance(build_completed=False)
+        instance._register_auto_pilot()
+        assert instance.register_behavior.call_count == 2
+
+    def test_phase_two_registers_all_controllers(self) -> None:
+        """opening 跑完（build_completed=True）：注册全部 7 个 behavior。"""
+        instance = self._make_instance(build_completed=True)
+        instance._register_auto_pilot()
+        # Mining + AutoSupply + BuildWorkers + Gas + Expansion + Production + Spawn
+        assert instance.register_behavior.call_count == 7
+
+    def test_no_build_order_runner_is_safe(self) -> None:
+        """build_order_runner 还没构造（None）→ _register_auto_pilot 直接返回，不抛。"""
+        instance = self._make_instance(build_completed=False)
+        instance.build_order_runner = None
+        instance._register_auto_pilot()
+        assert instance.register_behavior.call_count == 0
