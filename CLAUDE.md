@@ -177,6 +177,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 会话交接协议（permanent，不要删）
+
+CLAUDE.md 末尾可能存在一个**临时**交接块，边界明确：
+
+```markdown
+<!-- HANDOFF-START: ... -->
+## 上次会话进度（...）
+...
+<!-- HANDOFF-END -->
+```
+
+这是上一个 session 留给本 session 的 brief（commit hash / 待办 / 用户环境快照
+等不在代码里、但本 session 起手就要知道的事）。
+
+**新 session 起手的处理流程**：
+1. 启动时把 HANDOFF 块当作权威上下文读
+2. 至少完成一次有意义的动作（读文件 / 答用户首个问题 / 跑首条命令），确认已经
+   "接住"
+3. **接住后立即删除整段 HANDOFF 块**（从 `<!-- HANDOFF-START` 注释那一行到
+   `<!-- HANDOFF-END -->` 这一行整段，包含中间所有内容），用 commit message
+   `清理 HANDOFF 块（已接住 session N→N+1）` commit
+4. 本 session 结束 / 切换 / 用户明示要 handoff 时，**重新**生成新的 HANDOFF 块
+   写入 CLAUDE.md 末尾 + commit
+
+**HANDOFF 块的内容规范**（保持紧凑，<60 行）：
+- 最近 3-5 个 commit hash + 一句话描述
+- 当前里程碑状态 / 等待事项
+- 用户环境关键事实（路径、账号、装了什么）—— 仅写"不在代码里、问一遍要花时间"的
+- 下一步动作
+
+**不要写进 HANDOFF**：
+- 代码细节、架构决策（这些进 CLAUDE.md 永久段或 ADR）
+- 用户偏好（这些进 memory）
+- 调试日志、思考过程
+
+---
+
+<!-- HANDOFF-START: 2026-05-14 目录从 voice_craft 改名为 voicecraft 后接续。
+     本段为临时交接信息，新 session 按"会话交接协议"接住后请整段删除并 commit。 -->
+
 ## 上次会话进度（2026-05-14，目录改名后留给新 session 接续）
 
 **已完成 commits**（已 push 到 https://github.com/catmaniii/voicecraft）：
@@ -204,3 +244,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **下一步**：用户跑完 smoke 给反馈 → 通过则打 tag `v0.1.0a2` + 开 M1
 （Bot service + WS endpoint + 手机 PWA 框架 + 1 个剧本 set_build + LLM 单条话语
 解析），不通过看 `smoke_report.json` 的 `anomalies_by_kind` 决定回退方案。
+
+<!-- HANDOFF-END -->
