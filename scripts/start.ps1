@@ -1,17 +1,14 @@
-# VoiceCraft 一键启动脚本
-# 用法：在 PowerShell 里运行 .\scripts\start.ps1
-#       （或在文件资源管理器里右键 → 使用 PowerShell 运行；
-#        .ps1 直接双击默认是用记事本打开，不会执行）
+# VoiceCraft one-click launcher.
+# Usage: run  .\scripts\start.ps1  from a PowerShell window.
+#   (Double-clicking a .ps1 opens it in Notepad and will NOT run it.)
 #
-# 可选参数（覆盖默认值）：
-#   -Port <int>   监听端口，默认 8080
-#   -Token <str>  指定 room_token（默认自动生成）
-#   -Ip <str>     二维码显示用 IP（默认自动检测局域网 IP）
+# Optional parameters:
+#   -Port <int>   listen port, default 8080
+#   -Token <str>  fixed room_token (default: auto-generated)
+#   -Ip <str>     IP shown in the QR code (default: auto-detect LAN IP)
 #
-# 示例：
-#   .\scripts\start.ps1
-#   .\scripts\start.ps1 -Port 9090
-#   .\scripts\start.ps1 -Token "mytoken"
+# NOTE: keep this file ASCII-only. PowerShell 5.1 decodes a BOM-less file with
+# the system code page (GBK on zh-CN Windows); non-ASCII bytes break the parser.
 
 param(
     [int]$Port = 8080,
@@ -22,28 +19,48 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# 切换到仓库根目录（脚本放在 scripts/ 子目录）
+# cd to repo root (this script lives in scripts/)
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
-# 确认 uv 可用
+# UTF-8 console output: the QR code uses the solid block char U+2588, which
+# renders as garbage under a GBK code page.
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
+
+# Check uv is available.
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    Write-Error "找不到 uv。请先安装：https://docs.astral.sh/uv/getting-started/installation/"
+    Write-Error "uv not found. Install: https://docs.astral.sh/uv/getting-started/installation/"
     exit 1
 }
 
-# 组装 voicecraft serve 参数
-$ServeArgs = @("run", "voicecraft", "serve", "--port", $Port)
-
-if ($Token -ne "") {
-    $ServeArgs += @("--token", $Token)
+# Copy user-level env vars into this process. An already-running process does
+# not auto-refresh its env block; the SC2 subprocess / LLM call need these two,
+# and the spawned child inherits this process's env.
+foreach ($name in @("DEEPSEEK_API_KEY", "SC2PATH")) {
+    $val = [Environment]::GetEnvironmentVariable($name, "User")
+    if ($val) {
+        Set-Item -Path "Env:$name" -Value $val
+    }
 }
-if ($Ip -ne "") {
-    $ServeArgs += @("--ip", $Ip)
+if (-not $env:DEEPSEEK_API_KEY) {
+    Write-Host "WARNING: DEEPSEEK_API_KEY not set -- LLM parsing will fail." -ForegroundColor Yellow
+}
+if (-not $env:SC2PATH) {
+    Write-Host "WARNING: SC2PATH not set -- cannot launch SC2 on start_game." -ForegroundColor Yellow
 }
 
-Write-Host "VoiceCraft 启动中... (Ctrl+C 停止)" -ForegroundColor Cyan
+# Build 'voicecraft serve' args. --extra dev --extra sc2 keeps the ares stack
+# installed; a bare 'uv run' would sync to the pyproject default and uninstall
+# ares, breaking start_game.
+$ServeArgs = @(
+    "run", "--extra", "dev", "--extra", "sc2",
+    "voicecraft", "serve", "--port", $Port
+)
+if ($Token -ne "") { $ServeArgs += @("--token", $Token) }
+if ($Ip -ne "") { $ServeArgs += @("--ip", $Ip) }
+
+Write-Host "VoiceCraft starting... (Ctrl+C to stop)" -ForegroundColor Cyan
 Write-Host ""
 
-# 运行
 & uv @ServeArgs

@@ -2,7 +2,7 @@
 
 覆盖：
 - build_connect_url：URL 格式正确
-- render_qr_ascii：返回纯 ASCII（无 Unicode 特殊字符）、包含多行
+- render_qr_ascii：用实心块 ██ 渲染、行宽对齐、包含多行
 - get_lan_ip：正常路径 + OSError fallback
 - print_connect_info：返回正确 URL、包含 port/token
 """
@@ -35,10 +35,11 @@ class TestRenderQrAscii:
         lines = result.splitlines()
         assert len(lines) > 5
 
-    def test_only_ascii(self) -> None:
-        """输出必须全是 ASCII（Windows GBK 终端可打印）。"""
+    def test_uses_solid_block(self) -> None:
+        """黑模块用实心块 ██（比 ## 无缝隙、扫码识别率高）。"""
         result = render_qr_ascii("http://example.com")
-        assert result.isascii(), f"包含非 ASCII 字符：{[c for c in result if not c.isascii()][:5]}"
+        assert "██" in result
+        assert "#" not in result
 
     def test_lines_equal_width(self) -> None:
         """每行宽度相同（矩阵对齐）。"""

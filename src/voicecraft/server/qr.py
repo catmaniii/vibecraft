@@ -1,9 +1,12 @@
 """PC 终端二维码显示（M1.1d）。
 
 bot service 启动后在终端打印：
-  1. ASCII 二维码（用纯 ##/   渲染，绕过 Windows GBK 编码问题）
+  1. 二维码（实心块字符 ██ = 黑模块，空格 = 白模块，比 ## 无缝隙、好扫）
   2. 明文 URL（扫码失败可手输）
   3. 局域网 IP 自动检测
+
+注意：实心块 █ 是 Unicode 字符，终端需 UTF-8 输出编码才能正确显示
+（scripts/start.ps1 已设 [Console]::OutputEncoding = UTF8）。
 
 二维码内容：http://<局域网IP>:<port>/?room=<token>
 
@@ -23,9 +26,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# 用 ASCII 半宽字符渲染二维码：##=黑（模块），空格=白（背景）
-# Windows 终端 GBK 环境下，全角或 Unicode 块字符无法显示
-_CELL_BLACK = "##"
+# 二维码渲染：每个模块 2 字符宽，黑模块用实心块 ██，白模块用空格。
+# 实心块无缝隙、扫码识别率高；终端需 UTF-8 输出编码（见 start.ps1）。
+_CELL_BLACK = "██"
 _CELL_WHITE = "  "
 
 
@@ -52,9 +55,9 @@ def build_connect_url(ip: str, port: int, token: str) -> str:
 
 
 def render_qr_ascii(url: str) -> str:
-    """把 URL 渲染成 ASCII 二维码字符串（含边距）。
+    """把 URL 渲染成二维码字符串（含边距）。
 
-    用 ##/空格 渲染，与终端字符宽度匹配（每格 2 字符宽，高度比例合适）。
+    黑模块用实心块 ██、白模块用空格，每格 2 字符宽（长宽比接近正方形）。
     返回多行字符串，调用方直接 print()。
     """
     qr = qrcode.QRCode(border=2)
@@ -85,7 +88,7 @@ def print_connect_info(port: int, token: str, ip: str | None = None) -> str:
 
     qr_art = render_qr_ascii(url)
 
-    separator = "=" * 50  # 纯 ASCII，跟二维码渲染一样绕 Windows GBK 终端
+    separator = "=" * 50
     info = textwrap.dedent(f"""\
         {separator}
          VoiceCraft 已启动
