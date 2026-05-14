@@ -43,6 +43,8 @@ def _inject_fake_ares() -> tuple[type, type]:
         def __init__(self) -> None:
             self.config: dict[str, Any] = {}
             self.build_order_runner = MagicMock()
+            # 默认 opening 未跑完 → auto-pilot 只走阶段一（Mining/AutoSupply）
+            self.build_order_runner.build_completed = False
             self.mediator = MagicMock()
             self.time = 0.0
             self.minerals = 0
@@ -51,21 +53,46 @@ def _inject_fake_ares() -> tuple[type, type]:
             self.supply_cap = 0
             self.townhalls: list[Any] = []
             self.units = MagicMock()
+            self.start_location = (0, 0)
 
         async def on_start(self) -> None:
+            pass
+
+        def register_behavior(self, behavior: Any) -> None:
             pass
 
     fake_ares = ModuleType("ares")
     fake_ares.AresBot = FakeAresBot  # type: ignore[attr-defined]
 
+    # ares.behaviors.macro —— auto-pilot 用的 7 个 macro behavior（伪类即可）
+    fake_ares_behaviors = ModuleType("ares.behaviors")
+    fake_ares_behaviors_macro = ModuleType("ares.behaviors.macro")
+    for _bname in (
+        "AutoSupply",
+        "BuildWorkers",
+        "ExpansionController",
+        "GasBuildingController",
+        "Mining",
+        "ProductionController",
+        "SpawnController",
+    ):
+        setattr(fake_ares_behaviors_macro, _bname, MagicMock())
+
     sys.modules["ares"] = fake_ares
     sys.modules["ares.consts"] = fake_ares_consts
+    sys.modules["ares.behaviors"] = fake_ares_behaviors
+    sys.modules["ares.behaviors.macro"] = fake_ares_behaviors_macro
     if "sc2" not in sys.modules:
         fake_sc2 = ModuleType("sc2")
         fake_sc2_position = ModuleType("sc2.position")
         fake_sc2_position.Point2 = lambda t: t  # type: ignore[attr-defined]
+        fake_sc2_ids = ModuleType("sc2.ids")
+        fake_sc2_unit_typeid = ModuleType("sc2.ids.unit_typeid")
+        fake_sc2_unit_typeid.UnitTypeId = MagicMock()  # type: ignore[attr-defined]
         sys.modules["sc2"] = fake_sc2
         sys.modules["sc2.position"] = fake_sc2_position
+        sys.modules["sc2.ids"] = fake_sc2_ids
+        sys.modules["sc2.ids.unit_typeid"] = fake_sc2_unit_typeid
 
     return FakeAresBot, FakeUnitRole
 

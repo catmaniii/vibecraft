@@ -77,7 +77,17 @@ def make_bot_class(
     """
     try:
         from ares import AresBot
+        from ares.behaviors.macro import (
+            AutoSupply,
+            BuildWorkers,
+            ExpansionController,
+            GasBuildingController,
+            Mining,
+            ProductionController,
+            SpawnController,
+        )
         from ares.consts import UnitRole as AresUnitRole
+        from sc2.ids.unit_typeid import UnitTypeId
     except ImportError as e:
         raise ImportError(
             '未装 ares-sc2。`uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`'
@@ -94,6 +104,17 @@ def make_bot_class(
         UnitRole.HARASSER: AresUnitRole.HARASSING,
         UnitRole.SCOUT: AresUnitRole.SCOUTING,
     }
+
+    # === AUTO-PILOT === 通用神族军队组合（追猎为主 + 不朽 + 叉子，普通电脑级别）。
+    # SpawnController / ProductionController 共用：proportion 之和必须 == 1.0，
+    # priority 0 最高。详见 docs/plans/2026-05-15-auto-pilot.md。
+    generic_army: dict[Any, dict[str, Any]] = {
+        UnitTypeId.IMMORTAL: {"proportion": 0.25, "priority": 0},
+        UnitTypeId.STALKER: {"proportion": 0.55, "priority": 1},
+        UnitTypeId.ZEALOT: {"proportion": 0.20, "priority": 2},
+    }
+    target_worker_count = 66  # 约 3-4 基地饱和
+    target_base_count = 4  # 普通电脑级别 3-4 矿够
 
     class _AresFacade:
         """Sc2Facade 的 ares 实现。"""
@@ -268,6 +289,10 @@ def make_bot_class(
             if hasattr(super(), "on_step"):
                 await super().on_step(iteration)
 
+            # === AUTO-PILOT === 每 tick 重注册通用运营 behavior
+            # （behavior_executioner 在 _after_step 执行后会清空注册列表）。
+            self._register_auto_pilot()
+
             # Gap 2：非阻塞消费下行队列
             if down_q is not None:
                 try:
@@ -294,6 +319,41 @@ def make_bot_class(
             # 每 tick 让 director 处理 committed directives
             if self.director is not None:
                 self.director.on_tick(now=float(self.time))
+
+        def _register_auto_pilot(self) -> None:
+            """注册通用 auto-pilot behavior（设计文档 §6 基础 bot 能力标定）。
+
+            两阶段：
+            - 阶段一（opening 未跑完）：只跑不和 build_order_runner 抢资源的
+              Mining / AutoSupply
+            - 阶段二（build_completed）：追加会主动造建筑 / 出兵的 controller
+
+            隔离保证：这些 behavior 选 worker 都走 mediator.select_worker（只取
+            UnitRole.GATHERING），出兵只操作生产建筑 —— 不碰 CONTROL_GROUP_ONE
+            （voicecraft 的 LLM 接管特种兵）。详见 docs/plans/2026-05-15-auto-pilot.md §4。
+
+            behavior_executioner 每个 _after_step 执行后会清空注册列表，故必须
+            每个 on_step 重新注册。
+            """
+            runner = getattr(self, "build_order_runner", None)
+            if runner is None:
+                return
+
+            # 阶段一：全程开（不和 build_order_runner 抢资源）
+            self.register_behavior(Mining())
+            self.register_behavior(AutoSupply(self.start_location))
+
+            # 阶段二：opening 跑完才开（会主动造建筑 / 出兵，opening 期间和 BO 冲突）
+            if runner.build_completed:
+                self.register_behavior(BuildWorkers(to_count=target_worker_count))
+                self.register_behavior(GasBuildingController(to_count=len(self.townhalls) * 2))
+                self.register_behavior(
+                    ExpansionController(to_count=target_base_count, max_pending=1)
+                )
+                self.register_behavior(ProductionController(generic_army, self.start_location))
+                self.register_behavior(
+                    SpawnController(generic_army, spawn_target=self.start_location)
+                )
 
         def _on_cmd_task_done(self, task: asyncio.Task[Any]) -> None:
             """后台 cmd task 完成回调：移除引用，异常时 log 不静默丢。"""
