@@ -56,8 +56,11 @@ class GameConfig:
     全部使用标准 Python 基本类型。
     """
 
-    map_name: str = "Goldenaura LE"
-    """地图文件名（去掉 .SC2Map），传给 sc2.maps.get()。"""
+    map_name: str = "DaybreakLE"
+    """地图文件名（去掉 .SC2Map），传给 sc2.maps.get()。
+
+    默认 DaybreakLE —— 用户环境 `<SC2PATH>/Maps/` 下实际就位的地图（M0c 用的同一张）。
+    M2+ 可做成 PWA 可选 / 配置项。"""
 
     opponent_race: str = "Random"
     """内置 AI 种族：Protoss / Terran / Zerg / Random。"""
@@ -70,6 +73,13 @@ class GameConfig:
 
     llm_controlled_probes: int = 0
     """预留：开局置入 LLM 控制 role 的探机数（M1.5 用，M1.2 暂 0）。"""
+
+    # SC2 客户端窗口（窗口模式，靠左上角，撑满高度，右边留给 bot 状态面板）。
+    # 默认值针对当前显示器 2293x960；换屏需调整（M2+ 可做成自动检测 / PWA 可配）。
+    window_x: int = 0
+    window_y: int = 0
+    window_width: int = 1707
+    window_height: int = 960
 
 
 @dataclass
@@ -137,7 +147,7 @@ def _child_entry(
     try:
         from sc2 import maps
         from sc2.data import Difficulty, Race
-        from sc2.main import run_game
+        from sc2.main import GameMatch, run_multiple_games
         from sc2.player import Bot, Computer
     except ImportError as exc:
         _put("crashed", "error", detail=f"ImportError: {exc}")
@@ -159,16 +169,30 @@ def _child_entry(
 
     try:
         _put("launching", "running")
-        run_game(
-            sc2_map,
+        # 走 GameMatch + run_multiple_games：只有这条路径才会把 sc2_config
+        # 透传给 SC2Process（run_game 的 **kwargs 进的是 _host_game，不认
+        # sc2_config）。窗口模式 + 尺寸/位置：靠左撑满高度，右边留给 bot 状态面板。
+        run_multiple_games(
             [
-                Bot(Race.Protoss, bot_instance, name="VoiceCraft"),
-                Computer(
-                    Race[config.opponent_race],
-                    Difficulty[config.opponent_difficulty],
-                ),
-            ],
-            realtime=config.realtime,
+                GameMatch(
+                    sc2_map,
+                    [
+                        Bot(Race.Protoss, bot_instance, name="VoiceCraft"),
+                        Computer(
+                            Race[config.opponent_race],
+                            Difficulty[config.opponent_difficulty],
+                        ),
+                    ],
+                    realtime=config.realtime,
+                    sc2_config=[
+                        {
+                            "fullscreen": False,
+                            "resolution": (config.window_width, config.window_height),
+                            "placement": (config.window_x, config.window_y),
+                        }
+                    ],
+                )
+            ]
         )
         _put("ended", "idle")
     except Exception as exc:

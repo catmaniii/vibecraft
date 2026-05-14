@@ -68,10 +68,12 @@ def _make_fake_proc(
 class TestGameConfig:
     def test_defaults(self) -> None:
         cfg = GameConfig()
-        assert cfg.map_name == "Goldenaura LE"
+        assert cfg.map_name == "DaybreakLE"
         assert cfg.opponent_race == "Random"
         assert cfg.opponent_difficulty == "Easy"
         assert cfg.realtime is True
+        assert (cfg.window_x, cfg.window_y) == (0, 0)
+        assert (cfg.window_width, cfg.window_height) == (1707, 960)
 
     def test_picklable(self) -> None:
         """GameConfig 必须跨 spawn 边界传递，需能 pickle。"""

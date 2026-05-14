@@ -41,6 +41,15 @@ from voicecraft.strategy.models import BuildStep, OpeningBuild
 # ares 常量（字符串，不 import ares）
 _BUILDS_KEY = "Builds"
 _OPENING_BUILD_ORDER_KEY = "OpeningBuildOrder"
+_CONSTANT_WORKER_PRODUCTION_TILL_KEY = "ConstantWorkerProductionTill"
+_AUTO_SUPPLY_AT_SUPPLY_KEY = "AutoSupplyAtSupply"
+
+# ares build runner 的 opening 期背景行为参数。voicecraft 剧本 steps 只列关键
+# 建筑/单位时序，"持续造农民" + "supply 不堵" 是 ares 的背景行为，必须在 config
+# 里显式开启 —— ares 默认 ConstantWorkerProductionTill=0 即完全不造农民。
+# M2+ 可做成 OpeningBuild 的可配字段。
+_CONSTANT_WORKER_PRODUCTION_TILL = 44  # 持续造农民到 44 工人（神族双矿满采）
+_AUTO_SUPPLY_AT_SUPPLY = 14  # supply 到 14 起 ares 自动补 Pylon，防 supply 堵
 
 # upgrade → 研究建筑名（ares 步骤里 CHRONO 的 target）
 # 用大写 UnitID 名，与 ares parser 期望一致。
@@ -82,6 +91,8 @@ def opening_to_ares_builds_entry(opening: OpeningBuild) -> dict[str, object]:
     """单个 opening 翻译为 ares config["Builds"]["<id>"] 的 dict。"""
     return {
         _OPENING_BUILD_ORDER_KEY: translate_opening_to_ares_steps(opening),
+        _CONSTANT_WORKER_PRODUCTION_TILL_KEY: _CONSTANT_WORKER_PRODUCTION_TILL,
+        _AUTO_SUPPLY_AT_SUPPLY_KEY: _AUTO_SUPPLY_AT_SUPPLY,
     }
 
 

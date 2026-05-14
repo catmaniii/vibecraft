@@ -243,6 +243,17 @@ def make_bot_class(
                     if "Builds" not in self.config:
                         self.config["Builds"] = {}
                     self.config["Builds"].update(builds_cfg)
+                    # ares data_manager.initialise() 只在 config 里有 BuildChoices
+                    # 时才设 chosen_opening；否则 BuildOrderRunner 拿到空 opening
+                    # 名直接 assert 崩。用第一个 opening_build 作各种族默认初始
+                    # opening，玩家之后用语音 set_build 切。
+                    cycle_cfg = {"Cycle": [openings[0].id]}
+                    self.config["BuildChoices"] = {
+                        "Terran": cycle_cfg,
+                        "Zerg": cycle_cfg,
+                        "Protoss": cycle_cfg,
+                        "Random": cycle_cfg,
+                    }
 
             await super().on_start()
             self.facade = _AresFacade(self)
