@@ -10,13 +10,15 @@
 ## 当前状态（最近更新：2026-05-14）
 
 - **里程碑**：M0c 端到端 smoke（等待用户在 SC2 客户端跑 `scripts/smoke_test.py`）
-- **HEAD**：`fcb14aa` CLAUDE.md：加会话交接协议 + 标记当前 HANDOFF 块为临时
-- **阻塞**：用户环境里 ladder 1v1 地图未下载到 `Documents\StarCraft II\Maps\`；
-  smoke 必须先放地图才能跑
-- **下一步**：用户跑 smoke → 看 `smoke_report.json` 的 `verdict`
-  - `pass` → 打 tag `v0.1.0a2`，开 M1
-  - `fail` → 看 `anomalies_by_kind` 决定回退方案（详见
-    `docs/m0-smoke-runbook.md` §3 异常表）
+- **HEAD**：待 commit（runbook 修了 §0 前置准备 + 旧路径；TASKS.md 更新）
+- **阻塞**：ladder 1v1 地图未下载到 `$env:SC2PATH\Maps\`；smoke 必须先放地图
+  才能跑。runbook §0 已经写明具体步骤
+- **下一步**：
+  1. 用户按 `docs/m0-smoke-runbook.md` §0 设 `SC2PATH` + 建 Maps 目录 + 下地图
+  2. 用户跑 `uv run python scripts/smoke_test.py`
+  3. 看 `logs/<game_id>/smoke_report.json` 的 `verdict`：
+     - `pass` → 打 tag `v0.1.0a2`，开 M1
+     - `fail` → 看 `anomalies_by_kind`，按 runbook §3 异常表决定回退方案
 
 ---
 
@@ -78,16 +80,19 @@ pyproject / 目录 / lint / mypy / pytest / pre-commit / CI 模板。出口：
 
 待办：
 
-- [ ] **修 runbook 里的旧路径**：`docs/m0-smoke-runbook.md` 第 33 行写的是
-      `cd D:\code\claudecode\voice_craft`，应改成 `voicecraft`
-- [ ] 在 runbook 里**显式记一段** `SC2PATH` 设置 + Maps 目录初始化（用户实际
-      场景下 SC2 装在非默认路径，目录也不存在）
-- [ ] 用户下 ladder 地图到 `Documents\StarCraft II\Maps\`
+- [x] 修 runbook 里的旧路径（`voice_craft` → `voicecraft`）
+- [x] 在 runbook §0 显式写 `SC2PATH` 设置 + Maps 目录初始化步骤（用户 SC2 装
+      在 `D:\StarCraft II\`，非默认路径）
+- [ ] 用户按 runbook §0 设 `SC2PATH` + 建 Maps 目录 + 下 ladder 地图
 - [ ] 用户在 PowerShell 跑 `uv run python scripts/smoke_test.py`
 - [ ] 看 `logs/<game_id>/smoke_report.json`
   - pass → 打 tag `v0.1.0a2`，更新 CHANGELOG，开 M1
   - fail → 按 runbook §3 异常表分类，看是单 Manager 不 respect role
     （加 wrap）还是全 fail（回退 Hook B OverrideMediator 方案）
+
+**已校准**：`scripts/smoke_test.py` 的 import 与 `voicecraft.logging_` 实际
+exports 对齐（`Event` / `EventKind` / `GameSession` / `GameSessionConfig` /
+`LogStream`），路径上无 broken import 风险。
 
 ### M1 端到端骨架  ⬜ 未开始
 

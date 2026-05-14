@@ -20,17 +20,59 @@ ares 官方教程 `docs/tutorials/unit_squads_group_behaviors.md` 也是这个�
 
 需要 Windows 机器 + 已安装零售 StarCraft II 客户端。Linux/Mac 不行（SC2 仅 Windows 有渲染版）。
 
+### 0.1 SC2 路径（非默认安装位置必做）
+
+python-sc2 默认只在 `C:\Program Files (x86)\StarCraft II\` 和 `C:\Program Files\StarCraft II\` 找客户端。如果你装在别处（比如本机用户装在 `D:\StarCraft II\`），**必须设环境变量 `SC2PATH`**，指向你的 SC2 安装根目录（即包含 `Versions\` 子目录的那一级）。
+
+PowerShell 当前 session 临时设（推荐先这样试）：
+
+```powershell
+$env:SC2PATH = "D:\StarCraft II"
+```
+
+确认：
+
+```powershell
+Test-Path "$env:SC2PATH\Versions"   # 应该输出 True
+```
+
+要永久生效（下次开 shell 不用重设）：
+
+```powershell
+[Environment]::SetEnvironmentVariable("SC2PATH", "D:\StarCraft II", "User")
+# 然后**重开** PowerShell window
+```
+
+### 0.2 地图目录
+
+python-sc2 找地图的顺序：`$SC2PATH\Maps\` → `Documents\StarCraft II\Maps\`。
+**两个目录都可能不存在**（特别是从未跑过自定义游戏 / 编辑器的客户端）。
+
+```powershell
+# 选一个目录创建（推荐放 SC2 安装目录下）
+New-Item -ItemType Directory -Force -Path "$env:SC2PATH\Maps" | Out-Null
+```
+
+### 0.3 下载测试地图
+
+AI Arena 推荐的 ladder 地图都行；本手册默认 `Goldenaura LE`。把 `.SC2Map` 文件
+放到 §0.2 创建的目录里。
+
+如果你不知道地图叫什么，可以打开 SC2 → 自定义游戏 → 创建房间 → 看可选地图列表，
+挑一张 1v1 ladder 地图。
+
+### 0.4 客户端初始化
+
 1. **打开 SC2 一次**，登录战网账户，让客户端把地图缓存下载完。
-2. **下载测试地图**到 `Documents\StarCraft II\Maps\`。AI Arena 推荐的 ladder 地图都行；本手册默认 `Goldenaura LE`。如果你不知道地图叫什么，可以打开 SC2 → 自定义游戏 → 创建房间 → 看可选地图列表，挑一张 1v1 ladder 地图。
-3. **关闭 SC2 客户端**，python-sc2 会自己启 / 接管它。
+2. **关闭 SC2 客户端**，python-sc2 会自己启 / 接管它。
 
 ---
 
 ## 1. 装依赖
 
 ```powershell
-# 在项目根目录
-cd D:\code\claudecode\voice_craft
+# 在项目根目录（注意目录名是 voicecraft，不是 voice_craft）
+cd D:\code\claudecode\voicecraft
 
 # 装 voicecraft + dev 依赖
 uv sync --extra dev
@@ -125,13 +167,14 @@ uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
 
 ### `SC2 not found` 报错
 
-python-sc2 找不到 SC2 安装路径。要么：
-- 默认装 `C:\Program Files (x86)\StarCraft II\` 应该自动检测
-- 或设环境变量 `SC2PATH` 指向你的安装根目录
+python-sc2 找不到 SC2 安装路径。回到 §0.1，确认 `$env:SC2PATH` 已设且
+`$env:SC2PATH\Versions` 存在；新开 shell 之后 env var 没继承的话需要重设
+（或永久设 + 重开 shell）。
 
 ### 地图不存在
 
-把地图 `.SC2Map` 文件放到 `Documents\StarCraft II\Maps\`，重试。
+回到 §0.2 + §0.3：确认 `.SC2Map` 文件确实在 `$env:SC2PATH\Maps\` 或
+`Documents\StarCraft II\Maps\`，重试。
 
 ### bot 进游戏后客户端崩
 
