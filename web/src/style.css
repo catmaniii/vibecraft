@@ -1,0 +1,17 @@
+/* Tailwind 基础层 + 全局重置 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 移动端：禁用双击缩放 + 默认字号 */
+html {
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+/* 禁止长按弹出系统菜单（影响录音按钮 UX）*/
+button {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
