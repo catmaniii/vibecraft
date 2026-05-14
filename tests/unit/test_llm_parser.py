@@ -79,7 +79,7 @@ class TestPromptBuilders:
     def test_system_prompt_includes_aliases(self, library: StrategyLibrary) -> None:
         sp = build_system_prompt(library.aliases)
         assert "BG" in sp  # 至少一个 building hotkey
-        assert "VR" in sp  # ambiguous case
+        assert "VR" in sp  # 建筑 hotkey 别名
         assert "verb 消歧" in sp
 
     def test_strategy_catalog_lists_all_ids(self, library: StrategyLibrary) -> None:
@@ -220,6 +220,40 @@ class TestIntentParserHappyPath:
         assert isinstance(d.payload, ProductionOverridePayload)
         assert d.payload.unit_type == "Sentry"
         assert d.payload.count == 2
+
+    @pytest.mark.asyncio
+    async def test_payload_extra_fields_filtered(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """LLM 在 payload 里塞 schema 外字段（如 options），应被边界过滤掉而非整条拒绝。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切到 1门Robo",
+                        "confidence": 0.95,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "opening",
+                                    "strategy_id": "1g_robo_immortal",
+                                    "options": {},  # LLM 幻觉的 schema 外字段
+                                    "extra_note": "xxx",
+                                },
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("单BG VR出不朽", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        assert len(outcome.directives) == 1
+        payload = outcome.directives[0].payload
+        assert isinstance(payload, StrategySetPayload)
+        assert payload.strategy_id == "1g_robo_immortal"
 
 
 # =========================================================================

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field
 
@@ -137,6 +137,15 @@ Payload = Annotated[
     | ViewZoomPayload,
     Discriminator("type"),
 ]
+
+
+# type 值 → payload 模型类。供 IntentParser 在系统边界过滤 LLM 输出：
+# LLM 可能在 payload 里塞 schema 外字段，按 model_fields 白名单过滤，
+# 避免 _PayloadBase 的 extra=forbid 把整条 directive 拒掉。
+_PAYLOAD_UNION = get_args(Payload)[0]
+PAYLOAD_MODELS: dict[str, type[_PayloadBase]] = {
+    m.model_fields["type"].default.value: m for m in get_args(_PAYLOAD_UNION)
+}
 
 
 # =========================================================================

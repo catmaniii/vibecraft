@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from voicecraft.directives.models import Directive
+from voicecraft.directives.models import PAYLOAD_MODELS, Directive
 from voicecraft.directives.types import DirectiveType
 from voicecraft.llm.prompt import (
     ParseContext,
@@ -199,6 +199,11 @@ class IntentParser:
             raise ValueError("directive 缺少 type 或 payload")
         payload = dict(d_raw["payload"])
         payload["type"] = d_raw["type"]
+        # 系统边界过滤：LLM 可能在 payload 里塞 schema 外字段（如 options:{}），
+        # 按目标 payload 模型的字段白名单过滤，避免 extra=forbid 整条拒绝。
+        model = PAYLOAD_MODELS.get(str(d_raw["type"]))
+        if model is not None:
+            payload = {k: v for k, v in payload.items() if k in model.model_fields}
         env: dict[str, Any] = {
             "payload": payload,
             "issued_at": 0.0,  # IntentParser 不知道游戏时间；由 Board.submit() 时按 now 校正
