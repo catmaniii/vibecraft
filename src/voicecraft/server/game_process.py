@@ -97,13 +97,18 @@ _WATCHDOG_INTERVAL: float = 1.0
 def _child_entry(
     config: GameConfig,
     up_q: multiprocessing.Queue,  # type: ignore[type-arg]
-    _down_q: multiprocessing.Queue,  # type: ignore[type-arg]  # M1.4+ 用
+    down_q: multiprocessing.Queue,  # type: ignore[type-arg]
     log_level: int,
 ) -> None:
     """子进程入口：在子进程内构造 bot、调 run_game()，往 up_q 推状态事件。
 
     父进程只传 picklable 的 GameConfig（基本类型），此函数负责 import ares 并
-    构造 VoiceCraftBot / SmokeBot。M1.2 用最小 stub bot 验证进程通信。
+    构造真 _VoiceCraftBot（含 director + IntentParser + GameSession）。
+
+    M1.6 变更：
+    - 参数 `_down_q` 改为 `down_q`（激活下行队列，Gap 2）
+    - 改用 make_bot_class 造真 bot（Gap 1），同时传 status_callback 和 down_q（Gap 5+2）
+    - 子进程内装配 GameSession / StrategyLibrary / LLMProvider / IntentParser（Gap 4）
     """
     # 子进程需要重新配置日志（spawn 后父进程 logging state 不继承）
     logging.basicConfig(level=log_level)
@@ -115,6 +120,17 @@ def _child_entry(
             up_q.put_nowait({"sc2": sc2, "bot": bot, "detail": detail})
         except Exception as exc:
             child_log.warning("up_queue_put_failed: %s", exc)
+
+    def _put_echo(text: str, result: str) -> None:
+        """向上行队列推一条 echo 消息（基础版 echo，Gap §5 基础 echo）。
+
+        消息格式：{"kind": "echo", "user_text": ..., "interpretation": ...}
+        WS 层在收到此消息时把它转发给手机（设计文档 §9.3 echo 帧）。
+        """
+        try:
+            up_q.put_nowait({"kind": "echo", "user_text": text, "interpretation": result})
+        except Exception as exc:
+            child_log.warning("up_queue_echo_failed: %s", exc)
 
     _put("launching", "idle")
 
@@ -128,7 +144,7 @@ def _child_entry(
         return
 
     try:
-        bot_class = _build_bot_class(_put)
+        bot_class = _build_bot_class(_put, down_q, _put_echo)
     except Exception as exc:
         _put("crashed", "error", detail=f"bot_class构造失败: {type(exc).__name__}: {exc}")
         return
@@ -161,41 +177,126 @@ def _child_entry(
 
 def _build_bot_class(
     put_status: Any,
+    down_q: Any | None = None,
+    put_echo: Any | None = None,
 ) -> type:
-    """在子进程内构造 bot 类。M1.2 用最小 stub，M1.5 替换成 VoiceCraftBot。
+    """在子进程内构造 bot 类（M1.6：改用真 VoiceCraftBot）。
 
-    put_status 是子进程内的 _put 闭包（不跨进程边界传递，只在 _child_entry 内部用）。
-    ares / sc2 只在子进程内 import（mypy 设 ignore_missing_imports）。
+    put_status：子进程内的 _put 闭包（不跨进程边界传递）。
+    down_q：下行队列，传给 make_bot_class（Gap 2）。
+    put_echo：echo 回调，让 director 结果能推给父进程（基础 echo）。
+
+    fallback 逻辑（向后兼容 M0c smoke / 没有 ares 的环境）：
+    - ares 装了 → 调 make_bot_class 造真 _VoiceCraftBot
+    - ares 未装 → 退回 _M12Bot stub（仅推状态，不解析指令）
     """
-    try:
-        from ares import AresBot
-    except ImportError:
-        # ares 未装：退到最小 python-sc2 Bot（M1.2 smoke 环境里 ares 是可选的）
-        from sc2.bot_ai import BotAI as AresBot
+    # 检查 ares 是否可用（运行时探测，不引入顶层 import）
+    import importlib.util
 
-    class _M12Bot(AresBot):  # type: ignore[misc]
-        """M1.2 stub bot：仅负责在 on_start / on_step / on_end 推状态。
+    if importlib.util.find_spec("ares") is None:
+        # ares 未装：退到最小 python-sc2 Bot stub（M0c smoke 环境）
+        from sc2.bot_ai import BotAI as AresBotFallback
 
-        M1.5 会把这里替换成真正的 VoiceCraftBot。
-        """
+        class _M12Bot(AresBotFallback):  # type: ignore[misc]
+            """向后兼容 stub：ares 未装时保留 M1.2 行为（仅推状态）。"""
 
-        async def on_start(self) -> None:
-            """进对局时推 in_game → playing。"""
-            if hasattr(super(), "on_start"):
-                await super().on_start()
-            put_status("in_game", "running")
-            put_status("playing", "running")
+            async def on_start(self) -> None:
+                if hasattr(super(), "on_start"):
+                    await super().on_start()
+                put_status("in_game", "running")
+                put_status("playing", "running")
 
-        async def on_step(self, iteration: int) -> None:
-            """每 tick 推进，M1.2 不做任何操作。"""
-            if hasattr(super(), "on_step"):
-                await super().on_step(iteration)
+            async def on_step(self, iteration: int) -> None:
+                if hasattr(super(), "on_step"):
+                    await super().on_step(iteration)
 
-        async def on_end(self, game_result: Any) -> None:
-            """游戏结束时推 ended。"""
-            put_status("ended", "idle")
+            async def on_end(self, game_result: Any) -> None:
+                put_status("ended", "idle")
 
-    return _M12Bot
+        return _M12Bot
+
+    # ares 装了：装配完整 director 栈（Gap 4 + Gap 1 + Gap 5）
+    from pathlib import Path
+
+    from voicecraft.bot.ares_adapter import make_bot_class
+    from voicecraft.bot.director import Director
+    from voicecraft.llm.config import LLMConfig
+    from voicecraft.llm.parser import IntentParser
+    from voicecraft.logging_.session import GameSession, GameSessionConfig
+    from voicecraft.strategy.library import StrategyLibrary
+
+    # --- GameSession（日志落盘，logs/<game_id>/）---
+    session = GameSession(GameSessionConfig())
+
+    # --- StrategyLibrary（从 strategies/ + aliases/ 加载）---
+    # 路径推算：本文件在 src/voicecraft/server/game_process.py
+    # 项目根 = 上溯 4 层
+    _pkg_dir = Path(__file__).parent  # server/
+    _src_vc_dir = _pkg_dir.parent  # voicecraft/
+    _src_dir = _src_vc_dir.parent  # src/
+    _project_root = _src_dir.parent  # 项目根
+    strategies_dir = _project_root / "strategies"
+    aliases_path = _project_root / "aliases" / "aliases.yaml"
+
+    strategy_library: StrategyLibrary
+    if strategies_dir.exists() and aliases_path.exists():
+        strategy_library = StrategyLibrary.from_directories(strategies_dir, aliases_path)
+    else:
+        # 没有剧本文件时用空 library（单测 / 无策略环境也能跑）
+        strategy_library = StrategyLibrary()
+
+    # --- LLM provider（读 ANTHROPIC_API_KEY 环境变量）---
+    llm_config_path = _project_root / "config" / "llm.yaml"
+    llm_config = LLMConfig.from_yaml_or_defaults(
+        llm_config_path if llm_config_path.exists() else None
+    )
+    provider = llm_config.build_provider()
+
+    # --- IntentParser ---
+    parser = IntentParser(provider=provider, library=strategy_library, session=session)
+
+    # --- director_factory（在 on_start 时拿到真实 facade 再构造）---
+    def director_factory(facade: Any) -> Director:
+        return Director(facade=facade, parser=parser, session=session)
+
+    # --- echo 回调包装（把 ParseOutcome 转成 echo 消息推给父进程）---
+    async def _on_player_command_with_echo(
+        director: Director,
+        text: str,
+        now: float,
+    ) -> None:
+        """包装 director.on_player_command，完成后推基础 echo。"""
+        from voicecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
+
+        outcome = await director.on_player_command(text, now)
+        if put_echo is None:
+            return
+        if isinstance(outcome, IntentParseResult):
+            put_echo(text, outcome.interpretation_zh)
+        elif isinstance(outcome, AmbiguousParse):
+            put_echo(text, f"[模糊] {outcome.result.interpretation_zh}")
+        elif isinstance(outcome, ParseError):
+            put_echo(text, f"[解析失败] {outcome.message}")
+
+    # Gap 1+5：注入 status_callback 和 down_q
+    # down_q 里的 command 消息由 _VoiceCraftBot.on_step 消费，
+    # 但实际调 director.on_player_command 需要 echo 包装，
+    # 因此我们通过 director_factory 的闭包完成连接。
+    # echo 由 _VoiceCraftBot.on_step 内的 task done 回调触发，
+    # 但那里没有 put_echo。解法：让 make_bot_class 额外接收 cmd_wrapper，
+    # 或在 _VoiceCraftBot 层把 put_echo 一并传入。
+    # 最简方案：make_bot_class 的 down_q 消费处直接调 director.on_player_command，
+    # echo 由 done_callback 里拿 task result 触发。
+    # 见 ares_adapter._VoiceCraftBot.on_step 里 task 结束的回调。
+    # 此处通过「echo_callback 参数进 make_bot_class」来传递（Gap 2 扩展）。
+
+    return make_bot_class(
+        director_factory=director_factory,
+        strategy_library=strategy_library,
+        status_callback=put_status,
+        down_q=down_q,
+        echo_callback=put_echo,
+    )
 
 
 # -----------------------------------------------------------------------
@@ -204,7 +305,7 @@ def _build_bot_class(
 
 
 def _apply_raw_dict(
-    raw: dict[str, str],
+    raw: dict[str, Any],
     current_sc2: Sc2State,
     current_bot: BotState,
 ) -> tuple[Sc2State, BotState, str]:
@@ -212,7 +313,7 @@ def _apply_raw_dict(
     sc2 = raw.get("sc2", current_sc2)
     bot = raw.get("bot", current_bot)
     detail = raw.get("detail", "")
-    return sc2, bot, detail
+    return str(sc2), str(bot), str(detail)
 
 
 def _build_game_status_frame_dict(status: GameStatus) -> dict[str, object]:
@@ -303,8 +404,12 @@ class GameProcess:
             realtime=config.realtime,
         )
 
-    async def status_events(self) -> AsyncIterator[GameStatus]:
-        """上行流：持续 yield GameStatus，直到子进程结束或出错。
+    async def raw_events(self) -> AsyncIterator[dict[str, Any]]:
+        """上行流（M1.6）：持续 yield 原始 dict，直到子进程结束或出错。
+
+        上行消息有两种：
+        - game_status 类：含 sc2/bot 字段，_dispatch_upstream 转 game_status 帧
+        - echo 类：含 kind="echo"，_dispatch_upstream 转 command_echo 帧
 
         asyncio 侧用 run_in_executor 桥接阻塞 Queue.get()，不阻塞 event loop。
         """
@@ -315,7 +420,7 @@ class GameProcess:
 
         loop = asyncio.get_running_loop()
 
-        def _blocking_get() -> dict[str, str] | None:
+        def _blocking_get() -> dict[str, Any] | None:
             """在 executor 线程里阻塞等队列消息（最多 1s timeout 轮一次）。"""
             try:
                 return q.get(timeout=_WATCHDOG_INTERVAL)
@@ -326,8 +431,10 @@ class GameProcess:
             # 非阻塞：先把队列里积压的消息全部处理
             try:
                 raw = q.get_nowait()
-                status = self._apply_raw(raw)
-                yield status
+                # 只有 game_status 类消息才更新内部状态
+                if "sc2" in raw or "bot" in raw:
+                    self._apply_raw(raw)
+                yield raw
                 continue
             except queue.Empty:
                 pass
@@ -339,18 +446,32 @@ class GameProcess:
                 if exit_code != 0 and self._sc2_state not in ("ended", "crashed"):
                     self._sc2_state = "crashed"
                     self._bot_state = "error"
-                    yield GameStatus(
-                        sc2="crashed",
-                        bot="error",
-                        detail=f"子进程非正常退出，exitcode={exit_code}",
-                    )
+                    yield {
+                        "sc2": "crashed",
+                        "bot": "error",
+                        "detail": f"子进程非正常退出，exitcode={exit_code}",
+                    }
                 break
 
             # 阻塞等（在 executor 线程，不卡 event loop）
-            result: dict[str, str] | None = await loop.run_in_executor(None, _blocking_get)
+            result: dict[str, Any] | None = await loop.run_in_executor(None, _blocking_get)
             if result is not None:
-                status = self._apply_raw(result)
-                yield status
+                if "sc2" in result or "bot" in result:
+                    self._apply_raw(result)
+                yield result
+
+    async def status_events(self) -> AsyncIterator[GameStatus]:
+        """上行流（向后兼容）：持续 yield GameStatus，过滤掉 echo 消息。
+
+        M1.6 新增了 raw_events()；此方法保留向后兼容，
+        只 yield game_status 类消息（跳过 echo）。
+        """
+        async for raw in self.raw_events():
+            # echo 类消息跳过
+            if raw.get("kind") == "echo":
+                continue
+            sc2, bot, detail = _apply_raw_dict(raw, self._sc2_state, self._bot_state)
+            yield GameStatus(sc2=sc2, bot=bot, detail=detail)
 
     def send_command(self, cmd: dict[str, Any]) -> None:
         """下行通道：发指令到子进程（M1.4+ 用）。"""
