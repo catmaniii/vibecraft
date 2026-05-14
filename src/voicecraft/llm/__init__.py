@@ -5,10 +5,21 @@
 
 公共入口：`IntentParser`。Provider 通过 `LLMProvider` Protocol 注入，
 当前实现 `AnthropicProvider`，未来可加 OpenAI / DeepSeek。
+
+快速构造（生产路径）::
+
+    from voicecraft.llm import LLMConfig, IntentParser
+    from voicecraft.strategy import StrategyLibrary
+
+    config = LLMConfig.from_yaml(Path("config/llm.yaml"))
+    provider = config.build_provider()   # 读 ANTHROPIC_API_KEY 环境变量
+    parser = IntentParser(provider, library)
 """
 
 from __future__ import annotations
 
+from voicecraft.llm.anthropic_provider import AnthropicProvider
+from voicecraft.llm.config import LLMConfig
 from voicecraft.llm.errors import LLMError
 from voicecraft.llm.parser import IntentParser, ParserConfig
 from voicecraft.llm.prompt import (
@@ -34,8 +45,10 @@ from voicecraft.llm.schema import (
 
 __all__ = [
     "AmbiguousParse",
+    "AnthropicProvider",
     "IntentParseResult",
     "IntentParser",
+    "LLMConfig",
     "LLMError",
     "LLMProvider",
     "MockLLMProvider",
