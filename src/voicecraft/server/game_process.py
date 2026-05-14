@@ -12,7 +12,7 @@
 - 难点 4：双向通信 → 两个 multiprocessing.Queue（上行 / 下行）；asyncio 侧用
   loop.run_in_executor 桥接阻塞 Queue.get()。
 
-ADR：见 `docs/adr/0001-game-process-multiprocessing-spawn.md`。
+ADR：见 `docs/adr/0002-game-process-multiprocessing-spawn.md`。
 """
 
 from __future__ import annotations
@@ -313,7 +313,7 @@ class GameProcess:
         if proc is None or q is None:
             return
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _blocking_get() -> dict[str, str] | None:
             """在 executor 线程里阻塞等队列消息（最多 1s timeout 轮一次）。"""
