@@ -5,9 +5,13 @@
 
 实现按设计文档 §3.2 / §6.1 / §11.x：
 - bot 继承 `ares.AresBot`
-- `set_build()` → ares Build Runner
+- `set_build()` → `bot.build_order_runner.switch_opening(name)`
+  （M1.5 spike A/B 结论：AresBot 属性叫 `build_order_runner`，切换用
+  `switch_opening(name)`，name 必须预先在 `bot.config["Builds"]` 里）
+- voicecraft 剧本在 `on_start` 调 `super().on_start()` 之前注入
+  `bot.config["Builds"]`（spike B 结论：BuildOrderRunner 在 super().on_start()
+  末尾构造，必须在此之前让 config 就位）
 - `set_unit_role()` → `self.mediator.assign_role(tag, role)`
-  （API 名按 ares 实际为准，端到端时校准）
 - `move_camera()` → `self.client.move_camera(point)`
 
 调用方式：
@@ -20,7 +24,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from voicecraft.bot.build_translator import openings_to_ares_config_builds
 from voicecraft.bot.facade import BotState, UnitRole
+from voicecraft.strategy.library import StrategyLibrary
+from voicecraft.strategy.models import OpeningBuild
 
 if TYPE_CHECKING:
     # 这些 import 只在类型检查时有效；运行时 lazy import
@@ -35,11 +42,15 @@ class VoiceCraftBot:
     """
 
 
-def make_bot_class(director_factory: Any) -> type:
+def make_bot_class(director_factory: Any, strategy_library: StrategyLibrary | None = None) -> type:
     """工厂：返回一个继承 AresBot 的 bot 类，把事件转给 director。
 
     director_factory(bot) -> Director：在 on_start 时被调用，
     传入 bot 自己，让 director 持有 facade。
+
+    strategy_library：可选；传入后会把其中所有 OpeningBuild 在 on_start 时注入
+    `bot.config["Builds"]`（spike B：必须在 super().on_start() 之前完成，
+    因为 BuildOrderRunner 在 super().on_start() 末尾构造时读 config）。
     """
     try:
         from ares import AresBot
@@ -70,8 +81,12 @@ def make_bot_class(director_factory: Any) -> type:
         # ---- 写 -------------------------------------------------------
 
         def set_build(self, build_name: str) -> None:
-            # ares Build Runner: 实际 API 在 ares.build_runner.BuildRunner.set_build(name)
-            self.bot.build_runner.set_build(build_name)
+            # spike A/B 结论：
+            #   - AresBot 属性是 `build_order_runner`（非 `build_runner`）
+            #   - 切换 API：`switch_opening(opening_name)`
+            #   - `opening_name` 必须预先在 `bot.config["Builds"]` 里
+            #     （注入发生在 on_start 调 super() 之前，见 _VoiceCraftBot.on_start）
+            self.bot.build_order_runner.switch_opening(build_name)
 
         def set_production_override(
             self,
@@ -166,6 +181,19 @@ def make_bot_class(director_factory: Any) -> type:
         facade: _AresFacade | None = None
 
         async def on_start(self) -> None:
+            # spike B：BuildOrderRunner 在 super().on_start() 末尾构造，
+            # 因此必须在调 super() 之前把 voicecraft 剧本注入 config["Builds"]。
+            # 若 strategy_library 未传入，则跳过注入（向后兼容 M0c smoke）。
+            if strategy_library is not None:
+                openings: list[OpeningBuild] = [
+                    s for s in strategy_library.all_strategies() if isinstance(s, OpeningBuild)
+                ]
+                if openings:
+                    builds_cfg: dict[str, object] = openings_to_ares_config_builds(openings)
+                    if "Builds" not in self.config:
+                        self.config["Builds"] = {}
+                    self.config["Builds"].update(builds_cfg)
+
             await super().on_start()
             self.facade = _AresFacade(self)
             self.director = director_factory(self.facade)
