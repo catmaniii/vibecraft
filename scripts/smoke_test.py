@@ -242,10 +242,7 @@ def build_bot_class(
                             "ts": now,
                             "tag": tag,
                             "kind": "role_changed_away",
-                            "detail": (
-                                f"tag {tag} 不再属于 {LLM_ROLE.value}；"
-                                f"被 base bot 抢回了"
-                            ),
+                            "detail": (f"tag {tag} 不再属于 {LLM_ROLE.value}；被 base bot 抢回了"),
                         }
                     )
                 if orders:
@@ -284,8 +281,7 @@ def build_bot_class(
                 )
             )
             print(
-                f"[smoke] t={now:.1f}s: finalize verdict={verdict} "
-                f"anomalies={len(self.anomalies)}"
+                f"[smoke] t={now:.1f}s: finalize verdict={verdict} anomalies={len(self.anomalies)}"
             )
 
     return SmokeBot
@@ -315,10 +311,7 @@ def main() -> int:
     session = GameSession(GameSessionConfig())
     print(f"[smoke] 日志目录：{session.dir}")
     print(f"[smoke] 地图：{args.map}  对手：{args.opponent_race} {args.opponent_difficulty}")
-    print(
-        f"[smoke] 受控探机 {args.llm_controlled_probes} 个，"
-        f"观察窗口 {args.observation_seconds}s"
-    )
+    print(f"[smoke] 受控探机 {args.llm_controlled_probes} 个，观察窗口 {args.observation_seconds}s")
 
     SmokeBot = build_bot_class(
         session=session,
@@ -350,9 +343,7 @@ def main() -> int:
         return 2
 
     # 落 report
-    report_path = (
-        Path(args.report_path) if args.report_path else session.dir / "smoke_report.json"
-    )
+    report_path = Path(args.report_path) if args.report_path else session.dir / "smoke_report.json"
     report = {
         "verdict": "pass" if not bot.anomalies else "fail",
         "anomaly_count": len(bot.anomalies),
