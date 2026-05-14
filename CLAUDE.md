@@ -32,6 +32,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 常用命令
+
+uv 是主推路径；pip 也能用，见 README。Windows 上 PowerShell 即可。
+
+```bash
+uv sync --extra dev                     # 同步开发依赖（首次 / lock 变更后）
+uv run pytest                           # 跑全部单测（mock，无 SC2）
+uv run pytest tests/unit/test_director.py -x
+                                        # 跑单个文件（-x 首失败停）
+uv run pytest tests/unit/test_director.py::test_view_directive_bypasses_board
+                                        # 跑单条用例
+uv run pytest -m integration            # 集成层（mock python-sc2）
+uv run pytest -m e2e                    # 端到端（需 SC2 客户端；default 跳过）
+uv run pytest --cov=src/voicecraft --cov-report=term-missing
+                                        # 覆盖率报告
+
+uv run ruff check .                     # lint
+uv run ruff check --fix .               # lint + 自动修
+uv run ruff format .                    # 格式化（写回）
+uv run ruff format --check .            # 仅检查
+uv run mypy src/voicecraft              # 严格类型检查（strict mode）
+
+uv run pre-commit install               # 装 hook（首次 clone）
+uv run pre-commit run --all-files       # 在所有文件上跑一次
+
+uv run voicecraft --version             # CLI 占位（M0 stub）
+```
+
+**端到端 smoke**（需 Windows + SC2 + `SC2PATH` 环境变量；详见
+`docs/m0-smoke-runbook.md`）：
+
+```bash
+uv sync --extra dev
+uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
+uv run python scripts/smoke_test.py
+```
+
+pytest 配置（`pyproject.toml`）开了 `filterwarnings = ["error", ...]` —— 任意
+未预期 warning 会让测试红。pydantic 自身的 DeprecationWarning 已忽略，新增依赖
+前查一下它的 deprecation 噪音。
+
+---
+
 ## 项目速览
 
 **VoiceCraft** —— 用语音 + 文字指挥 AI 替你操作 SC2 神族，给操作不动的老 SC2 玩家。
@@ -40,14 +83,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **MVP 范围**：神族 vs SC2 内置 AI，3 个剧本（1门Robo opening / IAC midgame / Skytoss lategame）
 - **预估工期**：12-14 周（M0-M5 里程碑）
 
-### 必读文档
+### 必读文档（四层职责）
 
-| 文档 | 面向谁 | 用途 |
+| 文档 | 内容 | 何时看 |
 |---|---|---|
-| **`docs/plans/2026-05-14-voicecraft-design.md`** | 开发者 | 14 节完整设计，唯一真理源 |
-| **`USER_GUIDE.md`** | 玩家 | 入门手册 + 话语示例 + FAQ |
+| **`docs/plans/2026-05-14-voicecraft-design.md`** | WHY：14 节完整设计真理源 | 任何架构层面工作 |
+| **`ARCHITECTURE.md`** | WHAT IS：当前代码实际形态 + 不变量 + 数据流 | 动代码前 |
+| **`TASKS.md`** | WHAT NEXT：里程碑拆解 + 当前状态 + 用户环境快照 | **新 session 起手必看** |
+| **`USER_GUIDE.md`** | 玩家入门手册 + 话语示例 + FAQ | 改面向玩家功能时 |
+| `CHANGELOG.md` | 已发版历史 | 打 tag 时 |
 
-任何后续工作之前，先 Read 上面这两份文件。
+CLAUDE.md 只放**约定 + 指针**，不重复其他文档已有的内容。
 
 ---
 
@@ -104,15 +150,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 项目演进 Roadmap
+## 代码架构 / 任务进度
 
-| 版本 | 内容 |
-|---|---|
-| **MVP (v0.1)** | 神族 3 剧本 vs 内置 AI |
-| v0.5 | 神族 8+ 剧本 + Web Inspector |
-| v1.0 | 神族完整 + 两笔电 PvP + 本地 LLM fallback |
-| v1.5 | 加虫族 / 人族 |
-| v2.0 | `compile_strategy` 玩家口述生成新剧本 |
+为不膨胀 CLAUDE.md（每次 session 都会自动加载），架构与任务追踪拆到单独文档：
+
+- **代码现状 + 不变量 + 数据流** → `ARCHITECTURE.md`（动代码前必看）
+- **里程碑 + 当前状态 + 用户环境** → `TASKS.md`（新 session 起手必看）
+
+CLAUDE.md 只保留**约定 / 工作模式 / 关键决策摘要**，详细内容不要复制回来。
 
 ---
 
@@ -154,19 +199,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 任何后续工作的下一步
-
-设计文档 → 代码已开始。当前阶段拆解：
-
-| 阶段 | 范围 | 出口 |
-|---|---|---|
-| **M0a** 脚手架 | pyproject / 目录 / lint / mypy / pytest / pre-commit / CI 模板 | `pytest` 跑空通过 |
-| **M0b** Smoke 代码 | 最小 VoiceCraftBot + Unit Role 排除 demo + mock 单测 | mock 验证 role 隔离 + 一份给用户跑的 SC2 启动脚本 |
-| **M0c** 端到端 smoke | 用户启 SC2，验证 "不动的叉子" | 4 个 ares Manager 都 skip LLM_CONTROLLED |
-| **M1** 端到端骨架 | Bot service + WS endpoint + PWA 框架 + 1 剧本 + LLM 1 条话语 | 手机说话 → bot 切 1门Robo build |
-
----
-
 ## 实现纪律
 
 - **结构化日志 JSONL**：每次 LLM 调用（prompt 全文 / 响应 / 耗时 / token / 解析后 directives）、每个 directive 进出 Board、每个 Manager hook 触发，都落盘到 `logs/<game_id>/events.jsonl`。
@@ -179,70 +211,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 会话交接协议（permanent，不要删）
 
-CLAUDE.md 末尾可能存在一个**临时**交接块，边界明确：
+**交接载体**：`TASKS.md` 顶部的「当前状态」+「用户环境关键事实」两段。这两段
+取代了原 CLAUDE.md 末尾 HANDOFF 块的角色 —— TASKS.md 本身就是高频更新的，进度
+变动天然落在那里，不污染 CLAUDE.md history。
 
-```markdown
-<!-- HANDOFF-START: ... -->
-## 上次会话进度（...）
-...
-<!-- HANDOFF-END -->
-```
+**新 session 起手流程**：
+1. 启动时把 `TASKS.md` 顶部的「当前状态」+「用户环境关键事实」当权威上下文读
+2. 至少完成一次有意义的动作（读文件 / 答用户首个问题 / 跑首条命令）
 
-这是上一个 session 留给本 session 的 brief（commit hash / 待办 / 用户环境快照
-等不在代码里、但本 session 起手就要知道的事）。
+**session 结束 / 切换 / 用户明示要交接时**：
+- 更新 `TASKS.md` 顶部「当前状态」段：
+  - "最近更新" 日期
+  - 当前里程碑 + HEAD commit hash
+  - 阻塞 / 等待事项
+  - 下一步动作
+- 如有新的用户环境事实（路径变了、装了新东西），更新「用户环境关键事实」段
+- 当前里程碑的待办勾掉已完成项，列出剩余
+- commit message：`TASKS.md：更新 M{n} 状态 / session 交接`
 
-**新 session 起手的处理流程**：
-1. 启动时把 HANDOFF 块当作权威上下文读
-2. 至少完成一次有意义的动作（读文件 / 答用户首个问题 / 跑首条命令），确认已经
-   "接住"
-3. **接住后立即删除整段 HANDOFF 块**（从 `<!-- HANDOFF-START` 注释那一行到
-   `<!-- HANDOFF-END -->` 这一行整段，包含中间所有内容），用 commit message
-   `清理 HANDOFF 块（已接住 session N→N+1）` commit
-4. 本 session 结束 / 切换 / 用户明示要 handoff 时，**重新**生成新的 HANDOFF 块
-   写入 CLAUDE.md 末尾 + commit
+**不要写进交接**：
+- 代码细节、架构决策（→ `ARCHITECTURE.md` 或 `docs/adr/`）
+- 用户偏好（→ Claude memory）
+- 调试日志、思考过程（→ 不要持久化）
 
-**HANDOFF 块的内容规范**（保持紧凑，<60 行）：
-- 最近 3-5 个 commit hash + 一句话描述
-- 当前里程碑状态 / 等待事项
-- 用户环境关键事实（路径、账号、装了什么）—— 仅写"不在代码里、问一遍要花时间"的
-- 下一步动作
-
-**不要写进 HANDOFF**：
-- 代码细节、架构决策（这些进 CLAUDE.md 永久段或 ADR）
-- 用户偏好（这些进 memory）
-- 调试日志、思考过程
-
----
-
-<!-- HANDOFF-START: 2026-05-14 目录从 voice_craft 改名为 voicecraft 后接续。
-     本段为临时交接信息，新 session 按"会话交接协议"接住后请整段删除并 commit。 -->
-
-## 上次会话进度（2026-05-14，目录改名后留给新 session 接续）
-
-**已完成 commits**（已 push 到 https://github.com/catmaniii/voicecraft）：
-- `44159e1` M0a + M0b 完成：脚手架 + 全部无 SC2 模块 + 126 单测全过
-- `47d2b1e` 修正 LLM_CONTROLLED 映射 ares `CONTROL_GROUP_ONE`（ares UnitRole 是
-  固定 StrEnum 加不了成员，必须复用 `CONTROL_GROUP_ONE` 这个"留给用户的空槽"）
-
-**当前状态**：等待玩家 M0c 端到端 smoke 验证（"不动的叉子"）。详见
-`docs/m0-smoke-runbook.md` 与本仓库根部 `scripts/smoke_test.py`。
-
-**用户环境**（不要再问，直接用）：
-- SC2 装在 `D:\StarCraft II\`，最新版本 `Base94137`。**必须设环境变量**
-  `SC2PATH=D:\StarCraft II`，python-sc2 默认只找 C:\Program Files 路径
-- 用户的 `Documents\StarCraft II\Maps\` 和 `D:\StarCraft II\Maps\` 都不存在，
-  需要先下载 1v1 ladder 地图才能跑 smoke
-- 用户已装 uv + Python 3.11；本地仓库目录从 `voice_craft` 改名为 `voicecraft`，
-  与 GitHub repo 一致；`.venv` 改名后需重建（`rm -rf .venv && uv sync --extra dev`）
-- 用户的 GitHub 账户：`catmaniii`，gh CLI 已认证（HTTPS + keyring token）
-
-**版本号 / 里程碑映射**（见 CHANGELOG）：
-- `0.1.0a1` ← 当前 HEAD（M0b 完成）
-- `0.1.0a2` ← M0c smoke 通过后打 tag
-- `0.1.0` ← M5 MVP RC
-
-**下一步**：用户跑完 smoke 给反馈 → 通过则打 tag `v0.1.0a2` + 开 M1
-（Bot service + WS endpoint + 手机 PWA 框架 + 1 个剧本 set_build + LLM 单条话语
-解析），不通过看 `smoke_report.json` 的 `anomalies_by_kind` 决定回退方案。
-
-<!-- HANDOFF-END -->
