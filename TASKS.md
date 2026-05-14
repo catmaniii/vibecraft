@@ -9,16 +9,22 @@
 
 ## 当前状态（最近更新：2026-05-14）
 
-- **里程碑**：M0c ✅ 完成并已 commit；**M1 已拆解，待开工**
-- **HEAD**：`d917c30`（smoke_test.py `--realtime` 开关）
-  - 上游：`03fb12f` M0c 完成（smoke 3 处校准 + `.python-version` + 文档）
-  - 本地领先 origin 若干 commit，**未 push 未 tag**（按用户选择）
+- **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅）
+- **HEAD**：`8e65c3c` M1.1a（server 包 + room_token）
+  - 本地领先 origin **4 个 commit**（`03fb12f` / `d917c30` / `a082e0f` /
+    `8e65c3c`），**未 push 未 tag**（按用户选择）
+- **进行中**：M1.1 bot service 骨架
+  - **M1.1a ✅** —— `src/voicecraft/server/` 包 + `tokens.py`（`room_token`
+    生成 + `RoomRegistry` 单活跃连接顶旧）+ `test_server.py`（10 单测全绿，
+    ruff + mypy strict 干净）
+  - **下一步 → M1.1b WS endpoint**：`websockets` async server，监听
+    `0.0.0.0:<port>`（不硬编码 localhost）、token 验证握手、帧收发循环、
+    5s 心跳、重连顶旧（用 `RoomRegistry.attach` 返回的旧连接 `close()` 掉）。
+    拆解依据见设计文档 §9.2 / §9.3；`Connection` Protocol 已在
+    `server/tokens.py` 备好，WS 连接类实现它即可
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
-- **进行中**：M1.1 bot service 骨架。**M1.1a 完成**（`server/` 包 + `tokens.py`
-  room_token / RoomRegistry，10 单测全绿），待 commit
-- **下一步**：M1.1b WS endpoint（`websockets` async server）；建议切 Sonnet 起
-  session（模型选择规则：写代码用 Sonnet）
+- **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
 - **环境就绪情况**（M1 直接复用，不用重来）：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
   - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
