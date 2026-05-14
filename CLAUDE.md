@@ -174,3 +174,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Recipe store 抽象**：剧本不直接 import YAML 路径，走 `StrategyLibrary.get(id)` 接口，未来好替换。
 - **不允许 sleep 等真实 SC2**：单测全部 mock python-sc2 / ares 接口。`tests/integration/` 留给端到端，但跳过 default。
 - **直接修改 CLAUDE.md** 当：决策变更 / 新建一类约定 / 用户给了新的强偏好。
+
+---
+
+## 上次会话进度（2026-05-14，目录改名后留给新 session 接续）
+
+**已完成 commits**（已 push 到 https://github.com/catmaniii/voicecraft）：
+- `44159e1` M0a + M0b 完成：脚手架 + 全部无 SC2 模块 + 126 单测全过
+- `47d2b1e` 修正 LLM_CONTROLLED 映射 ares `CONTROL_GROUP_ONE`（ares UnitRole 是
+  固定 StrEnum 加不了成员，必须复用 `CONTROL_GROUP_ONE` 这个"留给用户的空槽"）
+
+**当前状态**：等待玩家 M0c 端到端 smoke 验证（"不动的叉子"）。详见
+`docs/m0-smoke-runbook.md` 与本仓库根部 `scripts/smoke_test.py`。
+
+**用户环境**（不要再问，直接用）：
+- SC2 装在 `D:\StarCraft II\`，最新版本 `Base94137`。**必须设环境变量**
+  `SC2PATH=D:\StarCraft II`，python-sc2 默认只找 C:\Program Files 路径
+- 用户的 `Documents\StarCraft II\Maps\` 和 `D:\StarCraft II\Maps\` 都不存在，
+  需要先下载 1v1 ladder 地图才能跑 smoke
+- 用户已装 uv + Python 3.11；本地仓库目录从 `voice_craft` 改名为 `voicecraft`，
+  与 GitHub repo 一致；`.venv` 改名后需重建（`rm -rf .venv && uv sync --extra dev`）
+- 用户的 GitHub 账户：`catmaniii`，gh CLI 已认证（HTTPS + keyring token）
+
+**版本号 / 里程碑映射**（见 CHANGELOG）：
+- `0.1.0a1` ← 当前 HEAD（M0b 完成）
+- `0.1.0a2` ← M0c smoke 通过后打 tag
+- `0.1.0` ← M5 MVP RC
+
+**下一步**：用户跑完 smoke 给反馈 → 通过则打 tag `v0.1.0a2` + 开 M1
+（Bot service + WS endpoint + 手机 PWA 框架 + 1 个剧本 set_build + LLM 单条话语
+解析），不通过看 `smoke_report.json` 的 `anomalies_by_kind` 决定回退方案。
