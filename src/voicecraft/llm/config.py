@@ -1,7 +1,12 @@
 """LLM 配置加载（设计文档 §7.4）。
 
-读取 `config/llm.yaml` + 环境变量 `ANTHROPIC_API_KEY`（secret 不进 git）。
+读取 `config/llm.yaml` + API key 环境变量（secret 不进 git）。环境变量名按
+provider 决定：anthropic → `ANTHROPIC_API_KEY`，deepseek → `DEEPSEEK_API_KEY`
+（也可在 yaml 里用 `api_key_env` 显式指定）。
 提供 `LLMConfig.build_provider()` 工厂方法，返回 `LLMProvider` 实现。
+
+provider 可配置切换：anthropic 走官方 Claude，deepseek 走 DeepSeek 的
+Anthropic 兼容端点（复用 AnthropicProvider + base_url，见 ADR 0005）。
 
 用法::
 
@@ -22,6 +27,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from voicecraft.llm.errors import LLMError
 from voicecraft.llm.provider import LLMProvider
 
+# provider → 默认 base_url（None = anthropic SDK 默认端点，即官方 Anthropic）
+_PROVIDER_BASE_URL: dict[str, str | None] = {
+    "anthropic": None,
+    "deepseek": "https://api.deepseek.com/anthropic",
+}
+
+# provider → 默认 API key 环境变量名
+_PROVIDER_API_KEY_ENV: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+}
+
 
 class LLMConfig(BaseModel):
     """config/llm.yaml 的 pydantic 模型。
@@ -31,8 +48,14 @@ class LLMConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provider: str = Field(default="anthropic", description="provider 名称")
+    provider: str = Field(default="anthropic", description="provider 名称（anthropic / deepseek）")
     model: str = Field(default="claude-sonnet-4-6", description="模型 id")
+    base_url: str | None = Field(
+        default=None, description="API 端点；None 时按 provider 取默认（见 _PROVIDER_BASE_URL）"
+    )
+    api_key_env: str | None = Field(
+        default=None, description="API key 环境变量名；None 时按 provider 取默认"
+    )
     fallback_provider: str | None = Field(default=None, description="备用 provider（MVP 不用）")
     fallback_model: str | None = Field(default=None)
     timeout_s: float = Field(default=3.0, ge=0.1, le=60.0)
@@ -63,24 +86,33 @@ class LLMConfig(BaseModel):
     def build_provider(self, api_key: str | None = None) -> LLMProvider:
         """根据配置构造 `LLMProvider` 实现。
 
-        `api_key` 参数优先；其次读环境变量 `ANTHROPIC_API_KEY`；
-        最后交给 SDK 自己的默认查找逻辑（SDK 也会读 env，此处显式读是为了
-        在 provider 构造时就报错，而不是等到第一次真实调用时才崩溃）。
-        """
-        if self.provider == "anthropic":
-            return self._build_anthropic(api_key=api_key)
-        raise LLMError(f"不支持的 provider: {self.provider!r}（当前仅支持 'anthropic'）")
+        `api_key` 参数优先；其次读 provider 对应的环境变量（anthropic →
+        `ANTHROPIC_API_KEY`，deepseek → `DEEPSEEK_API_KEY`，或 yaml 的
+        `api_key_env` 覆盖）；最后交给 SDK 自己的默认查找逻辑。此处显式读
+        是为了在 provider 构造时就报错，而不是等到第一次真实调用时才崩溃。
 
-    def _build_anthropic(self, api_key: str | None = None) -> LLMProvider:
-        """构造 AnthropicProvider。"""
+        anthropic / deepseek 都走 AnthropicProvider（DeepSeek 提供 Anthropic
+        兼容端点，靠 base_url 区分，见 ADR 0005）。
+        """
+        if self.provider in _PROVIDER_API_KEY_ENV:
+            return self._build_anthropic_compatible(api_key=api_key)
+        supported = " / ".join(repr(p) for p in _PROVIDER_API_KEY_ENV)
+        raise LLMError(f"不支持的 provider: {self.provider!r}（当前支持 {supported}）")
+
+    def _build_anthropic_compatible(self, api_key: str | None = None) -> LLMProvider:
+        """构造 AnthropicProvider（anthropic 官方 / deepseek 兼容端点共用）。"""
         # 延迟 import，避免 LLMConfig 在没有 anthropic SDK 时也无法 import
         from voicecraft.llm.anthropic_provider import AnthropicProvider
 
-        resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        base_url = self.base_url if self.base_url is not None else _PROVIDER_BASE_URL[self.provider]
+        key_env = self.api_key_env or _PROVIDER_API_KEY_ENV[self.provider]
+        resolved_key = api_key or os.environ.get(key_env)
         # 注意：key=None 时 SDK 也会自己找 env，这里 None 就直接传过去
         return AnthropicProvider(
             api_key=resolved_key,
             model=self.model,
             max_tokens=self.max_tokens,
             use_prompt_cache=self.use_prompt_cache,
+            base_url=base_url,
+            provider_name=self.provider,
         )

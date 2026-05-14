@@ -28,14 +28,18 @@
   前端 vitest 15 passed、ruff + ruff format + mypy strict 全干净
 - **M1.6 由 Sonnet subagent 实现**（worktree 隔离），Opus review 过、清掉一处死代码
   （`game_process._build_bot_class` 里未使用的 echo 包装函数 + 思考过程注释块）
-- **下一步：真实 SC2 端到端验证 —— 需用户在场 + `ANTHROPIC_API_KEY`**：
+- **LLM provider**：已从官方 Claude 切到 **DeepSeek V4**（走 Anthropic 兼容端点，
+  `deepseek-v4-flash`，见 ADR 0005 + `config/llm.yaml`）。API key 走
+  `DEEPSEEK_API_KEY` 环境变量。`cache_control` / `tool_choice` 强制 JSON 在
+  DeepSeek 端点的兼容性待真实 API 验证（已默认关 prompt cache 兜底）
+- **下一步：真实 SC2 端到端验证 —— 需用户在场 + `DEEPSEEK_API_KEY`**：
   启 bot service（`uv run voicecraft serve`）→ 手机扫码 → 点开始对局 →
   说「切1门Robo」→ 看 SC2 是否切到 `1g_robo_immortal` build + 手机收到
-  `command_echo`。**这一步同时验掉 M1.4 的真实 anthropic API**（之前一直挂着没验）。
+  `command_echo`。**这一步同时验掉 M1.4 的真实 LLM API（DeepSeek V4）**（一直挂着没验）。
   详细清单见 M1.6 subagent 报告
-- **可能失败点**（来自 subagent 报告）：`ANTHROPIC_API_KEY` 未设 → echo 显示
-  `[解析失败]`；环境只跑了 `uv sync --extra dev`（没带 `--extra sc2`）→ 退回
-  `_M12Bot` stub，command 被消费但不解析；地图缺失 → 子进程报「地图未找到」
+- **可能失败点**：`DEEPSEEK_API_KEY` 未设 → echo 显示 `[解析失败]`；环境只跑了
+  `uv sync --extra dev`（没带 `--extra sc2`）→ 退回 `_M12Bot` stub，command
+  被消费但不解析；地图缺失 → 子进程报「地图未找到」
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：真实验证若需 debug 用 Opus；M2 起写代码用 Sonnet

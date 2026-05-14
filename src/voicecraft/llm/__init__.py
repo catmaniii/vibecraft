@@ -4,7 +4,8 @@
 剧本能不能赢——失败就报错，**绝不"近似猜测"半懂半不懂的指令**。
 
 公共入口：`IntentParser`。Provider 通过 `LLMProvider` Protocol 注入，
-当前实现 `AnthropicProvider`，未来可加 OpenAI / DeepSeek。
+`AnthropicProvider` 同时覆盖官方 Claude 和 DeepSeek 的 Anthropic 兼容端点
+（靠 base_url 区分，见 ADR 0005）。
 
 快速构造（生产路径）::
 
@@ -12,7 +13,7 @@
     from voicecraft.strategy import StrategyLibrary
 
     config = LLMConfig.from_yaml(Path("config/llm.yaml"))
-    provider = config.build_provider()   # 读 ANTHROPIC_API_KEY 环境变量
+    provider = config.build_provider()   # 按 provider 读对应 API key 环境变量
     parser = IntentParser(provider, library)
 """
 

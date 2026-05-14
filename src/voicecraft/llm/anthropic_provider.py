@@ -1,10 +1,12 @@
-"""AnthropicProvider —— 真正的 Claude API 调用。
+"""AnthropicProvider —— 通过 anthropic SDK 调用 Claude 或 Anthropic 兼容端点。
 
 仅在 production 路径用，单测全部 mock（不调真实 API）。
 本文件 import anthropic SDK，但 LLMProvider Protocol 已在 provider.py
 独立定义，import 失败不影响其他模块。
 
 模型默认 `claude-sonnet-4-6`（设计文档 §7.4），可通过 LLMConfig 切换。
+`base_url` 指向 DeepSeek 的 Anthropic 兼容端点（`https://api.deepseek.com/anthropic`）
+时，同一份代码即可调 DeepSeek V4（见 ADR 0005）。
 
 错误处理策略（设计文档 §7.6）：
 - `anthropic.APITimeoutError` / `asyncio.TimeoutError` → 由上层 `asyncio.wait_for` 或
@@ -45,7 +47,7 @@ class AnthropicProvider:
     secret **不进 git** —— yaml / 代码里不要写 key 字面值。
     """
 
-    name = "anthropic"
+    name: str
 
     def __init__(
         self,
@@ -53,24 +55,37 @@ class AnthropicProvider:
         model: str = "claude-sonnet-4-6",
         max_tokens: int = 1024,
         use_prompt_cache: bool = True,
+        base_url: str | None = None,
+        provider_name: str = "anthropic",
     ) -> None:
         """
         Args:
-            api_key: Anthropic API key；为 None 时 SDK 读 `ANTHROPIC_API_KEY` 环境变量。
-            model: 使用的 Claude 模型 id。
+            api_key: API key；为 None 时 SDK 自己读环境变量。
+            model: 模型 id。
             max_tokens: 单次调用最大输出 token 数。
             use_prompt_cache: 是否给静态段（system / few-shot）打 cache_control。
+            base_url: API 端点；None 走 anthropic SDK 默认（官方 Anthropic）。
+                指向 DeepSeek 的 Anthropic 兼容端点时传
+                `https://api.deepseek.com/anthropic`。
+            provider_name: provider 标识，写进 ProviderResponse.provider + 日志。
+                走 DeepSeek 兼容端点时传 "deepseek"。
         """
         try:
             from anthropic import AsyncAnthropic
         except ImportError as e:
             raise LLMError("未安装 anthropic SDK：`uv add anthropic`") from e
 
-        # api_key=None 时 AsyncAnthropic 自己读 ANTHROPIC_API_KEY env var
-        self.client: AsyncAnthropic = AsyncAnthropic(api_key=api_key)
+        # base_url=None 时不传给 SDK，走官方默认端点；
+        # api_key=None 时 AsyncAnthropic 自己读环境变量
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url is not None:
+            client_kwargs["base_url"] = base_url
+        self.client: AsyncAnthropic = AsyncAnthropic(**client_kwargs)
         self.model = model
         self.max_tokens = max_tokens
         self.use_prompt_cache = use_prompt_cache
+        self.base_url = base_url
+        self.name = provider_name
 
     async def parse(
         self,
@@ -179,7 +194,7 @@ class AnthropicProvider:
             cache_hit=cache_read > 0,
             latency_ms=latency_ms,
             model=self.model,
-            provider="anthropic",
+            provider=self.name,
             extra={
                 "stop_reason": msg.stop_reason,
                 "cache_read_input_tokens": cache_read,

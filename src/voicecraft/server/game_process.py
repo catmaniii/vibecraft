@@ -245,7 +245,7 @@ def _build_bot_class(
         # 没有剧本文件时用空 library（单测 / 无策略环境也能跑）
         strategy_library = StrategyLibrary()
 
-    # --- LLM provider（读 ANTHROPIC_API_KEY 环境变量）---
+    # --- LLM provider（按 config/llm.yaml 的 provider 读对应 API key 环境变量）---
     llm_config_path = _project_root / "config" / "llm.yaml"
     llm_config = LLMConfig.from_yaml_or_defaults(
         llm_config_path if llm_config_path.exists() else None

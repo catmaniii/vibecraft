@@ -594,12 +594,14 @@ class TestIntentParserWithAnthropicProvider:
 
 class TestLLMConfig:
     def test_from_yaml_loads_fields(self) -> None:
-        """从项目 config/llm.yaml 加载，字段全正确。"""
+        """从项目 config/llm.yaml 加载，字段全正确（当前配置为 DeepSeek V4）。"""
         cfg = LLMConfig.from_yaml(PROJECT_ROOT / "config" / "llm.yaml")
-        assert cfg.provider == "anthropic"
-        assert cfg.model == "claude-sonnet-4-6"
+        assert cfg.provider == "deepseek"
+        assert cfg.model == "deepseek-v4-flash"
+        assert cfg.base_url == "https://api.deepseek.com/anthropic"
+        assert cfg.api_key_env == "DEEPSEEK_API_KEY"
         assert cfg.timeout_s == 3.0
-        assert cfg.use_prompt_cache is True
+        assert cfg.use_prompt_cache is False
 
     def test_from_yaml_or_defaults_missing_file(self, tmp_path: Path) -> None:
         """文件不存在 → 使用默认值，不抛异常。"""
@@ -662,6 +664,74 @@ class TestLLMConfig:
 
 
 # ======================================================================
+# LLMConfig：provider=deepseek（走 Anthropic 兼容端点，ADR 0005）
+# ======================================================================
+
+
+class TestLLMConfigDeepSeek:
+    """provider=deepseek：复用 AnthropicProvider + base_url + DEEPSEEK_API_KEY。"""
+
+    def test_deepseek_uses_default_base_url(self) -> None:
+        """provider=deepseek 未显式给 base_url → 用 DeepSeek 兼容端点默认值。"""
+        cfg = LLMConfig(provider="deepseek", model="deepseek-v4-flash")
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            cfg.build_provider(api_key="sk-ds")
+        mock_cls.assert_called_once_with(
+            api_key="sk-ds", base_url="https://api.deepseek.com/anthropic"
+        )
+
+    def test_deepseek_reads_deepseek_api_key_env(self) -> None:
+        """provider=deepseek → 读 DEEPSEEK_API_KEY，不读 ANTHROPIC_API_KEY。"""
+        cfg = LLMConfig(provider="deepseek", model="deepseek-v4-flash")
+        with (
+            patch.dict(
+                os.environ,
+                {"DEEPSEEK_API_KEY": "sk-deepseek", "ANTHROPIC_API_KEY": "sk-anthropic"},
+            ),
+            patch("anthropic.AsyncAnthropic") as mock_cls,
+        ):
+            cfg.build_provider()
+        mock_cls.assert_called_once_with(
+            api_key="sk-deepseek", base_url="https://api.deepseek.com/anthropic"
+        )
+
+    def test_explicit_base_url_overrides_default(self) -> None:
+        """yaml 显式 base_url 覆盖 provider 默认值。"""
+        cfg = LLMConfig(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            base_url="https://custom.example/anthropic",
+        )
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            cfg.build_provider(api_key="sk-ds")
+        mock_cls.assert_called_once_with(
+            api_key="sk-ds", base_url="https://custom.example/anthropic"
+        )
+
+    def test_explicit_api_key_env_overrides_default(self) -> None:
+        """yaml 显式 api_key_env 覆盖 provider 默认环境变量名。"""
+        cfg = LLMConfig(provider="deepseek", api_key_env="MY_KEY")
+        with (
+            patch.dict(os.environ, {"MY_KEY": "sk-custom"}),
+            patch("anthropic.AsyncAnthropic") as mock_cls,
+        ):
+            cfg.build_provider()
+        mock_cls.assert_called_once_with(
+            api_key="sk-custom", base_url="https://api.deepseek.com/anthropic"
+        )
+
+    def test_deepseek_provider_name_propagates(self) -> None:
+        """provider=deepseek → AnthropicProvider.name == 'deepseek'。"""
+        cfg = LLMConfig(provider="deepseek", model="deepseek-v4-flash")
+        with patch("anthropic.AsyncAnthropic"):
+            provider = cfg.build_provider(api_key="sk-ds")
+        assert isinstance(provider, AnthropicProvider)
+        assert provider.name == "deepseek"
+        assert provider.base_url == "https://api.deepseek.com/anthropic"
+        assert provider.model == "deepseek-v4-flash"
+
+
+# ======================================================================
 # AnthropicProvider：constructor（不需要真实 key）
 # ======================================================================
 
@@ -678,6 +748,26 @@ class TestAnthropicProviderConstructor:
         with patch("anthropic.AsyncAnthropic"):
             p = AnthropicProvider(api_key="x", model="claude-haiku-4-5")
         assert p.model == "claude-haiku-4-5"
+
+    def test_base_url_passed_to_sdk(self) -> None:
+        """base_url 非 None → 传给 AsyncAnthropic；provider_name 写进 name。"""
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            p = AnthropicProvider(
+                api_key="x",
+                base_url="https://api.deepseek.com/anthropic",
+                provider_name="deepseek",
+            )
+        mock_cls.assert_called_once_with(api_key="x", base_url="https://api.deepseek.com/anthropic")
+        assert p.name == "deepseek"
+        assert p.base_url == "https://api.deepseek.com/anthropic"
+
+    def test_base_url_none_not_passed_to_sdk(self) -> None:
+        """base_url=None（默认）→ 不传 base_url 给 SDK，走官方默认端点。"""
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            p = AnthropicProvider(api_key="x")
+        mock_cls.assert_called_once_with(api_key="x")
+        assert p.name == "anthropic"
+        assert p.base_url is None
 
     def test_import_error_raises_llm_error(self) -> None:
         """anthropic SDK 未安装 → LLMError（不是 ImportError）。"""

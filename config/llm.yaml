@@ -1,13 +1,18 @@
-# LLM provider 配置（设计文档 §7.4）
+# LLM provider 配置（设计文档 §7.4 / ADR 0005）
 #
-# API key 放 .env / 环境变量，不要 commit。
+# API key 放环境变量，不要 commit。当前 provider=deepseek → 读 DEEPSEEK_API_KEY。
+# 切回官方 Claude：provider 改 anthropic、model 改 claude-sonnet-4-6、
+# base_url 改 null（或删掉该行）、use_prompt_cache 可设 true。
 
-provider: anthropic
-model: claude-sonnet-4-6
-fallback_provider: null   # M0 不接 fallback；M1+ 可设 openai
+provider: deepseek
+model: deepseek-v4-flash       # 或 deepseek-v4-pro（更强、更慢更贵）
+base_url: https://api.deepseek.com/anthropic   # DeepSeek 的 Anthropic 兼容端点
+api_key_env: DEEPSEEK_API_KEY
+fallback_provider: null   # M0 不接 fallback；M1+ 可设
 fallback_model: null
 timeout_s: 3.0
 max_retries: 1
 confidence_threshold: 0.6
 max_directives_per_call: 10
-use_prompt_cache: true
+use_prompt_cache: false   # DeepSeek 兼容端点 cache_control 兼容性未经真实验证；
+                          # DeepSeek 自带 prefix 自动缓存兜底。验证兼容后可改 true

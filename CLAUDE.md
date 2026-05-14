@@ -139,7 +139,7 @@ CLAUDE.md 只放**约定 + 指针**，不重复其他文档已有的内容。
 | 输入设备 | **手机 PWA** (Vue 3 + Tailwind)，扫码连接 |
 | 视野控制 | **手机小地图拖拽** → bot move_camera |
 | 玩家在 PC 上 | **不需要键鼠**，物理隔离即可（不屏蔽，自愈机制兜底）|
-| LLM 部署 | **纯云端** (Claude Sonnet 4.6 起步，留接口接 DeepSeekV4) |
+| LLM 部署 | **纯云端**，provider 可配置切换（当前 DeepSeek V4 走 Anthropic 兼容端点，留官方 Claude 接口；见 ADR 0005）|
 | 内部语言 | **Directives JSON** 是唯一中间表示 |
 | 优先级机制 | LLM_CONTROLLED role 让 base bot 默认 skip |
 | 公平性 | 1.5s 固定生效延迟 + 10s 限频 + APM cap 120 |
