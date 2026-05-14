@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import queue
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,10 +28,17 @@ from voicecraft.server.game_process import (
 # ---------------------------------------------------------------------------
 
 
-def _make_up_q(*messages: dict[str, str]) -> multiprocessing.Queue:  # type: ignore[type-arg]
-    """构造一个已有若干消息的上行队列（不需要子进程）。"""
-    ctx = multiprocessing.get_context("spawn")
-    q: multiprocessing.Queue[dict[str, str]] = ctx.Queue()
+def _make_up_q(*messages: dict[str, str]) -> queue.Queue[dict[str, str]]:
+    """构造一个已有若干消息的上行队列（不需要子进程）。
+
+    用标准库同步 `queue.Queue` 而非 `multiprocessing.Queue`：后者的 `put` 经由
+    内部 feeder thread 异步写入底层 pipe，`put` 返回后不保证消息立刻能被 `get`
+    取到 —— 全套测试跑、机器负载高时 feeder 调度慢，`status_events()` 的
+    `get_nowait()` 会取不全消息，导致 flaky。`status_events()` 只用到
+    `get_nowait()` / `get(timeout=)`（两者 `queue.Queue` 都有，且抛同一个
+    `queue.Empty`），换成同步队列后 deterministic。
+    """
+    q: queue.Queue[dict[str, str]] = queue.Queue()
     for msg in messages:
         q.put_nowait(msg)
     return q
@@ -299,8 +307,9 @@ class TestGameProcessSendCommand:
 
     def test_send_command_puts_to_queue(self) -> None:
         gp = GameProcess()
-        ctx = multiprocessing.get_context("spawn")
-        gp._down_q = ctx.Queue()
+        # 同步 queue.Queue 替代 multiprocessing.Queue：后者 put 经 feeder thread
+        # 异步写入，put 完立刻 get_nowait 会偶发 Empty（同 _make_up_q 的 flaky）。
+        gp._down_q = queue.Queue()
         gp.send_command({"type": "leave"})
         msg = gp._down_q.get_nowait()
         assert msg["type"] == "leave"
