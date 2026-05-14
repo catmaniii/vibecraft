@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **BF** = Forge / BF
   - **BC** = Cybernetics Core / BC
   - **VC** = Assimilator / 气矿
-  - **VR** = Robotics Facility / VR （兵种 VR = Void Ray 看上下文消歧）
+  - **VR** = Robotics Facility / VR（仅指建筑；虚空辉光舰不叫 VR，叫"虚空 / 辉光舰"）
   - **VD** = Robotics Bay / VD
   - **VS** = Stargate / VS
   - **VT** = Twilight Council / VT
@@ -145,7 +145,7 @@ CLAUDE.md 只放**约定 + 指针**，不重复其他文档已有的内容。
 | 公平性 | 1.5s 固定生效延迟 + 10s 限频 + APM cap 120 |
 | 剧本表达 | 多态 YAML：opening_build / midgame_stance / lategame_doctrine |
 | 时机记法 | build steps 用 supply，timing windows 用 game_time |
-| 别名机制 | 中央 YAML 表 + verb 消歧（VR 建筑 vs VR 单位）|
+| 别名机制 | 中央 YAML 表 + verb 消歧（"造建筑" / "出单位" / "研升级"）|
 | 6 个 ares hook 点 | A Build Runner / B OverrideMediator / C Unit Role / D Rationale Logger / E ViewController / F BuildLocationOverride |
 
 ---

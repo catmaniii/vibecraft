@@ -2,10 +2,9 @@
 
 设计文档 §4.4：
 - aliases/protoss.yaml 列 building / unit / upgrade 各自的中文 + hotkey 别名
-- 一个 alias 可能在 building 表和 unit 表里同名（VR = RoboticsFacility 也 = VoidRay）
-- 根据 verb 上下文消歧：
-  - `build VR` → 建筑表 → RoboticsFacility
-  - `train VR` → 单位表 → VoidRay
+- verb 上下文决定查哪一组：build→建筑、train→单位、research→升级，
+  同时起类型校验作用（"造叉子" 这种 verb 与组不匹配会抛错）
+- 若同一字面别名在多组同形，verb 用来消歧；verb=ANY 且同形则抛歧义错误
 """
 
 from __future__ import annotations

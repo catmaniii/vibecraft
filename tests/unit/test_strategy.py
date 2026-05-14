@@ -3,7 +3,7 @@
 覆盖 (§4.2 / §4.4)：
 - BuildStep 紧凑三段式解析
 - 三种 kind 的 schema ser/de
-- AliasTable verb 消歧（VR 建筑 vs VR 单位）
+- AliasTable verb 消歧（"造/出/研" 决定查哪组 + 同形别名消歧）
 - StrategyLibrary 加载 / 查询 / 转移图
 - 跨引用校验（opening → midgame 必须存在）
 - 真实 YAML 文件能加载（fixture 用项目 strategies/）
@@ -121,7 +121,7 @@ def alias_table() -> AliasTable:
         "units": {
             "VoidRay": {
                 "default_display": "虚空",
-                "aliases": ["虚空", "VR", "虚空辐射"],
+                "aliases": ["虚空", "虚空辐射"],
             },
             "Stalker": {
                 "default_display": "追猎",
@@ -149,10 +149,21 @@ class TestAliasTable:
         assert canonical == "Gateway"
         assert group == "building"
 
-    def test_ambiguous_alias_without_verb_raises(self, alias_table: AliasTable) -> None:
-        """VR 同时是建筑（RoboticsFacility）和单位（VoidRay）。"""
+    def test_ambiguous_alias_without_verb_raises(self) -> None:
+        """同形别名（building+unit 共用）在 verb=ANY 时抛歧义错误。
+
+        真实 aliases/protoss.yaml 当前无同形别名（VR 仅建筑），这里构造一个
+        同形场景覆盖 resolve 的歧义分支。
+        """
+        table = AliasTable.from_dict(
+            {
+                "buildings": {"Gateway": {"default_display": "BG", "aliases": ["同形"]}},
+                "units": {"Zealot": {"default_display": "叉子", "aliases": ["同形"]}},
+                "upgrades": {},
+            }
+        )
         with pytest.raises(StrategyValidationError, match="歧义"):
-            alias_table.resolve("VR")
+            table.resolve("同形")
 
     def test_verb_disambiguates_to_building(self, alias_table: AliasTable) -> None:
         canonical, group = alias_table.resolve("VR", verb=VerbHint.BUILD)
@@ -160,7 +171,7 @@ class TestAliasTable:
         assert group == "building"
 
     def test_verb_disambiguates_to_unit(self, alias_table: AliasTable) -> None:
-        canonical, group = alias_table.resolve("VR", verb=VerbHint.TRAIN)
+        canonical, group = alias_table.resolve("虚空", verb=VerbHint.TRAIN)
         assert canonical == "VoidRay"
         assert group == "unit"
 
@@ -274,11 +285,13 @@ class TestStrategyLibrary:
             strategies_dir=PROJECT_ROOT / "strategies",
             aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
         )
-        # VR 在真实别名表里就是模糊的（建筑 RoboticsFacility + 单位 VoidRay）
+        # VR 在真实别名表里仅指建筑（虚空辉光舰不叫 VR）
         canonical, _ = lib.aliases.resolve("VR", verb=VerbHint.BUILD)
         assert canonical == "RoboticsFacility"
-        canonical, _ = lib.aliases.resolve("VR", verb=VerbHint.TRAIN)
+        # 单位别名走 TRAIN：虚空 → VoidRay
+        canonical, group = lib.aliases.resolve("虚空", verb=VerbHint.TRAIN)
         assert canonical == "VoidRay"
+        assert group == "unit"
 
     def test_hotkey_aliases(self) -> None:
         lib = StrategyLibrary.from_directories(

@@ -78,7 +78,7 @@ def build_system_prompt(aliases: AliasTable) -> str:
 2. 不发明剧本 id。仅可用 catalog 列出的剧本。
 3. 不"近似猜测"半懂半不懂的指令；不确定就给低 confidence，让玩家二次确认。
 4. 别名 normalize：玩家说 "VR" / "球塔" / "兵营"，你输出 canonical id。
-5. 复合句拆成多个 directive（顺序保留）。
+5. 复合句拆成多个 directive（顺序保留）。但若玩家整句话整体就是某个 catalog 剧本——哪怕用 build 步骤的口语描述（如「单BG VR出不朽」对应 `1g_robo_immortal`）——只输出**单条** strategy_set，**不要**再把其中的建筑/单位拆成额外的 production_override / tech_override。判断依据：对照 catalog 里每个剧本的内容摘要。
 6. 不要下任何 SC2 API；不要评估剧本能不能赢。
 
 别名表（仅供 normalize 用，不是任务清单）：
@@ -90,7 +90,7 @@ verb 消歧规则：
 - 玩家说 "造 / build / 起一个" + 建筑名 → building 表
 - 玩家说 "出 / train / 训练" + 单位名 → unit 表
 - 玩家说 "研 / 研究 / 升 / research" + 升级名 → upgrade 表
-- 当 "VR" 等同形别名出现，必须靠 verb 消歧
+- "VR" 仅指机械工厂（建筑 RoboticsFacility）；虚空辉光舰不叫 VR
 """
 
 
@@ -103,21 +103,21 @@ def build_strategy_catalog(library: StrategyLibrary) -> str:
         if not isinstance(s, OpeningBuild):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
-        parts.append(f"- `{s.id}` —— {s.display_name_zh} (aliases: {aliases})")
+        parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
 
     parts.append("\n### midgame_stance")
     for s in library.all_strategies():
         if not isinstance(s, MidgameStance):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
-        parts.append(f"- `{s.id}` —— {s.display_name_zh} (aliases: {aliases})")
+        parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
 
     parts.append("\n### lategame_doctrine")
     for s in library.all_strategies():
         if not isinstance(s, LategameDoctrine):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
-        parts.append(f"- `{s.id}` —— {s.display_name_zh} (aliases: {aliases})")
+        parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
 
     return "\n".join(parts)
 

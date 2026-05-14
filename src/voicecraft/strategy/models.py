@@ -122,6 +122,7 @@ class OpeningBuild(BaseModel):
     kind: Literal[StrategyKind.OPENING] = StrategyKind.OPENING
     id: str
     display_name_zh: str
+    summary_zh: str = ""
     aliases: list[str] = Field(default_factory=list)
     matchup: list[str] = Field(default_factory=list)
     phases: list[Phase]
@@ -151,6 +152,7 @@ class MidgameStance(BaseModel):
     kind: Literal[StrategyKind.MIDGAME] = StrategyKind.MIDGAME
     id: str
     display_name_zh: str
+    summary_zh: str = ""
     aliases: list[str] = Field(default_factory=list)
     enter_when: list[str] = Field(default_factory=list)
     commitments: dict[str, dict[str, int] | int | list[str]] = Field(default_factory=dict)
@@ -171,6 +173,7 @@ class LategameDoctrine(BaseModel):
     kind: Literal[StrategyKind.LATEGAME] = StrategyKind.LATEGAME
     id: str
     display_name_zh: str
+    summary_zh: str = ""
     aliases: list[str] = Field(default_factory=list)
     target_composition: dict[str, int]
     required_tech: list[str] = Field(default_factory=list)

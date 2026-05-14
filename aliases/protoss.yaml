@@ -7,7 +7,7 @@
 #     aliases: [...]            # 接受的玩家用法（中文 / hotkey / 英文短称）
 #     hotkey: "B+G"             # 仅信息，不参与匹配
 #
-# 注意：同一 alias 可能在 building 和 unit 都有，需 verb 消歧（如 VR）。
+# 注意：verb 消歧用来区分"造建筑 / 出单位 / 研升级"（玩家说的动词决定查哪组）。
 
 buildings:
   Nexus:
@@ -104,7 +104,7 @@ units:
     aliases: [OB, 雷达, Observer, 观察者]
   WarpPrism:
     default_display: "棱镜"
-    aliases: [棱镜, WarpPrism, 折跃棱镜]
+    aliases: [棱镜, 速棱镜, WarpPrism, 折跃棱镜]
   Colossus:
     default_display: "巨像"
     aliases: [巨像, Colossus]
@@ -116,7 +116,7 @@ units:
     aliases: [凤凰, Phoenix]
   VoidRay:
     default_display: "虚空"
-    aliases: [虚空, 虚空辐射, VoidRay, VR]      # ⚠️ 与 RoboticsFacility 重名
+    aliases: [虚空, 虚空辐射, 辉光舰, 虚空辉光舰, VoidRay]
   Oracle:
     default_display: "先知"
     aliases: [先知, Oracle]
