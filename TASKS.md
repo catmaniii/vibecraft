@@ -9,10 +9,8 @@
 
 ## 当前状态（最近更新：2026-05-14）
 
-- **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅）
-- **HEAD**：`8e65c3c` M1.1a（server 包 + room_token）
-  - 本地领先 origin **4 个 commit**（`03fb12f` / `d917c30` / `a082e0f` /
-    `8e65c3c`），**未 push 未 tag**（按用户选择）
+- **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
+- **HEAD**：`0ce1307`，已与 `origin/main` 同步
 - **进行中**：M1.1 bot service 骨架
   - **M1.1a ✅** —— `src/voicecraft/server/` 包 + `tokens.py`（`room_token`
     生成 + `RoomRegistry` 单活跃连接顶旧）+ `test_server.py`（10 单测全绿，
@@ -22,6 +20,10 @@
     5s 心跳、重连顶旧（用 `RoomRegistry.attach` 返回的旧连接 `close()` 掉）。
     拆解依据见设计文档 §9.2 / §9.3；`Connection` Protocol 已在
     `server/tokens.py` 备好，WS 连接类实现它即可
+- **本轮授权范围**（用户 2026-05-14 指示）：用 Sonnet **一口气做完 M1.1b →
+  M1.1e**（见下方 M1.1 清单，每块带单测），**全部单测通过后再找用户验收**；
+  中途只在设计文档歧义 / 架构偏离时才打断（CLAUDE.md「工作模式：用户偏好
+  自驱动」）。每块做完按惯例 commit（commit 后是否 push 由用户定）
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
