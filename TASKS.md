@@ -9,16 +9,19 @@
 
 ## 当前状态（最近更新：2026-05-14）
 
-- **里程碑**：M0c 端到端 smoke（等待用户在 SC2 客户端跑 `scripts/smoke_test.py`）
-- **HEAD**：待 commit（runbook 修了 §0 前置准备 + 旧路径；TASKS.md 更新）
-- **阻塞**：ladder 1v1 地图未下载到 `$env:SC2PATH\Maps\`；smoke 必须先放地图
-  才能跑。runbook §0 已经写明具体步骤
-- **下一步**：
-  1. 用户按 `docs/m0-smoke-runbook.md` §0 设 `SC2PATH` + 建 Maps 目录 + 下地图
-  2. 用户跑 `uv run python scripts/smoke_test.py`
-  3. 看 `logs/<game_id>/smoke_report.json` 的 `verdict`：
-     - `pass` → 打 tag `v0.1.0a2`，开 M1
-     - `fail` → 看 `anomalies_by_kind`，按 runbook §3 异常表决定回退方案
+- **里程碑**：M0c **已通过** ✅ —— 真实 SC2 smoke「不动的叉子」验证成立
+  （`logs/game_20260514_070745_c5332c/smoke_report.json` verdict=pass，
+  anomalies=0，2 探机 60s 零指令零移动，`Idle worker time: 168.0`）
+- **HEAD**：`3af28e0`（M0c 的代码/文档改动待 commit）
+- **待提交**：`scripts/smoke_test.py`（3 处端到端修复）、`.python-version`、
+  `CHANGELOG.md`、`docs/m0-smoke-runbook.md`、`TASKS.md`
+- **待办**：commit M0c 改动 → 打 tag `v0.1.0a2` → 开 M1
+- **环境就绪情况**（M1 直接复用，不用重来）：
+  - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
+  - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
+  - `.venv` = Python 3.11.14；ares-sc2 3.7.2 / burnysc2 7.1.0 / sc2-helper 0.2.1 已装
+  - `.venv/Lib/site-packages/ares_sc2_src.pth`（内容 `src`）—— 修 ares 打包问题，
+    **重建 venv 后需重新创建**（详见 runbook §4）
 
 ---
 
@@ -73,26 +76,23 @@ pyproject / 目录 / lint / mypy / pytest / pre-commit / CI 模板。出口：
 `CONTROL_GROUP_ONE`（ares `UnitRole` 是固定 StrEnum 加不了成员，必须复用
 留给用户的空槽）。
 
-### M0c 端到端 smoke  🟡 in progress
+### M0c 端到端 smoke  ✅ done
 
-用户启 SC2，验证"不动的叉子"。出口：4 个 ares Manager 都 skip
-`LLM_CONTROLLED`，`smoke_report.json` `verdict=pass`。
+真实 SC2 验证「不动的叉子」—— role 隔离机制成立，设计文档 §3.4「唯一存疑点」
+核心假设确认。
 
-待办：
+- [x] runbook §0 重写（`SC2PATH` / Maps 目录 / 地图来源）
+- [x] 环境搭建：`.venv` 重建为 Python 3.11、装 ares-sc2 全家桶、修 src-layout
+      打包问题、装 sc2-helper
+- [x] 地图：从 Battle.net Cache 提取 `(2)DaybreakLE` archive
+- [x] `scripts/smoke_test.py` 端到端校准：`maps.get()` 传 Map 对象、enroll 后
+      `unit.stop()` 清开局采矿 order
+- [x] smoke 通过：`verdict=pass`，anomalies=0
 
-- [x] 修 runbook 里的旧路径（`voice_craft` → `voicecraft`）
-- [x] 在 runbook §0 显式写 `SC2PATH` 设置 + Maps 目录初始化步骤（用户 SC2 装
-      在 `D:\StarCraft II\`，非默认路径）
-- [ ] 用户按 runbook §0 设 `SC2PATH` + 建 Maps 目录 + 下 ladder 地图
-- [ ] 用户在 PowerShell 跑 `uv run python scripts/smoke_test.py`
-- [ ] 看 `logs/<game_id>/smoke_report.json`
-  - pass → 打 tag `v0.1.0a2`，更新 CHANGELOG，开 M1
-  - fail → 按 runbook §3 异常表分类，看是单 Manager 不 respect role
-    （加 wrap）还是全 fail（回退 Hook B OverrideMediator 方案）
-
-**已校准**：`scripts/smoke_test.py` 的 import 与 `voicecraft.logging_` 实际
-exports 对齐（`Event` / `EventKind` / `GameSession` / `GameSessionConfig` /
-`LogStream`），路径上无 broken import 风险。
+**端到端结论**：把单位置入 ares 的 `CONTROL_GROUP_ONE` role 后，所有 ares
+Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll 后
+`stop()` 清掉 SC2 开局默认采矿 order，探机即保持完全 idle。Hook C (Unit Role)
+方案成立，不需要回退到 Hook B OverrideMediator wrap。
 
 ### M1 端到端骨架  ⬜ 未开始
 

@@ -53,13 +53,25 @@ python-sc2 找地图的顺序：`$SC2PATH\Maps\` → `Documents\StarCraft II\Map
 New-Item -ItemType Directory -Force -Path "$env:SC2PATH\Maps" | Out-Null
 ```
 
-### 0.3 下载测试地图
+### 0.3 测试地图
 
-AI Arena 推荐的 ladder 地图都行；本手册默认 `Goldenaura LE`。把 `.SC2Map` 文件
-放到 §0.2 创建的目录里。
+python-sc2 需要 `Maps\` 目录下有 `.SC2Map` 文件。两个来源：
 
-如果你不知道地图叫什么，可以打开 SC2 → 自定义游戏 → 创建房间 → 看可选地图列表，
-挑一张 1v1 ladder 地图。
+**来源 A：从 Battle.net Cache 提取（推荐，不用下载）**
+
+只要你在 SC2 客户端里浏览 / 玩过某张 1v1 ladder 图，它的完整地图 archive 就缓存
+在 `C:\ProgramData\Blizzard Entertainment\Battle.net\Cache\` 下（`.s2ma` 文件，
+本质就是 MPQ archive，改扩展名为 `.SC2Map` 即可用）。本手册验证时用的是
+`(2)DaybreakLE`，已提取为 `D:\StarCraft II\Maps\DaybreakLE.SC2Map`。
+
+> 注：cache 里的 `.s2ma` 是 hash 命名的，认出哪个是哪张图需要解析 cache 元数据
+>（`.s2mh` 头部有明文图名 + 引用的 `.s2ma` hash）。MVP 阶段是手动做的，未来可
+> 脚本化。最省事的办法：在 SC2 客户端开一局 vs AI 的自定义对局、选张 1v1 图，
+> 这张图的 `.s2ma` 就会完整缓存。
+
+**来源 B：直接下载 `.SC2Map`**
+
+AI Arena / SC2 社区的 ladder 地图包，下载后放进 §0.2 创建的目录。
 
 ### 0.4 客户端初始化
 
@@ -70,34 +82,76 @@ AI Arena 推荐的 ladder 地图都行；本手册默认 `Goldenaura LE`。把 `
 
 ## 1. 装依赖
 
+### 1.1 Python 版本：必须 3.11
+
+`sc2-helper`（ares 间接依赖的 combat simulator）只发布到 `cp311` wheel，
+**Python 3.12 装不上**。仓库根目录的 `.python-version` 已锁定 `3.11`，`uv` 会
+自动选用。还没装 3.11 的话：
+
+```powershell
+uv python install 3.11
+```
+
+如果 `.venv` 是用 3.12 建的（`uv run python --version` 查），重建：
+
+```powershell
+Remove-Item -Recurse -Force .venv
+uv venv          # 读 .python-version，用 3.11
+```
+
+### 1.2 装 voicecraft + ares 全家桶
+
 ```powershell
 # 在项目根目录（注意目录名是 voicecraft，不是 voice_craft）
 cd D:\code\claudecode\voicecraft
 
-# 装 voicecraft + dev 依赖
 uv sync --extra dev
-
-# 装 ares-sc2 + burnysc2 + map-analyzer（git）
 uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
+uv pip install sc2-helper          # ares 没把它写进依赖声明，要手动装
 ```
 
-如果 `uv pip install` 拉 git 失败（公司网 / 防火墙），可以手 clone 然后 `uv pip install -e ../ares-sc2`。
+如果 `uv pip install` 拉 git 失败（公司网 / 防火墙），可以手 clone 然后
+`uv pip install -e ../ares-sc2`。
+
+### 1.3 修 ares-sc2 的 src-layout 打包问题
+
+ares-sc2 3.7.2 用 `uv_build` backend，会把包错装到 `site-packages/src/ares/`
+而非 `site-packages/ares/`，导致 `import ares` 失败。修法：在 site-packages 放
+一个内容为 `src` 的 `.pth` 文件：
+
+```powershell
+$sp = (uv run python -c "import sysconfig; print(sysconfig.get_path('purelib'))")
+"src" | Out-File -FilePath "$sp\ares_sc2_src.pth" -Encoding ascii -NoNewline
+```
+
+> **重建 `.venv` 后这个 `.pth` 会丢，要重新创建。**
+
+### 1.4 验证
+
+```powershell
+uv run python -c "import ares, sc2, voicecraft; print('ok')"
+```
+
+输出 `ok` 即环境就绪。如果报 `os error 32` / `DLL load failed` / 误报
+"未安装 ares-sc2"——是 Windows Defender 在扫新解压的文件，**重试几次**即可
+（见 §4）。
 
 ---
 
 ## 2. 跑 smoke
 
 ```powershell
-uv run python scripts/smoke_test.py
+uv run python scripts/smoke_test.py --map "DaybreakLE"
 ```
 
-默认参数：地图 `Goldenaura LE`、对手 `Random Easy`、监测 60 秒、2 个探机置入 LLM_CONTROLLED。
+默认参数：对手 `Random Easy`、监测 60 秒、2 个探机置入 `CONTROL_GROUP_ONE` role。
+`--map` 传 `Maps\` 目录里 `.SC2Map` 文件的文件名（去掉扩展名）。
 
 可调：
 
 ```powershell
 uv run python scripts/smoke_test.py `
-  --map "Equilibrium LE" `
+  --map "DaybreakLE" `
   --opponent-difficulty Easy `
   --opponent-race Zerg `
   --llm-controlled-probes 3 `
@@ -124,9 +178,10 @@ SC2 会自动启动 → 进对局 → 跑 60 秒 → bot 自己 `leave` → 客�
   "anomalies": [],
   "anomalies_by_kind": {},
   "snapshots": [
-    { "ts": 5.5, "probes": [
-        { "tag": 12345, "alive": true, "role": "LLM_CONTROLLED",
-          "position": [38.0, 142.0], "order_count": 0, "orders": [] },
+    { "ts": 5.9, "probes": [
+        { "tag": 12345, "alive": true, "in_role": true,
+          "position": [44.3, 23.5], "drift_from_initial": 0.0,
+          "order_count": 0, "orders": [] },
         ...
     ]},
     ...
@@ -137,9 +192,15 @@ SC2 会自动启动 → 进对局 → 跑 60 秒 → bot 自己 `leave` → 客�
 ### 怎么算 pass
 
 - 全过程 `anomalies` 为空
-- 每个被托管探机的 `role` 始终是 `"LLM_CONTROLLED"`
-- 每个被托管探机的 `order_count` 始终是 0（没有任何 base bot 给的指令）
-- `position` 几乎不变（探机站在初始点）
+- 每个被托管探机的 `in_role` 始终是 `true`（没被某个 Manager 改走 role）
+- 每个被托管探机的 `order_count` 始终是 0（enroll 时已 `stop()` 清掉开局默认
+  采矿 order，之后没有任何 Manager 再给它下指令）
+- `drift_from_initial` 几乎为 0（探机 stop 后站在原地不动）
+
+> 注意：探机开局 0s 就会自动采矿（SC2 引擎默认行为，非 bot 指令）。smoke 在
+> t=5s 把探机置入 role 后会立刻 `unit.stop()` 清掉这条旧 order —— 所以"零
+> order"指的是 stop **之后**。若 stop 后 order 又冒出来，才是真的有 Manager
+> 在主动接管（`received_orders` 异常）。
 
 ### 怎么算 fail
 
@@ -164,6 +225,28 @@ uv pip install "git+https://github.com/august-k/python-sc2@develop"
 uv pip install "git+https://github.com/spudde123/SC2MapAnalysis@develop"
 uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
 ```
+
+### `sc2-helper` 装不上：`no wheels with a matching Python ABI tag`
+
+`.venv` 是 Python 3.12 建的。`sc2-helper` 只有到 `cp311` 的 wheel。回到 §1.1
+用 3.11 重建 `.venv`。
+
+### `os error 32` / `DLL load failed` / 误报"未安装 ares-sc2"
+
+Windows Defender 实时扫描刚解压的 `.exe` / `.dll`（standalone Python、ares
+全家桶、cython 扩展），会短暂锁住文件，导致紧接着的命令失败：
+
+- `uv` 报 `error: ... failed with ... os error 32`
+- `python` 报 `ImportError: DLL load failed while importing ...`
+- `smoke_test.py` 误报 `[smoke] 未安装 ares-sc2 / burnysc2`（它把任何
+  `ImportError` 都当成"没装"，但 DLL 锁也是 `ImportError`）
+
+**都不是真错误，等几秒重试即可。** 装完依赖后先空跑几次
+`uv run python -c "import ares"` 让 Defender 扫完一波，再跑 smoke 就稳了。
+
+### `import ares` 报 `No module named 'ares'`（但 `ares-sc2` 已装）
+
+ares-sc2 3.7.2 的 src-layout 打包问题，见 §1.3 的 `.pth` 修复。
 
 ### `SC2 not found` 报错
 

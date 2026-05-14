@@ -19,6 +19,18 @@ VoiceCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-voicecr
 
 ## [Unreleased]
 
+M1：Bot service + WS endpoint + 手机 PWA 框架 + 1 剧本 + LLM 单条话语解析。
+
+---
+
+## [0.1.0a2] - 2026-05-14
+
+**M0c 完成。** 真实 SC2 客户端端到端 smoke 通过 ——「不动的叉子」验证成立：
+2 个探机置入 `CONTROL_GROUP_ONE` role 并 `stop()` 后，60 秒监测窗口内零指令、
+零移动、`in_role` 全程保持；ares 结算 `Idle worker time: 168.0` 反证 WorkerManager
+没有重新接管。设计文档 §3.4 的「唯一存疑点」—— Hook C (Unit Role) 的 role 隔离
+机制 —— 核心假设确认成立。
+
 ### 修正 (Fixed)
 
 - **`LLM_CONTROLLED` 映射到 ares 的 `CONTROL_GROUP_ONE`**：ares 的 `UnitRole`
@@ -27,8 +39,30 @@ VoiceCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-voicecr
 - **`scripts/smoke_test.py` 用真实 ares API**：`mediator.assign_role(tag=, role=)`
   + `mediator.get_units_from_role(role=, unit_type=)`（按 role 反查池），且 role
   传 ares 真实 enum 而非字符串。
+- **`smoke_test.py` 传 Map 对象**：`run_game()` 在 burnysc2 7.1.0 要的是
+  `maps.get(name)` 返回的 Map 对象，先前直接传字符串会
+  `AttributeError: 'str' object has no attribute 'relative_path'`。
+- **`smoke_test.py` enroll 后 `unit.stop()`**：探机开局 0s 自动采矿，不清掉这条
+  SC2 引擎默认 order 会被误判成 `received_orders` 异常。enroll 进 role 后立刻
+  stop，之后再出现的 order 才真正意味着有 Manager 主动接管。
 
-待 M0c 端到端 smoke 通过后释放 `0.1.0a2`。
+### 环境校准（端到端踩坑记录）
+
+- **Python 必须 3.11**：`sc2-helper`（ares 间接依赖）只发布到 `cp311` wheel，
+  3.12 装不上。已加 `.python-version` 锁定 3.11。
+- **ares-sc2 3.7.2 src-layout 打包问题**：`uv_build` backend 把包装进
+  `site-packages/src/ares/` 而非 `site-packages/ares/`，`import ares` 找不到。
+  修法：在 site-packages 放一个内容为 `src` 的 `.pth` 文件。
+- **`sc2_helper` 需手动安装**：不在 ares-sc2 的依赖声明里，但 ares 的
+  `combat_sim_manager` 直接 `import sc2_helper`。需 `uv pip install sc2-helper`。
+- **Windows Defender 文件锁**：新解压的 `.exe` / `.dll` 会被实时扫描短暂锁住，
+  紧接着的命令报 `os error 32` / `DLL load failed`，重试即可（非真错误）。
+
+### 新增 (Added)
+
+- **`.python-version`** —— 锁定 Python 3.11，避免 uv 误用 3.12。
+
+详细安装 / smoke 流程见 `docs/m0-smoke-runbook.md`。
 
 ---
 

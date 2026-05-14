@@ -161,6 +161,11 @@ def build_bot_class(
                 self.initial_positions[tag] = (float(w.position.x), float(w.position.y))
                 try:
                     self.mediator.assign_role(tag=tag, role=LLM_ROLE)
+                    # 清掉 SC2 开局默认的采矿 order：探机开局 0s 就自动采矿，
+                    # 不 stop 的话残留的旧 order 会被误判成 received_orders。
+                    # stop 之后再出现的任何 order，才真正意味着有 Manager 在
+                    # enroll 之后主动指挥它 —— 那才是 role 隔离失效的证据。
+                    w.stop()
                 except Exception as e:
                     self.anomalies.append(
                         {
@@ -289,6 +294,7 @@ def main() -> int:
     args = parse_args()
 
     try:
+        from sc2 import maps
         from sc2.data import Difficulty, Race
         from sc2.main import run_game
         from sc2.player import Bot, Computer
@@ -317,7 +323,7 @@ def main() -> int:
     bot = SmokeBot()
     try:
         run_game(
-            args.map,
+            maps.get(args.map),
             [
                 Bot(Race.Protoss, bot, name="VoiceCraftSmoke"),
                 Computer(Race[args.opponent_race], Difficulty[args.opponent_difficulty]),
