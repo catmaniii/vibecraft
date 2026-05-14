@@ -10,20 +10,17 @@
 ## 当前状态（最近更新：2026-05-14）
 
 - **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
-- **HEAD**：`0ce1307`，已与 `origin/main` 同步
-- **进行中**：M1.1 bot service 骨架
-  - **M1.1a ✅** —— `src/voicecraft/server/` 包 + `tokens.py`（`room_token`
-    生成 + `RoomRegistry` 单活跃连接顶旧）+ `test_server.py`（10 单测全绿，
-    ruff + mypy strict 干净）
-  - **下一步 → M1.1b WS endpoint**：`websockets` async server，监听
-    `0.0.0.0:<port>`（不硬编码 localhost）、token 验证握手、帧收发循环、
-    5s 心跳、重连顶旧（用 `RoomRegistry.attach` 返回的旧连接 `close()` 掉）。
-    拆解依据见设计文档 §9.2 / §9.3；`Connection` Protocol 已在
-    `server/tokens.py` 备好，WS 连接类实现它即可
-- **本轮授权范围**（用户 2026-05-14 指示）：用 Sonnet **一口气做完 M1.1b →
-  M1.1e**（见下方 M1.1 清单，每块带单测），**全部单测通过后再找用户验收**；
-  中途只在设计文档歧义 / 架构偏离时才打断（CLAUDE.md「工作模式：用户偏好
-  自驱动」）。每块做完按惯例 commit（commit 后是否 push 由用户定）
+- **HEAD**：`3c2380b`，已与 `origin/main` **未同步**（用户决定 push 时机）
+- **M1.1 ✅ 完成**（2026-05-14）：
+  - M1.1a ✅ `tokens.py` + 10 单测
+  - M1.1b ✅ WS endpoint + 15 单测（`server/ws.py`）
+  - M1.1c ✅ HTTP static server，与 WS 共端口（`server/http.py`）+ 11 单测
+  - M1.1d ✅ ASCII 二维码 + UDP 局域网 IP 检测（`server/qr.py`）+ 12 单测
+  - M1.1e ✅ BotService + `voicecraft serve` CLI + `scripts/start.ps1` + 11 单测
+  - 共 49 个新单测，全部通过；ruff + mypy strict 全干净
+- **下一步 → M1.2** SC2 子进程生命周期管理（依赖 M1.1）
+- **本轮授权范围**（用户 2026-05-14 指示）：M1.1b-e 已完成，找用户验收；
+  验收通过后继续 M1.2-M1.6
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
@@ -115,13 +112,17 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 拆解依据：设计文档 §3.3「启动时序（两阶段）」+ §9（`start_game` / `game_status`
 帧 + 三段式状态链）。按依赖排序：
 
-**M1.1 bot service 骨架**
+**M1.1 bot service 骨架** ✅ 全完成
 - [x] `src/voicecraft/server/` 包骨架 + `tokens.py`：`room_token` 生成 / 验证 /
       `RoomRegistry` 单活跃连接顶旧（10 单测，ruff + mypy 干净）
-- [ ] WS endpoint（`websockets`，listen `0.0.0.0:<port>`，**不硬编码 localhost**）
-- [ ] HTTP server（serve PWA 静态资源）
-- [ ] PC 端二维码显示（弹窗 / 极简本地页）+ IP:port 明文
-- [ ] 一键启动脚本（`.ps1`）：双击起 bot service
+- [x] WS endpoint（`websockets`，listen `0.0.0.0:<port>`，**不硬编码 localhost**）
+      `server/ws.py`：token 验证握手、帧收发循环（stub）、5s 心跳、重连顶旧
+- [x] HTTP server（serve PWA 静态资源）`server/http.py`：`process_request` 钩子
+      与 WS 共端口，SPA fallback，路径遍历防护
+- [x] PC 端二维码显示 `server/qr.py`：ASCII 二维码（##/空格，绕 Windows GBK），
+      UDP socket 局域网 IP 自动检测
+- [x] 一键启动脚本 `scripts/start.ps1` + `voicecraft serve` CLI 子命令；
+      `server/service.py` BotService + ServiceConfig
 
 **M1.2 SC2 子进程生命周期管理**（依赖 M1.1）
 - [ ] 收 `start_game` 帧 → 独立进程 / 线程调 `run_game()` 拉 SC2，WS 主循环不阻塞
