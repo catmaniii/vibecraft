@@ -1,35 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VoiceCraft</title>
-  <style>
-    body { font-family: sans-serif; display: flex; flex-direction: column;
-           align-items: center; justify-content: center; min-height: 100vh;
-           background: #0d1117; color: #e6edf3; margin: 0; }
-    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-    p  { color: #8b949e; }
-  </style>
-</head>
-<body>
-  <h1>VoiceCraft</h1>
-  <p>PWA 占位页 —— M1.3 实现手机驾驶舱 UI</p>
-  <p id="status">正在连接...</p>
-  <script>
-    // 从 URL 取 room token
-    const params = new URLSearchParams(location.search);
-    const room = params.get('room') || '';
-    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsProto}://${location.host}/ws?room=${encodeURIComponent(room)}`;
-
-    const status = document.getElementById('status');
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen  = () => { status.textContent = '已连接'; };
-    ws.onclose = () => { status.textContent = '连接已断开，请刷新页面重连'; };
-    ws.onerror = () => { status.textContent = 'WebSocket 错误'; };
-    ws.onmessage = (evt) => { console.log('收到帧:', evt.data); };
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0d1117" />
+    <title>VoiceCraft</title>
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <script type="module" crossorigin src="/assets/index-BUq226-U.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CZtAgOda.css">
+  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+  <body>
+    <div id="app"></div>
+  </body>
 </html>
