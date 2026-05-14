@@ -7,38 +7,46 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-14）
+## 当前状态（最近更新：2026-05-15）
 
-- **里程碑**：M1 进行中 —— **M1.1-M1.5 ✅ 完成并验收**，只剩 M1.6
-  （M0a-M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
+- **里程碑**：**M1 ✅ 全部完成（M1.1-M1.6）** —— 端到端骨架代码层打通，
+  → `0.1.0a3`（M0a-M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
 - **M1.1-M1.5 摘要**（逐项详情见下方「里程碑拆解」）：
   - M1.1 bot service 骨架：`server/` 包（tokens/ws/http/qr/service）+ CLI + 启动脚本
   - M1.2 SC2 子进程生命周期：`game_process.py`（multiprocessing spawn）+ ADR 0002
   - M1.3 PWA 最小壳：`web/` Vue 3 + Tailwind + 三段式状态链 UI（build → `static/`）
   - M1.4 IntentParser 接真实 anthropic：`AnthropicProvider` + `llm/config.py`
-  - M1.5 ares_adapter set_build：`build_translator.py` 翻译层（voicecraft 剧本 →
-    ares builds 格式）+ `switch_opening` 对接 + 启动注入 `config["Builds"]` + ADR 0003
-  - 验证：后端 `uv run pytest` **270 passed**、前端 vitest **15 passed**、
-    ruff + mypy strict 全干净
-  - M1.3 / M1.4 / M1.5 由 Sonnet subagent 实现（worktree 隔离；M1.3+M1.4 并行），
-    Opus 全部 review 过、修了若干小瑕疵 + 1 个 pre-existing flaky test
-    （`test_game_process.py` 的 `multiprocessing.Queue` → `queue.Queue`）
-- **下一步**：M1.6 端到端串通验证 —— 手机说话 → `command` → IntentParser →
-  Directive → Board → Director → Facade → ares → SC2 切 build。依赖全部，
-  **需真实 SC2 + 用户在场**
-- **待用户做**：M1.4 的真实 anthropic API 验证 —— 设 `$env:ANTHROPIC_API_KEY`
-  后跑冒烟（脚本见 M1.4 subagent 报告）；也可留到 M1.6 端到端时一起验
+  - M1.5 ares_adapter set_build：`build_translator.py` 翻译层 + `switch_opening`
+    对接 + 启动注入 `config["Builds"]` + ADR 0003
+- **M1.6 端到端串通摘要**（详情见 ADR 0004 + `docs/plans/2026-05-14-m1.6-end-to-end.md`）：
+  5 个串通 gap 全部接通 —— 子进程 bot 统一（`_child_entry` 用 `make_bot_class`
+  造真 `_VoiceCraftBot`）/ 下行 command Queue 激活（WS `command` 帧 →
+  `send_command` → `on_step` 非阻塞消费）/ fire-and-forget（`on_player_command`
+  在 `on_step` 里 `create_task`，不阻塞 realtime）/ ParseContext+GameSession
+  子进程内装配 / 状态推送 hook + 基础 echo（`command_echo` 帧回手机）
+- **验证（无 SC2，mock）**：`uv run --extra dev --extra sc2 pytest` **291 passed**、
+  前端 vitest 15 passed、ruff + ruff format + mypy strict 全干净
+- **M1.6 由 Sonnet subagent 实现**（worktree 隔离），Opus review 过、清掉一处死代码
+  （`game_process._build_bot_class` 里未使用的 echo 包装函数 + 思考过程注释块）
+- **下一步：真实 SC2 端到端验证 —— 需用户在场 + `ANTHROPIC_API_KEY`**：
+  启 bot service（`uv run voicecraft serve`）→ 手机扫码 → 点开始对局 →
+  说「切1门Robo」→ 看 SC2 是否切到 `1g_robo_immortal` build + 手机收到
+  `command_echo`。**这一步同时验掉 M1.4 的真实 anthropic API**（之前一直挂着没验）。
+  详细清单见 M1.6 subagent 报告
+- **可能失败点**（来自 subagent 报告）：`ANTHROPIC_API_KEY` 未设 → echo 显示
+  `[解析失败]`；环境只跑了 `uv sync --extra dev`（没带 `--extra sc2`）→ 退回
+  `_M12Bot` stub，command 被消费但不解析；地图缺失 → 子进程报「地图未找到」
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
-- **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
+- **模型**：真实验证若需 debug 用 Opus；M2 起写代码用 Sonnet
 - **环境就绪情况**：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
   - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
   - `.venv` = Python 3.11.14
   - **ares 全家桶已写进 `pyproject.toml` 的 `sc2` extra + `[tool.uv.sources]`**：
-    `uv sync --extra dev --extra sc2` 一条命令装 / 恢复。⚠️ `uv sync` 不带
-    `--extra sc2` 会**卸载** ares 全家桶（M1.2-M1.4 不用 ares 没事，碰 smoke /
-    `ares_adapter` 时记得带上）
+    `uv sync --extra dev --extra sc2` 一条命令装 / 恢复。⚠️ `uv sync` / `uv run`
+    不带 `--extra sc2` 会**卸载** ares 全家桶 —— M1.6 测试也走 ares 分支，跑
+    pytest / smoke / `ares_adapter` 相关时必须带 `--extra sc2`（或 `uv run --no-sync`）
   - `.venv/.../ares_sc2_src.pth`（内容 `src`）—— 修 ares src-layout 打包 bug；
     `uv sync` 不碰它，但**重建 venv 后需重新创建**（runbook §1.3）
 
@@ -64,7 +72,7 @@
 |---|---|
 | `0.1.0a1` | M0b 完成 |
 | `0.1.0a2` | M0c 完成（已 commit `03fb12f`，**未打 tag** —— 按用户选择）|
-| `0.1.0a3` | M1 完成 |
+| `0.1.0a3` | M1 完成（代码层 ✅；待真实 SC2 出口验证 + 打 tag）|
 | `0.1.0` | M5 MVP RC |
 
 ---
@@ -115,7 +123,7 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 `stop()` 清掉 SC2 开局默认采矿 order，探机即保持完全 idle。Hook C (Unit Role)
 方案成立，不需要回退到 Hook B OverrideMediator wrap。
 
-### M1 端到端骨架  🟡 进行中（M1.1-M1.4 ✅）
+### M1 端到端骨架  ✅ 代码层完成（M1.1-M1.6 ✅；出口验证待真实 SC2）
 
 把「无 SC2 模块」（M0b）和「真实 SC2 接管」（M0c 验证）接通成第一条端到端
 链路。出口：**手机说一句话 → SC2 里 bot 真的切到对应 build**。完成 → `0.1.0a3`。
@@ -167,10 +175,12 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 - 范围边界：只接 `opening_build` kind；midgame/lategame ares build runner 管不了，
   留 M2+（见 ADR 0003 + 预研文档 §5）
 
-**M1.6 端到端串通 + 验证**（依赖全部）
-- [ ] 完整链路跑通：手机说话 → `command` → IntentParser → Directive → Board →
-      Director → Facade → ares → SC2 切 build
-- [ ] 出口验证：手机说「切 1门Robo」→ SC2 里 bot 真的切到 `1g_robo_immortal`
+**M1.6 端到端串通 + 验证**（依赖全部）✅ 代码层完成（真实 SC2 验证待用户）
+- [x] 完整链路跑通（代码层）：手机说话 → `command` → IntentParser → Directive →
+      Board → Director → Facade → ares → SC2 切 build；5 个串通 gap 见 ADR 0004
+- [x] 单测：`test_m1_6_end_to_end.py`（21 用例，mock down_q / mock director / 子进程装配）
+- [ ] 出口验证：手机说「切1门Robo」→ SC2 里 bot 真的切到 `1g_robo_immortal`
+      —— **需真实 SC2 + `ANTHROPIC_API_KEY` + 用户在场**（同时验掉 M1.4 真实 API）
 
 ### M2-M5
 

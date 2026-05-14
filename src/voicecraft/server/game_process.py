@@ -259,37 +259,8 @@ def _build_bot_class(
     def director_factory(facade: Any) -> Director:
         return Director(facade=facade, parser=parser, session=session)
 
-    # --- echo 回调包装（把 ParseOutcome 转成 echo 消息推给父进程）---
-    async def _on_player_command_with_echo(
-        director: Director,
-        text: str,
-        now: float,
-    ) -> None:
-        """包装 director.on_player_command，完成后推基础 echo。"""
-        from voicecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
-
-        outcome = await director.on_player_command(text, now)
-        if put_echo is None:
-            return
-        if isinstance(outcome, IntentParseResult):
-            put_echo(text, outcome.interpretation_zh)
-        elif isinstance(outcome, AmbiguousParse):
-            put_echo(text, f"[模糊] {outcome.result.interpretation_zh}")
-        elif isinstance(outcome, ParseError):
-            put_echo(text, f"[解析失败] {outcome.message}")
-
-    # Gap 1+5：注入 status_callback 和 down_q
-    # down_q 里的 command 消息由 _VoiceCraftBot.on_step 消费，
-    # 但实际调 director.on_player_command 需要 echo 包装，
-    # 因此我们通过 director_factory 的闭包完成连接。
-    # echo 由 _VoiceCraftBot.on_step 内的 task done 回调触发，
-    # 但那里没有 put_echo。解法：让 make_bot_class 额外接收 cmd_wrapper，
-    # 或在 _VoiceCraftBot 层把 put_echo 一并传入。
-    # 最简方案：make_bot_class 的 down_q 消费处直接调 director.on_player_command，
-    # echo 由 done_callback 里拿 task result 触发。
-    # 见 ares_adapter._VoiceCraftBot.on_step 里 task 结束的回调。
-    # 此处通过「echo_callback 参数进 make_bot_class」来传递（Gap 2 扩展）。
-
+    # echo 由 ares_adapter._run_command_with_echo 在 task done 时推送，
+    # 经 echo_callback 参数（=put_echo）回传父进程。
     return make_bot_class(
         director_factory=director_factory,
         strategy_library=strategy_library,
