@@ -9,20 +9,22 @@
 
 ## 当前状态（最近更新：2026-05-14）
 
-- **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
-- **M1.1 ✅ 完成并验收**（2026-05-14）：
-  - M1.1a-e 全部完成：`server/` 包（`tokens` / `ws` / `http` / `qr` /
-    `service`）+ `voicecraft serve` CLI + `scripts/start.ps1`，共 59 个单测
-  - Opus review 过 + 修了 6 个小瑕疵（commit `e34b147`）
-  - `uv run pytest` 185 passed；ruff + mypy strict 全干净
-- **M1.2 ✅ 完成**（2026-05-14）：
-  - spike 确认：multiprocessing spawn 方案可行（`GameConfig` picklable，bot 在子进程内构造）
-  - `src/voicecraft/server/game_process.py`：`GameConfig` + `GameStatus` + `GameProcess`（start / status_events / send_command / stop）
-  - `ws.py`：`start_game` handler 从 stub 换成真的（`GameProcess.start()` + `status_events()` pump）；`game_status` 帧下行
-  - `service.py`：`BotService` 持有共享 `GameProcess` 实例
-  - 27 个新单测（`test_game_process.py`），212 passed；ruff + mypy strict 全干净
-  - ADR 见 `docs/adr/0002-game-process-multiprocessing-spawn.md`
-- **下一步 → M1.3** PWA 最小壳
+- **里程碑**：M1 进行中 —— **M1.1-M1.4 ✅ 完成并验收**，M1.5 / M1.6 待做
+  （M0a-M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
+- **M1.1-M1.4 摘要**（逐项详情见下方「里程碑拆解」）：
+  - M1.1 bot service 骨架：`server/` 包（tokens/ws/http/qr/service）+ CLI + 启动脚本
+  - M1.2 SC2 子进程生命周期：`game_process.py`（multiprocessing spawn）+ ADR 0002
+  - M1.3 PWA 最小壳：`web/` Vue 3 + Tailwind + 三段式状态链 UI（build → `static/`）
+  - M1.4 IntentParser 接真实 anthropic：`AnthropicProvider` + `llm/config.py`
+  - 验证：后端 `uv run pytest` **241 passed**、前端 vitest **15 passed**、
+    ruff + mypy strict 全干净
+  - M1.3 / M1.4 由两个 Sonnet subagent 并行实现（worktree 隔离），Opus 全部
+    review 过、修了若干小瑕疵 + 1 个 pre-existing flaky test（`test_game_process.py`
+    的 `multiprocessing.Queue` → `queue.Queue`）
+- **下一步**：M1.5（`ares_adapter` 真实现 `set_build`，M0c 环境已就绪）
+  + M1.6（端到端串通验证）
+- **待用户做**：M1.4 的真实 anthropic API 验证 —— 设 `$env:ANTHROPIC_API_KEY`
+  后跑冒烟（脚本见 M1.4 subagent 报告）；也可留到 M1.6 端到端时一起验
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
@@ -110,7 +112,7 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 `stop()` 清掉 SC2 开局默认采矿 order，探机即保持完全 idle。Hook C (Unit Role)
 方案成立，不需要回退到 Hook B OverrideMediator wrap。
 
-### M1 端到端骨架  ⬜ 未开始
+### M1 端到端骨架  🟡 进行中（M1.1-M1.4 ✅）
 
 把「无 SC2 模块」（M0b）和「真实 SC2 接管」（M0c 验证）接通成第一条端到端
 链路。出口：**手机说一句话 → SC2 里 bot 真的切到对应 build**。完成 → `0.1.0a3`。
@@ -135,16 +137,20 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 - [x] 检测启动阶段（launching / in_game / playing）/ 崩溃 / 结束
 - [x] `game_status` 帧下行（三段式状态链：link / sc2 / bot）
 
-**M1.3 PWA 最小壳**（依赖 M1.1）
-- [ ] Vue 3 + Tailwind 脚手架，扫码连 WS
-- [ ] 三段式系统状态链 UI（手机 → 服务端 → SC2 → Bot）
-- [ ] 「开始对局」按钮 → `start_game` 帧
-- [ ] 录音 / 文本输入 → `command` 帧
+**M1.3 PWA 最小壳**（依赖 M1.1）✅ 完成
+- [x] Vue 3 + Tailwind + Vite PWA 脚手架（`web/`，build → `server/static/`）
+- [x] 扫码连 WS（`useWs.ts`，指数退避 1→2→4→8s 重连）
+- [x] 三段式系统状态链 UI（`StatusChain.vue`，全绿折叠 / 异常展开）
+- [x] 「开始对局」按钮 → `start_game` 帧；录音（Web Speech API）/ 文本 → `command` 帧
+- [x] 15 个 vitest 单测
 
-**M1.4 IntentParser 接真实 anthropic**（可与 M1.1-1.3 并行）
-- [ ] `AnthropicProvider` 接真实 API（secret 走环境变量 / config，不进 git）
-- [ ] 单条话语 → directives（M0b 已有 parser 逻辑，这里接真 LLM）
-- [ ] LLM 调用全量 JSONL 日志（设计文档 §11.4）
+**M1.4 IntentParser 接真实 anthropic**（可与 M1.1-1.3 并行）✅ 完成
+- [x] `AnthropicProvider` 接真实 API（tool_use 强制 JSON、prompt 缓存；
+      secret 走 `ANTHROPIC_API_KEY` 环境变量，不进 git）
+- [x] 新增 `llm/config.py`（`LLMConfig` + `build_provider()` 工厂）
+- [x] LLM 调用全量 JSONL 日志增强（`parser.py` 的 `_log_call`，符合 §11.4）
+- [x] 29 个 mock 单测（`test_llm_anthropic.py`）
+- [ ] **真实 API 验证待用户做**（需 `ANTHROPIC_API_KEY`；单测全 mock 不真调）
 
 **M1.5 第 1 个剧本接通 set_build**（依赖 M0c 环境，已就绪）
 - [ ] `ares_adapter` 真实实现 `set_build`（M0c 只验证了 role 隔离，set_build

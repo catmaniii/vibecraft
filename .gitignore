@@ -64,6 +64,9 @@ logs/
 secrets/
 config/secrets.*.yaml
 
+# Claude Code worktrees（subagent 隔离副本，临时目录，不进版本控制）
+.claude/worktrees/
+
 # Frontend (M1+)
 node_modules/
 dist/

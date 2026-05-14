@@ -19,7 +19,7 @@ function linkColor(s: LinkState): SegColor {
 function sc2Color(s: Sc2State): SegColor {
   if (s === 'playing' || s === 'in_game') return 'green'
   if (s === 'launching') return 'yellow'
-  if (s === 'crashed' || s === 'error' as string) return 'red'
+  if (s === 'crashed') return 'red'
   // idle / ended = 灰色（正常待机态）
   return 'gray'
 }
