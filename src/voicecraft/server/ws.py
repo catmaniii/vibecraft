@@ -161,8 +161,8 @@ class WsConnection:
         if frame_type == "start_game":
             await self._handle_start_game(frame)
         elif frame_type == "command":
-            # M1.4+ 实现
-            self._log.info("ws_stub_command", text=frame.get("text"))
+            # Gap 2：stub → 真实转发到下行队列
+            await self._handle_command(frame)
         elif frame_type in {
             "view_move",
             "view_follow",
@@ -228,15 +228,86 @@ class WsConnection:
             name="status-pump",
         )
 
+    # ------------------------------------------------------------------
+    # command 处理（M1.6）
+    # ------------------------------------------------------------------
+
+    async def _handle_command(self, frame: dict[str, Any]) -> None:
+        """收到 command 帧 → 发到子进程下行队列。
+
+        若 SC2 对局还没启动（game_process 没有活跃子进程），
+        静默丢弃并 log warning（不抛异常，保持 WS 连接活跃）。
+        """
+        text = frame.get("text", "")
+        if not isinstance(text, str) or not text.strip():
+            self._log.warning("ws_command_empty_text", frame=frame)
+            return
+
+        if not self._game_process.is_running:
+            self._log.warning("ws_command_no_game_running", text=text[:80])
+            return
+
+        cmd = {
+            "type": "command",
+            "text": text.strip(),
+            "issued_at": round(time.time(), 3),
+        }
+        self._game_process.send_command(cmd)
+        self._log.info("ws_command_sent", text=text[:80])
+
+    # ------------------------------------------------------------------
+    # status pump
+    # ------------------------------------------------------------------
+
     async def _status_pump_loop(self) -> None:
-        """持续把 GameProcess.status_events() 转发成 game_status 下行帧。"""
+        """持续把 GameProcess.status_events() 转发成下行帧。
+
+        上行队列消息有两种：
+        - game_status 消息（sc2/bot 字段）→ game_status 帧
+        - echo 消息（kind="echo"）→ command_echo 帧给手机
+        """
         try:
-            async for status in self._game_process.status_events():
-                await self._send_game_status(status)
+            async for raw in self._game_process.raw_events():
+                await self._dispatch_upstream(raw)
         except asyncio.CancelledError:
             raise
         except Exception:
             self._log.exception("status_pump_error")
+
+    async def _dispatch_upstream(self, raw: dict[str, Any]) -> None:
+        """把上行队列的单条消息转发为对应下行帧。"""
+        kind = raw.get("kind")
+        if kind == "echo":
+            # 基础 echo：告诉手机指令已被解析
+            frame = json.dumps(
+                {
+                    "type": "command_echo",
+                    "user_text": raw.get("user_text", ""),
+                    "interpretation": raw.get("interpretation", ""),
+                    "ts": round(time.time(), 3),
+                }
+            )
+            try:
+                await self._ws.send(frame)
+                self._log.info(
+                    "ws_echo_sent",
+                    interpretation=str(raw.get("interpretation", ""))[:80],
+                )
+            except Exception:
+                self._log.warning("ws_echo_send_failed")
+        else:
+            # 默认当 game_status 消息处理（sc2/bot 字段）
+            from voicecraft.server.game_process import _apply_raw_dict
+
+            sc2, bot, detail = _apply_raw_dict(
+                raw,
+                self._game_process._sc2_state,
+                self._game_process._bot_state,
+            )
+            from voicecraft.server.game_process import GameStatus
+
+            status = GameStatus(sc2=sc2, bot=bot, detail=detail)
+            await self._send_game_status(status)
 
     async def _send_game_status(self, status: GameStatus) -> None:
         """封包 game_status 帧并推给手机。连接已断时静默忽略。"""

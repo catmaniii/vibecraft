@@ -22,6 +22,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import queue as queue_module
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from voicecraft.bot.build_translator import openings_to_ares_config_builds
@@ -33,6 +37,8 @@ if TYPE_CHECKING:
     # 这些 import 只在类型检查时有效；运行时 lazy import
     from ares import AresBot
 
+logger = logging.getLogger(__name__)
+
 
 class VoiceCraftBot:
     """ares-sc2 子类的薄壳。
@@ -42,15 +48,32 @@ class VoiceCraftBot:
     """
 
 
-def make_bot_class(director_factory: Any, strategy_library: StrategyLibrary | None = None) -> type:
+def make_bot_class(
+    director_factory: Any,
+    strategy_library: StrategyLibrary | None = None,
+    status_callback: Callable[[str, str, str], None] | None = None,
+    down_q: Any | None = None,
+    echo_callback: Callable[[str, str], None] | None = None,
+) -> type:
     """工厂：返回一个继承 AresBot 的 bot 类，把事件转给 director。
 
-    director_factory(bot) -> Director：在 on_start 时被调用，
-    传入 bot 自己，让 director 持有 facade。
+    director_factory(facade) -> Director：在 on_start 时被调用，
+    传入 bot 自己的 facade，让 director 持有 facade。
 
     strategy_library：可选；传入后会把其中所有 OpeningBuild 在 on_start 时注入
     `bot.config["Builds"]`（spike B：必须在 super().on_start() 之前完成，
     因为 BuildOrderRunner 在 super().on_start() 末尾构造时读 config）。
+
+    status_callback：可选；签名 (sc2_state, bot_state, detail) -> None，
+    在 on_start/on_step/on_end 时推状态给父进程（Gap 5）。
+    None 时忽略（向后兼容 M0c smoke）。
+
+    down_q：可选；multiprocessing.Queue 或 queue.Queue，
+    bot 的 on_step 里非阻塞消费（Gap 2）。None 时忽略。
+
+    echo_callback：可选；签名 (user_text, interpretation) -> None，
+    on_player_command 完成后推基础 echo 给父进程（设计文档 §9.3 基础 echo）。
+    None 时忽略。
     """
     try:
         from ares import AresBot
@@ -176,9 +199,36 @@ def make_bot_class(director_factory: Any, strategy_library: StrategyLibrary | No
                 return matched
             return []
 
+    # -----------------------------------------------------------------------
+    # 基础 echo 辅助协程（在 make_bot_class 闭包内，能访问 echo_callback）
+    # -----------------------------------------------------------------------
+
+    async def _run_command_with_echo(director: Any, text: str, now: float) -> None:
+        """调 director.on_player_command，完成后用 echo_callback 推基础 echo。
+
+        echo 是设计文档 §9.3 基础 echo 的最小实现：
+        玩家知道指令收到了 + 解析结果（完整撤销 / pending 计时器留 M3）。
+        """
+        from voicecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
+
+        outcome = await director.on_player_command(text, now)
+        if echo_callback is not None:
+            if isinstance(outcome, IntentParseResult):
+                echo_callback(text, outcome.interpretation_zh)
+            elif isinstance(outcome, AmbiguousParse):
+                echo_callback(text, f"[模糊] {outcome.result.interpretation_zh}")
+            elif isinstance(outcome, ParseError):
+                echo_callback(text, f"[解析失败] {outcome.message}")
+
     class _VoiceCraftBot(AresBot):  # type: ignore[misc]
         director = None
         facade: _AresFacade | None = None
+        # in-flight async task 列表：防止 GC 消掉后台任务（Gap 3）
+        _cmd_tasks: list[asyncio.Task[Any]]
+
+        def __init__(self) -> None:
+            super().__init__()
+            self._cmd_tasks = []
 
         async def on_start(self) -> None:
             # spike B：BuildOrderRunner 在 super().on_start() 末尾构造，
@@ -198,9 +248,67 @@ def make_bot_class(director_factory: Any, strategy_library: StrategyLibrary | No
             self.facade = _AresFacade(self)
             self.director = director_factory(self.facade)
 
+            # Gap 5：推 in_game → playing 给父进程
+            if status_callback is not None:
+                status_callback("in_game", "running", "")
+                status_callback("playing", "running", "")
+
         async def on_step(self, iteration: int) -> None:
-            await super().on_step(iteration)
+            if hasattr(super(), "on_step"):
+                await super().on_step(iteration)
+
+            # Gap 2：非阻塞消费下行队列
+            if down_q is not None:
+                try:
+                    while True:
+                        msg: dict[str, Any] = down_q.get_nowait()
+                        msg_type = msg.get("type")
+                        if msg_type == "command":
+                            text = str(msg.get("text", ""))
+                            issued_at = float(msg.get("issued_at", float(self.time)))
+                            if self.director is not None:
+                                # Gap 3：fire-and-forget，不 await（LLM 调用可能几秒）
+                                task = asyncio.create_task(
+                                    _run_command_with_echo(self.director, text, issued_at),
+                                    name=f"cmd-{issued_at:.3f}",
+                                )
+                                self._cmd_tasks.append(task)
+                                # 绑定回调：task 完成后从列表移除 + 捕获异常日志
+                                task.add_done_callback(self._on_cmd_task_done)
+                        elif msg_type == "leave":
+                            logger.info("bot 收到 leave 信号，等待 on_end")
+                except queue_module.Empty:
+                    pass
+
+            # 每 tick 让 director 处理 committed directives
             if self.director is not None:
                 self.director.on_tick(now=float(self.time))
+
+        def _on_cmd_task_done(self, task: asyncio.Task[Any]) -> None:
+            """后台 cmd task 完成回调：移除引用，异常时 log 不静默丢。"""
+            import contextlib
+
+            with contextlib.suppress(ValueError):
+                self._cmd_tasks.remove(task)
+            if not task.cancelled():
+                exc = task.exception()
+                if exc is not None:
+                    logger.error(
+                        "cmd_task_failed %s: %s",
+                        task.get_name(),
+                        exc,
+                        exc_info=exc,
+                    )
+
+        async def on_end(self, game_result: Any) -> None:
+            """游戏结束时：等待所有 in-flight cmd task，再推 ended 状态。"""
+            # 等待所有后台 cmd task（不再接新 command）
+            if self._cmd_tasks:
+                await asyncio.gather(*self._cmd_tasks, return_exceptions=True)
+                self._cmd_tasks.clear()
+
+            # Gap 5：推 ended 给父进程
+            if status_callback is not None:
+                status_callback("ended", "idle", "")
 
     return _VoiceCraftBot
