@@ -9,20 +9,23 @@
 
 ## 当前状态（最近更新：2026-05-14）
 
-- **里程碑**：M1 进行中 —— **M1.1-M1.4 ✅ 完成并验收**，M1.5 / M1.6 待做
+- **里程碑**：M1 进行中 —— **M1.1-M1.5 ✅ 完成并验收**，只剩 M1.6
   （M0a-M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
-- **M1.1-M1.4 摘要**（逐项详情见下方「里程碑拆解」）：
+- **M1.1-M1.5 摘要**（逐项详情见下方「里程碑拆解」）：
   - M1.1 bot service 骨架：`server/` 包（tokens/ws/http/qr/service）+ CLI + 启动脚本
   - M1.2 SC2 子进程生命周期：`game_process.py`（multiprocessing spawn）+ ADR 0002
   - M1.3 PWA 最小壳：`web/` Vue 3 + Tailwind + 三段式状态链 UI（build → `static/`）
   - M1.4 IntentParser 接真实 anthropic：`AnthropicProvider` + `llm/config.py`
-  - 验证：后端 `uv run pytest` **241 passed**、前端 vitest **15 passed**、
+  - M1.5 ares_adapter set_build：`build_translator.py` 翻译层（voicecraft 剧本 →
+    ares builds 格式）+ `switch_opening` 对接 + 启动注入 `config["Builds"]` + ADR 0003
+  - 验证：后端 `uv run pytest` **270 passed**、前端 vitest **15 passed**、
     ruff + mypy strict 全干净
-  - M1.3 / M1.4 由两个 Sonnet subagent 并行实现（worktree 隔离），Opus 全部
-    review 过、修了若干小瑕疵 + 1 个 pre-existing flaky test（`test_game_process.py`
-    的 `multiprocessing.Queue` → `queue.Queue`）
-- **下一步**：M1.5（`ares_adapter` 真实现 `set_build`，M0c 环境已就绪）
-  + M1.6（端到端串通验证）
+  - M1.3 / M1.4 / M1.5 由 Sonnet subagent 实现（worktree 隔离；M1.3+M1.4 并行），
+    Opus 全部 review 过、修了若干小瑕疵 + 1 个 pre-existing flaky test
+    （`test_game_process.py` 的 `multiprocessing.Queue` → `queue.Queue`）
+- **下一步**：M1.6 端到端串通验证 —— 手机说话 → `command` → IntentParser →
+  Directive → Board → Director → Facade → ares → SC2 切 build。依赖全部，
+  **需真实 SC2 + 用户在场**
 - **待用户做**：M1.4 的真实 anthropic API 验证 —— 设 `$env:ANTHROPIC_API_KEY`
   后跑冒烟（脚本见 M1.4 subagent 报告）；也可留到 M1.6 端到端时一起验
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
@@ -152,11 +155,17 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 - [x] 29 个 mock 单测（`test_llm_anthropic.py`）
 - [ ] **真实 API 验证待用户做**（需 `ANTHROPIC_API_KEY`；单测全 mock 不真调）
 
-**M1.5 第 1 个剧本接通 set_build**（依赖 M0c 环境，已就绪）
-- [ ] `ares_adapter` 真实实现 `set_build`（M0c 只验证了 role 隔离，set_build
-      还是骨架）
-- [ ] `1g_robo_immortal.yaml` → `StrategyLibrary.get()` → `Director` →
-      `Facade.set_build()` → ares Build Runner
+**M1.5 第 1 个剧本接通 set_build**（依赖 M0c 环境，已就绪）✅ 完成
+- [x] spike：ares 真实 API —— `BuildOrderRunner.switch_opening(name)`，name 须
+      预先在 `bot.config["Builds"]`；step 直接用 `UnitID` 大写名（ADR 0003）
+- [x] `bot/build_translator.py`：voicecraft `opening_build` 剧本 → ares builds
+      格式的纯函数翻译层（`@chrono` → 独立 CHRONO step、`send_probe` → WORKER_SCOUT）
+- [x] `ares_adapter.set_build` 真实现 → `build_order_runner.switch_opening()`；
+      `make_bot_class` 加 `strategy_library` 参数，`on_start` 在 `super()` 前注入
+      `config["Builds"]`
+- [x] 翻译层 + adapter 共 ~50 个单测（纯函数 + mock bot，不拉真 SC2）
+- 范围边界：只接 `opening_build` kind；midgame/lategame ares build runner 管不了，
+  留 M2+（见 ADR 0003 + 预研文档 §5）
 
 **M1.6 端到端串通 + 验证**（依赖全部）
 - [ ] 完整链路跑通：手机说话 → `command` → IntentParser → Directive → Board →
