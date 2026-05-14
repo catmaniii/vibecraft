@@ -1,5 +1,7 @@
 # VoiceCraft 一键启动脚本
-# 用法：双击此文件，或在 PowerShell 里运行 .\scripts\start.ps1
+# 用法：在 PowerShell 里运行 .\scripts\start.ps1
+#       （或在文件资源管理器里右键 → 使用 PowerShell 运行；
+#        .ps1 直接双击默认是用记事本打开，不会执行）
 #
 # 可选参数（覆盖默认值）：
 #   -Port <int>   监听端口，默认 8080

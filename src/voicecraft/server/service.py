@@ -54,8 +54,6 @@ class BotService:
         config = ServiceConfig(port=8080)
         svc = BotService(config)
         asyncio.run(svc.run())
-
-    或直接用 ``serve_forever()`` 作为可取消任务。
     """
 
     def __init__(self, config: ServiceConfig | None = None) -> None:
@@ -101,7 +99,3 @@ class BotService:
                 ip=cfg.display_ip,
             )
             await server.serve_forever()
-
-    async def serve_forever(self) -> None:
-        """serve_forever 是 run() 的别名，语义更清晰。"""
-        await self.run()

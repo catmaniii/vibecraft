@@ -85,7 +85,7 @@ def print_connect_info(port: int, token: str, ip: str | None = None) -> str:
 
     qr_art = render_qr_ascii(url)
 
-    separator = "─" * 50
+    separator = "=" * 50  # 纯 ASCII，跟二维码渲染一样绕 Windows GBK 终端
     info = textwrap.dedent(f"""\
         {separator}
          VoiceCraft 已启动

@@ -25,6 +25,7 @@ from typing import Any
 
 import structlog
 from websockets.asyncio.server import ServerConnection
+from websockets.datastructures import Headers as WsHeaders
 from websockets.http11 import Request, Response
 
 logger = structlog.get_logger(__name__)
@@ -97,8 +98,6 @@ def _serve_static(
 
     log.debug("http_static_served", file=str(target), content_type=content_type)
 
-    from websockets.datastructures import Headers as WsHeaders
-
     headers = WsHeaders(
         [
             ("Content-Type", content_type),
@@ -112,7 +111,6 @@ def _serve_static(
 def _text_response(status: http.HTTPStatus, text: str) -> Response:
     """构造纯文本 HTTP 响应。"""
     body = text.encode()
-    from websockets.datastructures import Headers as WsHeaders
 
     headers = WsHeaders(
         [

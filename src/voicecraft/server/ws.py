@@ -2,7 +2,7 @@
 
 设计文档 §9.2 / §9.3：
 - URL 格式：ws://host:port/ws?room=<token>
-- 握手时从 query 取 token，用 RoomRegistry.verify() 验证，失败拒连（HTTP 403）
+- 握手时从 query 取 token，用 RoomRegistry.verify() 验证，失败拒连（WS close 1008）
 - attach() 接入，若返回被顶掉的旧连接则 close()（重连顶旧）
 - 帧收发循环：收 JSON → 解析 type → 分发 handler（M1.1 阶段全是 stub）
 - 5s 心跳：下行 {"type": "ping", "ts": <game_time>}
@@ -27,11 +27,9 @@ from voicecraft.server.tokens import Connection, RoomRegistry
 
 logger = structlog.get_logger(__name__)
 
-# 心跳间隔（秒）
+# 业务层心跳间隔（秒）。websockets 协议层 keepalive 在 BotService 里设
+# ping_interval=None 关掉，心跳全由业务层 ping 帧负责。
 _PING_INTERVAL: float = 5.0
-
-# websockets ping（TCP keepalive 层）使用库默认；这里是业务层 ping 帧
-_WS_PING_INTERVAL: float | None = None  # 关掉 websockets 内置 ping，改由业务层控制
 
 
 class WsConnection:
