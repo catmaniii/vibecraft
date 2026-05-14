@@ -15,9 +15,14 @@
     `service`）+ `voicecraft serve` CLI + `scripts/start.ps1`，共 59 个单测
   - Opus review 过 + 修了 6 个小瑕疵（commit `e34b147`）
   - `uv run pytest` 185 passed；ruff + mypy strict 全干净
-- **下一步 → M1.2** SC2 子进程生命周期管理。设计预研已完成：
-  `docs/plans/2026-05-14-m1.2-sc2-lifecycle.md`（4 个架构难点 + 方案 trade-off +
-  `GameProcess` 接口草案 + spike 待办）。用 Sonnet subagent / 新 session 实现
+- **M1.2 ✅ 完成**（2026-05-14）：
+  - spike 确认：multiprocessing spawn 方案可行（`GameConfig` picklable，bot 在子进程内构造）
+  - `src/voicecraft/server/game_process.py`：`GameConfig` + `GameStatus` + `GameProcess`（start / status_events / send_command / stop）
+  - `ws.py`：`start_game` handler 从 stub 换成真的（`GameProcess.start()` + `status_events()` pump）；`game_status` 帧下行
+  - `service.py`：`BotService` 持有共享 `GameProcess` 实例
+  - 27 个新单测（`test_game_process.py`），212 passed；ruff + mypy strict 全干净
+  - ADR 见 `docs/adr/0002-game-process-multiprocessing-spawn.md`
+- **下一步 → M1.3** PWA 最小壳
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
@@ -125,10 +130,10 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 - [x] 一键启动脚本 `scripts/start.ps1` + `voicecraft serve` CLI 子命令；
       `server/service.py` BotService + ServiceConfig
 
-**M1.2 SC2 子进程生命周期管理**（依赖 M1.1）
-- [ ] 收 `start_game` 帧 → 独立进程 / 线程调 `run_game()` 拉 SC2，WS 主循环不阻塞
-- [ ] 检测启动阶段（launching / in_game / playing）/ 崩溃 / 结束
-- [ ] `game_status` 帧上行（三段式状态链）
+**M1.2 SC2 子进程生命周期管理**（依赖 M1.1）✅ 完成
+- [x] 收 `start_game` 帧 → 独立 multiprocessing spawn 子进程调 `run_game()`，WS 主循环不阻塞
+- [x] 检测启动阶段（launching / in_game / playing）/ 崩溃 / 结束
+- [x] `game_status` 帧下行（三段式状态链：link / sc2 / bot）
 
 **M1.3 PWA 最小壳**（依赖 M1.1）
 - [ ] Vue 3 + Tailwind 脚手架，扫码连 WS
