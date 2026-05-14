@@ -4,10 +4,14 @@
 - URL 格式：ws://host:port/ws?room=<token>
 - 握手时从 query 取 token，用 RoomRegistry.verify() 验证，失败拒连（WS close 1008）
 - attach() 接入，若返回被顶掉的旧连接则 close()（重连顶旧）
-- 帧收发循环：收 JSON → 解析 type → 分发 handler（M1.1 阶段全是 stub）
+- 帧收发循环：收 JSON → 解析 type → 分发 handler
 - 5s 心跳：下行 {"type": "ping", "ts": <game_time>}
 - 连接断开调 RoomRegistry.detach()
 - 所有连接事件用 structlog 结构化 log
+
+M1.2 变更：
+- start_game handler 从 stub 换成真的 → GameProcess.start() + status_events() 推上行
+- WsConnection 增加 game_process 参数
 """
 
 from __future__ import annotations
@@ -23,6 +27,12 @@ import structlog
 from websockets.asyncio.server import ServerConnection
 from websockets.exceptions import ConnectionClosed
 
+from voicecraft.server.game_process import (
+    GameConfig,
+    GameProcess,
+    GameStatus,
+    _build_game_status_frame_dict,
+)
 from voicecraft.server.tokens import Connection, RoomRegistry
 
 logger = structlog.get_logger(__name__)
@@ -32,16 +42,28 @@ logger = structlog.get_logger(__name__)
 _PING_INTERVAL: float = 5.0
 
 
+def _build_game_status_frame(status: GameStatus) -> str:
+    """把 GameStatus 封包成下行 game_status JSON 帧（设计文档 §9.3）。"""
+    return json.dumps(_build_game_status_frame_dict(status))
+
+
 class WsConnection:
     """一个活跃 WS 连接，实现 Connection Protocol（tokens.py）。
 
-    M1.1b 阶段：帧业务逻辑全是 stub，只 log。
-    M1.4-M1.6 阶段：替换 _dispatch 里的 handler。
+    M1.2：start_game handler 真实实现；新增 game_process 参数。
+    M1.4-M1.6 阶段：替换 _dispatch 里的其他 handler。
     """
 
-    def __init__(self, ws: ServerConnection, registry: RoomRegistry) -> None:
+    def __init__(
+        self,
+        ws: ServerConnection,
+        registry: RoomRegistry,
+        game_process: GameProcess | None = None,
+    ) -> None:
         self._ws = ws
         self._registry = registry
+        self._game_process = game_process or GameProcess()
+        self._status_pump_task: asyncio.Task[None] | None = None
         self._log = logger.bind(
             remote=str(ws.remote_address),
         )
@@ -79,6 +101,11 @@ class WsConnection:
             ping_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ping_task
+            # 停 status pump（如果 start_game 启动了）
+            if self._status_pump_task is not None:
+                self._status_pump_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._status_pump_task
             self._registry.detach(self)
             self._log.info("ws_session_ended")
 
@@ -122,26 +149,26 @@ class WsConnection:
         await self._dispatch(frame_type, frame)
 
     async def _dispatch(self, frame_type: str, frame: dict[str, Any]) -> None:
-        """帧类型分发。M1.1 阶段全是 stub，只 log。
+        """帧类型分发。
 
         帧类型来自设计文档 §9.3 上行 schema：
         start_game / command / recipe / compile_strategy /
         view_move / view_follow / view_zoom /
         confirm_ambiguous / revoke / save_recipe / release_unit
         """
-        # M1.1 stub：全部 log，不执行业务逻辑
-        # M1.2+ 替换对应分支
         self._log.info("ws_frame_received", frame_type=frame_type, frame=frame)
 
         if frame_type == "start_game":
-            self._log.info("ws_stub_start_game")
+            await self._handle_start_game(frame)
         elif frame_type == "command":
+            # M1.4+ 实现
             self._log.info("ws_stub_command", text=frame.get("text"))
         elif frame_type in {
             "view_move",
             "view_follow",
             "view_zoom",
         }:
+            # M1.4+ 实现
             self._log.info("ws_stub_view", frame_type=frame_type)
         elif frame_type in {
             "recipe",
@@ -151,9 +178,81 @@ class WsConnection:
             "save_recipe",
             "release_unit",
         }:
+            # 后续里程碑实现
             self._log.info("ws_stub_other", frame_type=frame_type)
         else:
             self._log.warning("ws_unknown_frame_type", frame_type=frame_type)
+
+    # ------------------------------------------------------------------
+    # start_game 处理（M1.2）
+    # ------------------------------------------------------------------
+
+    async def _handle_start_game(self, frame: dict[str, Any]) -> None:
+        """收到 start_game 帧 → 解析 config → GameProcess.start() → 开 status pump。
+
+        设计文档 §9.3：config 可省略，缺省用默认值。
+        """
+        raw_config: dict[str, Any] = frame.get("config") or {}
+        config = GameConfig(
+            map_name=str(raw_config.get("map", GameConfig.map_name)),
+            opponent_race=str(raw_config.get("opponent_race", GameConfig.opponent_race)),
+            opponent_difficulty=str(
+                raw_config.get("opponent_difficulty", GameConfig.opponent_difficulty)
+            ),
+            realtime=bool(raw_config.get("realtime", GameConfig.realtime)),
+        )
+
+        self._log.info(
+            "ws_start_game",
+            map_name=config.map_name,
+            opponent_race=config.opponent_race,
+            opponent_difficulty=config.opponent_difficulty,
+            realtime=config.realtime,
+        )
+
+        # 若已有 status pump 在跑（上一局还没退干净），先取消
+        if self._status_pump_task is not None and not self._status_pump_task.done():
+            self._status_pump_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._status_pump_task
+
+        self._game_process.start(config)
+
+        # 立即推 launching 状态给手机
+        launching_status = self._game_process.status
+        await self._send_game_status(launching_status)
+
+        # 启动 status pump task：持续把上行队列的消息转发给手机
+        self._status_pump_task = asyncio.create_task(
+            self._status_pump_loop(),
+            name="status-pump",
+        )
+
+    async def _status_pump_loop(self) -> None:
+        """持续把 GameProcess.status_events() 转发成 game_status 下行帧。"""
+        try:
+            async for status in self._game_process.status_events():
+                await self._send_game_status(status)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._log.exception("status_pump_error")
+
+    async def _send_game_status(self, status: GameStatus) -> None:
+        """封包 game_status 帧并推给手机。连接已断时静默忽略。"""
+        frame = _build_game_status_frame(status)
+        try:
+            await self._ws.send(frame)
+            self._log.debug(
+                "ws_game_status_sent",
+                sc2=status.sc2,
+                bot=status.bot,
+                detail=status.detail,
+            )
+        except ConnectionClosed:
+            self._log.info("ws_game_status_dropped_connection_closed")
+        except Exception:
+            self._log.exception("ws_game_status_send_error")
 
 
 # ------------------------------------------------------------------
@@ -163,11 +262,17 @@ class WsConnection:
 
 def make_ws_handler(
     registry: RoomRegistry,
+    game_process: GameProcess | None = None,
 ) -> Any:
     """返回 websockets handler coroutine。
 
     handler 被 websockets.serve 调用，每个新连接进来都会调一次。
+
+    game_process：可注入，用于测试；None 时每条连接自建一个（服务端默认行为应传入共享实例）。
+    M1.2 阶段 BotService 传入 service 级共享 GameProcess（一个 service 实例 = 一局）。
     """
+    # 若外部没注入，handler 每次新建一个（MVP 一 token 一连接，一局一 GameProcess）
+    _gp = game_process
 
     async def handler(ws: ServerConnection) -> None:
         """WS 连接 handler：验 token → 顶旧 → 运行 WsConnection.run()。"""
@@ -193,7 +298,7 @@ def make_ws_handler(
             await ws.close(1008, "Invalid room token")
             return
 
-        conn = WsConnection(ws, registry)
+        conn = WsConnection(ws, registry, game_process=_gp)
         evicted = registry.attach(conn)
         if evicted is not None:
             log.info("ws_evicting_old_connection")

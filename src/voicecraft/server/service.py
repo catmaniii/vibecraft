@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import structlog
 from websockets.asyncio.server import serve
 
+from voicecraft.server.game_process import GameProcess
 from voicecraft.server.http import make_process_request
 from voicecraft.server.qr import print_connect_info
 from voicecraft.server.tokens import RoomRegistry, generate_room_token
@@ -59,12 +60,18 @@ class BotService:
     def __init__(self, config: ServiceConfig | None = None) -> None:
         self._config = config or ServiceConfig()
         self._registry = RoomRegistry(token=self._config.token or generate_room_token())
+        self._game_process = GameProcess()
         self._log = logger.bind(port=self._config.port, host=self._config.host)
 
     @property
     def registry(self) -> RoomRegistry:
         """暴露 registry，方便测试 / M1.2 扩展注入 SC2 生命周期。"""
         return self._registry
+
+    @property
+    def game_process(self) -> GameProcess:
+        """暴露 game_process，方便测试检查状态。"""
+        return self._game_process
 
     @property
     def token(self) -> str:
@@ -74,7 +81,7 @@ class BotService:
         """启动 server，打印二维码，run forever（收到 SIGINT / CancelledError 退出）。"""
         cfg = self._config
         process_request = make_process_request(static_dir=cfg.static_dir)
-        ws_handler = make_ws_handler(self._registry)
+        ws_handler = make_ws_handler(self._registry, game_process=self._game_process)
 
         self._log.info("bot_service_starting")
 
