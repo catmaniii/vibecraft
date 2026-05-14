@@ -100,7 +100,7 @@ show_error_codes = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["ares.*", "sc2.*", "ares_sc2.*", "burnysc2.*"]
+module = ["ares.*", "sc2.*", "ares_sc2.*", "burnysc2.*", "qrcode.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
