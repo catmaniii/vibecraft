@@ -15,8 +15,10 @@
   - 本地领先 origin 若干 commit，**未 push 未 tag**（按用户选择）
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
-- **下一步**：开 M1，从 **M1.1 bot service 骨架**起；建议切 Sonnet 起 session
-  （模型选择规则：写代码用 Sonnet）
+- **进行中**：M1.1 bot service 骨架。**M1.1a 完成**（`server/` 包 + `tokens.py`
+  room_token / RoomRegistry，10 单测全绿），待 commit
+- **下一步**：M1.1b WS endpoint（`websockets` async server）；建议切 Sonnet 起
+  session（模型选择规则：写代码用 Sonnet）
 - **环境就绪情况**（M1 直接复用，不用重来）：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
   - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
@@ -106,9 +108,10 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 帧 + 三段式状态链）。按依赖排序：
 
 **M1.1 bot service 骨架**
-- [ ] HTTP server（serve PWA 静态资源）+ WS endpoint（`websockets`，listen
-      `0.0.0.0:<port>`，**不硬编码 localhost**）
-- [ ] room_token 生成 + 验证；一 token 一活跃连接（重连顶旧）
+- [x] `src/voicecraft/server/` 包骨架 + `tokens.py`：`room_token` 生成 / 验证 /
+      `RoomRegistry` 单活跃连接顶旧（10 单测，ruff + mypy 干净）
+- [ ] WS endpoint（`websockets`，listen `0.0.0.0:<port>`，**不硬编码 localhost**）
+- [ ] HTTP server（serve PWA 静态资源）
 - [ ] PC 端二维码显示（弹窗 / 极简本地页）+ IP:port 明文
 - [ ] 一键启动脚本（`.ps1`）：双击起 bot service
 
