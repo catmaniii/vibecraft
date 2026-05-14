@@ -7,54 +7,51 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-15）
+## 当前状态（最近更新：2026-05-15 深夜，session 自主收尾）
 
-- **里程碑**：**M1 ✅ 全部完成（M1.1-M1.6）** —— 端到端骨架代码层打通，
-  → `0.1.0a3`（M0a-M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
-- **M1.1-M1.5 摘要**（逐项详情见下方「里程碑拆解」）：
-  - M1.1 bot service 骨架：`server/` 包（tokens/ws/http/qr/service）+ CLI + 启动脚本
-  - M1.2 SC2 子进程生命周期：`game_process.py`（multiprocessing spawn）+ ADR 0002
-  - M1.3 PWA 最小壳：`web/` Vue 3 + Tailwind + 三段式状态链 UI（build → `static/`）
-  - M1.4 IntentParser 接真实 anthropic：`AnthropicProvider` + `llm/config.py`
-  - M1.5 ares_adapter set_build：`build_translator.py` 翻译层 + `switch_opening`
-    对接 + 启动注入 `config["Builds"]` + ADR 0003
-- **M1.6 端到端串通摘要**（详情见 ADR 0004 + `docs/plans/2026-05-14-m1.6-end-to-end.md`）：
-  5 个串通 gap 全部接通 —— 子进程 bot 统一（`_child_entry` 用 `make_bot_class`
-  造真 `_VoiceCraftBot`）/ 下行 command Queue 激活（WS `command` 帧 →
-  `send_command` → `on_step` 非阻塞消费）/ fire-and-forget（`on_player_command`
-  在 `on_step` 里 `create_task`，不阻塞 realtime）/ ParseContext+GameSession
-  子进程内装配 / 状态推送 hook + 基础 echo（`command_echo` 帧回手机）
-- **验证（无 SC2，mock）**：`uv run --extra dev --extra sc2 pytest` **291 passed**、
-  前端 vitest 15 passed、ruff + ruff format + mypy strict 全干净
-- **M1.6 由 Sonnet subagent 实现**（worktree 隔离），Opus review 过、清掉一处死代码
-  （`game_process._build_bot_class` 里未使用的 echo 包装函数 + 思考过程注释块）
-- **LLM provider**：已从官方 Claude 切到 **DeepSeek V4**（走 Anthropic 兼容端点，
-  `deepseek-v4-flash`，见 ADR 0005）。API key 走 `DEEPSEEK_API_KEY` 环境变量。
-  **真实 API 冒烟已通过**（`scripts/llm_smoke.py`：「切1门Robo」→ `strategy_set`
-  directive，置信度 0.9）—— 关键修正：DeepSeek v4 在该端点默认走思考模式、不兼容
-  `tool_choice` 强制，须 `disable_thinking: true`；`cache_control` 被端点忽略
-- **下一步：真实 SC2 端到端验证 —— 需用户在场**：
-  启 bot service（`uv run voicecraft serve`）→ 手机扫码 → 点开始对局 →
-  说「切1门Robo」→ 看 SC2 是否切到 `1g_robo_immortal` build + 手机收到
-  `command_echo`。LLM 那一环已单独验过，这步主要验 SC2 子进程 + 串通链路。
-  详细清单见 M1.6 subagent 报告
-- **可能失败点**：`DEEPSEEK_API_KEY` 未设 → echo 显示 `[解析失败]`；环境只跑了
-  `uv sync --extra dev`（没带 `--extra sc2`）→ 退回 `_M12Bot` stub，command
-  被消费但不解析；地图缺失 → 子进程报「地图未找到」
-- **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
-  客户端 + 三段式连接状态链」，是 M1 拆解的依据
+- **里程碑**：M1 代码层完成 + **M1.6 真实 SC2 启动链路已跑通**（端到端骨架
+  → `0.1.0a3`，待真实验证后打 tag）。auto-pilot（基础 bot 自动运营）已实现。
+- **本次 session（2026-05-15）做了什么** —— 真实启动 SC2 端到端，逐个暴露并修复
+  M0b-M1.5 全 mock 单测没覆盖的实现缺口：
+  - LLM provider 切 **DeepSeek V4**（ADR 0005，走 Anthropic 兼容端点 +
+    `disable_thinking`）+ 剧本解析治本（catalog 摘要 + 收敛规则 + 真实黑话别名）
+    + parser 边界过滤 schema 外字段
+  - 实心二维码（`██`）+ `scripts/start.ps1` 全 ASCII 重写（原脚本含中文/`█`，
+    PowerShell 5.1 按 GBK 解码 BOM-less UTF-8 直接 parser 报错，从没跑通过）
+  - M1.6 真实跑通修复：BuildChoices 注入（ares 进游戏即崩）/ GameMatch 路径
+    （窗口配置）/ 默认地图 `DaybreakLE` / 造农民（`ConstantWorkerProductionTill`）
+  - **auto-pilot**（ADR 0006 + `docs/plans/2026-05-15-auto-pilot.md`）：
+    `_VoiceCraftBot.on_step` 接 ares macro behaviors，两阶段（opening 期
+    `Mining`/`AutoSupply`；opening 跑完后 + `BuildWorkers`/`Gas`/`Expansion`/
+    `Production`/`Spawn`）。目标「无干预 ≈ 普通电脑级别」。role 隔离已调研验证
+    （不碰 `CONTROL_GROUP_ONE` = LLM 接管的特种兵）
+- **真实 SC2 验证进展**：手机连接 → `start_game` → SC2 拉起 → ares 跑
+  `1g_robo_immortal` build → `bot=running`，**链路已通**（日志 `bcz59yaqv.output`，
+  但那是 auto-pilot 之前的旧 service）
+- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **303 passed**、
+  ruff + ruff format + mypy strict 全干净
+- **下一步：用户醒来做真实端到端验证**（需看屏幕判断 auto-pilot 效果）：
+  1. `.\scripts\start.ps1`（一键启动，已修好；token 固定 `voicecraft-dev`）
+  2. 手机扫码 / 输 `http://<内网IP>:8080/?room=voicecraft-dev`
+  3. 点「开始对局」→ SC2 靠左 1707×960 拉起 → 看 auto-pilot：opening 按
+     `1g_robo_immortal` 跑、农民持续造 + 闲置农民采矿、opening 后 3-4 矿饱和 + 出兵
+  4. 说「单BG VR出不朽」→ 手机收 `command_echo` → 约 1.5s 后 SC2 切 build
+  5. 对照 ADR 0006 §「待真实验证」的 spike A-D
+- **已知未做（非 bug，是 M2/M3 范围）**：
+  - 对局 UI（小地图 / 当前剧本 / bot 信息驾驶舱）—— **M3**，PWA 现在是 M1.3 最小壳，
+    点「开始对局」后不切界面是因为对局界面还没做
+  - 「按 midgame/lategame 剧本自动转」—— **M2**（当前 auto-pilot 只是通用兜底）
+  - 造建筑指令（「造水晶和BG」）—— directive schema 没这个类型，**M2**
+- **service 状态**：session 收尾时停掉了旧 service（跑 auto-pilot 之前的代码）。
+  用户醒来直接 `.\scripts\start.ps1` 即可（会加载所有新代码）
 - **模型**：真实验证若需 debug 用 Opus；M2 起写代码用 Sonnet
 - **环境就绪情况**：
-  - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
-  - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
-  - `.venv` = Python 3.11.14
-  - `DEEPSEEK_API_KEY` 已设为 user-level 永久环境变量（LLM = DeepSeek V4）。
-    ⚠️ 已运行的进程不会刷新环境块 —— 新开 shell 才继承；当前 shell 可用
-    `$env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable("DEEPSEEK_API_KEY","User")` 刷
-  - **ares 全家桶已写进 `pyproject.toml` 的 `sc2` extra + `[tool.uv.sources]`**：
-    `uv sync --extra dev --extra sc2` 一条命令装 / 恢复。⚠️ `uv sync` / `uv run`
-    不带 `--extra sc2` 会**卸载** ares 全家桶 —— M1.6 测试也走 ares 分支，跑
-    pytest / smoke / `ares_adapter` 相关时必须带 `--extra sc2`（或 `uv run --no-sync`）
+  - `SC2PATH` = `D:\StarCraft II`（user-level 永久）；地图
+    `D:\StarCraft II\Maps\DaybreakLE.SC2Map` 已就位
+  - `DEEPSEEK_API_KEY` 已设 user-level 永久。`start.ps1` 会自动从 user 级刷到
+    进程 env（已运行的 shell 不自动刷新环境块）
+  - `.venv` = Python 3.11.14；ares 全家桶在 `sc2` extra。⚠️ `uv sync` / `uv run`
+    不带 `--extra sc2` 会**卸载** ares —— 跑 pytest / smoke 用 `uv run --no-sync`
   - `.venv/.../ares_sc2_src.pth`（内容 `src`）—— 修 ares src-layout 打包 bug；
     `uv sync` 不碰它，但**重建 venv 后需重新创建**（runbook §1.3）
 
