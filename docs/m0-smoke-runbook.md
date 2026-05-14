@@ -101,17 +101,26 @@ uv venv          # 读 .python-version，用 3.11
 
 ### 1.2 装 voicecraft + ares 全家桶
 
+ares-sc2 / burnysc2 / map-analyzer 不在 PyPI（git 源），sc2-helper 在 PyPI。
+它们都归到 `pyproject.toml` 的 `sc2` extra，git URL 已写进 `[tool.uv.sources]`：
+
 ```powershell
 # 在项目根目录（注意目录名是 voicecraft，不是 voice_craft）
 cd D:\code\claudecode\voicecraft
 
-uv sync --extra dev
-uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
-uv pip install sc2-helper          # ares 没把它写进依赖声明，要手动装
+uv sync --extra dev --extra sc2     # 一条命令装全：dev 工具链 + ares 全家桶
 ```
 
-如果 `uv pip install` 拉 git 失败（公司网 / 防火墙），可以手 clone 然后
-`uv pip install -e ../ares-sc2`。
+**注意**：日常开发若用不到 ares（M1.2-M1.4 的 server / PWA / LLM 都不需要），
+`uv sync --extra dev` 即可；但**一旦 `uv sync` 时漏了 `--extra sc2`，ares 全家桶
+会被卸载**（uv 让 venv 严格匹配启用的 extra）。跑 smoke / 碰 `ares_adapter` 时
+务必带上 `--extra sc2`。
+
+pip 用户（不走 uv）`[tool.uv.sources]` 不生效，仍需手动 git install：
+
+```powershell
+pip install "git+https://github.com/AresSC2/ares-sc2@main" sc2-helper
+```
 
 ### 1.3 修 ares-sc2 的 src-layout 打包问题
 

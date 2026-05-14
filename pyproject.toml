@@ -31,6 +31,14 @@ dev = [
     "types-PyYAML>=6.0",
     "pre-commit>=3.7",
 ]
+# 端到端依赖（真实 SC2 + ares-sc2）。ares-sc2 / burnysc2 / map-analyzer 都不在
+# PyPI（git 源），所以单独成 extra —— 日常 `uv sync --extra dev` 不会装它们，
+# 只有要跑 smoke / M1.5 ares_adapter 才 `uv sync --extra dev --extra sc2`。
+# uv 用户靠下方 [tool.uv.sources] 解析 git URL；pip 用户走 runbook §1 手动装。
+sc2 = [
+    "ares-sc2",
+    "sc2-helper>=0.2.1",
+]
 
 [project.scripts]
 voicecraft = "voicecraft.cli:main"
@@ -41,6 +49,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voicecraft"]
+
+# ----------------------------------------------------------------------
+# uv sources —— 把 sc2 extra 里的 git 依赖映射到源（uv 专用，pip 不读这段）。
+# 根治「`uv sync` 把 ares 全家桶清掉」的问题：之前 ares 是 `uv pip install`
+# 旁路装的、不在 pyproject 声明里，任何 `uv sync` 都会清掉它们。
+# burnysc2 / map-analyzer 是 ares-sc2 的传递依赖，显式列源保证用对 URL。
+# `ares_sc2_src.pth`（修 ares-sc2 src-layout 打包 bug）仍需手动建，见 runbook §1。
+# ----------------------------------------------------------------------
+[tool.uv.sources]
+ares-sc2 = { git = "https://github.com/AresSC2/ares-sc2", branch = "main" }
+burnysc2 = { git = "https://github.com/august-k/python-sc2", branch = "develop" }
+map-analyzer = { git = "https://github.com/spudde123/SC2MapAnalysis", branch = "develop" }
 
 # ----------------------------------------------------------------------
 # ruff

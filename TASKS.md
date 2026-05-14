@@ -10,26 +10,27 @@
 ## 当前状态（最近更新：2026-05-14）
 
 - **里程碑**：M1 进行中（M0a / M0b / M0c 全 ✅，tag `v0.1.0a2` 已打并 push）
-- **HEAD**：`3c2380b`，已与 `origin/main` **未同步**（用户决定 push 时机）
-- **M1.1 ✅ 完成**（2026-05-14）：
-  - M1.1a ✅ `tokens.py` + 10 单测
-  - M1.1b ✅ WS endpoint + 15 单测（`server/ws.py`）
-  - M1.1c ✅ HTTP static server，与 WS 共端口（`server/http.py`）+ 11 单测
-  - M1.1d ✅ ASCII 二维码 + UDP 局域网 IP 检测（`server/qr.py`）+ 12 单测
-  - M1.1e ✅ BotService + `voicecraft serve` CLI + `scripts/start.ps1` + 11 单测
-  - 共 49 个新单测，全部通过；ruff + mypy strict 全干净
-- **下一步 → M1.2** SC2 子进程生命周期管理（依赖 M1.1）
-- **本轮授权范围**（用户 2026-05-14 指示）：M1.1b-e 已完成，找用户验收；
-  验收通过后继续 M1.2-M1.6
+- **M1.1 ✅ 完成并验收**（2026-05-14）：
+  - M1.1a-e 全部完成：`server/` 包（`tokens` / `ws` / `http` / `qr` /
+    `service`）+ `voicecraft serve` CLI + `scripts/start.ps1`，共 59 个单测
+  - Opus review 过 + 修了 6 个小瑕疵（commit `e34b147`）
+  - `uv run pytest` 185 passed；ruff + mypy strict 全干净
+- **下一步 → M1.2** SC2 子进程生命周期管理。设计预研已完成：
+  `docs/plans/2026-05-14-m1.2-sc2-lifecycle.md`（4 个架构难点 + 方案 trade-off +
+  `GameProcess` 接口草案 + spike 待办）。用 Sonnet subagent / 新 session 实现
 - **设计文档**：§3.3 / §9 已更新 —— 部署形态补「两阶段启动 + UI 拉起 SC2
   客户端 + 三段式连接状态链」，是 M1 拆解的依据
 - **模型**：M1 往后是写代码，用 Sonnet（架构已在 Opus 敲定）
-- **环境就绪情况**（M1 直接复用，不用重来）：
+- **环境就绪情况**：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久已设）
   - 地图：`D:\StarCraft II\Maps\DaybreakLE.SC2Map`（从 Battle.net Cache 提取）
-  - `.venv` = Python 3.11.14；ares-sc2 3.7.2 / burnysc2 7.1.0 / sc2-helper 0.2.1 已装
-  - `.venv/Lib/site-packages/ares_sc2_src.pth`（内容 `src`）—— 修 ares 打包问题，
-    **重建 venv 后需重新创建**（详见 runbook §4）
+  - `.venv` = Python 3.11.14
+  - **ares 全家桶已写进 `pyproject.toml` 的 `sc2` extra + `[tool.uv.sources]`**：
+    `uv sync --extra dev --extra sc2` 一条命令装 / 恢复。⚠️ `uv sync` 不带
+    `--extra sc2` 会**卸载** ares 全家桶（M1.2-M1.4 不用 ares 没事，碰 smoke /
+    `ares_adapter` 时记得带上）
+  - `.venv/.../ares_sc2_src.pth`（内容 `src`）—— 修 ares src-layout 打包 bug；
+    `uv sync` 不碰它，但**重建 venv 后需重新创建**（runbook §1.3）
 
 ---
 
