@@ -133,9 +133,7 @@ class MinimapBuilder:
 
         # 地形高度图(0-255):静态数据,只第一帧带,前端缓存
         if not self._terrain_sent:
-            frame["terrain"] = self._encode_playable_pixelmap(
-                self.bot.game_info.terrain_height
-            )
+            frame["terrain"] = self._encode_playable_pixelmap(self.bot.game_info.terrain_height)
             self._terrain_sent = True
 
         return frame

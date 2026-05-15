@@ -296,7 +296,11 @@ def _inject_fake_sharpy_for_move_camera() -> type:
     import enum
 
     for key in list(sys.modules.keys()):
-        if key.startswith("sharpy") or key.startswith("voicecraft.bot.sharpy_adapter") or key.startswith("voicecraft.bot.auto_combat"):
+        if (
+            key.startswith("sharpy")
+            or key.startswith("voicecraft.bot.sharpy_adapter")
+            or key.startswith("voicecraft.bot.auto_combat")
+        ):
             del sys.modules[key]
 
     class _FakeUnitTask(enum.IntEnum):

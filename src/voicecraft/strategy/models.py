@@ -130,6 +130,9 @@ class OpeningBuild(BaseModel):
     scout_at: str | None = None
     abort_signals: list[AbortSignal] = Field(default_factory=list)
     default_transitions: list[DefaultTransition] = Field(default_factory=list)
+    # M2+M3: sharpy dummy bot class（格式 "module:ClassName"，相对于 vendor/sharpy/dummies/）
+    # 非 None 时 create_plan() 会从该 dummy 拉 BuildOrder，接入 IfElse 路由树。
+    sharpy_dummy_class: str | None = None
 
     @model_validator(mode="after")
     def _validate_steps_parseable(self) -> OpeningBuild:
@@ -160,6 +163,8 @@ class MidgameStance(BaseModel):
     micro_doctrine: list[str] = Field(default_factory=list)
     expire_action: list[str] = Field(default_factory=list)
     lategame_transitions: list[LategameTransition] = Field(default_factory=list)
+    # M2+M3: sharpy dummy class（格式 "module:ClassName"）—— 留 M4 commitments 注入时用
+    sharpy_dummy_class: str | None = None
 
 
 # =========================================================================
@@ -182,6 +187,8 @@ class LategameDoctrine(BaseModel):
     win_condition: dict[str, str] = Field(default_factory=dict)
     counters_against: list[str] = Field(default_factory=list)
     weak_against: list[str] = Field(default_factory=list)
+    # M2+M3: sharpy dummy class（格式 "module:ClassName"）—— 留 M4 lategame 注入时用
+    sharpy_dummy_class: str | None = None
 
 
 # =========================================================================

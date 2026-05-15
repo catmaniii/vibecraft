@@ -51,8 +51,8 @@ def _make_library(*opening_ids: str) -> StrategyLibrary:
 # ---------------------------------------------------------------------------
 
 
-def _inject_fake_sharpy() -> tuple[type, type]:
-    """向 sys.modules 注入伪 sharpy / sc2 模块，返回 (FakeKnowledgeBot, FakeUnitTask)。
+def _inject_fake_sharpy() -> tuple[type, type, type, type]:
+    """向 sys.modules 注入伪 sharpy / sc2 模块，返回 (FakeKnowledgeBot, FakeUnitTask, FakeBuildOrder, FakeIfElse)。
 
     调用者必须在测试结束后清理（autouse fixture 负责）。
     """
@@ -87,10 +87,42 @@ def _inject_fake_sharpy() -> tuple[type, type]:
     # --- sharpy.plans ---
     class FakeBuildOrder:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+            self.args = args
+
+    class FakeIfElse:
+        """最小 IfElse stub：记录 condition / action / action_else，
+        execute() 调 condition（传 None 作 ai 替代）选分支。"""
+
+        def __init__(
+            self,
+            condition: Any,
+            action: Any,
+            action_else: Any = None,
+            **_: Any,
+        ) -> None:
+            self.condition = condition
+            self.action = action
+            self.action_else = action_else
+
+        def check(self, ai: Any = None) -> bool:
+            # condition 是 callable（lambda）或有 check() 的 RequireBase
+            if callable(self.condition):
+                return bool(self.condition(ai))
+            return bool(self.condition.check())
+
+        async def execute(self, ai: Any = None) -> bool:
+            if self.check(ai):
+                return True
+            if self.action_else is not None and isinstance(self.action_else, FakeIfElse):
+                return await self.action_else.execute(ai)
+            return True
 
     fake_plans_mod = ModuleType("sharpy.plans")
     fake_plans_mod.BuildOrder = FakeBuildOrder  # type: ignore[attr-defined]
+    fake_plans_mod.IfElse = FakeIfElse  # type: ignore[attr-defined]
+
+    fake_if_else_mod = ModuleType("sharpy.plans.if_else")
+    fake_if_else_mod.IfElse = FakeIfElse  # type: ignore[attr-defined]
 
     # --- sharpy.knowledges ---
     class FakeKnowledge:
@@ -181,13 +213,14 @@ def _inject_fake_sharpy() -> tuple[type, type]:
     sys.modules["sharpy.knowledges"] = fake_knowledges_mod
     sys.modules["sharpy.knowledges.knowledge_bot"] = fake_kb_mod
     sys.modules["sharpy.plans"] = fake_plans_mod
+    sys.modules["sharpy.plans.if_else"] = fake_if_else_mod
     sys.modules["sharpy.managers"] = ModuleType("sharpy.managers")
     sys.modules["sharpy.managers.core"] = fake_managers_core_mod
     sys.modules["sharpy.managers.core.roles"] = fake_roles_mod
     sys.modules["sharpy.managers.core.roles.unit_task"] = fake_unit_task_mod
     sys.modules["sharpy.managers.extensions"] = fake_managers_ext_mod
 
-    return FakeKnowledgeBot, FakeUnitTask
+    return FakeKnowledgeBot, FakeUnitTask, FakeBuildOrder, FakeIfElse
 
 
 @pytest.fixture(autouse=True)
@@ -219,7 +252,7 @@ class TestMakeBotClass:
         assert isinstance(BotClass, type)
 
     def test_class_is_knowledgebot_subclass(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -242,7 +275,7 @@ class TestSetBuild:
     """_SharpyFacade.set_build M1 占位：写 bot.active_recipe，不抛。"""
 
     def test_set_build_updates_active_recipe(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -261,7 +294,7 @@ class TestSetBuild:
         assert instance.active_recipe == "1g_robo_immortal"
 
     def test_set_build_different_names(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -290,7 +323,7 @@ class TestOnStart:
     """on_start 正确构造 facade / director，注入 callbacks。"""
 
     async def test_facade_created_after_on_start(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -303,7 +336,7 @@ class TestOnStart:
         assert instance.facade is not None
 
     async def test_director_created_after_on_start(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
@@ -317,7 +350,7 @@ class TestOnStart:
         assert instance.director is director_mock
 
     async def test_snapshot_callback_injected(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         snap_calls: list[Any] = []
@@ -337,7 +370,7 @@ class TestOnStart:
         assert len(snap_calls) == 1
 
     async def test_status_callback_on_start(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
@@ -360,7 +393,7 @@ class TestOnStart:
         assert "playing" in sc2_states
 
     async def test_no_strategy_library_is_fine(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
@@ -372,7 +405,7 @@ class TestOnStart:
             await instance.on_start()
 
     async def test_strategy_library_sets_initial_recipe(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         lib = _make_library("build_alpha", "build_beta")
@@ -403,7 +436,7 @@ class TestOnStep:
     """on_step 消费下行队列（command / view_move / leave）。"""
 
     async def test_on_step_creates_task_for_command(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         parse_calls: list[tuple[str, float]] = []
@@ -445,7 +478,7 @@ class TestOnStep:
         assert parse_calls[0][1] == 17.5
 
     async def test_on_step_view_move_calls_facade_move_camera(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
@@ -472,7 +505,7 @@ class TestOnStep:
         facade_mock.move_camera.assert_called_once_with((64.0, 32.0))
 
     async def test_director_tick_called_each_step(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
@@ -503,7 +536,7 @@ class TestMoveCameraStaged:
     """_SharpyFacade.move_camera 暂存模式 + drain_pending_actions。"""
 
     def test_move_camera_stores_pending_point(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -520,7 +553,7 @@ class TestMoveCameraStaged:
         assert instance.facade._pending_camera_point == (48.0, 72.0)
 
     def test_multiple_move_camera_collapses_to_latest(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -539,7 +572,7 @@ class TestMoveCameraStaged:
         assert instance.facade._pending_camera_point == (50.0, 60.0)
 
     async def test_drain_pending_actions_calls_client_move_camera(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -558,7 +591,7 @@ class TestMoveCameraStaged:
         assert instance.facade._pending_camera_point is None
 
     async def test_drain_no_pending_is_noop(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
@@ -584,7 +617,7 @@ class TestSetUnitRole:
     """_SharpyFacade.set_unit_role 调 sharpy UnitRoleManager.set_task。"""
 
     async def test_set_unit_role_calls_set_task(self) -> None:
-        FakeKnowledgeBot, FakeUnitTask = _inject_fake_sharpy()
+        FakeKnowledgeBot, FakeUnitTask, *_ = _inject_fake_sharpy()
         from voicecraft.bot.facade import UnitRole
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
@@ -601,12 +634,10 @@ class TestSetUnitRole:
         instance.facade.set_unit_role(42, UnitRole.LLM_CONTROLLED)
 
         # set_task(Reserved, unit) 被调
-        instance.knowledge.roles.set_task.assert_called_once_with(
-            FakeUnitTask.Reserved, fake_unit
-        )
+        instance.knowledge.roles.set_task.assert_called_once_with(FakeUnitTask.Reserved, fake_unit)
 
     async def test_set_unit_role_warns_if_unit_not_found(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.facade import UnitRole
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
@@ -635,7 +666,7 @@ class TestOnEnd:
     """on_end 等待 cmd tasks + 推 ended 状态。"""
 
     async def test_on_end_calls_status_callback(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[str] = []
@@ -652,7 +683,7 @@ class TestOnEnd:
         assert "ended" in calls
 
     async def test_on_end_awaits_cmd_tasks(self) -> None:
-        FakeKnowledgeBot, _ = _inject_fake_sharpy()
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
         from voicecraft.bot.sharpy_adapter import make_bot_class
 
         task_finished = asyncio.Event()
@@ -705,7 +736,7 @@ class TestBuildRoleMap:
             assert role in role_map
 
     def test_llm_controlled_maps_to_reserved(self) -> None:
-        _, FakeUnitTask = _inject_fake_sharpy()
+        _, FakeUnitTask, *_ = _inject_fake_sharpy()
         from voicecraft.bot.facade import UnitRole
 
         with patch(
@@ -717,3 +748,261 @@ class TestBuildRoleMap:
             role_map = build_role_map()
 
         assert role_map[UnitRole.LLM_CONTROLLED] == FakeUnitTask.Reserved
+
+
+# ---------------------------------------------------------------------------
+# 测试：create_plan() IfElse 路由树（M2+M3）
+# ---------------------------------------------------------------------------
+
+
+def _make_opening_with_dummy(opening_id: str, dummy_spec: str) -> Any:
+    """构造带 sharpy_dummy_class 字段的 OpeningBuild。"""
+    from voicecraft.strategy.models import OpeningBuild
+
+    return OpeningBuild.model_validate(
+        {
+            "kind": "opening_build",
+            "id": opening_id,
+            "display_name_zh": f"测试 {opening_id}",
+            "phases": [{"id": "p1", "display": "P1"}],
+            "steps": ["13 build Pylon", "14 build Gateway"],
+            "sharpy_dummy_class": dummy_spec,
+            "default_transitions": [],
+        }
+    )
+
+
+def _make_library_with_dummies(*specs: tuple[str, str]) -> Any:
+    """构造包含 sharpy_dummy_class 的 StrategyLibrary。
+
+    specs: list of (opening_id, dummy_spec)
+    """
+    from voicecraft.strategy.library import StrategyLibrary
+
+    openings = [_make_opening_with_dummy(oid, spec) for oid, spec in specs]
+    return StrategyLibrary(openings=openings, midgames=[], lategames=[])
+
+
+class TestCreatePlan:
+    """create_plan() 构建 IfElse 路由树；set_build → active_recipe 让条件切换。"""
+
+    async def test_create_plan_returns_build_order_with_dummies(self) -> None:
+        """create_plan() 成功 import dummy + 返回包含 IfElse 的 BuildOrder。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, _FakeIfElse = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        # 构造 fake dummy module
+        fake_dummy_plan = FakeBuildOrder([])
+
+        class FakeDummy:
+            def create_plan(self) -> Any:
+                return fake_dummy_plan
+
+        fake_dummy_mod = ModuleType("dummies.protoss.fake_a")
+        fake_dummy_mod.FakeDummyA = FakeDummy  # type: ignore[attr-defined]
+        sys.modules["dummies"] = ModuleType("dummies")
+        sys.modules["dummies.protoss"] = ModuleType("dummies.protoss")
+        sys.modules["dummies.protoss.fake_a"] = fake_dummy_mod
+
+        lib = _make_library_with_dummies(("recipe_a", "dummies.protoss.fake_a:FakeDummyA"))
+
+        BotClass = make_bot_class(
+            lambda facade: None,
+            strategy_library=lib,
+        )
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        # create_plan 返回 BuildOrder（包含 IfElse 或单 plan）
+        plan = await instance.create_plan()
+        assert isinstance(plan, FakeBuildOrder)
+
+    async def test_create_plan_builds_ifl_else_for_multiple_recipes(self) -> None:
+        """多个 dummy → IfElse 嵌套结构（BuildOrder args 非空）。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, FakeIfElse = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        class FakeDummyA:
+            def create_plan(self) -> Any:
+                return FakeBuildOrder(["plan_a"])
+
+        class FakeDummyB:
+            def create_plan(self) -> Any:
+                return FakeBuildOrder(["plan_b"])
+
+        for mod_name, cls_name, cls in [
+            ("dummies.protoss.fake_aa", "FakeDummyA", FakeDummyA),
+            ("dummies.protoss.fake_bb", "FakeDummyB", FakeDummyB),
+        ]:
+            m = ModuleType(mod_name)
+            setattr(m, cls_name, cls)
+            sys.modules["dummies"] = sys.modules.get("dummies", ModuleType("dummies"))
+            sys.modules["dummies.protoss"] = sys.modules.get(
+                "dummies.protoss", ModuleType("dummies.protoss")
+            )
+            sys.modules[mod_name] = m
+
+        lib = _make_library_with_dummies(
+            ("recipe_a", "dummies.protoss.fake_aa:FakeDummyA"),
+            ("recipe_b", "dummies.protoss.fake_bb:FakeDummyB"),
+        )
+
+        BotClass = make_bot_class(
+            lambda facade: None,
+            strategy_library=lib,
+        )
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        plan = await instance.create_plan()
+        # BuildOrder 包含 IfElse（args[0] 是 FakeIfElse）
+        assert isinstance(plan, FakeBuildOrder)
+        assert len(plan.args) > 0
+        inner = plan.args[0]  # IfElse(cond_a, plan_a, plan_b)
+        # 两个 recipe → 有 IfElse（嵌套）或直接是 FakeBuildOrder（单 recipe 时）
+        assert isinstance(inner, (FakeIfElse, FakeBuildOrder)), (
+            f"expected IfElse or BuildOrder, got {type(inner)}: {inner}"
+        )
+
+    async def test_set_build_then_lambda_condition_matches(self) -> None:
+        """set_build("recipe_b") 后，active_recipe == "recipe_b" → IfElse condition 为 True。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, FakeIfElse = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        class FakeDummyA:
+            def create_plan(self) -> Any:
+                return FakeBuildOrder(["plan_a"])
+
+        class FakeDummyB:
+            def create_plan(self) -> Any:
+                return FakeBuildOrder(["plan_b"])
+
+        for mod_name, cls_name, cls in [
+            ("dummies.protoss.cond_a", "FakeDummyA", FakeDummyA),
+            ("dummies.protoss.cond_b", "FakeDummyB", FakeDummyB),
+        ]:
+            m = ModuleType(mod_name)
+            setattr(m, cls_name, cls)
+            sys.modules["dummies"] = sys.modules.get("dummies", ModuleType("dummies"))
+            sys.modules["dummies.protoss"] = sys.modules.get(
+                "dummies.protoss", ModuleType("dummies.protoss")
+            )
+            sys.modules[mod_name] = m
+
+        lib = _make_library_with_dummies(
+            ("recipe_a", "dummies.protoss.cond_a:FakeDummyA"),
+            ("recipe_b", "dummies.protoss.cond_b:FakeDummyB"),
+        )
+
+        BotClass = make_bot_class(
+            lambda facade: None,
+            strategy_library=lib,
+        )
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        plan = await instance.create_plan()
+        inner = plan.args[0]  # top-level IfElse
+
+        # 初始 active_recipe = "recipe_a"（on_start 设第一个）
+        assert isinstance(inner, FakeIfElse)
+        assert inner.check(None) is True  # lambda: active_recipe == "recipe_a"
+
+        # set_build 切到 recipe_b
+        instance.facade.set_build("recipe_b")
+        assert instance.active_recipe == "recipe_b"
+        # top IfElse condition 现在 false（recipe_a != recipe_b）
+        assert inner.check(None) is False
+
+    async def test_set_build_invalid_still_works(self) -> None:
+        """set_build("nonexistent") 不崩，active_recipe 更新；IfElse 条件全 False 走 else 兜底。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, _FakeIfElse = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        class FakeDummyA:
+            def create_plan(self) -> Any:
+                return FakeBuildOrder(["plan_a"])
+
+        m = ModuleType("dummies.protoss.inv_a")
+        m.FakeDummyA = FakeDummyA  # type: ignore[attr-defined]
+        sys.modules["dummies"] = sys.modules.get("dummies", ModuleType("dummies"))
+        sys.modules["dummies.protoss"] = sys.modules.get(
+            "dummies.protoss", ModuleType("dummies.protoss")
+        )
+        sys.modules["dummies.protoss.inv_a"] = m
+
+        lib = _make_library_with_dummies(("recipe_a", "dummies.protoss.inv_a:FakeDummyA"))
+
+        BotClass = make_bot_class(
+            lambda facade: None,
+            strategy_library=lib,
+        )
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        # set_build 不存在的 id → active_recipe 更新，不抛
+        instance.facade.set_build("nonexistent_id")
+        assert instance.active_recipe == "nonexistent_id"
+
+    async def test_create_plan_fallback_on_import_error(self) -> None:
+        """dummy import 失败 → fallback BuildOrder，不抛，整体 create_plan 仍返回 BuildOrder。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, _ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        # "dummies.protoss.bad_module" 不在 sys.modules → importlib.import_module 失败
+        # （确保不意外在 sys.modules 里）
+        sys.modules.pop("dummies.protoss.bad_module", None)
+
+        lib = _make_library_with_dummies(
+            ("recipe_bad", "dummies.protoss.bad_module:NonExistentClass")
+        )
+
+        BotClass = make_bot_class(
+            lambda facade: None,
+            strategy_library=lib,
+        )
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        # 即使 dummy import 失败，create_plan 仍返回 BuildOrder（fallback）
+        plan = await instance.create_plan()
+        assert isinstance(plan, FakeBuildOrder)
+
+    async def test_create_plan_no_strategy_library_returns_empty(self) -> None:
+        """无 strategy_library 时 create_plan 返回空 BuildOrder。"""
+        FakeKnowledgeBot, *_, FakeBuildOrder, _ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)  # no strategy_library
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        plan = await instance.create_plan()
+        assert isinstance(plan, FakeBuildOrder)
+
+    def test_default_active_recipe_is_1g_robo_immortal(self) -> None:
+        """_VoiceCraftProtossBot.__init__ 设 active_recipe = '1g_robo_immortal'。"""
+        _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        # 直接访问类属性（类级别默认值）
+        assert BotClass.active_recipe == "1g_robo_immortal"

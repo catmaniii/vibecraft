@@ -2,6 +2,7 @@ kind: opening_build
 id: 4bg
 display_name_zh: "4 门 BG 闪追压制"
 summary_zh: "经典 4 BG 折跃压制:13 农 BG → BC → 折跃 → 加到 4 门 → 闪追/纯狂出门 timing"
+sharpy_dummy_class: "dummies.protoss.gate4:Stalkers4Gate"
 aliases:
   - "4BG"
   - "4bg"

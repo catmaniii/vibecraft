@@ -2,6 +2,7 @@ kind: opening_build
 id: 1g_robo_immortal
 display_name_zh: "1门Robo 不朽开"
 summary_zh: "单 BG 速开机械科技出不朽的标准开局：13农BG→BC→VR，出 OB+不朽，走双矿"
+sharpy_dummy_class: "dummies.protoss.robo:MacroRobo"
 aliases: ["1门Robo", "速不朽", "1G Robo", "1门机械", "单BG VR出不朽", "单BG出不朽", "1BG VR不朽", "1 Gate Robo"]
 matchup: [PvT, PvZ, PvP]
 

@@ -2,6 +2,7 @@ kind: midgame_stance
 id: iac_2base
 display_name_zh: "双矿 IAC 重装地面"
 summary_zh: "双矿后以 不朽+白球+冲锋叉（IAC）为核心的重装地面中期推进，9:30-11:30 进攻窗口"
+sharpy_dummy_class: "dummies.protoss.macro_stalkers:MacroStalkers"
 aliases: ["叉光", "IAC", "重装地面", "叉光不朽推", "叉球", "叉球不朽推", "不朽光灵冲锋叉", "IAC双矿", "Immortal Archon Chargelot"]
 
 enter_when:

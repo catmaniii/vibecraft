@@ -2,6 +2,7 @@ kind: lategame_doctrine
 id: skytoss
 display_name_zh: "Skytoss 航母流"
 summary_zh: "后期以航母为核心的空军体系：航母+风暴战舰+HT+白球+母舰，靠空军远程DPS慢推"
+sharpy_dummy_class: "dummies.protoss.voidray:MacroVoidray"
 aliases: ["航母流", "Skytoss", "天空", "航母收", "空军神族", "神族空军", "出航母", "憋航母"]
 
 target_composition:

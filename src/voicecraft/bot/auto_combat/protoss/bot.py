@@ -98,13 +98,12 @@ def make_protoss_bot_class(
         # ---- 写 -------------------------------------------------------
 
         def set_build(self, build_name: str) -> None:
-            """M1 占位：记录 active_recipe。M3 才接 IfElse 树切换。
+            """active_recipe 切换 → IfElse 路由树在下一个 step 立即生效。
 
-            sharpy 的剧本逻辑通过 BuildOrder + IfElse 在 create_plan() 里定义，
-            运行时动态切换需要 M3 的 IfElse 求值机制才能接入。
-            M1 只记录意图，确保接口稳定。
+            sharpy IfElse.execute() 每 step 调 condition.check()（RequireCustom
+            每次重新求值 lambda），因此只要更新 active_recipe，IfElse 就自动切换。
             """
-            logger.info("set_build requested: %s (M1 占位，M3 接 IfElse)", build_name)
+            logger.info("set_build switched to %s", build_name)
             self.bot.active_recipe = build_name
 
         def set_production_override(
@@ -259,8 +258,9 @@ def make_protoss_bot_class(
         _minimap_tick_count: int = 0
         _minimap_builder: Any = None
         _decision_watcher: Any = None
-        # 当前剧本名（M1 占位；M3 接 IfElse）
-        active_recipe: str = ""
+        # 当前剧本名：IfElse 路由树每 step 检查此值；set_build 写入后下个 step 立即生效。
+        # 默认 "1g_robo_immortal"（opening fallback），on_start 会根据 strategy_library 重设。
+        active_recipe: str = "1g_robo_immortal"
 
         def __init__(self) -> None:
             super().__init__("VoiceCraft Protoss")
@@ -268,17 +268,101 @@ def make_protoss_bot_class(
             self._minimap_tick_count = 0
             self._minimap_builder = None
             self._decision_watcher = None
-            self.active_recipe = ""
+            self.active_recipe = "1g_robo_immortal"
 
         async def create_plan(self) -> BuildOrder:  # sharpy type; statically Any via overrides
-            """M1 占位：最小 BuildOrder，只做基础采矿 + 出探机。
+            """M2+M3：IfElse 路由树，由 active_recipe 决定走哪个 sharpy dummy plan。
 
-            M3 替换：接入 IfElse 树，由 active_recipe 决定走哪个剧本分支。
+            流程：
+            1. 从 strategy_library 收集所有有 sharpy_dummy_class 字段的策略
+            2. 逐个 importlib.import_module + getattr 拿到 sharpy dummy class
+            3. 调 dummy.create_plan()（可能 sync 或 async）拿到 BuildOrder
+            4. 用 IfElse 嵌套组合：active_recipe 匹配哪个，就执行哪个 BuildOrder
+            5. 任何 dummy import/实例化/create_plan 失败 → fallback 到空 BuildOrder + log warning
+
+            lambda condition 引用 self.active_recipe，sharpy IfElse.execute() 每 step
+            调 RequireCustom.check()，每次重新求值 → set_build 立即在下个 step 生效。
             """
-            # 最小 BuildOrder：DistributeWorkers + 持续出探机
-            # sharpy 的 BuildOrder 接受空列表时相当于"do nothing"；
-            # on_step 里 KnowledgeBot 的 Knowledge.update 会自动处理 worker 采矿。
-            return BuildOrder([])
+            import importlib
+            import inspect
+
+            # --- 收集 strategies with sharpy_dummy_class ---
+            # 支持 OpeningBuild / MidgameStance / LategameDoctrine（M2+M3 统一处理）
+            from voicecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+
+            if strategy_library is None:
+                logger.warning("create_plan: no strategy_library, returning empty BuildOrder")
+                return BuildOrder([])
+
+            candidates: list[tuple[str, str]] = []  # [(recipe_id, "module:ClassName"), ...]
+            for s in strategy_library.all_strategies():
+                if (
+                    isinstance(s, (OpeningBuild, MidgameStance, LategameDoctrine))
+                    and s.sharpy_dummy_class
+                ):
+                    candidates.append((s.id, s.sharpy_dummy_class))
+
+            if not candidates:
+                logger.warning("create_plan: 没有 sharpy_dummy_class 策略，返回空 BuildOrder")
+                return BuildOrder([])
+
+            # --- 逐个 import + create_plan ---
+            def _make_fallback_plan() -> BuildOrder:
+                """import/实例化/create_plan 失败时的最小 fallback。"""
+                from sc2.ids.unit_typeid import UnitTypeId
+
+                try:
+                    from sharpy.plans.acts.act_unit import ActUnit
+
+                    return BuildOrder([ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14)])
+                except Exception:
+                    return BuildOrder([])
+
+            # _VENDOR_SHARPY 的 dummies 子目录是 "dummies.protoss.xxx"
+            # vendor/sharpy/ 已在 sys.path（_ensure_sharpy_on_path 在工厂函数入口调过）
+            plans: dict[str, BuildOrder] = {}
+            for recipe_id, dummy_spec in candidates:
+                module_path, class_name = dummy_spec.rsplit(":", 1)
+                try:
+                    mod = importlib.import_module(module_path)
+                    dummy_cls = getattr(mod, class_name)
+                    dummy_inst = dummy_cls()
+                    raw_plan = dummy_inst.create_plan()
+                    # create_plan 可能是 sync（SkeletonBot）或 async（KnowledgeBot）
+                    if inspect.isawaitable(raw_plan):
+                        raw_plan = await raw_plan
+                    plans[recipe_id] = raw_plan
+                    logger.info("create_plan: loaded dummy %s for recipe %s", dummy_spec, recipe_id)
+                except Exception as exc:
+                    logger.warning(
+                        "create_plan: failed to load dummy %s for recipe %s: %s — fallback",
+                        dummy_spec,
+                        recipe_id,
+                        exc,
+                    )
+                    plans[recipe_id] = _make_fallback_plan()
+
+            if not plans:
+                return BuildOrder([])
+
+            # --- 构建 IfElse 嵌套树 ---
+            # 顺序：candidates 的顺序决定 IfElse 嵌套深度；最后一个作 else 兜底。
+            # lambda 捕获 recipe_id 参数（避免 late-binding 坑：用默认参数绑定）
+            from sharpy.plans.if_else import IfElse
+
+            # 从最后一个往前折叠，构成嵌套 IfElse 树
+            recipe_ids = [rid for rid, _ in candidates]
+            # 兜底分支（最后一个 recipe 的 plan）
+            result: Any = plans[recipe_ids[-1]]
+            for rid in reversed(recipe_ids[:-1]):
+                _rid = rid  # loop var capture
+                result = IfElse(
+                    lambda k, r=_rid: self.active_recipe == r,
+                    plans[_rid],
+                    result,
+                )
+
+            return BuildOrder(result)
 
         async def on_start(self) -> None:
             # KnowledgeBot.on_start() 初始化所有 Manager（含 roles / unit_cache 等）
@@ -305,25 +389,25 @@ def make_protoss_bot_class(
 
                 self._decision_watcher = DecisionWatcher(event_callback)
 
-            # 把第一个 opening 立刻落到 board.opening slot，
+            # 初始化 active_recipe + 把第一个 opening 落到 board.opening slot，
             # 让手机 UI 一进对局就显示当前宏观剧本（否则空着等玩家发指令才亮）。
-            if (
-                strategy_library is not None
-                and self.director is not None
-            ):
-                from voicecraft.directives.types import StageKind
+            if strategy_library is not None:
                 from voicecraft.strategy.models import OpeningBuild
 
                 openings = [
-                    s
-                    for s in strategy_library.all_strategies()
-                    if isinstance(s, OpeningBuild)
+                    s for s in strategy_library.all_strategies() if isinstance(s, OpeningBuild)
                 ]
                 if openings:
+                    # 设 active_recipe 不依赖 director（create_plan() 在 KnowledgeBot.on_start
+                    # 内被调用，此时 director 尚未构造）
                     self.active_recipe = openings[0].id
-                    self.director.set_initial_strategy(
-                        StageKind.OPENING, openings[0].id, float(self.time)
-                    )
+
+                    if self.director is not None:
+                        from voicecraft.directives.types import StageKind
+
+                        self.director.set_initial_strategy(
+                            StageKind.OPENING, openings[0].id, float(self.time)
+                        )
 
             if status_callback is not None:
                 status_callback("in_game", "running", "")
@@ -354,9 +438,7 @@ def make_protoss_bot_class(
                         elif msg_type == "view_move":
                             target = msg.get("target_point", [0.0, 0.0])
                             if self.facade is not None:
-                                self.facade.move_camera(
-                                    (float(target[0]), float(target[1]))
-                                )
+                                self.facade.move_camera((float(target[0]), float(target[1])))
                         elif msg_type == "leave":
                             logger.info("bot 收到 leave 信号，等待 on_end")
                 except queue_module.Empty:

@@ -129,9 +129,7 @@ class DecisionWatcher:
 
         # upgrades(state.upgrades 是 set[UpgradeId];str(u) 形如 "UpgradeId.BLINKTECH")
         state = getattr(bot, "state", None)
-        cur_upgrades: set[str] = (
-            {str(u) for u in state.upgrades} if state is not None else set()
-        )
+        cur_upgrades: set[str] = {str(u) for u in state.upgrades} if state is not None else set()
         if self._prev_upgrade_set:
             new_upgrades = cur_upgrades - self._prev_upgrade_set
             for uid in new_upgrades:
