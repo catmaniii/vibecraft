@@ -25,21 +25,28 @@
     `Mining`/`AutoSupply`；opening 跑完后 + `BuildWorkers`/`Gas`/`Expansion`/
     `Production`/`Spawn`）。目标「无干预 ≈ 普通电脑级别」。role 隔离已调研验证
     （不碰 `CONTROL_GROUP_ONE` = LLM 接管的特种兵）
+  - **对局 UI + 状态同步**（cockpit-sync，`docs/plans/2026-05-15-cockpit-sync.md`，
+    P0+P1 由 Sonnet subagent 实现、Opus review 修了一个 kind 覆盖 bug）：
+    snapshot/event 帧后端推送链路（`director.build_snapshot` + `on_tick` 两阶段推
+    → 上行队列嵌套 `frame` → `ws._dispatch_upstream` 分发）；PWA 拆「未开局/对局中」
+    两视图，对局界面有剧本卡片（三档当前剧本可见）+ bot 决策流 + 指令输入
 - **真实 SC2 验证进展**：手机连接 → `start_game` → SC2 拉起 → ares 跑
   `1g_robo_immortal` build → `bot=running`，**链路已通**（日志 `bcz59yaqv.output`，
   但那是 auto-pilot 之前的旧 service）
-- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **303 passed**、
-  ruff + ruff format + mypy strict 全干净
+- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **328 passed**、
+  前端 vitest **24 passed**、ruff + ruff format + mypy strict 全干净、Vite build 通过
 - **下一步：用户醒来做真实端到端验证**（需看屏幕判断 auto-pilot 效果）：
   1. `.\scripts\start.ps1`（一键启动，已修好；token 固定 `voicecraft-dev`）
   2. 手机扫码 / 输 `http://<内网IP>:8080/?room=voicecraft-dev`
-  3. 点「开始对局」→ SC2 靠左 1707×960 拉起 → 看 auto-pilot：opening 按
-     `1g_robo_immortal` 跑、农民持续造 + 闲置农民采矿、opening 后 3-4 矿饱和 + 出兵
-  4. 说「单BG VR出不朽」→ 手机收 `command_echo` → 约 1.5s 后 SC2 切 build
-  5. 对照 ADR 0006 §「待真实验证」的 spike A-D
+  3. 点「开始对局」→ PWA 切到「对局界面」（剧本卡片 + 决策流）→ SC2 靠左
+     1707×960 拉起 → 看 auto-pilot：opening 按 `1g_robo_immortal` 跑、农民持续造 +
+     闲置农民采矿、opening 后 3-4 矿饱和 + 出兵
+  4. 说「单BG VR出不朽」→ 手机收 `command_echo` + **对局界面剧本卡片应变化**
+     （这就是 cockpit-sync 解决的「判断剧本切没切」刚需）→ 约 1.5s 后 SC2 切 build
+  5. 对照 ADR 0006 §「待真实验证」spike A-D + cockpit-sync 方案 §6 的 S1/S2
 - **已知未做（非 bug，是 M2/M3 范围）**：
-  - 对局 UI（小地图 / 当前剧本 / bot 信息驾驶舱）—— **M3**，PWA 现在是 M1.3 最小壳，
-    点「开始对局」后不切界面是因为对局界面还没做
+  - 对局 UI **完整驾驶舱**（小地图拖拽切视野、phase stepper 精确进度、撤销/快捷）
+    —— **M3**。cockpit-sync 已交付最小版（剧本卡片 + 决策流），完整版留 M3
   - 「按 midgame/lategame 剧本自动转」—— **M2**（当前 auto-pilot 只是通用兜底）
   - 造建筑指令（「造水晶和BG」）—— directive schema 没这个类型，**M2**
 - **service 状态**：session 收尾时停掉了旧 service（跑 auto-pilot 之前的代码）。
