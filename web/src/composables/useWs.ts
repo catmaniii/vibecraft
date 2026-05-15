@@ -5,7 +5,14 @@
 // - 暴露 status / send / 关闭能力
 
 import { ref, readonly, onUnmounted } from 'vue'
-import type { SystemStatus, UpFrame, GameStatusFrame } from '@/types'
+import type {
+  SystemStatus,
+  UpFrame,
+  GameStatusFrame,
+  SnapshotFrame,
+  EventFrame,
+  CommandEchoFrame,
+} from '@/types'
 import { DEFAULT_STATUS } from '@/types'
 
 // 退避序列（秒）：1 2 4 8 8 8...
@@ -29,6 +36,16 @@ export function getRoomToken(): string {
 export function useWs() {
   // 系统状态链（响应式）
   const status = ref<SystemStatus>({ ...DEFAULT_STATUS })
+
+  // P0：snapshot strategy + recent_commands（响应式）
+  const snapshotStrategy = ref<SnapshotFrame['strategy'] | null>(null)
+  const recentCommands = ref<{ text: string; ts: number }[]>([])
+
+  // P1：event ring buffer（最近 30 条，响应式）
+  const events = ref<EventFrame[]>([])
+
+  // command_echo（最新一条）
+  const lastEcho = ref<CommandEchoFrame | null>(null)
 
   // 内部 WS 实例 + 重连计数
   let ws: WebSocket | null = null
@@ -57,16 +74,42 @@ export function useWs() {
     ws.onmessage = (evt: MessageEvent) => {
       try {
         const frame = JSON.parse(evt.data as string) as { type: string }
-        if (frame.type === 'game_status') {
-          const f = frame as GameStatusFrame
-          status.value = {
-            link: status.value.link,   // link 由 WS 事件自己管理
-            sc2: f.sc2,
-            bot: f.bot,
-            detail: f.detail ?? '',
+        switch (frame.type) {
+          case 'game_status': {
+            const f = frame as GameStatusFrame
+            status.value = {
+              link: status.value.link,   // link 由 WS 事件自己管理
+              sc2: f.sc2,
+              bot: f.bot,
+              detail: f.detail ?? '',
+            }
+            break
           }
+          case 'snapshot': {
+            // P0：更新剧本状态 + 最近指令
+            const f = frame as SnapshotFrame
+            snapshotStrategy.value = f.strategy
+            recentCommands.value = f.recent_commands
+            break
+          }
+          case 'event': {
+            // P1：push 进 ring buffer（最多 30 条）
+            const f = frame as EventFrame
+            events.value = [f, ...events.value].slice(0, 30)
+            break
+          }
+          case 'command_echo': {
+            // 更新最近 echo
+            lastEcho.value = frame as CommandEchoFrame
+            break
+          }
+          case 'ping':
+            // 静默忽略（保活用）
+            break
+          default:
+            // 未知帧类型，静默忽略
+            break
         }
-        // ping 帧静默忽略（保活用）
       } catch {
         console.warn('[voicecraft] WS 帧解析失败', evt.data)
       }
@@ -121,6 +164,10 @@ export function useWs() {
 
   return {
     status: readonly(status),
+    snapshotStrategy: readonly(snapshotStrategy),
+    recentCommands: readonly(recentCommands),
+    events: readonly(events),
+    lastEcho: readonly(lastEcho),
     send,
     close,
     token,
