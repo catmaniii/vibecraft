@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "ares-sc2-starter-bot"
+version = "0.1.0"
+description = ""
+authors = []
+readme = "README.md"
+packages = [{include = "ares-sc2/src/ares"}]
+
+[tool.poetry.dependencies]
+ares-sc2 = { path = "ares-sc2", develop = false }
+python = ">=3.11, <3.12"
+black = "^23.1.0"
+isort = "^5.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"

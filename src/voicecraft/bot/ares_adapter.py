@@ -28,6 +28,7 @@ import queue as queue_module
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from voicecraft.bot.auto_combat.common import _log_move_camera_done
 from voicecraft.bot.build_translator import openings_to_ares_config_builds
 from voicecraft.bot.facade import BotState, UnitRole
 from voicecraft.strategy.library import StrategyLibrary
@@ -38,17 +39,6 @@ if TYPE_CHECKING:
     from ares import AresBot
 
 logger = logging.getLogger(__name__)
-
-
-def _log_move_camera_done(task: Any) -> None:
-    """move_camera / follow_unit create_task 的 done callback：异常时 log，不静默丢。
-
-    ADR 0007：fire-and-forget 的异常不向调用方传播；这里捕获并 log。
-    """
-    if not task.cancelled():
-        exc = task.exception()
-        if exc is not None:
-            logger.error("move_camera_task_failed: %s", exc, exc_info=exc)
 
 
 class VoiceCraftBot:
@@ -68,6 +58,7 @@ def make_bot_class(
     snapshot_callback: Callable[[dict[str, Any]], None] | None = None,
     event_callback: Callable[[dict[str, Any]], None] | None = None,
     minimap_callback: Callable[[dict[str, Any]], None] | None = None,
+    race: str = "Protoss",
 ) -> type:
     """工厂：返回一个继承 AresBot 的 bot 类，把事件转给 director。
 
@@ -109,24 +100,18 @@ def make_bot_class(
             ProductionController,
             SpawnController,
         )
-        from ares.consts import UnitRole as AresUnitRole
         from sc2.ids.unit_typeid import UnitTypeId
     except ImportError as e:
         raise ImportError(
             '未装 ares-sc2。`uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`'
         ) from e
 
-    # 把 voicecraft 的 UnitRole 映射到 ares 真实成员。
+    # 把 voicecraft 的 UnitRole 映射到 ares 真实成员（抽到 common.py）。
     # LLM_CONTROLLED → CONTROL_GROUP_ONE：ares 留给用户的空槽，
     # ares 源码里没有任何 Manager 使用它，正是 §3.4 想要的"排除单元"载体。
-    role_map = {
-        UnitRole.LLM_CONTROLLED: AresUnitRole.CONTROL_GROUP_ONE,
-        UnitRole.IDLE: AresUnitRole.IDLE,
-        UnitRole.ARMY: AresUnitRole.ATTACKING,
-        UnitRole.DEFENDER: AresUnitRole.DEFENDING,
-        UnitRole.HARASSER: AresUnitRole.HARASSING,
-        UnitRole.SCOUT: AresUnitRole.SCOUTING,
-    }
+    from voicecraft.bot.auto_combat.common import build_role_map
+
+    role_map = build_role_map()
 
     # === AUTO-PILOT === 通用神族军队组合（追猎为主 + 不朽 + 叉子，普通电脑级别）。
     # SpawnController / ProductionController 共用：proportion 之和必须 == 1.0，
@@ -140,10 +125,19 @@ def make_bot_class(
     target_base_count = 4  # 普通电脑级别 3-4 矿够
 
     class _AresFacade:
-        """Sc2Facade 的 ares 实现。"""
+        """Sc2Facade 的 ares 实现。
+
+        camera 操作暂存模式(ADR 0008):
+        move_camera / follow_unit **不直接** 发协议,只暂存最新目标点。
+        on_step 末尾调 drain_pending_actions() 在 step await 链内串行发出。
+        python-sc2 的 ws 协议是单 socket 一发一收(无 request id),
+        fire-and-forget 的 create_task 会和 step 并发写 socket 导致
+        帧交织,SC2 客户端协议解析失败直接崩溃。
+        """
 
         def __init__(self, bot: AresBot) -> None:
             self.bot = bot
+            self._pending_camera_point: tuple[float, float] | None = None
 
         # ---- 写 -------------------------------------------------------
 
@@ -196,31 +190,34 @@ def make_bot_class(
             pass
 
         def move_camera(self, point: tuple[float, float]) -> None:
-            """将相机移到世界坐标 point。
+            """暂存相机目标点,真实 await 在 on_step 末尾 drain_pending_actions(ADR 0008)。
 
-            spike S1 修复（ADR 0007）：bot.client.move_camera 是 async 协程，
-            同步姿势调它只产生未 await 的 coroutine 对象，实际不发 SC2 请求
-            （运行时 RuntimeWarning: coroutine was never awaited）。
-            修法：在 on_step 的 event loop 里 asyncio.create_task 包装，
-            fire-and-forget：相机移动是单向命令，不需要等返回值。
+            多次调用合并为 latest——用户拖小地图节流后,只在意最终位置。
             """
-            import asyncio
-
-            from sc2.position import Point2
-
-            coro = self.bot.client.move_camera(Point2(point))
-            task = asyncio.create_task(coro, name=f"move_camera-{point}")
-            task.add_done_callback(_log_move_camera_done)
+            self._pending_camera_point = point
 
         def follow_unit(self, unit_tag: int) -> None:
-            """跟随指定 tag 的单位移动相机（同 move_camera，async 包装）。"""
-            import asyncio
-
+            """暂存 unit 当前位置作为 camera 目标点(MVP:不持续跟随,只切一次)。"""
             unit = self.bot.units.find_by_tag(unit_tag)
             if unit is not None:
-                coro = self.bot.client.move_camera(unit.position)
-                task = asyncio.create_task(coro, name=f"follow_unit-{unit_tag}")
-                task.add_done_callback(_log_move_camera_done)
+                self._pending_camera_point = (unit.position.x, unit.position.y)
+
+        async def drain_pending_actions(self) -> None:
+            """在 step await 链内串行发出暂存的 camera 调用。
+
+            必须从 on_step 内调,且与 step 主请求串行(python-sc2 ws 协议无并发)。
+            异常吞掉:相机移动失败不该让整个 bot 挂。
+            """
+            if self._pending_camera_point is None:
+                return
+            from sc2.position import Point2
+
+            pt = self._pending_camera_point
+            self._pending_camera_point = None
+            try:
+                await self.bot.client.move_camera(Point2(pt))
+            except Exception as exc:
+                logger.warning("move_camera_failed point=%s err=%s", pt, exc)
 
         def set_camera_zoom(self, level: float) -> None:
             # python-sc2 暴露 zoom 不一致，M0 noop
@@ -261,25 +258,17 @@ def make_bot_class(
             return []
 
     # -----------------------------------------------------------------------
-    # 基础 echo 辅助协程（在 make_bot_class 闭包内，能访问 echo_callback）
+    # 基础 echo 辅助协程（在 make_bot_class 闭包内，捕获 echo_callback）
     # -----------------------------------------------------------------------
 
     async def _run_command_with_echo(director: Any, text: str, now: float) -> None:
-        """调 director.on_player_command，完成后用 echo_callback 推基础 echo。
+        """调 director.on_player_command，完成后推基础 echo（§9.3）。
 
-        echo 是设计文档 §9.3 基础 echo 的最小实现：
-        玩家知道指令收到了 + 解析结果（完整撤销 / pending 计时器留 M3）。
+        薄包装：把闭包里的 echo_callback 传给 common.run_command_with_echo。
         """
-        from voicecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
+        from voicecraft.bot.auto_combat.common import run_command_with_echo
 
-        outcome = await director.on_player_command(text, now)
-        if echo_callback is not None:
-            if isinstance(outcome, IntentParseResult):
-                echo_callback(text, outcome.interpretation_zh)
-            elif isinstance(outcome, AmbiguousParse):
-                echo_callback(text, f"[模糊] {outcome.result.interpretation_zh}")
-            elif isinstance(outcome, ParseError):
-                echo_callback(text, f"[解析失败] {outcome.message}")
+        await run_command_with_echo(director, text, now, echo_callback)
 
     class _VoiceCraftBot(AresBot):  # type: ignore[misc]
         director = None
@@ -473,4 +462,24 @@ def make_bot_class(
             if status_callback is not None:
                 status_callback("ended", "idle", "")
 
-    return _VoiceCraftBot
+    # dispatch by race
+    if race == "Protoss":
+        from voicecraft.bot.auto_combat.common import run_command_with_echo
+        from voicecraft.bot.auto_combat.protoss.bot import make_protoss_bot_class
+
+        return make_protoss_bot_class(
+            director_factory=director_factory,
+            strategy_library=strategy_library,
+            status_callback=status_callback,
+            down_q=down_q,
+            echo_callback=echo_callback,
+            snapshot_callback=snapshot_callback,
+            event_callback=event_callback,
+            minimap_callback=minimap_callback,
+            facade_class=_AresFacade,
+            run_command_with_echo_fn=run_command_with_echo,
+            log_move_camera_done_fn=_log_move_camera_done,
+            openings_to_ares_config_builds_fn=openings_to_ares_config_builds,
+            opening_build_class=OpeningBuild,
+        )
+    raise NotImplementedError(f"race={race!r} 暂未实现（Terran/Zerg 留 M3+）")

@@ -17,10 +17,12 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import typing
 from types import ModuleType
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -48,9 +50,17 @@ class _FakePlayableArea:
     height = 116
 
 
+class FakePixelMap:
+    """模拟 sc2.pixel_map.PixelMap:.data_numpy shape=(h, w) uint8。"""
+
+    def __init__(self, w: int = 168, h: int = 168, fill: int = 100) -> None:
+        self.data_numpy = np.full((h, w), fill, dtype=np.uint8)
+
+
 class FakeGameInfo:
     playable_area = _FakePlayableArea()
     map_size = (168, 168)  # NamedTuple-like：支持 [0] / [1] 索引
+    terrain_height = FakePixelMap(168, 168, fill=128)
 
 
 class FakeCamera:
@@ -63,8 +73,14 @@ class FakeObservationRaw:
         camera = FakeCamera()
 
 
+class FakeObservation:
+    alerts: typing.ClassVar[list[int]] = []
+
+
 class FakeState:
     observation_raw = FakeObservationRaw()
+    observation = FakeObservation()
+    visibility = FakePixelMap(168, 168, fill=2)  # 全可见
 
 
 class FakeBot:
@@ -350,27 +366,46 @@ def _inject_fake_ares_for_move_camera() -> type:
         sys.modules["sc2.ids"] = fake_sc2_ids
         sys.modules["sc2.ids.unit_typeid"] = fake_sc2_unit_typeid
 
+    # fake aristaeus bot.main（S2：make_bot_class Protoss dispatch 需要）
+    fake_bot_main = ModuleType("bot.main")
+    fake_bot_mod = ModuleType("bot")
+
+    class FakeAristaeusMyBot(FakeAresBot):
+        """Aristaeus MyBot 极简 stub。"""
+
+        async def on_step(self, iteration: int) -> None:
+            pass
+
+        def register_managers(self) -> None:
+            pass
+
+    fake_bot_main.MyBot = FakeAristaeusMyBot  # type: ignore[attr-defined]
+    sys.modules["bot"] = fake_bot_mod
+    sys.modules["bot.main"] = fake_bot_main
+
     return FakeAresBot
 
 
 @pytest.fixture(autouse=True)
 def _clean_ares_modules_minimap() -> Any:
+    _prefixes = ("ares", "bot", "voicecraft.bot.ares_adapter", "voicecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
-        if key.startswith("ares"):
+        if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
-    sys.modules.pop("voicecraft.bot.ares_adapter", None)
     yield
     for key in list(sys.modules.keys()):
-        if key.startswith("ares"):
+        if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
-    sys.modules.pop("voicecraft.bot.ares_adapter", None)
 
 
-class TestAresFacadeMoveCameraAsync:
-    """spike S1：move_camera 应 create_task（fire-and-forget），不直接 await。"""
+class TestAresFacadeMoveCameraStaged:
+    """ADR 0008:move_camera 暂存 + on_step 末尾 drain。
 
-    async def test_move_camera_creates_task_not_direct_await(self) -> None:
-        """move_camera 调用后，client.move_camera coroutine 应被 schedule（task 完成时已 await）。"""
+    撤回 ADR 0007 的 fire-and-forget(会与 step 主请求并发写 ws,SC2 客户端崩)。
+    """
+
+    async def test_move_camera_stages_point_not_immediate_call(self) -> None:
+        """move_camera 只暂存 point,**不**立即调 client.move_camera。"""
         FakeAresBot = _inject_fake_ares_for_move_camera()
         from voicecraft.bot.ares_adapter import make_bot_class
 
@@ -378,24 +413,21 @@ class TestAresFacadeMoveCameraAsync:
         instance = object.__new__(BotClass)
         FakeAresBot.__init__(instance)  # type: ignore[arg-type]
 
-        # 直接调 _AresFacade（通过 on_start 创建）
         with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
         facade = instance.facade
         assert facade is not None
 
-        # 调 move_camera：应 create_task
         facade.move_camera((50.0, 50.0))
-
-        # 给 event loop 机会执行 task
         await asyncio.sleep(0)
 
-        # client.move_camera AsyncMock 应被 await（通过 create_task）
-        instance.client.move_camera.assert_called_once()
+        # 关键回归断言:client.move_camera **没**被调用(还没 drain)
+        instance.client.move_camera.assert_not_called()
+        assert facade._pending_camera_point == (50.0, 50.0)
 
-    async def test_move_camera_does_not_raise_sync(self) -> None:
-        """move_camera 是同步方法（不需要 await），调用不抛异常。"""
+    async def test_drain_pending_actions_awaits_move_camera(self) -> None:
+        """drain_pending_actions 应 await client.move_camera 并清空 pending。"""
         FakeAresBot = _inject_fake_ares_for_move_camera()
         from voicecraft.bot.ares_adapter import make_bot_class
 
@@ -406,18 +438,56 @@ class TestAresFacadeMoveCameraAsync:
         with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
-        # 同步调，不需要 await，不抛
-        instance.facade.move_camera((88.0, 90.0))
-        await asyncio.sleep(0)  # 让 task 有机会完成
+        facade = instance.facade
+        facade.move_camera((50.0, 50.0))
+        await facade.drain_pending_actions()
 
-    async def test_on_step_view_move_calls_facade_move_camera(self) -> None:
-        """on_step 消费 view_move 消息时，应调 facade.move_camera。"""
+        instance.client.move_camera.assert_called_once()
+        assert facade._pending_camera_point is None
+
+    async def test_drain_with_no_pending_is_noop(self) -> None:
+        """无暂存时 drain 不调 client.move_camera。"""
+        FakeAresBot = _inject_fake_ares_for_move_camera()
+        from voicecraft.bot.ares_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: MagicMock())
+        instance = object.__new__(BotClass)
+        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        await instance.facade.drain_pending_actions()
+        instance.client.move_camera.assert_not_called()
+
+    async def test_move_camera_does_not_raise_sync(self) -> None:
+        """move_camera 是同步方法,调用不抛异常。"""
+        FakeAresBot = _inject_fake_ares_for_move_camera()
+        from voicecraft.bot.ares_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: MagicMock())
+        instance = object.__new__(BotClass)
+        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+
+        with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        instance.facade.move_camera((88.0, 90.0))
+
+    async def test_on_step_view_move_stages_then_drains(self) -> None:
+        """on_step 消费 view_move:先 facade.move_camera 暂存,末尾 drain_pending_actions。"""
         import queue
 
         FakeAresBot = _inject_fake_ares_for_move_camera()
         from voicecraft.bot.ares_adapter import make_bot_class
 
         move_camera_calls: list[tuple[float, float]] = []
+        drain_calls = 0
+
+        async def fake_drain() -> None:
+            nonlocal drain_calls
+            drain_calls += 1
+
         director_mock = MagicMock()
         director_mock.on_tick = MagicMock()
 
@@ -434,15 +504,16 @@ class TestAresFacadeMoveCameraAsync:
         instance._cmd_tasks = []
         instance.director = director_mock
 
-        # 构造一个带 move_camera 记录的 facade mock
         fake_facade = MagicMock()
         fake_facade.move_camera = lambda pt: move_camera_calls.append(pt)
+        fake_facade.drain_pending_actions = fake_drain
         instance.facade = fake_facade
 
         await instance.on_step(0)
 
         assert len(move_camera_calls) == 1
         assert move_camera_calls[0] == (88.5, 134.2)
+        assert drain_calls == 1
 
 
 # ---------------------------------------------------------------------------

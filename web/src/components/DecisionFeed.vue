@@ -44,6 +44,10 @@ function kindToText(ev: EventFrame): string {
       const msg = (p.message as string) || '开局 build 跑完，转入自动运营'
       return msg
     }
+    case 'decision.bot_action': {
+      // bot 自动决策(造建筑/扩张/升级/build 完成),DecisionWatcher 推
+      return (p.text as string) || 'bot 动作'
+    }
     default:
       return ev.kind
   }

@@ -116,6 +116,37 @@ class DirectiveBoard:
 
     # ----- 写入 ---------------------------------------------------------
 
+    def set_initial_slot(self, stage: StageKind, strategy_id: str, now: float) -> bool:
+        """初始化某阶段 slot,bypass 1.5s commit delay。
+
+        用途:bot 启动时把 ares 选的默认 opening 直接落入 board.slots[OPENING],
+        让手机 UI 立即(下一次 snapshot)显示当前剧本,而不是空着等 1.5s 后才有。
+
+        幂等:若该阶段 slot 已存在(可能来自玩家语音切换)则不动,避免覆盖玩家意图。
+        发出 STRATEGY_CHANGED 事件,触发 Director 主动 push snapshot。
+
+        来源标记为 BOT_INTERNAL(优先级最低),玩家任何 VOICE 指令都能覆盖。
+        """
+        if self.slots[stage] is not None:
+            return False
+        self.slots[stage] = StrategySlot(
+            stage=stage,
+            strategy_id=strategy_id,
+            set_at=now,
+            set_by=IssuedBy.BOT_INTERNAL,
+        )
+        self._emit(
+            BoardEventKind.STRATEGY_CHANGED,
+            now,
+            None,
+            payload={
+                "stage": stage.value,
+                "strategy_id": strategy_id,
+                "set_by": IssuedBy.BOT_INTERNAL.value,
+            },
+        )
+        return True
+
     def submit(self, directive: Directive, now: float) -> Directive:
         """玩家话语解析后落 Board。
 

@@ -82,6 +82,13 @@ export interface CommandEchoFrame {
   ts: number
 }
 
+// PixelMap base64 编码(切 playable 区域)
+export interface PixelMapB64 {
+  w: number   // playable width
+  h: number   // playable height
+  b64: string // uint8 row-major bytes,base64
+}
+
 // 下行：minimap（bot → 手机，5Hz）—— 设计文档 §9.3 MVP 子集
 export interface MinimapFrame {
   type: 'minimap'
@@ -96,6 +103,14 @@ export interface MinimapFrame {
   }
   units_own: [number, number, string][]          // [x, y, kind]
   units_enemy_visible: [number, number, string][]
+  // 战争迷雾(每帧):0=Hidden / 1=Fogged / 2=Visible
+  vision: PixelMapB64
+  // 地形高度(开局第一帧):0-255 高度。后续帧 omit,前端缓存
+  terrain?: PixelMapB64
+  // 被攻击位置:本帧 (health+shield) 降低的 own 单位/建筑位置
+  under_attack?: [number, number][]
+  // SC2 全局 alerts:"BuildingUnderAttack" / "UnitUnderAttack" / "NuclearLaunchDetected" 等
+  alerts?: string[]
 }
 
 export type DownFrame = GameStatusFrame | PingFrame | SnapshotFrame | EventFrame | CommandEchoFrame | MinimapFrame
