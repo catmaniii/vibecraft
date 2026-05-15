@@ -275,7 +275,14 @@ class WsConnection:
             self._log.exception("status_pump_error")
 
     async def _dispatch_upstream(self, raw: dict[str, Any]) -> None:
-        """把上行队列的单条消息转发为对应下行帧。"""
+        """把上行队列的单条消息转发为对应下行帧。
+
+        kind 分支（显式，不落到 else，避免污染 _sc2_state/_bot_state）：
+        - "echo"     → command_echo 帧
+        - "snapshot" → snapshot 帧（直接转发，子进程已组好）
+        - "event"    → event 帧（直接转发，子进程已组好）
+        - 无 kind    → game_status 帧（含 sc2/bot 字段）
+        """
         kind = raw.get("kind")
         if kind == "echo":
             # 基础 echo：告诉手机指令已被解析
@@ -295,8 +302,26 @@ class WsConnection:
                 )
             except Exception:
                 self._log.warning("ws_echo_send_failed")
+        elif kind == "snapshot":
+            # P0-5：snapshot 帧，子进程已组好，直接转发（去掉 kind 字段）
+            payload = {k: v for k, v in raw.items() if k != "kind"}
+            frame = json.dumps(payload)
+            try:
+                await self._ws.send(frame)
+                self._log.debug("ws_snapshot_sent", ts=raw.get("ts"))
+            except Exception:
+                self._log.warning("ws_snapshot_send_failed")
+        elif kind == "event":
+            # P1-5：event 帧，子进程已组好，直接转发（去掉 kind 字段）
+            payload = {k: v for k, v in raw.items() if k != "kind"}
+            frame = json.dumps(payload)
+            try:
+                await self._ws.send(frame)
+                self._log.debug("ws_event_sent", event_kind=raw.get("kind"))
+            except Exception:
+                self._log.warning("ws_event_send_failed")
         else:
-            # 默认当 game_status 消息处理（sc2/bot 字段）
+            # game_status 消息处理（sc2/bot 字段）
             from voicecraft.server.game_process import _apply_raw_dict
 
             sc2, bot, detail = _apply_raw_dict(

@@ -54,6 +54,8 @@ def make_bot_class(
     status_callback: Callable[[str, str, str], None] | None = None,
     down_q: Any | None = None,
     echo_callback: Callable[[str, str], None] | None = None,
+    snapshot_callback: Callable[[dict[str, Any]], None] | None = None,
+    event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> type:
     """工厂：返回一个继承 AresBot 的 bot 类，把事件转给 director。
 
@@ -74,6 +76,12 @@ def make_bot_class(
     echo_callback：可选；签名 (user_text, interpretation) -> None，
     on_player_command 完成后推基础 echo 给父进程（设计文档 §9.3 基础 echo）。
     None 时忽略。
+
+    snapshot_callback：可选；签名 (snapshot_dict) -> None，
+    Director 每次需要推 snapshot 时调用（P0）。None 时忽略。
+
+    event_callback：可选；签名 (event_dict) -> None，
+    Director 推 event 帧时调用（P1）。None 时忽略。
     """
     try:
         from ares import AresBot
@@ -246,10 +254,13 @@ def make_bot_class(
         facade: _AresFacade | None = None
         # in-flight async task 列表：防止 GC 消掉后台任务（Gap 3）
         _cmd_tasks: list[asyncio.Task[Any]]
+        # P1-2：auto-pilot 阶段二边沿检测（只在 false→true 那一 tick 推一次 event）
+        _autopilot_started: bool = False
 
         def __init__(self) -> None:
             super().__init__()
             self._cmd_tasks = []
+            self._autopilot_started = False
 
         async def on_start(self) -> None:
             # spike B：BuildOrderRunner 在 super().on_start() 末尾构造，
@@ -279,6 +290,12 @@ def make_bot_class(
             await super().on_start()
             self.facade = _AresFacade(self)
             self.director = director_factory(self.facade)
+
+            # P0-3：注入 snapshot / event callback 到 director
+            if snapshot_callback is not None and self.director is not None:
+                self.director.set_snapshot_callback(snapshot_callback)
+            if event_callback is not None and self.director is not None:
+                self.director.set_event_callback(event_callback)
 
             # Gap 5：推 in_game → playing 给父进程
             if status_callback is not None:
@@ -345,6 +362,21 @@ def make_bot_class(
 
             # 阶段二：opening 跑完才开（会主动造建筑 / 出兵，opening 期间和 BO 冲突）
             if runner.build_completed:
+                # P1-2：边沿检测 false→true，只推一次 autopilot_phase event
+                if not self._autopilot_started:
+                    self._autopilot_started = True
+                    if event_callback is not None:
+                        event_callback(
+                            {
+                                "type": "event",
+                                "kind": "decision.autopilot_phase",
+                                "ts": round(float(self.time), 3),
+                                "payload": {
+                                    "phase": "macro",
+                                    "message": "开局 build 跑完，转入自动运营（造兵/扩张/开矿）",
+                                },
+                            }
+                        )
                 self.register_behavior(BuildWorkers(to_count=target_worker_count))
                 self.register_behavior(GasBuildingController(to_count=len(self.townhalls) * 2))
                 self.register_behavior(

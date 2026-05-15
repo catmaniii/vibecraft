@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from voicecraft.bot.facade import Sc2Facade, UnitRole
 from voicecraft.directives.board import (
@@ -53,6 +55,9 @@ from voicecraft.llm.schema import (
 from voicecraft.logging_.session import GameSession
 from voicecraft.logging_.types import Event, EventKind
 
+if TYPE_CHECKING:
+    from voicecraft.strategy.library import StrategyLibrary
+
 
 @dataclass
 class DirectorConfig:
@@ -60,6 +65,7 @@ class DirectorConfig:
 
     commit_delay_s: float = 1.5
     recent_command_buffer: int = 3
+    snapshot_interval_ticks: int = 45  # ~2s 兜底周期（realtime ~22.4 tick/s × 45 ≈ 2s）
 
 
 @dataclass
@@ -78,18 +84,95 @@ class Director:
         session: GameSession,
         board: DirectiveBoard | None = None,
         config: DirectorConfig | None = None,
+        library: StrategyLibrary | None = None,
     ) -> None:
         self.facade = facade
         self.parser = parser
         self.session = session
         self.config = config or DirectorConfig()
         self.board = board or DirectiveBoard(commit_delay_s=self.config.commit_delay_s)
+        self.library = library
         self._recent_commands: list[_RecentCommand] = []
         self._committed_count = 0
         # 跟踪 in-flight directive（submit 后 → committed/revoked 前）。
         # Board 的 strategy_set / unit_release 不会进 overlays，需要这层映射才能在
         # COMMITTED 事件里把 directive 取出来 dispatch。
         self._in_flight: dict[str, Directive] = {}
+        # snapshot / event 推送回调（P0 / P1）
+        self._snapshot_callback: Callable[[dict[str, Any]], None] | None = None
+        self._event_callback: Callable[[dict[str, Any]], None] | None = None
+        # snapshot 兜底周期计数器
+        self._tick_count: int = 0
+
+    # ------------------------------------------------------------------
+    # snapshot / event 回调注入（P0 / P1）
+    # ------------------------------------------------------------------
+
+    def set_snapshot_callback(self, cb: Callable[[dict[str, Any]], None]) -> None:
+        """注入 snapshot 推送回调（game_process 在构造 bot 后调用）。"""
+        self._snapshot_callback = cb
+
+    def set_event_callback(self, cb: Callable[[dict[str, Any]], None]) -> None:
+        """注入 event 推送回调（P1）。"""
+        self._event_callback = cb
+
+    # ------------------------------------------------------------------
+    # snapshot 构造（P0-1）
+    # ------------------------------------------------------------------
+
+    def build_snapshot(self, now: float) -> dict[str, Any]:
+        """组装 snapshot 帧 payload（§1.1 MVP 子集：strategy + recent_commands）。
+
+        library 为 None 时，display 字段 fallback 成 id（向后兼容 + 单测用）。
+        """
+        from voicecraft.strategy.models import OpeningBuild
+
+        def _slot_view(stage: StageKind) -> dict[str, Any] | None:
+            slot = self.board.slots.get(stage)
+            if slot is None:
+                return None
+            sid = slot.strategy_id
+            display = sid  # fallback
+            phases: list[dict[str, Any]] | None = None
+            if self.library is not None:
+                try:
+                    strat = self.library.get(sid)
+                    display = strat.display_name_zh
+                    if isinstance(strat, OpeningBuild):
+                        phases = [
+                            {"id": p.id, "display": p.display, "subtitle": p.subtitle}
+                            for p in strat.phases
+                        ]
+                except Exception:
+                    pass
+            entry: dict[str, Any] = {"id": sid, "display": display}
+            if phases is not None:
+                entry["phases"] = phases
+            return entry
+
+        return {
+            "type": "snapshot",
+            "ts": round(now, 3),
+            "strategy": {
+                "current_stage": self.board.current_stage.value,
+                "opening": _slot_view(StageKind.OPENING),
+                "midgame": _slot_view(StageKind.MIDGAME),
+                "lategame": _slot_view(StageKind.LATEGAME),
+            },
+            "recent_commands": [
+                {"text": c.text, "ts": round(c.ts, 3)} for c in self._recent_commands
+            ],
+        }
+
+    def _push_snapshot(self, now: float) -> None:
+        """推 snapshot（若 callback 已注入）。"""
+        if self._snapshot_callback is not None:
+            self._snapshot_callback(self.build_snapshot(now))
+
+    def _push_event(self, event_dict: dict[str, Any]) -> None:
+        """推 event 帧（若 callback 已注入）。"""
+        if self._event_callback is not None:
+            self._event_callback(event_dict)
 
     # ------------------------------------------------------------------
     # 玩家话语入口
@@ -147,8 +230,22 @@ class Director:
 
     def on_tick(self, now: float) -> list[BoardEvent]:
         events = self.board.tick(now)
+        need_snapshot = False
         for ev in events:
             self._dispatch_event(ev)
+            # 变化推：strategy 变化时立即推 snapshot（P0-2）
+            if ev.kind in (BoardEventKind.STRATEGY_CHANGED, BoardEventKind.PHASE_TRANSITIONED):
+                need_snapshot = True
+
+        # 兜底周期推（P0-2）
+        self._tick_count += 1
+        if self._tick_count >= self.config.snapshot_interval_ticks:
+            self._tick_count = 0
+            need_snapshot = True
+
+        if need_snapshot:
+            self._push_snapshot(now)
+
         return events
 
     def _dispatch_event(self, ev: BoardEvent) -> None:
@@ -171,9 +268,51 @@ class Director:
                 )
             )
 
+        # P1-1：A 组埋点 —— BoardEvent → event 帧 dict → _event_callback
+        self._maybe_push_event_frame(ev)
+
         # 仅在 COMMITTED 时下发 facade 调用
         if ev.kind == BoardEventKind.COMMITTED and ev.directive_id is not None:
             self._dispatch_committed_to_facade(ev.directive_id, ev.ts)
+
+    def _maybe_push_event_frame(self, ev: BoardEvent) -> None:
+        """把 BoardEvent 转译成设计文档 §9.4 的 event 帧，推到手机（P1-1 A 组）。
+
+        只转译有意义的 kind；SUBMITTED/REVOKED/SUPERSEDED 不推（信息量低）。
+        """
+        # §9.4 taxonomy 映射
+        ws_kind_map: dict[BoardEventKind, str] = {
+            BoardEventKind.STRATEGY_CHANGED: "strategy.set",
+            BoardEventKind.PHASE_TRANSITIONED: "strategy.phase_change",
+            BoardEventKind.COMMITTED: "directive.committed",
+            BoardEventKind.RELEASED: "directive.released",
+            BoardEventKind.REJECTED: "directive.rejected",
+        }
+        ws_kind = ws_kind_map.get(ev.kind)
+        if ws_kind is None:
+            return
+
+        payload: dict[str, Any] = dict(ev.payload)
+        if ev.directive_id is not None:
+            payload["directive_id"] = ev.directive_id
+
+        # strategy.set / strategy.phase_change：补 display（§2.5）
+        if ev.kind == BoardEventKind.STRATEGY_CHANGED:
+            sid = payload.get("strategy_id", "")
+            if self.library is not None and isinstance(sid, str) and sid:
+                try:
+                    strat = self.library.get(sid)
+                    payload["display"] = strat.display_name_zh
+                except Exception:
+                    pass
+
+        event_dict = {
+            "type": "event",
+            "kind": ws_kind,
+            "ts": round(ev.ts, 3),
+            "payload": payload,
+        }
+        self._push_event(event_dict)
 
     def _dispatch_committed_to_facade(self, directive_id: str, now: float) -> None:
         d = self._in_flight.pop(directive_id, None)

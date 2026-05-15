@@ -142,6 +142,28 @@ def _child_entry(
         except Exception as exc:
             child_log.warning("up_queue_echo_failed: %s", exc)
 
+    def _put_snapshot(d: dict[str, Any]) -> None:
+        """向上行队列推一条 snapshot 消息（P0-4）。
+
+        消息格式：{"kind": "snapshot", ...snapshot_payload...}
+        WS 层在收到时转发给手机。
+        """
+        try:
+            up_q.put_nowait({"kind": "snapshot", **d})
+        except Exception as exc:
+            child_log.warning("up_queue_snapshot_failed: %s", exc)
+
+    def _put_event(d: dict[str, Any]) -> None:
+        """向上行队列推一条 event 消息（P1-4）。
+
+        消息格式：{"kind": "event", ...event_payload...}
+        WS 层在收到时转发给手机。
+        """
+        try:
+            up_q.put_nowait({"kind": "event", **d})
+        except Exception as exc:
+            child_log.warning("up_queue_event_failed: %s", exc)
+
     _put("launching", "idle")
 
     try:
@@ -154,7 +176,7 @@ def _child_entry(
         return
 
     try:
-        bot_class = _build_bot_class(_put, down_q, _put_echo)
+        bot_class = _build_bot_class(_put, down_q, _put_echo, _put_snapshot, _put_event)
     except Exception as exc:
         _put("crashed", "error", detail=f"bot_class构造失败: {type(exc).__name__}: {exc}")
         return
@@ -203,12 +225,16 @@ def _build_bot_class(
     put_status: Any,
     down_q: Any | None = None,
     put_echo: Any | None = None,
+    put_snapshot: Any | None = None,
+    put_event: Any | None = None,
 ) -> type:
     """在子进程内构造 bot 类（M1.6：改用真 VoiceCraftBot）。
 
     put_status：子进程内的 _put 闭包（不跨进程边界传递）。
     down_q：下行队列，传给 make_bot_class（Gap 2）。
     put_echo：echo 回调，让 director 结果能推给父进程（基础 echo）。
+    put_snapshot：snapshot 推送回调（P0-4）。None 时忽略。
+    put_event：event 推送回调（P1-4）。None 时忽略。
 
     fallback 逻辑（向后兼容 M0c smoke / 没有 ares 的环境）：
     - ares 装了 → 调 make_bot_class 造真 _VoiceCraftBot
@@ -281,7 +307,7 @@ def _build_bot_class(
 
     # --- director_factory（在 on_start 时拿到真实 facade 再构造）---
     def director_factory(facade: Any) -> Director:
-        return Director(facade=facade, parser=parser, session=session)
+        return Director(facade=facade, parser=parser, session=session, library=strategy_library)
 
     # echo 由 ares_adapter._run_command_with_echo 在 task done 时推送，
     # 经 echo_callback 参数（=put_echo）回传父进程。
@@ -291,6 +317,8 @@ def _build_bot_class(
         status_callback=put_status,
         down_q=down_q,
         echo_callback=put_echo,
+        snapshot_callback=put_snapshot,
+        event_callback=put_event,
     )
 
 
@@ -456,14 +484,14 @@ class GameProcess:
                 yield result
 
     async def status_events(self) -> AsyncIterator[GameStatus]:
-        """上行流（向后兼容）：持续 yield GameStatus，过滤掉 echo 消息。
+        """上行流（向后兼容）：持续 yield GameStatus，过滤掉 echo / snapshot / event 消息。
 
         M1.6 新增了 raw_events()；此方法保留向后兼容，
-        只 yield game_status 类消息（跳过 echo）。
+        只 yield game_status 类消息（跳过 echo / snapshot / event）。
         """
         async for raw in self.raw_events():
-            # echo 类消息跳过
-            if raw.get("kind") == "echo":
+            # 非 game_status 类消息跳过（echo / snapshot / event 等）
+            if raw.get("kind") in ("echo", "snapshot", "event"):
                 continue
             sc2, bot, detail = _apply_raw_dict(raw, self._sc2_state, self._bot_state)
             yield GameStatus(sc2=sc2, bot=bot, detail=detail)
