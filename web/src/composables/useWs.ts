@@ -12,6 +12,8 @@ import type {
   SnapshotFrame,
   EventFrame,
   CommandEchoFrame,
+  MinimapFrame,
+  ViewMoveFrame,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
 
@@ -46,6 +48,9 @@ export function useWs() {
 
   // command_echo（最新一条）
   const lastEcho = ref<CommandEchoFrame | null>(null)
+
+  // minimap（最新一帧，5Hz 高频流）
+  const minimap = ref<MinimapFrame | null>(null)
 
   // 内部 WS 实例 + 重连计数
   let ws: WebSocket | null = null
@@ -103,6 +108,11 @@ export function useWs() {
             lastEcho.value = frame as CommandEchoFrame
             break
           }
+          case 'minimap': {
+            // minimap 高频流：整帧替换 ref，触发 Minimap.vue 的 watch redraw
+            minimap.value = frame as MinimapFrame
+            break
+          }
           case 'ping':
             // 静默忽略（保活用）
             break
@@ -132,6 +142,12 @@ export function useWs() {
       // onerror 之后 onclose 一定会触发，重连逻辑交给 onclose
       console.warn('[voicecraft] WebSocket error，等待 onclose 触发重连')
     }
+  }
+
+  // 便捷上行函数：发 view_move 帧（不改 send 签名）
+  function sendViewMove(point: [number, number]) {
+    const frame: ViewMoveFrame = { type: 'view_move', target_point: point }
+    send(frame)
   }
 
   function send(frame: UpFrame) {
@@ -168,7 +184,9 @@ export function useWs() {
     recentCommands: readonly(recentCommands),
     events: readonly(events),
     lastEcho: readonly(lastEcho),
+    minimap: readonly(minimap),
     send,
+    sendViewMove,
     close,
     token,
   }

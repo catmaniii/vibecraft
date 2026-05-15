@@ -18,7 +18,13 @@ export interface CommandFrame {
   text: string
 }
 
-export type UpFrame = StartGameFrame | CommandFrame
+// 上行：view_move（手机拖小地图 → bot 切视野）
+export interface ViewMoveFrame {
+  type: 'view_move'
+  target_point: [number, number]   // [x, y] 世界坐标
+}
+
+export type UpFrame = StartGameFrame | CommandFrame | ViewMoveFrame
 
 // ---- 下行帧（Bot → 手机）----
 
@@ -76,7 +82,23 @@ export interface CommandEchoFrame {
   ts: number
 }
 
-export type DownFrame = GameStatusFrame | PingFrame | SnapshotFrame | EventFrame | CommandEchoFrame
+// 下行：minimap（bot → 手机，5Hz）—— 设计文档 §9.3 MVP 子集
+export interface MinimapFrame {
+  type: 'minimap'
+  ts: number
+  map: {
+    playable: [number, number, number, number]   // [x, y, w, h] 世界坐标
+    size: [number, number]                       // [w, h] pathing grid 尺寸
+  }
+  viewport: {
+    center: [number, number]   // observation_raw.player.camera.{x,y}
+    size: [number, number]     // 固定估算 [24, 18]，spike S3
+  }
+  units_own: [number, number, string][]          // [x, y, kind]
+  units_enemy_visible: [number, number, string][]
+}
+
+export type DownFrame = GameStatusFrame | PingFrame | SnapshotFrame | EventFrame | CommandEchoFrame | MinimapFrame
 
 // ---- 本地连接状态 ----
 

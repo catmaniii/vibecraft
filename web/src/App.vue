@@ -11,7 +11,7 @@ import CockpitView from '@/views/CockpitView.vue'
 import { useWs } from '@/composables/useWs'
 import type { CommandFrame } from '@/types'
 
-const { status, send, token, snapshotStrategy, recentCommands, events } = useWs()
+const { status, send, sendViewMove, token, snapshotStrategy, recentCommands, events, minimap } = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
 const canSendCommand = computed(
@@ -34,6 +34,10 @@ function startGame() {
 
 function onCommand(frame: CommandFrame) {
   send(frame)
+}
+
+function onViewMove(pt: [number, number]) {
+  sendViewMove(pt)
 }
 
 // SC2 状态显示文案
@@ -77,8 +81,10 @@ const sc2Label = computed(() => {
         :strategy="snapshotStrategy"
         :recent-commands="recentCommands"
         :events="events"
+        :minimap="minimap"
         :can-send-command="canSendCommand"
         @command="onCommand"
+        @view-move="onViewMove"
       />
 
       <!-- 其他状态 → LaunchView -->

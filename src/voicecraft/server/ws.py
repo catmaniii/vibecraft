@@ -156,19 +156,25 @@ class WsConnection:
         view_move / view_follow / view_zoom /
         confirm_ambiguous / revoke / save_recipe / release_unit
         """
-        self._log.info("ws_frame_received", frame_type=frame_type, frame=frame)
+        # view_move 拖拽时高频（10Hz），降到 debug 避免刷屏；其它帧保持 info
+        if frame_type == "view_move":
+            self._log.debug("ws_frame_received", frame_type=frame_type)
+        else:
+            self._log.info("ws_frame_received", frame_type=frame_type, frame=frame)
 
         if frame_type == "start_game":
             await self._handle_start_game(frame)
         elif frame_type == "command":
             # Gap 2：stub → 真实转发到下行队列
             await self._handle_command(frame)
+        elif frame_type == "view_move":
+            # minimap 拖拽 → 切 SC2 大屏视野
+            await self._handle_view_move(frame)
         elif frame_type in {
-            "view_move",
             "view_follow",
             "view_zoom",
         }:
-            # M1.4+ 实现
+            # M3+ 实现
             self._log.info("ws_stub_view", frame_type=frame_type)
         elif frame_type in {
             "recipe",
@@ -182,6 +188,36 @@ class WsConnection:
             self._log.info("ws_stub_other", frame_type=frame_type)
         else:
             self._log.warning("ws_unknown_frame_type", frame_type=frame_type)
+
+    # ------------------------------------------------------------------
+    # view_move 处理（minimap 拖拽切视野）
+    # ------------------------------------------------------------------
+
+    async def _handle_view_move(self, frame: dict[str, Any]) -> None:
+        """收到 view_move 帧 → 校验 → 经 down_q 发到子进程。
+
+        若 SC2 对局未在 playing 状态，静默丢弃（避免无效 move_camera 调用）。
+        校验：target_point 必须是 [number, number] 列表。
+        """
+        pt = frame.get("target_point")
+        if (
+            not isinstance(pt, list)
+            or len(pt) != 2
+            or not all(isinstance(v, (int, float)) for v in pt)
+        ):
+            self._log.warning("ws_view_move_bad_point", frame=frame)
+            return
+        if not self._game_process.is_running:
+            self._log.debug("ws_view_move_no_game_running")
+            return
+        self._game_process.send_command(
+            {
+                "type": "view_move",
+                "target_point": [float(pt[0]), float(pt[1])],
+            }
+        )
+        # debug 级别：拖拽时高频，info 会刷屏
+        self._log.debug("ws_view_move_sent", point=pt)
 
     # ------------------------------------------------------------------
     # start_game 处理（M1.2）
@@ -318,6 +354,14 @@ class WsConnection:
                 self._log.debug("ws_event_sent", event_kind=ev_frame.get("kind"))
             except Exception:
                 self._log.warning("ws_event_send_failed")
+        elif kind == "minimap":
+            # minimap 帧嵌套在 raw["frame"]，子进程已组好，直接转发
+            mm_frame = raw["frame"]
+            try:
+                await self._ws.send(json.dumps(mm_frame))
+                self._log.debug("ws_minimap_sent", ts=mm_frame.get("ts"))
+            except Exception:
+                self._log.warning("ws_minimap_send_failed")
         else:
             # game_status 消息处理（sc2/bot 字段）
             from voicecraft.server.game_process import _apply_raw_dict

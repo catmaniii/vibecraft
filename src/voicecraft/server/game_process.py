@@ -168,6 +168,18 @@ def _child_entry(
         except Exception as exc:
             child_log.warning("up_queue_event_failed: %s", exc)
 
+    def _put_minimap(d: dict[str, Any]) -> None:
+        """向上行队列推一条 minimap 消息（5Hz 下行流）。
+
+        消息格式：{"kind": "minimap", "frame": <minimap 帧 dict>}。
+        与 snapshot / event 保持一致的嵌套模式：frame 字段包含完整帧，
+        WS 层 _dispatch_upstream 取 raw["frame"] 直接转发给手机。
+        """
+        try:
+            up_q.put_nowait({"kind": "minimap", "frame": d})
+        except Exception as exc:
+            child_log.warning("up_queue_minimap_failed: %s", exc)
+
     _put("launching", "idle")
 
     try:
@@ -180,7 +192,9 @@ def _child_entry(
         return
 
     try:
-        bot_class = _build_bot_class(_put, down_q, _put_echo, _put_snapshot, _put_event)
+        bot_class = _build_bot_class(
+            _put, down_q, _put_echo, _put_snapshot, _put_event, _put_minimap
+        )
     except Exception as exc:
         _put("crashed", "error", detail=f"bot_class构造失败: {type(exc).__name__}: {exc}")
         return
@@ -231,6 +245,7 @@ def _build_bot_class(
     put_echo: Any | None = None,
     put_snapshot: Any | None = None,
     put_event: Any | None = None,
+    put_minimap: Any | None = None,
 ) -> type:
     """在子进程内构造 bot 类（M1.6：改用真 VoiceCraftBot）。
 
@@ -239,6 +254,7 @@ def _build_bot_class(
     put_echo：echo 回调，让 director 结果能推给父进程（基础 echo）。
     put_snapshot：snapshot 推送回调（P0-4）。None 时忽略。
     put_event：event 推送回调（P1-4）。None 时忽略。
+    put_minimap：minimap 推送回调（5Hz 下行流）。None 时忽略。
 
     fallback 逻辑（向后兼容 M0c smoke / 没有 ares 的环境）：
     - ares 装了 → 调 make_bot_class 造真 _VoiceCraftBot
@@ -323,6 +339,7 @@ def _build_bot_class(
         echo_callback=put_echo,
         snapshot_callback=put_snapshot,
         event_callback=put_event,
+        minimap_callback=put_minimap,
     )
 
 
@@ -494,8 +511,8 @@ class GameProcess:
         只 yield game_status 类消息（跳过 echo / snapshot / event）。
         """
         async for raw in self.raw_events():
-            # 非 game_status 类消息跳过（echo / snapshot / event 等）
-            if raw.get("kind") in ("echo", "snapshot", "event"):
+            # 非 game_status 类消息跳过（echo / snapshot / event / minimap 等）
+            if raw.get("kind") in ("echo", "snapshot", "event", "minimap"):
                 continue
             sc2, bot, detail = _apply_raw_dict(raw, self._sc2_state, self._bot_state)
             yield GameStatus(sc2=sc2, bot=bot, detail=detail)

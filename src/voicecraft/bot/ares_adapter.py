@@ -40,6 +40,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _log_move_camera_done(task: Any) -> None:
+    """move_camera / follow_unit create_task 的 done callback：异常时 log，不静默丢。
+
+    ADR 0007：fire-and-forget 的异常不向调用方传播；这里捕获并 log。
+    """
+    if not task.cancelled():
+        exc = task.exception()
+        if exc is not None:
+            logger.error("move_camera_task_failed: %s", exc, exc_info=exc)
+
+
 class VoiceCraftBot:
     """ares-sc2 子类的薄壳。
 
@@ -56,6 +67,7 @@ def make_bot_class(
     echo_callback: Callable[[str, str], None] | None = None,
     snapshot_callback: Callable[[dict[str, Any]], None] | None = None,
     event_callback: Callable[[dict[str, Any]], None] | None = None,
+    minimap_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> type:
     """工厂：返回一个继承 AresBot 的 bot 类，把事件转给 director。
 
@@ -82,6 +94,9 @@ def make_bot_class(
 
     event_callback：可选；签名 (event_dict) -> None，
     Director 推 event 帧时调用（P1）。None 时忽略。
+
+    minimap_callback：可选；签名 (minimap_dict) -> None，
+    on_step 每 N tick 调用一次（minimap 帧，5Hz 下行流）。None 时忽略。
     """
     try:
         from ares import AresBot
@@ -181,14 +196,31 @@ def make_bot_class(
             pass
 
         def move_camera(self, point: tuple[float, float]) -> None:
+            """将相机移到世界坐标 point。
+
+            spike S1 修复（ADR 0007）：bot.client.move_camera 是 async 协程，
+            同步姿势调它只产生未 await 的 coroutine 对象，实际不发 SC2 请求
+            （运行时 RuntimeWarning: coroutine was never awaited）。
+            修法：在 on_step 的 event loop 里 asyncio.create_task 包装，
+            fire-and-forget：相机移动是单向命令，不需要等返回值。
+            """
+            import asyncio
+
             from sc2.position import Point2
 
-            self.bot.client.move_camera(Point2(point))
+            coro = self.bot.client.move_camera(Point2(point))
+            task = asyncio.create_task(coro, name=f"move_camera-{point}")
+            task.add_done_callback(_log_move_camera_done)
 
         def follow_unit(self, unit_tag: int) -> None:
+            """跟随指定 tag 的单位移动相机（同 move_camera，async 包装）。"""
+            import asyncio
+
             unit = self.bot.units.find_by_tag(unit_tag)
             if unit is not None:
-                self.bot.client.move_camera(unit.position)
+                coro = self.bot.client.move_camera(unit.position)
+                task = asyncio.create_task(coro, name=f"follow_unit-{unit_tag}")
+                task.add_done_callback(_log_move_camera_done)
 
         def set_camera_zoom(self, level: float) -> None:
             # python-sc2 暴露 zoom 不一致，M0 noop
@@ -256,11 +288,16 @@ def make_bot_class(
         _cmd_tasks: list[asyncio.Task[Any]]
         # P1-2：auto-pilot 阶段二边沿检测（只在 false→true 那一 tick 推一次 event）
         _autopilot_started: bool = False
+        # minimap：tick 计数（每 N tick 推一次）
+        _minimap_tick_count: int = 0
+        _minimap_builder: Any = None  # MinimapBuilder 实例，on_start 后构造
 
         def __init__(self) -> None:
             super().__init__()
             self._cmd_tasks = []
             self._autopilot_started = False
+            self._minimap_tick_count = 0
+            self._minimap_builder = None
 
         async def on_start(self) -> None:
             # spike B：BuildOrderRunner 在 super().on_start() 末尾构造，
@@ -290,6 +327,12 @@ def make_bot_class(
             await super().on_start()
             self.facade = _AresFacade(self)
             self.director = director_factory(self.facade)
+
+            # minimap builder（on_start 后 game_info / playable_area 才可访问）
+            if minimap_callback is not None:
+                from voicecraft.bot.minimap import MinimapBuilder
+
+                self._minimap_builder = MinimapBuilder(self)
 
             # P0-3：注入 snapshot / event callback 到 director
             if snapshot_callback is not None and self.director is not None:
@@ -328,10 +371,26 @@ def make_bot_class(
                                 self._cmd_tasks.append(task)
                                 # 绑定回调：task 完成后从列表移除 + 捕获异常日志
                                 task.add_done_callback(self._on_cmd_task_done)
+                        elif msg_type == "view_move":
+                            # minimap 拖拽 → 切 SC2 大屏视野（ADR 0007：async fire-and-forget）
+                            target = msg.get("target_point", [0.0, 0.0])
+                            if self.facade is not None:
+                                self.facade.move_camera((float(target[0]), float(target[1])))
                         elif msg_type == "leave":
                             logger.info("bot 收到 leave 信号，等待 on_end")
                 except queue_module.Empty:
                     pass
+
+            # minimap：每 N tick 推一帧（§1.3，N=5 ≈ 4.5Hz）
+            if minimap_callback is not None and self._minimap_builder is not None:
+                self._minimap_tick_count += 1
+                if self._minimap_tick_count >= 5:
+                    self._minimap_tick_count = 0
+                    try:
+                        frame = self._minimap_builder.build(float(self.time))
+                        minimap_callback(frame)
+                    except Exception as exc:
+                        logger.warning("minimap_build_failed: %s", exc)
 
             # 每 tick 让 director 处理 committed directives
             if self.director is not None:
