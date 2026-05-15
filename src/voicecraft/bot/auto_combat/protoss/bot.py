@@ -1,10 +1,12 @@
-"""神族 bot：_VoiceCraftProtossBot 继承 Aristaeus MyBot。
+"""神族 bot：_VoiceCraftProtossBot 继承 sharpy KnowledgeBot。
 
-import 路径说明：vendor/aristaeus/ 不在标准 src layout 下，
-运行时通过 sys.path 注入让 `from bot.main import MyBot` 可解析。
-注入只在真正 import 本模块时发生（lazy，单测时 fake_aristaeus 先 mock 掉 sys.modules）。
+import 路径说明：vendor/sharpy/ 不在标准 src layout 下，
+运行时通过 sys.path 注入让 `from sharpy.knowledges.knowledge_bot import KnowledgeBot`
+可解析。注入只在真正 import 本模块时发生（lazy，单测时 fake_sharpy 先 mock sys.modules）。
 
-设计参考：docs/plans/2026-05-16-tri-race-bots.md §S2。
+设计参考：docs/plans/2026-05-16-sharpy-migration.md §1-4。
+
+继承层次：_VoiceCraftProtossBot → KnowledgeBot → SkeletonBot → BotAI
 """
 
 from __future__ import annotations
@@ -19,27 +21,28 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------
-# vendor path 注入（ares 装了才跑到这里；单测先 mock sys.modules 绕开）
+# vendor path 注入（单测先 mock sys.modules 绕开）
 # -----------------------------------------------------------------------
-_VENDOR_ARISTAEUS = Path(__file__).parents[5] / "vendor" / "aristaeus"
+_VENDOR_SHARPY = Path(__file__).parents[5] / "vendor" / "sharpy"
 
 
-def _ensure_aristaeus_on_path() -> None:
-    """把 vendor/aristaeus 加进 sys.path(幂等)。
+def _ensure_sharpy_on_path() -> None:
+    """把 vendor/sharpy 加进 sys.path（幂等）。
 
-    Aristaeus 锁定 ares-sc2 1.15.1 而 venv 装的是 3.7.2,我们直接对 vendor 代码打 patch:
-    - `from ares.cython_extensions.X` → `from cython_extensions.X` (6 处,sed 批量)
-    - `CombatBehavior` → `CombatIndividualBehavior` (oracle_kite_forward.py 2 处)
-    无语义改动,纯 import 路径漂移。详见 vendor/aristaeus/ATTRIBUTION.md。
+    sharpy 所有模块（sharpy.*、config、bot_loader 等）都在 vendor/sharpy/ 下，
+    直接把该目录加进 sys.path 即可解析。
+
+    无 cython_extensions / CombatBehavior 漂移：sharpy 的 pure Python 实现
+    不需要 Aristaeus 那套 patch。详见 vendor/sharpy/ATTRIBUTION.md（M1 新建）。
     """
-    target = str(_VENDOR_ARISTAEUS)
+    target = str(_VENDOR_SHARPY)
     if target not in sys.path:
         sys.path.insert(0, target)
 
 
 # -----------------------------------------------------------------------
 # 工厂函数：返回 _VoiceCraftProtossBot 类
-# 所有闭包参数与 ares_adapter.make_bot_class 一致。
+# 所有闭包参数与 sharpy_adapter.make_bot_class 一致。
 # -----------------------------------------------------------------------
 
 
@@ -52,112 +55,274 @@ def make_protoss_bot_class(
     snapshot_callback: Any,
     event_callback: Any,
     minimap_callback: Any,
-    # 闭包引用：由 ares_adapter 传入（运行时已构造好）
-    facade_class: Any,
     run_command_with_echo_fn: Any,
-    log_move_camera_done_fn: Any,
-    openings_to_ares_config_builds_fn: Any,
-    opening_build_class: Any,
 ) -> type:
-    """工厂：返回继承 Aristaeus MyBot 的神族 bot 类。
+    """工厂：返回继承 sharpy KnowledgeBot 的神族 bot 类。
 
     参数设计：把外层 make_bot_class 闭包内的对象显式传进来，
-    保持 _VoiceCraftProtossBot 与 ares_adapter.py 之间的解耦。
+    保持 _VoiceCraftProtossBot 与 sharpy_adapter.py 之间的解耦。
     """
-    _ensure_aristaeus_on_path()
+    _ensure_sharpy_on_path()
 
     try:
-        from bot.main import MyBot
+        from sharpy.knowledges.knowledge_bot import KnowledgeBot
+        from sharpy.plans import BuildOrder
     except ImportError as e:
         raise ImportError(
-            "无法 import vendor/aristaeus/bot/main.py；"
-            "确认 vendor/aristaeus/ 已 clone 且 ares-sc2 已装。"
+            "无法 import sharpy.knowledges.knowledge_bot；"
+            "确认 vendor/sharpy/ 已 clone 且 python-sc2 已装。"
         ) from e
 
-    class _VoiceCraftProtossBot(MyBot):  # type: ignore[misc]
-        """voicecraft 神族 bot：Aristaeus MyBot + voicecraft 指挥层。
+    # facade 类（在闭包内定义，持有 bot 引用）
+    from voicecraft.bot.facade import BotState, UnitRole
 
-        继承层次：_VoiceCraftProtossBot → MyBot → AresBot → ...
+    # move camera done callback（ADR 0008 日志用）
+    def _log_move_camera_done(task: Any) -> None:
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.error("move_camera_task_failed: %s", exc, exc_info=exc)
 
-        on_start 顺序（spike B 结论保持）：
-          1. 注入 config["Builds"]（必须在 super().on_start() 之前）
-          2. await super().on_start()（Aristaeus + AresBot 完成初始化）
-          3. 构造 facade / director / minimap builder
-          4. 注入 snapshot / event callback
+    class _SharpyFacade:
+        """Sc2Facade 的 sharpy 实现。
+
+        camera 操作暂存模式(ADR 0008):
+        move_camera / follow_unit **不直接** 发协议，只暂存最新目标点。
+        on_step 末尾调 drain_pending_actions() 在 step await 链内串行发出。
+        """
+
+        def __init__(self, bot: Any) -> None:
+            self.bot = bot
+            self._pending_camera_point: tuple[float, float] | None = None
+
+        # ---- 写 -------------------------------------------------------
+
+        def set_build(self, build_name: str) -> None:
+            """M1 占位：记录 active_recipe。M3 才接 IfElse 树切换。
+
+            sharpy 的剧本逻辑通过 BuildOrder + IfElse 在 create_plan() 里定义，
+            运行时动态切换需要 M3 的 IfElse 求值机制才能接入。
+            M1 只记录意图，确保接口稳定。
+            """
+            logger.info("set_build requested: %s (M1 占位，M3 接 IfElse)", build_name)
+            self.bot.active_recipe = build_name
+
+        def set_production_override(
+            self,
+            unit_type: str,
+            count: int,
+            building_tag: int | None = None,
+        ) -> None:
+            # M1 noop，留 M3 接 sharpy ActUnit override
+            pass
+
+        def set_tech_override(self, upgrade_id: str, building_tag: int | None = None) -> None:
+            # M1 noop
+            pass
+
+        def set_expansion_override(self, target_count: int) -> None:
+            # M1 noop
+            pass
+
+        def set_unit_role(self, unit_tag: int, role: UnitRole) -> None:
+            """把 voicecraft UnitRole 映射到 sharpy UnitTask 并设置。
+
+            sharpy UnitRoleManager.set_task 接 Unit 对象（不接 tag），
+            需先用 cache.by_tag 取 unit；找不到时 log warn，不崩。
+            """
+            try:
+                from voicecraft.bot.auto_combat.common import build_role_map
+
+                role_map = build_role_map()
+                task = role_map[role]
+                unit = self.bot.knowledge.unit_cache.by_tag(unit_tag)
+                if unit is None:
+                    logger.warning(
+                        "set_unit_role: tag=%d not found in cache (role=%s)", unit_tag, role
+                    )
+                    return
+                self.bot.knowledge.roles.set_task(task, unit)
+            except Exception as exc:
+                logger.warning("set_unit_role failed tag=%d role=%s err=%s", unit_tag, role, exc)
+
+        def execute_unit_action(
+            self,
+            unit_tag: int,
+            verb: str,
+            target: dict[str, object] | None = None,
+            ability_id: str | None = None,
+        ) -> None:
+            # M1 noop。LLMControlBehavior 真实实现留 M4。
+            pass
+
+        def set_build_location_override(
+            self,
+            structure_type: str,
+            point: tuple[float, float],
+        ) -> None:
+            # M1 noop
+            pass
+
+        def set_engagement_stance(self, stance: str) -> None:
+            # M1 noop
+            pass
+
+        def move_camera(self, point: tuple[float, float]) -> None:
+            """暂存相机目标点，真实 await 在 on_step 末尾 drain_pending_actions(ADR 0008)。
+
+            多次调用合并为 latest——用户拖小地图节流后，只在意最终位置。
+            """
+            self._pending_camera_point = point
+
+        def follow_unit(self, unit_tag: int) -> None:
+            """暂存 unit 当前位置作为 camera 目标点（MVP：不持续跟随，只切一次）。"""
+            unit = self.bot.units.find_by_tag(unit_tag)
+            if unit is not None:
+                self._pending_camera_point = (unit.position.x, unit.position.y)
+
+        async def drain_pending_actions(self) -> None:
+            """在 step await 链内串行发出暂存的 camera 调用。
+
+            必须从 on_step 内调，且与 step 主请求串行（python-sc2 ws 协议无并发）。
+            异常吞掉：相机移动失败不该让整个 bot 挂。
+            """
+            if self._pending_camera_point is None:
+                return
+            from sc2.position import Point2
+
+            pt = self._pending_camera_point
+            self._pending_camera_point = None
+            try:
+                await self.bot.client.move_camera(Point2(pt))
+            except Exception as exc:
+                logger.warning("move_camera_failed point=%s err=%s", pt, exc)
+
+        def set_camera_zoom(self, level: float) -> None:
+            # python-sc2 暴露 zoom 不一致，M1 noop
+            pass
+
+        # ---- 读 -------------------------------------------------------
+
+        def get_state(self) -> BotState:
+            b = self.bot
+            return BotState(
+                game_time=float(b.time),
+                minerals=int(b.minerals),
+                gas=int(b.vespene),
+                supply_used=int(b.supply_used),
+                supply_cap=int(b.supply_cap),
+                expansion_count=len(b.townhalls),
+                army_summary={},  # M1 占位
+                enemy_summary={},
+            )
+
+        def resolve_selector(
+            self,
+            unit_type: str | None = None,
+            tag: int | None = None,
+            tags: list[int] | None = None,
+        ) -> list[int]:
+            if tag is not None:
+                return [tag]
+            if tags:
+                return list(tags)
+            if unit_type is not None:
+                matched = []
+                for u in self.bot.units:
+                    if str(u.type_id.name).casefold() == unit_type.casefold():
+                        matched.append(u.tag)
+                return matched
+            return []
+
+    class _VoiceCraftProtossBot(KnowledgeBot):  # type: ignore[misc]
+        """voicecraft 神族 bot：sharpy KnowledgeBot + voicecraft 指挥层。
+
+        继承层次：_VoiceCraftProtossBot → KnowledgeBot → SkeletonBot → BotAI
+
+        on_start 顺序：
+          1. await super().on_start()（KnowledgeBot 初始化所有 Manager）
+          2. 构造 _SharpyFacade / director / minimap_builder
+          3. 注入 snapshot / event callback 到 director
+          4. 推 set_initial_strategy（让手机 UI 一进对局就显示当前剧本）
+          5. 推 status_callback
 
         on_step 顺序：
-          1. await super().on_step(iteration)（Aristaeus 自身：Mining + ProductionManager）
+          1. await super().on_step(iteration)（KnowledgeBot.on_step：update + execute）
           2. voicecraft down_q 消费 + minimap 推送 + director.on_tick
+          3. decision_watcher.tick
+          4. facade.drain_pending_actions（串行 camera 命令，ADR 0008）
         """
 
         director: Any = None
-        facade: Any = None
+        facade: _SharpyFacade | None = None
         _cmd_tasks: list[asyncio.Task[Any]]
         _minimap_tick_count: int = 0
         _minimap_builder: Any = None
         _decision_watcher: Any = None
+        # 当前剧本名（M1 占位；M3 接 IfElse）
+        active_recipe: str = ""
 
         def __init__(self) -> None:
-            super().__init__()
+            super().__init__("VoiceCraft Protoss")
             self._cmd_tasks = []
             self._minimap_tick_count = 0
             self._minimap_builder = None
             self._decision_watcher = None
+            self.active_recipe = ""
+
+        async def create_plan(self) -> BuildOrder:  # sharpy type; statically Any via overrides
+            """M1 占位：最小 BuildOrder，只做基础采矿 + 出探机。
+
+            M3 替换：接入 IfElse 树，由 active_recipe 决定走哪个剧本分支。
+            """
+            # 最小 BuildOrder：DistributeWorkers + 持续出探机
+            # sharpy 的 BuildOrder 接受空列表时相当于"do nothing"；
+            # on_step 里 KnowledgeBot 的 Knowledge.update 会自动处理 worker 采矿。
+            return BuildOrder([])
 
         async def on_start(self) -> None:
-            # spike B：config["Builds"] 必须在 super().on_start() 之前注入
-            if strategy_library is not None:
-                openings = [
-                    s
-                    for s in strategy_library.all_strategies()
-                    if isinstance(s, opening_build_class)
-                ]
-                if openings:
-                    builds_cfg = openings_to_ares_config_builds_fn(openings)
-                    if "Builds" not in self.config:
-                        self.config["Builds"] = {}
-                    self.config["Builds"].update(builds_cfg)
-                    cycle_cfg = {"Cycle": [openings[0].id]}
-                    self.config["BuildChoices"] = {
-                        "Terran": cycle_cfg,
-                        "Zerg": cycle_cfg,
-                        "Protoss": cycle_cfg,
-                        "Random": cycle_cfg,
-                    }
-
+            # KnowledgeBot.on_start() 初始化所有 Manager（含 roles / unit_cache 等）
             await super().on_start()
-            self.facade = facade_class(self)
+
+            self.facade = _SharpyFacade(self)
             self.director = director_factory(self.facade)
 
+            # minimap builder（on_start 后 game_info / playable_area 才可访问）
             if minimap_callback is not None:
                 from voicecraft.bot.minimap import MinimapBuilder
 
                 self._minimap_builder = MinimapBuilder(self)
 
+            # 注入 snapshot / event callback 到 director
             if snapshot_callback is not None and self.director is not None:
                 self.director.set_snapshot_callback(snapshot_callback)
             if event_callback is not None and self.director is not None:
                 self.director.set_event_callback(event_callback)
 
-            # 状态 diff watcher:bot 自动决策(造建筑/扩张/升级/build 完成)推 event
+            # 状态 diff watcher
             if event_callback is not None:
                 from voicecraft.bot.auto_combat.decision_watcher import DecisionWatcher
 
                 self._decision_watcher = DecisionWatcher(event_callback)
 
-            # 把 ares 选中的默认 opening 立刻落到 board.opening slot,
-            # 让手机 UI 一进对局就显示当前宏观脚本(否则空着等玩家发指令才亮)。
+            # 把第一个 opening 立刻落到 board.opening slot，
+            # 让手机 UI 一进对局就显示当前宏观剧本（否则空着等玩家发指令才亮）。
             if (
                 strategy_library is not None
                 and self.director is not None
-                and "BuildChoices" in self.config
             ):
                 from voicecraft.directives.types import StageKind
+                from voicecraft.strategy.models import OpeningBuild
 
-                cycle = self.config["BuildChoices"].get("Protoss", {}).get("Cycle", [])
-                if cycle:
+                openings = [
+                    s
+                    for s in strategy_library.all_strategies()
+                    if isinstance(s, OpeningBuild)
+                ]
+                if openings:
+                    self.active_recipe = openings[0].id
                     self.director.set_initial_strategy(
-                        StageKind.OPENING, cycle[0], float(self.time)
+                        StageKind.OPENING, openings[0].id, float(self.time)
                     )
 
             if status_callback is not None:
@@ -165,7 +330,7 @@ def make_protoss_bot_class(
                 status_callback("playing", "running", "")
 
         async def on_step(self, iteration: int) -> None:
-            # 先让 Aristaeus（Mining + ProductionManager）跑
+            # KnowledgeBot.on_step 跑 knowledge.update + execute（含所有 Manager tick）
             await super().on_step(iteration)
 
             # voicecraft down_q 消费
@@ -176,10 +341,6 @@ def make_protoss_bot_class(
                         msg_type = msg.get("type")
                         if msg_type == "command":
                             text = str(msg.get("text", ""))
-                            # WS 消息里的 issued_at 是 unix timestamp(time.time()),
-                            # 但 Director / Board 内部所有 now 都是 game_time(bot.time)。
-                            # 混用会让 effective_at = unix + 1.5 永远 > game_time,
-                            # directive 卡 pending 永不 commit(剧本切换无响应)。
                             game_now = float(self.time)
                             if self.director is not None:
                                 task = asyncio.create_task(
@@ -216,13 +377,22 @@ def make_protoss_bot_class(
             if self.director is not None:
                 self.director.on_tick(now=float(self.time))
 
-            # bot 自动决策 watcher(状态 diff → event 帧)
+            # bot 自动决策 watcher（状态 diff → event 帧）
             if self._decision_watcher is not None:
                 self._decision_watcher.tick(self, float(self.time))
 
-            # step 末尾串行 await 暂存的 camera 调用(ADR 0008:避免与 step 主请求并发写 ws)
+            # step 末尾串行 await 暂存的 camera 调用（ADR 0008）
             if self.facade is not None:
                 await self.facade.drain_pending_actions()
+
+        async def on_unit_created(self, unit: Any) -> None:
+            """单位创建事件。M1 无 voicecraft 逻辑，M4 加 LLM_CONTROLLED role 时再用。"""
+            if hasattr(super(), "on_unit_created"):
+                await super().on_unit_created(unit)
+
+        async def on_unit_destroyed(self, unit_tag: int) -> None:
+            """单位死亡事件。调 super()（KnowledgeBot 需要通知 knowledge）。"""
+            await super().on_unit_destroyed(unit_tag)
 
         def _on_cmd_task_done(self, task: asyncio.Task[Any]) -> None:
             import contextlib

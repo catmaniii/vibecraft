@@ -5,7 +5,7 @@
 架构难点解决方案（spike 结论）：
 - 难点 1：`run_game()` 阻塞 → 方案 B：独立 `multiprocessing` spawn 子进程。
   Windows 用 spawn，父进程只传 picklable 的 GameConfig，子进程自己构造 bot。
-  spike 确认：GameConfig 全是基本类型，可 pickle；子进程 import ares + 构造 bot
+  spike 确认：GameConfig 全是基本类型，可 pickle；子进程 import sharpy + 构造 bot
   在自己的进程空间完成，不跨进程传 bot 对象。
 - 难点 2：阶段检测 → bot 回调（on_start / on_step / on_end）往上行队列 put 状态事件。
 - 难点 3：崩溃捕获 → try/except 包 run_game()；父进程轮询 exitcode 兜底。
@@ -256,15 +256,15 @@ def _build_bot_class(
     put_event：event 推送回调（P1-4）。None 时忽略。
     put_minimap：minimap 推送回调（5Hz 下行流）。None 时忽略。
 
-    fallback 逻辑（向后兼容 M0c smoke / 没有 ares 的环境）：
-    - ares 装了 → 调 make_bot_class 造真 _VoiceCraftBot
-    - ares 未装 → 退回 _M12Bot stub（仅推状态，不解析指令）
+    fallback 逻辑（向后兼容 M0c smoke / 没有 sc2 的环境）：
+    - sc2 装了 → 调 make_bot_class 造真 _VoiceCraftProtossBot（sharpy KnowledgeBot 子类）
+    - sc2 未装 → 退回 _M12Bot stub（仅推状态，不解析指令）
     """
-    # 检查 ares 是否可用（运行时探测，不引入顶层 import）
+    # 检查 sc2 是否可用（运行时探测，不引入顶层 import）
     import importlib.util
 
-    if importlib.util.find_spec("ares") is None:
-        # ares 未装：退到最小 python-sc2 Bot stub（M0c smoke 环境）
+    if importlib.util.find_spec("sc2") is None:
+        # sc2 未装：退到最小 python-sc2 Bot stub（M0c smoke 环境）
         from sc2.bot_ai import BotAI as AresBotFallback
 
         class _M12Bot(AresBotFallback):  # type: ignore[misc]
@@ -285,11 +285,11 @@ def _build_bot_class(
 
         return _M12Bot
 
-    # ares 装了：装配完整 director 栈（Gap 4 + Gap 1 + Gap 5）
+    # sc2 + sharpy 装了：装配完整 director 栈（Gap 4 + Gap 1 + Gap 5）
     from pathlib import Path
 
-    from voicecraft.bot.ares_adapter import make_bot_class
     from voicecraft.bot.director import Director
+    from voicecraft.bot.sharpy_adapter import make_bot_class
     from voicecraft.llm.config import LLMConfig
     from voicecraft.llm.parser import IntentParser
     from voicecraft.logging_.session import GameSession, GameSessionConfig
@@ -329,7 +329,7 @@ def _build_bot_class(
     def director_factory(facade: Any) -> Director:
         return Director(facade=facade, parser=parser, session=session, library=strategy_library)
 
-    # echo 由 ares_adapter._run_command_with_echo 在 task done 时推送，
+    # echo 由 auto_combat.common.run_command_with_echo 在 task done 时推送，
     # 经 echo_callback 参数（=put_echo）回传父进程。
     return make_bot_class(
         director_factory=director_factory,

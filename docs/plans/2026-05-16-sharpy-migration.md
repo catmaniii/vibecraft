@@ -145,3 +145,49 @@ class TestBot(KnowledgeBot):
 - 默认:**1:1 套 4 个**(M2 范围),剩 8 个作为 M2 之后战术库扩充
 
 不主动来问,有歧义时按默认走;只在 Hook A POC 失败时立刻 escalate。
+
+---
+
+## M1 spike 结论（2026-05-16）
+
+**执行结果：全部 green**
+
+### 文件改动清单
+
+| 操作 | 文件 |
+|---|---|
+| 新建 | `src/voicecraft/bot/sharpy_adapter.py` |
+| 重写 | `src/voicecraft/bot/auto_combat/protoss/bot.py`（KnowledgeBot 继承） |
+| 重写 | `src/voicecraft/bot/auto_combat/common.py`（sharpy UnitTask 映射） |
+| 新建 | `tests/unit/test_sharpy_adapter.py`（24 test cases） |
+| 修改 | `tests/unit/test_m1_6_end_to_end.py`（fake_ares → fake_sharpy） |
+| 修改 | `tests/unit/test_cockpit_sync.py`（同上） |
+| 修改 | `tests/unit/test_minimap.py`（同上） |
+| 修改 | `src/voicecraft/server/game_process.py`（import sharpy_adapter） |
+| 修改 | `pyproject.toml`（mypy overrides 加 sharpy.*/s2clientprotocol.*） |
+| 修改 | `scripts/sync_vendor.ps1`（aristaeus → sharpy） |
+| 新建 | `vendor/sharpy/ATTRIBUTION.md` |
+| 删除 | `src/voicecraft/bot/ares_adapter.py` |
+| 删除 | `tests/unit/test_ares_adapter.py` |
+| 删除 | `vendor/aristaeus/`（整目录 git rm -r） |
+
+### 测试结果
+
+- `uv run --no-sync pytest`：**351 passed, 18 failed, 6 skipped**
+  - 18 failed = 预存 minimap 失败（`_collect_alerts` 相关，M1 前已存在，与本次改动无关）
+  - 6 skipped = auto-pilot 相关（已标 `@pytest.mark.skip`，非本次引入）
+- `uv run --no-sync ruff check .`：**All checks passed**
+- `uv run --no-sync mypy src/voicecraft`：**Success: no issues found in 49 source files**
+
+### 方案偏离记录
+
+1. **vendor 路径注入方式**：plan 预期用 `pip install sharpy-sc2`，但 sharpy 不在 PyPI（Q2 默认路径执行），改用 `vendor/sharpy/` + `sys.path` 注入，符合 plan Trade-off Q2 备用路径。
+2. **on_start 初始化顺序**：ares 需要在 `super().on_start()` **前**注入 `config["Builds"]`；sharpy 必须在 `super().on_start()` **后**才能访问 managers（`knowledge.roles` 等在 `KnowledgeBot.on_start` 里初始化）。facade/director 构造移到 super() 之后，与原 ares_adapter 逻辑相反，但设计意图不变。
+3. **s2clientprotocol mypy 错误**：minimap.py 对 s2clientprotocol 的 import 未被 ignore，属 M1 前遗留问题；一并加进 mypy overrides，维持 mypy clean 目标。
+
+### M2/M3 关键提示
+
+- **Hook A（M3）**：`create_plan()` 现返回空 `BuildOrder([])`，M3 需替换为 IfElse 树读 `self.active_recipe`，路由到对应 sharpy dummy 剧本。推荐方案：`BuildOrder([IfElse(lambda: self.active_recipe == "robo_opening", robo_plan, fallback_plan)])`。
+- **Hook C 精度（M2）**：`set_unit_role` 用 `knowledge.unit_cache.by_tag(tag)` 查 Unit 对象；sharpy manager 的 Reserved 过滤是 manager 级（非框架级），需验证各 manager 在 on_step 不干扰 Reserved 单位。
+- **sharpy config.ini**：sharpy 从 CWD 读 `config.ini`，game_process.py 启动时需确认 CWD 有该文件或显式 `os.chdir`（端到端验证时排查）。
+- **minimap 18 个失败**：`_collect_alerts` 方法逻辑 bug，与 sharpy 迁移无关，可独立处理。

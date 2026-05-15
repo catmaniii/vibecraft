@@ -1,53 +1,51 @@
-"""三族共享工具：role_map、echo 辅助协程、log callback。
+"""三族共享工具：role_map、echo 辅助协程。
 
-从 ares_adapter.py 抽离的公共部分，避免在各族 bot 子类里重复。
-所有内容都是"有了 ares 才能用"的；import 前必须确保 ares-sc2 已装。
+sharpy 迁移（M1）：build_role_map 改用 sharpy UnitTask（原 ares AresUnitRole 删除）。
+所有内容都是"有了 python-sc2 + sharpy 才能用"的；import 前必须确保已装。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def _log_move_camera_done(task: Any) -> None:
-    """move_camera / follow_unit create_task 的 done callback：异常时 log，不静默丢。
-
-    ADR 0007：fire-and-forget 的异常不向调用方传播；这里捕获并 log。
-    """
-    if not task.cancelled():
-        exc = task.exception()
-        if exc is not None:
-            logger.error("move_camera_task_failed: %s", exc, exc_info=exc)
-
-
 def build_role_map() -> dict[Any, Any]:
-    """构造 voicecraft UnitRole → ares AresUnitRole 映射表。
+    """构造 voicecraft UnitRole → sharpy UnitTask 映射表。
 
-    必须在 ares 已 import 后调用（运行时 lazy）。
+    必须在 sharpy 已 import 后调用（运行时 lazy）。
 
-    LLM_CONTROLLED → CONTROL_GROUP_THREE：
-    Aristaeus（vendor）在 cannon_rush_manager 里占用了 CONTROL_GROUP_ONE（炮塔rush探机）
-    和 CONTROL_GROUP_TWO（chaos探机）。voicecraft 改用 CONTROL_GROUP_THREE 避冲突。
-    THREE 在 ares 源码和 Aristaeus 里均未使用，仍是"排除单元"载体（§3.4）。
-    见 docs/plans/2026-05-16-tri-race-bots.md "S2 spike 结论"。
+    LLM_CONTROLLED → UnitTask.Reserved：
+    sharpy 里 Reserved(8) 是"为未知目的保留"的槽位，相当于 ares 里的
+    CONTROL_GROUP_THREE —— sharpy 各 Manager 不会主动把 Reserved 单位
+    拉去执行任务，恰好满足 §3.4 "LLM 接管单元不被 base bot 占用"的需求。
+
+    其他映射：
+    - IDLE     → UnitTask.Idle(0)
+    - ARMY     → UnitTask.Attacking(7)
+    - DEFENDER → UnitTask.Defending(6)
+    - HARASSER → UnitTask.Attacking(7)（sharpy 无专用 Harassing task）
+    - SCOUT    → UnitTask.Scouting(3)
+
+    见 docs/plans/2026-05-16-sharpy-migration.md §2 hook 映射表。
     """
-    from ares.consts import UnitRole as AresUnitRole
+    from voicecraft.bot.auto_combat.protoss.bot import _ensure_sharpy_on_path
+
+    _ensure_sharpy_on_path()
+
+    from sharpy.managers.core.roles.unit_task import UnitTask
 
     from voicecraft.bot.facade import UnitRole
 
     return {
-        UnitRole.LLM_CONTROLLED: AresUnitRole.CONTROL_GROUP_THREE,
-        UnitRole.IDLE: AresUnitRole.IDLE,
-        UnitRole.ARMY: AresUnitRole.ATTACKING,
-        UnitRole.DEFENDER: AresUnitRole.DEFENDING,
-        UnitRole.HARASSER: AresUnitRole.HARASSING,
-        UnitRole.SCOUT: AresUnitRole.SCOUTING,
+        UnitRole.LLM_CONTROLLED: UnitTask.Reserved,
+        UnitRole.IDLE: UnitTask.Idle,
+        UnitRole.ARMY: UnitTask.Attacking,
+        UnitRole.DEFENDER: UnitTask.Defending,
+        UnitRole.HARASSER: UnitTask.Attacking,  # sharpy 无 Harassing
+        UnitRole.SCOUT: UnitTask.Scouting,
     }
 
 

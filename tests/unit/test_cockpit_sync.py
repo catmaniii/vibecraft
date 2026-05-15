@@ -420,7 +420,7 @@ class TestDispatchUpstreamNoStatePollution:
 
 @pytest.fixture(autouse=True)
 def _clean_ares() -> Any:
-    _prefixes = ("ares", "bot", "voicecraft.bot.ares_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -431,19 +431,57 @@ def _clean_ares() -> Any:
 
 
 def _inject_fake_ares_minimal() -> type:
-    """注入最小伪 ares，返回 FakeAresBot 类（内联，不依赖 test_ares_adapter）。"""
-    fake_ares_consts = ModuleType("ares.consts")
-    FakeUnitRole = MagicMock()
-    for attr in ("CONTROL_GROUP_ONE", "IDLE", "ATTACKING", "DEFENDING", "HARASSING", "SCOUTING"):
-        setattr(FakeUnitRole, attr, attr)
-    fake_ares_consts.UnitRole = FakeUnitRole  # type: ignore[attr-defined]
+    """注入最小伪 sharpy，返回 FakeKnowledgeBot 类（M1 sharpy 迁移后替代原 FakeAresBot）。"""
+    import enum
 
-    class FakeAresBot:
+    class _FakeUnitTask(enum.IntEnum):
+        Idle = 0
+        Reserved = 8
+
+    fake_unit_task_mod = ModuleType("sharpy.managers.core.roles.unit_task")
+    fake_unit_task_mod.UnitTask = _FakeUnitTask  # type: ignore[attr-defined]
+    fake_roles_mod = ModuleType("sharpy.managers.core.roles")
+    fake_roles_mod.UnitTask = _FakeUnitTask  # type: ignore[attr-defined]
+
+    class FakeBuildOrder:
+        def __init__(self, *a: Any, **kw: Any) -> None:
+            pass
+
+    fake_plans_mod = ModuleType("sharpy.plans")
+    fake_plans_mod.BuildOrder = FakeBuildOrder  # type: ignore[attr-defined]
+
+    class FakeKnowledge:
         def __init__(self) -> None:
-            self.config: dict[str, Any] = {}
-            self.build_order_runner = MagicMock()
-            self.build_order_runner.build_completed = False
-            self.mediator = MagicMock()
+            self.roles = MagicMock()
+            self.unit_cache = MagicMock()
+
+        def pre_start(self, *a: Any, **kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def update(self, iteration: int) -> None:
+            pass
+
+        async def post_update(self) -> None:
+            pass
+
+        async def on_unit_destroyed(self, unit_tag: int) -> None:
+            pass
+
+        async def on_end(self, result: Any) -> None:
+            pass
+
+        def print(self, *a: Any, **kw: Any) -> None:
+            pass
+
+    class FakeKnowledgeBot:
+        """sharpy KnowledgeBot 极简 stub。"""
+
+        def __init__(self, name: str = "fake") -> None:
+            self.name = name
+            self.knowledge = FakeKnowledge()
             self.time = 0.0
             self.minerals = 0
             self.vespene = 0
@@ -451,33 +489,32 @@ def _inject_fake_ares_minimal() -> type:
             self.supply_cap = 0
             self.townhalls: list[Any] = []
             self.units = MagicMock()
-            self.start_location = (0, 0)
+            self.client = MagicMock()
+            self.client.move_camera = AsyncMock()
+            self.state = MagicMock()
+            self.last_game_loop = -1
+            self.realtime = False
+            self.active_recipe = ""
 
         async def on_start(self) -> None:
             pass
 
-        def register_behavior(self, behavior: Any) -> None:
+        async def on_step(self, iteration: int) -> None:
             pass
 
-    fake_ares = ModuleType("ares")
-    fake_ares.AresBot = FakeAresBot  # type: ignore[attr-defined]
-    fake_ares_behaviors = ModuleType("ares.behaviors")
-    fake_ares_behaviors_macro = ModuleType("ares.behaviors.macro")
-    for _bname in (
-        "AutoSupply",
-        "BuildWorkers",
-        "ExpansionController",
-        "GasBuildingController",
-        "Mining",
-        "ProductionController",
-        "SpawnController",
-    ):
-        setattr(fake_ares_behaviors_macro, _bname, MagicMock())
+        async def on_unit_destroyed(self, unit_tag: int) -> None:
+            await self.knowledge.on_unit_destroyed(unit_tag)
 
-    sys.modules["ares"] = fake_ares
-    sys.modules["ares.consts"] = fake_ares_consts
-    sys.modules["ares.behaviors"] = fake_ares_behaviors
-    sys.modules["ares.behaviors.macro"] = fake_ares_behaviors_macro
+        async def on_end(self, result: Any) -> None:
+            await self.knowledge.on_end(result)
+
+    fake_sharpy_mod = ModuleType("sharpy")
+    fake_knowledges_mod = ModuleType("sharpy.knowledges")
+    fake_knowledges_mod.KnowledgeBot = FakeKnowledgeBot  # type: ignore[attr-defined]
+    fake_knowledges_mod.BuildOrder = FakeBuildOrder  # type: ignore[attr-defined]
+    fake_kb_mod = ModuleType("sharpy.knowledges.knowledge_bot")
+    fake_kb_mod.KnowledgeBot = FakeKnowledgeBot  # type: ignore[attr-defined]
+
     if "sc2" not in sys.modules:
         fake_sc2 = ModuleType("sc2")
         fake_sc2_position = ModuleType("sc2.position")
@@ -490,24 +527,17 @@ def _inject_fake_ares_minimal() -> type:
         sys.modules["sc2.ids"] = fake_sc2_ids
         sys.modules["sc2.ids.unit_typeid"] = fake_sc2_unit_typeid
 
-    # fake aristaeus bot.main（S2：make_bot_class Protoss dispatch 需要）
-    fake_bot_main = ModuleType("bot.main")
-    fake_bot_mod = ModuleType("bot")
+    sys.modules["sharpy"] = fake_sharpy_mod
+    sys.modules["sharpy.knowledges"] = fake_knowledges_mod
+    sys.modules["sharpy.knowledges.knowledge_bot"] = fake_kb_mod
+    sys.modules["sharpy.plans"] = fake_plans_mod
+    sys.modules["sharpy.managers"] = ModuleType("sharpy.managers")
+    sys.modules["sharpy.managers.core"] = ModuleType("sharpy.managers.core")
+    sys.modules["sharpy.managers.core.roles"] = fake_roles_mod
+    sys.modules["sharpy.managers.core.roles.unit_task"] = fake_unit_task_mod
+    sys.modules["sharpy.managers.extensions"] = ModuleType("sharpy.managers.extensions")
 
-    class FakeAristaeusMyBot(FakeAresBot):
-        """Aristaeus MyBot 极简 stub。"""
-
-        async def on_step(self, iteration: int) -> None:
-            pass
-
-        def register_managers(self) -> None:
-            pass
-
-    fake_bot_main.MyBot = FakeAristaeusMyBot  # type: ignore[attr-defined]
-    sys.modules["bot"] = fake_bot_mod
-    sys.modules["bot.main"] = fake_bot_main
-
-    return FakeAresBot
+    return FakeKnowledgeBot
 
 
 class TestAutopilotEventCallback:
@@ -518,15 +548,15 @@ class TestAutopilotEventCallback:
     """
 
     def _make_instance(self, event_cb: Any) -> Any:
-        FakeAresBot = _inject_fake_ares_minimal()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot = _inject_fake_ares_minimal()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(
             director_factory=lambda facade: MagicMock(),
             event_callback=event_cb,
         )
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance.register_behavior = MagicMock()
         return instance
 

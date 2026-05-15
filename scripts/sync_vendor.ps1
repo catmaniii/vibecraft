@@ -1,10 +1,10 @@
 # sync_vendor.ps1 — 从 upstream 重新拉 vendor 目录
 #
 # 用法（在仓库根运行）：
-#   .\scripts\sync_vendor.ps1 -Repo aristaeus
+#   .\scripts\sync_vendor.ps1 -Repo sharpy
 #
 # 支持的 Repo 参数与对应 GitHub URL：
-#   aristaeus -> https://github.com/august-k/Aristaeus
+#   sharpy -> https://github.com/DrInfy/sharpy-sc2
 #
 # 流程：
 #   1. 在临时目录 clone --depth 1
@@ -17,12 +17,12 @@
 
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("aristaeus")]
+    [ValidateSet("sharpy")]
     [string]$Repo
 )
 
 $repoMap = @{
-    "aristaeus" = "https://github.com/august-k/Aristaeus"
+    "sharpy" = "https://github.com/DrInfy/sharpy-sc2"
 }
 
 $upstream = $repoMap[$Repo]

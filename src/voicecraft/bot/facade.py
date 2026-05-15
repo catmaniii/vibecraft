@@ -20,13 +20,13 @@ from typing import Protocol
 
 
 class UnitRole(str, Enum):
-    """voicecraft 内部的 unit role；运行时由 `ares_adapter` 映射到真实
-    `ares.consts.UnitRole` 成员。
+    """voicecraft 内部的 unit role；运行时由 `sharpy_adapter` 映射到真实
+    `sharpy.managers.core.roles.unit_task.UnitTask` 成员。
 
-    **重要**：ares 的 UnitRole 是固定 StrEnum，无法动态加成员。
-    `LLM_CONTROLLED` 实际映射到 ares 的 `CONTROL_GROUP_ONE`（ares
-    自身注释："use for anything not specified"，且无任何 ares Manager
-    内部使用它）—— 这就是设计文档 §3.4 假设的 role 排除机制的载体。
+    **重要**：sharpy 的 UnitTask 是 IntEnum，固定成员。
+    `LLM_CONTROLLED` 实际映射到 sharpy 的 `UnitTask.Reserved`（Reserved=8，
+    sharpy 框架无任何 Manager 主动占用 Reserved slot）——
+    这就是设计文档 §3.4 假设的 role 排除机制的载体。
     """
 
     LLM_CONTROLLED = "LLM_CONTROLLED"

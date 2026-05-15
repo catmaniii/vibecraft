@@ -23,29 +23,69 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# fake ares 注入辅助（复用 test_ares_adapter.py 的模式）
+# fake sharpy 注入辅助（M1 sharpy 迁移后替代原 _inject_fake_ares）
 # ---------------------------------------------------------------------------
 
 
 def _inject_fake_ares() -> tuple[type, type]:
-    """向 sys.modules 注入伪 ares 模块。"""
-    fake_ares_consts = ModuleType("ares.consts")
-    FakeUnitRole = MagicMock()
-    FakeUnitRole.CONTROL_GROUP_ONE = "CONTROL_GROUP_ONE"
-    FakeUnitRole.IDLE = "IDLE"
-    FakeUnitRole.ATTACKING = "ATTACKING"
-    FakeUnitRole.DEFENDING = "DEFENDING"
-    FakeUnitRole.HARASSING = "HARASSING"
-    FakeUnitRole.SCOUTING = "SCOUTING"
-    fake_ares_consts.UnitRole = FakeUnitRole  # type: ignore[attr-defined]
+    """向 sys.modules 注入伪 sharpy 模块，保持调用点签名不变。
 
-    class FakeAresBot:
+    M1 后 make_bot_class 走 sharpy_adapter，base class 是 KnowledgeBot 而非 AresBot。
+    返回 (FakeKnowledgeBot, FakeUnitTask) 但签名兼容原 (FakeAresBot, FakeUnitRole)。
+    """
+    import enum
+
+    class FakeUnitTask(enum.IntEnum):
+        Idle = 0
+        Scouting = 3
+        Defending = 6
+        Attacking = 7
+        Reserved = 8
+
+    fake_unit_task_mod = ModuleType("sharpy.managers.core.roles.unit_task")
+    fake_unit_task_mod.UnitTask = FakeUnitTask  # type: ignore[attr-defined]
+    fake_roles_mod = ModuleType("sharpy.managers.core.roles")
+    fake_roles_mod.UnitTask = FakeUnitTask  # type: ignore[attr-defined]
+
+    class FakeBuildOrder:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    fake_plans_mod = ModuleType("sharpy.plans")
+    fake_plans_mod.BuildOrder = FakeBuildOrder  # type: ignore[attr-defined]
+
+    class FakeKnowledge:
         def __init__(self) -> None:
-            self.config: dict[str, Any] = {}
-            self.build_order_runner = MagicMock()
-            # 默认 opening 未跑完 → auto-pilot 只走阶段一（Mining/AutoSupply）
-            self.build_order_runner.build_completed = False
-            self.mediator = MagicMock()
+            self.roles = MagicMock()
+            self.unit_cache = MagicMock()
+
+        def pre_start(self, *a: Any, **kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def update(self, iteration: int) -> None:
+            pass
+
+        async def post_update(self) -> None:
+            pass
+
+        async def on_unit_destroyed(self, unit_tag: int) -> None:
+            pass
+
+        async def on_end(self, result: Any) -> None:
+            pass
+
+        def print(self, *a: Any, **kw: Any) -> None:
+            pass
+
+    class FakeKnowledgeBot:
+        """sharpy KnowledgeBot 极简 stub。"""
+
+        def __init__(self, name: str = "fake") -> None:
+            self.name = name
+            self.knowledge = FakeKnowledge()
             self.time = 0.0
             self.minerals = 0
             self.vespene = 0
@@ -53,35 +93,32 @@ def _inject_fake_ares() -> tuple[type, type]:
             self.supply_cap = 0
             self.townhalls: list[Any] = []
             self.units = MagicMock()
-            self.start_location = (0, 0)
+            self.client = MagicMock()
+            self.client.move_camera = AsyncMock()
+            self.state = MagicMock()
+            self.last_game_loop = -1
+            self.realtime = False
+            self.active_recipe = ""
 
         async def on_start(self) -> None:
             pass
 
-        def register_behavior(self, behavior: Any) -> None:
+        async def on_step(self, iteration: int) -> None:
             pass
 
-    fake_ares = ModuleType("ares")
-    fake_ares.AresBot = FakeAresBot  # type: ignore[attr-defined]
+        async def on_unit_destroyed(self, unit_tag: int) -> None:
+            await self.knowledge.on_unit_destroyed(unit_tag)
 
-    # ares.behaviors.macro —— auto-pilot 用的 7 个 macro behavior（伪类即可）
-    fake_ares_behaviors = ModuleType("ares.behaviors")
-    fake_ares_behaviors_macro = ModuleType("ares.behaviors.macro")
-    for _bname in (
-        "AutoSupply",
-        "BuildWorkers",
-        "ExpansionController",
-        "GasBuildingController",
-        "Mining",
-        "ProductionController",
-        "SpawnController",
-    ):
-        setattr(fake_ares_behaviors_macro, _bname, MagicMock())
+        async def on_end(self, result: Any) -> None:
+            await self.knowledge.on_end(result)
 
-    sys.modules["ares"] = fake_ares
-    sys.modules["ares.consts"] = fake_ares_consts
-    sys.modules["ares.behaviors"] = fake_ares_behaviors
-    sys.modules["ares.behaviors.macro"] = fake_ares_behaviors_macro
+    fake_sharpy_mod = ModuleType("sharpy")
+    fake_knowledges_mod = ModuleType("sharpy.knowledges")
+    fake_knowledges_mod.KnowledgeBot = FakeKnowledgeBot  # type: ignore[attr-defined]
+    fake_knowledges_mod.BuildOrder = FakeBuildOrder  # type: ignore[attr-defined]
+    fake_kb_mod = ModuleType("sharpy.knowledges.knowledge_bot")
+    fake_kb_mod.KnowledgeBot = FakeKnowledgeBot  # type: ignore[attr-defined]
+
     if "sc2" not in sys.modules:
         fake_sc2 = ModuleType("sc2")
         fake_sc2_position = ModuleType("sc2.position")
@@ -94,29 +131,22 @@ def _inject_fake_ares() -> tuple[type, type]:
         sys.modules["sc2.ids"] = fake_sc2_ids
         sys.modules["sc2.ids.unit_typeid"] = fake_sc2_unit_typeid
 
-    # fake aristaeus bot.main（S2：make_bot_class Protoss dispatch 需要）
-    fake_bot_main = ModuleType("bot.main")
-    fake_bot_mod = ModuleType("bot")
+    sys.modules["sharpy"] = fake_sharpy_mod
+    sys.modules["sharpy.knowledges"] = fake_knowledges_mod
+    sys.modules["sharpy.knowledges.knowledge_bot"] = fake_kb_mod
+    sys.modules["sharpy.plans"] = fake_plans_mod
+    sys.modules["sharpy.managers"] = ModuleType("sharpy.managers")
+    sys.modules["sharpy.managers.core"] = ModuleType("sharpy.managers.core")
+    sys.modules["sharpy.managers.core.roles"] = fake_roles_mod
+    sys.modules["sharpy.managers.core.roles.unit_task"] = fake_unit_task_mod
+    sys.modules["sharpy.managers.extensions"] = ModuleType("sharpy.managers.extensions")
 
-    class FakeAristaeusMyBot(FakeAresBot):
-        """Aristaeus MyBot 极简 stub。"""
-
-        async def on_step(self, iteration: int) -> None:
-            pass
-
-        def register_managers(self) -> None:
-            pass
-
-    fake_bot_main.MyBot = FakeAristaeusMyBot  # type: ignore[attr-defined]
-    sys.modules["bot"] = fake_bot_mod
-    sys.modules["bot.main"] = fake_bot_main
-
-    return FakeAresBot, FakeUnitRole
+    return FakeKnowledgeBot, FakeUnitTask
 
 
 @pytest.fixture(autouse=True)
 def _clean_ares_modules() -> Any:
-    _prefixes = ("ares", "bot", "voicecraft.bot.ares_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -249,8 +279,8 @@ class TestBotOnStepConsumesQueue:
 
     async def test_on_step_creates_task_for_command(self) -> None:
         """on_step 里收到 command 消息，应 create_task 调 director.on_player_command。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         parse_calls: list[tuple[str, float]] = []
 
@@ -274,7 +304,7 @@ class TestBotOnStepConsumesQueue:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -296,8 +326,8 @@ class TestBotOnStepConsumesQueue:
 
     async def test_on_step_does_not_await_command(self) -> None:
         """on_step 在 task 完成前就返回（不阻塞 realtime loop）。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         parse_started = asyncio.Event()
         parse_can_finish = asyncio.Event()
@@ -322,7 +352,7 @@ class TestBotOnStepConsumesQueue:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -344,8 +374,8 @@ class TestBotOnStepConsumesQueue:
 
     async def test_cmd_task_exception_is_logged_not_raised(self) -> None:
         """后台 cmd task 异常时 log 不向上传播（不崩 bot）。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         async def failing_parse(text: str, now: float) -> Any:
             raise RuntimeError("parse 崩了")
@@ -363,7 +393,7 @@ class TestBotOnStepConsumesQueue:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -383,8 +413,8 @@ class TestBotOnStepConsumesQueue:
 
     async def test_empty_queue_does_not_crash(self) -> None:
         """下行队列空时 on_step 正常跑。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
         director_mock.on_tick = MagicMock()
@@ -397,7 +427,7 @@ class TestBotOnStepConsumesQueue:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -417,8 +447,8 @@ class TestStatusCallback:
 
     async def test_status_callback_on_start(self) -> None:
         """on_start 应调 status_callback("in_game", ...) 和 status_callback("playing", ...)。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
 
@@ -431,10 +461,10 @@ class TestStatusCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
 
-        with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
         sc2_states = [c[0] for c in calls]
@@ -443,8 +473,8 @@ class TestStatusCallback:
 
     async def test_status_callback_on_end(self) -> None:
         """on_end 应调 status_callback("ended", ...)。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
 
@@ -457,7 +487,7 @@ class TestStatusCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
 
         await instance.on_end("Defeat")
@@ -466,8 +496,8 @@ class TestStatusCallback:
 
     async def test_no_status_callback_is_backward_compatible(self) -> None:
         """status_callback=None 时，on_start / on_end 不抛异常（向后兼容）。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(
             director_factory=lambda facade: MagicMock(),
@@ -475,10 +505,10 @@ class TestStatusCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
 
-        with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()  # 不应抛
 
         await instance.on_end("Victory")  # 不应抛
@@ -494,8 +524,8 @@ class TestEchoCallback:
 
     async def test_echo_on_successful_parse(self) -> None:
         """IntentParseResult → echo_callback(text, interpretation_zh)。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
         from voicecraft.llm.schema import IntentParseResult
 
         echo_calls: list[tuple[str, str]] = []
@@ -521,7 +551,7 @@ class TestEchoCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -537,8 +567,8 @@ class TestEchoCallback:
 
     async def test_echo_on_parse_error(self) -> None:
         """ParseError → echo_callback(text, '[解析失败] ...')。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
         from voicecraft.llm.schema import ParseError, ParseErrorKind
 
         echo_calls: list[tuple[str, str]] = []
@@ -560,7 +590,7 @@ class TestEchoCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -575,8 +605,8 @@ class TestEchoCallback:
 
     async def test_no_echo_callback_is_fine(self) -> None:
         """echo_callback=None 时，parse 完成后不抛异常。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
         from voicecraft.llm.schema import IntentParseResult
 
         async def fake_parse(text: str, now: float) -> Any:
@@ -600,7 +630,7 @@ class TestEchoCallback:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
         instance.director = director_mock
         instance.facade = MagicMock()
@@ -767,16 +797,16 @@ class TestBackwardCompatibility:
 
     async def test_old_usage_no_new_params(self) -> None:
         """旧版 make_bot_class(director_factory) 签名不破坏。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
 
-        with patch.object(FakeAresBot, "on_start", new_callable=AsyncMock):
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
         # on_step 调 on_tick
@@ -798,8 +828,8 @@ class TestOnEndWaitsForTasks:
 
     async def test_on_end_awaits_cmd_tasks(self) -> None:
         """on_end 应 gather 所有 _cmd_tasks 才调 status_callback("ended")。"""
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         task_finished = asyncio.Event()
         status_calls: list[str] = []
@@ -817,7 +847,7 @@ class TestOnEndWaitsForTasks:
         )
 
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance._cmd_tasks = []
 
         # 手动加一个 in-flight task
@@ -846,12 +876,12 @@ class TestAutoPilot:
     """
 
     def _make_instance(self, build_completed: bool) -> Any:
-        FakeAresBot, _ = _inject_fake_ares()
-        from voicecraft.bot.ares_adapter import make_bot_class
+        FakeKnowledgeBot, _ = _inject_fake_ares()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(director_factory=lambda facade: MagicMock())
         instance = object.__new__(BotClass)
-        FakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
         instance.build_order_runner.build_completed = build_completed
         instance.register_behavior = MagicMock()
         return instance
