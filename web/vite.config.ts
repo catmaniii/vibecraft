@@ -8,8 +8,10 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      // 开发中用 generateSW；MVP 阶段不需要离线缓存策略，manifest 对象注入即可
-      registerType: 'autoUpdate',
+      // MVP 阶段不需要离线缓存。autoUpdate 会在新版本就绪后**自动 reload 整页**，
+      // 对局中刷掉 WS 状态导致 SC2/Bot 段显示成 idle。改 'prompt' 让用户主动触发
+      // （目前 UI 还没接 prompt → 实际上等于不会自动 reload，开局后无中断）。
+      registerType: 'prompt',
       manifest: {
         name: 'VoiceCraft',
         short_name: 'VoiceCraft',

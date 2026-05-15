@@ -58,6 +58,8 @@ def _inject_fake_ares() -> tuple[MagicMock, MagicMock]:
     fake_ares_consts = ModuleType("ares.consts")
     FakeUnitRole = MagicMock()
     FakeUnitRole.CONTROL_GROUP_ONE = "CONTROL_GROUP_ONE"
+    FakeUnitRole.CONTROL_GROUP_TWO = "CONTROL_GROUP_TWO"
+    FakeUnitRole.CONTROL_GROUP_THREE = "CONTROL_GROUP_THREE"
     FakeUnitRole.IDLE = "IDLE"
     FakeUnitRole.ATTACKING = "ATTACKING"
     FakeUnitRole.DEFENDING = "DEFENDING"
@@ -126,24 +128,37 @@ def _inject_fake_ares() -> tuple[MagicMock, MagicMock]:
         sys.modules["sc2.ids"] = fake_sc2_ids
         sys.modules["sc2.ids.unit_typeid"] = fake_sc2_unit_typeid
 
+    # fake aristaeus bot.main（S2：make_bot_class Protoss dispatch 会 import bot.main.MyBot）
+    fake_bot_main = ModuleType("bot.main")
+    fake_bot_mod = ModuleType("bot")
+
+    class FakeAristaeusMyBot(FakeAresBot):
+        """Aristaeus MyBot 的极简 stub，继承 FakeAresBot。"""
+
+        async def on_step(self, iteration: int) -> None:
+            await super().on_start()  # 模拟 super chain
+
+        def register_managers(self) -> None:
+            pass
+
+    fake_bot_main.MyBot = FakeAristaeusMyBot  # type: ignore[attr-defined]
+    sys.modules["bot"] = fake_bot_mod
+    sys.modules["bot.main"] = fake_bot_main
+
     return FakeAresBot, FakeUnitRole
 
 
 @pytest.fixture(autouse=True)
 def _clean_ares_modules():
     """每个测试前清理 ares 模块缓存，保证测试互相隔离。"""
+    _prefixes = ("ares", "bot", "voicecraft.bot.ares_adapter", "voicecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
-        if key.startswith("ares"):
+        if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
-    # 也强制重新导入 ares_adapter，使其内部 lazy import 能重新解析
-    if "voicecraft.bot.ares_adapter" in sys.modules:
-        del sys.modules["voicecraft.bot.ares_adapter"]
     yield
     for key in list(sys.modules.keys()):
-        if key.startswith("ares"):
+        if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
-    if "voicecraft.bot.ares_adapter" in sys.modules:
-        del sys.modules["voicecraft.bot.ares_adapter"]
 
 
 # ---------------------------------------------------------------------------
@@ -241,14 +256,27 @@ class TestConfigInjection:
                 # 在 super().on_start() 被调用时捕获 config 快照
                 injected_config_at_super.update(self.config)
 
-        # 替换 FakeAresBot
+        # 替换 ares.AresBot 和 bot.main.MyBot（S2：_VoiceCraftProtossBot 继承 MyBot）
         import ares as ares_mod
+        import bot.main as bot_main_mod
 
         ares_mod.AresBot = CapturingFakeAresBot  # type: ignore[attr-defined]
 
+        class CapturingMyBot(CapturingFakeAresBot):  # type: ignore[valid-type,misc]
+            """fake Aristaeus MyBot，super().on_start() 走到 CapturingFakeAresBot。"""
+
+            def register_managers(self) -> None:
+                pass
+
+        bot_main_mod.MyBot = CapturingMyBot  # type: ignore[attr-defined]
+        # protoss/bot.py 里 import bot.main 已缓存，需要刷新
+        for _k in list(sys.modules.keys()):
+            if _k.startswith("voicecraft.bot.auto_combat.protoss"):
+                del sys.modules[_k]
+
         BotClass = make_bot_class(lambda facade: None, strategy_library=library)
         instance = object.__new__(BotClass)
-        CapturingFakeAresBot.__init__(instance)  # type: ignore[arg-type]
+        CapturingMyBot.__init__(instance)  # type: ignore[arg-type]
 
         asyncio.run(instance.on_start())
         return injected_config_at_super

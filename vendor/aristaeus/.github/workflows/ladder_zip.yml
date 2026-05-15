@@ -1,0 +1,35 @@
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # check-out repo
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      # install poetry
+      - name: Install poetry
+        run: pipx install poetry==1.5
+      # set-up python with cache
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'poetry'
+      - name: Install requirements
+        run: poetry install --no-root
+      - name: Compile ladder zip
+        run: poetry run python scripts/create_ladder_zip.py
+      - uses: montudor/action-zip@v1
+        with:
+          args: unzip -qq bot.zip -d out
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ladder-zip
+          path: out

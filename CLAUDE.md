@@ -216,6 +216,7 @@ CLAUDE.md 只保留**约定 / 工作模式 / 关键决策摘要**，详细内容
 - **两种部署变体接口**：服务端协议必须假定可能被远程客户端连接；不要硬编码 `localhost`。
 - **Recipe store 抽象**：剧本不直接 import YAML 路径，走 `StrategyLibrary.get(id)` 接口，未来好替换。
 - **不允许 sleep 等真实 SC2**：单测全部 mock python-sc2 / ares 接口。`tests/integration/` 留给端到端，但跳过 default。
+- **装 Python 包先确认在 venv 里,不污染全局**：本项目用 `uv`,新依赖一律走 `uv add <pkg>`（写 pyproject）或 `uv pip install <pkg>`（仅 venv,等价 `.venv/Scripts/pip install`）。**严禁** 在系统 Python 跑裸 `pip install`，不管它装到哪里。装新框架前先 `where python` / `Get-Command python` 确认指到 `.venv/Scripts/python.exe`。
 - **直接修改 CLAUDE.md** 当：决策变更 / 新建一类约定 / 用户给了新的强偏好。
 
 ---

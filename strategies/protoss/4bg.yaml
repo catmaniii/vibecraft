@@ -1,0 +1,65 @@
+kind: opening_build
+id: 4bg
+display_name_zh: "4 门 BG 闪追压制"
+summary_zh: "经典 4 BG 折跃压制:13 农 BG → BC → 折跃 → 加到 4 门 → 闪追/纯狂出门 timing"
+aliases:
+  - "4BG"
+  - "4bg"
+  - "四门"
+  - "4门"
+  - "4 Gate"
+  - "4Gate"
+  - "4G"
+  - "4门追猎"
+  - "4 Gate Stalker"
+  - "4门闪追"
+  - "闪追 timing"
+  - "闪追timing"
+  - "4门压制"
+  - "纯狂"
+  - "纯狂热者"
+matchup: [PvT, PvZ, PvP]
+
+phases:
+  - id: opening
+    display: "开局"
+    subtitle: "13 农 BG"
+  - id: tech
+    display: "出折跃"
+    subtitle: "BC + 闪烁"
+  - id: massing
+    display: "堆 4 BG"
+    subtitle: "Gateway × 4"
+  - id: executing
+    display: "出门压制"
+    subtitle: "5:30-6:30 timing"
+
+steps:
+  - "13 build Pylon"
+  - "14 build Gateway"
+  - "15 build Assimilator"
+  - "16 build Assimilator"
+  - "17 build Pylon"
+  - "20 build CyberneticsCore"
+  - "21 build Nexus"
+  - "23 build Gateway"
+  - "26 research WarpGateResearch @chrono"
+  - "27 build Gateway"
+  - "30 build Gateway"
+  - "31 build Pylon"
+  - "33 train Stalker"
+  - "35 build TwilightCouncil"
+  - "38 train Stalker"
+  - "42 research BlinkTech @chrono"
+
+scout_at: "17 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.units.phoenix.count >= 2"
+    then: "transition:1g_stargate"
+  - sees: "enemy.units.colossus.count >= 1"
+    then: "transition:iac_2base"
+
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"

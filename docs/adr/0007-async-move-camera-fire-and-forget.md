@@ -3,8 +3,14 @@
 | 字段 | 值 |
 |---|---|
 | 日期 | 2026-05-15 |
-| 状态 | 已采用 |
+| 状态 | **已撤回（superseded by [ADR 0008](0008-camera-staged-drain.md)）** |
 | 触发 | minimap 里程碑 spike S1：发现 `_AresFacade.move_camera` 同步调 async 协程等于没调 |
+
+> **撤回原因**：fire-and-forget 在真实 SC2 上让客户端立即崩。python-sc2 的
+> `Protocol.__request` 是 send_bytes 后立刻 receive_bytes,**无 request id**,
+> 隐含"单 socket 一发一收串行"假设。`asyncio.create_task` 让 `move_camera`
+> 与 bot 主 step 并发往同一个 ws 写 bytes,帧交织导致 SC2 协议解析失败客户端崩溃。
+> 正确修法见 ADR 0008(staged + on_step drain)。
 
 ## 背景
 

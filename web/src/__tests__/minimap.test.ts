@@ -24,6 +24,53 @@ function canvasToWorld(cx: number, cy: number, playable: number[]): [number, num
   return [wx, wy]
 }
 
+// sendIfInFrame 的核心:CSS 坐标 → 归一化 → 物理画布像素 → 世界坐标
+// (修复"越靠右下角误差越大"bug 的回归测试:不能直接拿 cssCoord clamp 到 CANVAS_W)
+function cssToWorld(
+  cssX: number,
+  cssY: number,
+  rectW: number,
+  rectH: number,
+  playable: number[],
+): [number, number] {
+  const cx = (cssX / rectW) * CANVAS_W
+  const cy = (cssY / rectH) * CANVAS_H
+  const ccx = Math.max(0, Math.min(CANVAS_W, cx))
+  const ccy = Math.max(0, Math.min(CANVAS_H, cy))
+  return canvasToWorld(ccx, ccy, playable)
+}
+
+describe('Minimap sendIfInFrame: CSS → canvas → world 归一化(防越靠右下角偏差越大 bug)', () => {
+  const playable = [16, 12, 152, 116]
+  // 模拟 CSS w-full 把 280×280 画布拉伸到 380×380 显示
+  const rectW = 380
+  const rectH = 380
+
+  it('CSS 右下角 → playable 右下(世界右下,y 翻转后 canvas 底)', () => {
+    const [wx, wy] = cssToWorld(rectW, rectH, rectW, rectH, playable)
+    expect(wx).toBeCloseTo(16 + 152, 0)
+    expect(wy).toBeCloseTo(12, 0) // 翻转:cssY=rectH → canvas 底 → world y 小
+  })
+
+  it('CSS 左上角 → playable 左上(世界左上,canvas 顶)', () => {
+    const [wx, wy] = cssToWorld(0, 0, rectW, rectH, playable)
+    expect(wx).toBeCloseTo(16, 0)
+    expect(wy).toBeCloseTo(12 + 116, 0)
+  })
+
+  it('CSS 中心 → playable 中心', () => {
+    const [wx, wy] = cssToWorld(rectW / 2, rectH / 2, rectW, rectH, playable)
+    expect(wx).toBeCloseTo(16 + 152 / 2, 0)
+    expect(wy).toBeCloseTo(12 + 116 / 2, 0)
+  })
+
+  it('CSS 坐标超过 rect(理论不该发生)也被 clamp 到画布范围内', () => {
+    const [wx, wy] = cssToWorld(rectW + 50, rectH + 50, rectW, rectH, playable)
+    expect(wx).toBeCloseTo(16 + 152, 0)
+    expect(wy).toBeCloseTo(12, 0)
+  })
+})
+
 describe('Minimap 坐标变换：worldToCanvas', () => {
   const playable = [16, 12, 152, 116]  // 典型 playable_area
 

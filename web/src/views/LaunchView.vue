@@ -3,24 +3,21 @@
 // - SC2 / Bot 状态卡片
 // - 「开始对局」按钮
 // - 话语示例
-import { computed } from 'vue'
-import CommandInput from '@/components/CommandInput.vue'
-import { useWs } from '@/composables/useWs'
-import type { CommandFrame } from '@/types'
+//
+// 关键约束：status 必须由父组件（App.vue）通过 props 传入，
+// 不能在这里自己再调 useWs()——同一 token 第二个连接会顶掉父组件的连接，
+// 导致父组件 isPlaying 永远不再更新、视图永远切不到 CockpitView。
+import type { SystemStatus } from '@/types'
 
 const props = defineProps<{
   canStartGame: boolean
-  canSendCommand: boolean
   sc2Label: string
+  status: SystemStatus
 }>()
 
 const emit = defineEmits<{
   startGame: []
-  command: [frame: CommandFrame]
 }>()
-
-// 引入 status 只用于内部渲染
-const { status } = useWs()
 </script>
 
 <template>
@@ -33,10 +30,10 @@ const { status } = useWs()
         <span
           class="inline-block w-2.5 h-2.5 rounded-full"
           :class="{
-            'bg-success': status.sc2 === 'playing',
-            'bg-warn animate-pulse': status.sc2 === 'launching' || status.sc2 === 'in_game',
-            'bg-danger': status.sc2 === 'crashed',
-            'bg-muted': status.sc2 === 'idle' || status.sc2 === 'ended',
+            'bg-success': props.status.sc2 === 'playing',
+            'bg-warn animate-pulse': props.status.sc2 === 'launching' || props.status.sc2 === 'in_game',
+            'bg-danger': props.status.sc2 === 'crashed',
+            'bg-muted': props.status.sc2 === 'idle' || props.status.sc2 === 'ended',
           }"
         ></span>
       </div>
@@ -46,10 +43,10 @@ const { status } = useWs()
           <span class="w-16 text-muted shrink-0">SC2</span>
           <span
             :class="{
-              'text-success': status.sc2 === 'playing',
-              'text-warn': status.sc2 === 'launching' || status.sc2 === 'in_game',
-              'text-danger': status.sc2 === 'crashed',
-              'text-muted': status.sc2 === 'idle' || status.sc2 === 'ended',
+              'text-success': props.status.sc2 === 'playing',
+              'text-warn': props.status.sc2 === 'launching' || props.status.sc2 === 'in_game',
+              'text-danger': props.status.sc2 === 'crashed',
+              'text-muted': props.status.sc2 === 'idle' || props.status.sc2 === 'ended',
             }"
           >{{ props.sc2Label }}</span>
         </div>
@@ -57,14 +54,14 @@ const { status } = useWs()
           <span class="w-16 text-muted shrink-0">Bot</span>
           <span
             :class="{
-              'text-success': status.bot === 'running',
-              'text-danger': status.bot === 'error',
-              'text-muted': status.bot === 'idle',
+              'text-success': props.status.bot === 'running',
+              'text-danger': props.status.bot === 'error',
+              'text-muted': props.status.bot === 'idle',
             }"
-          >{{ status.bot === 'running' ? '运行中' : status.bot === 'error' ? '出错' : '待机' }}</span>
+          >{{ props.status.bot === 'running' ? '运行中' : props.status.bot === 'error' ? '出错' : '待机' }}</span>
         </div>
-        <p v-if="status.detail" class="text-xs text-danger mt-1">
-          {{ status.detail }}
+        <p v-if="props.status.detail" class="text-xs text-danger mt-1">
+          {{ props.status.detail }}
         </p>
       </div>
 
@@ -79,29 +76,12 @@ const { status } = useWs()
       </button>
 
       <p
-        v-if="status.sc2 === 'launching' || status.sc2 === 'in_game'"
+        v-if="props.status.sc2 === 'launching' || props.status.sc2 === 'in_game'"
         class="mt-2 text-center text-xs text-warn"
       >
         SC2 正在启动，请稍等...
       </p>
     </div>
 
-    <!-- 指令输入区 -->
-    <div class="rounded-xl bg-surface-2 border border-border p-4">
-      <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">
-        发号施令
-      </p>
-      <CommandInput :can-send="props.canSendCommand" @send="(f) => emit('command', f)" />
-    </div>
-
-    <!-- 话语示例 -->
-    <div class="rounded-xl bg-surface-3 border border-border p-3 text-xs text-muted">
-      <p class="font-semibold mb-1">话语示例</p>
-      <ul class="space-y-0.5 leading-relaxed">
-        <li>「切 IAC」「切到双矿凤凰」</li>
-        <li>「叉子全压上去」「追猎偷矿」</li>
-        <li>「我要 DT 骚扰」「先撑到 Skytoss」</li>
-      </ul>
-    </div>
   </div>
 </template>

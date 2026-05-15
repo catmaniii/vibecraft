@@ -83,9 +83,28 @@ class WsConnection:
     # ------------------------------------------------------------------
 
     async def run(self) -> None:
-        """接管握手后的全部生命周期：心跳 + 收帧循环 + 断开清理。"""
+        """接管握手后的全部生命周期：心跳 + 收帧循环 + 断开清理。
+
+        新连接落地时若 game_process 已经在跑（例如 PWA 刷新 / 重连），
+        立即推一次当前 game_status 并启动 status pump —— 否则手机端会一直
+        停在 sc2=idle/bot=idle 默认状态，因为状态推送是事件驱动的（变化才推）。
+        """
         self._log.info("ws_connected")
         ping_task = asyncio.create_task(self._heartbeat_loop())
+
+        # 重连兜底：如果游戏已经在跑，主动推一次当前状态 + 启动 pump
+        if self._game_process.is_running:
+            await self._send_game_status(self._game_process.status)
+            self._status_pump_task = asyncio.create_task(
+                self._status_pump_loop(),
+                name="status-pump-resume",
+            )
+            self._log.info(
+                "ws_resume_pushed_current_status",
+                sc2=self._game_process.status.sc2,
+                bot=self._game_process.status.bot,
+            )
+
         try:
             async for raw in self._ws:
                 await self._handle_raw(raw)

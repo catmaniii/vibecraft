@@ -1,0 +1,55 @@
+# This file is optional and here as an example of how to activate the build runner
+# FEEL FREE TO DELETE!!
+
+# If playing as a different race, make a file similar to this but change filename:
+# `zerg_builds.yml` or `terran_builds.yml`
+
+
+# Save the game opening and result to disk?
+# Setting to `True` allows Ares to select a new opening after defeat
+UseData: True
+# How should we choose a build? Cycle is the only option for now
+BuildSelection: Cycle
+# For each Race / Opponent ID choose a build selection
+BuildChoices:
+    # test_123 is active if Debug: True (set via a `config.yml` file)
+    test_123:
+        BotName: Test
+        Cycle:
+            - CannonRush
+
+    Protoss:
+        BotName: ProtossRace
+        Cycle:
+            - CannonRush
+
+    Random:
+        BotName: RandomRace
+        Cycle:
+            - CannonRush
+
+    Terran:
+        BotName: TerranRace
+        Cycle:
+            - CannonRush
+
+    Zerg:
+        BotName: ZergRace
+        Cycle:
+            - CannonRush
+
+    # Can also use specific opponent ids (overrides race options above)
+    a_bot_opponent_id_from_aiarena:
+        BotName: QueenBot
+        Cycle:
+            - CannonRush
+
+Builds:
+    CannonRush:
+        # Build constant workers till x supply
+        ConstantWorkerProductionTill: 0
+        OpeningBuildOrder:
+            # Example: ['12 worker', '13 worker', '14 supply', '14 worker', '15 chrono @ nexus',
+            #           '15 worker', '16 gateway']
+            # See docs: https://aressc2.github.io/ares-sc2/tutorials.html#build-runner-system
+            ['12 chrono @ nexus', '12 worker', '13 worker']

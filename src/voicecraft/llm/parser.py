@@ -107,13 +107,15 @@ class IntentParser:
             self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
             return err
 
-        outcome = self._build_outcome(response, user_text)
+        outcome = self._build_outcome(response, user_text, context)
         self._log_call(user_text, context, response, outcome, latency_ms=response.latency_ms)
         return outcome
 
     # ------------------------------------------------------------------
 
-    def _build_outcome(self, response: ProviderResponse, user_text: str) -> ParseOutcome:
+    def _build_outcome(
+        self, response: ProviderResponse, user_text: str, context: ParseContext
+    ) -> ParseOutcome:
         raw = response.raw
         # 必须含 directives / interpretation_zh / confidence
         if "directives" not in raw or "interpretation_zh" not in raw or "confidence" not in raw:
@@ -144,7 +146,7 @@ class IntentParser:
         directives: list[Directive] = []
         for i, d_raw in enumerate(directives_raw):
             try:
-                envelope = self._normalize_directive_raw(d_raw, user_text)
+                envelope = self._normalize_directive_raw(d_raw, user_text, context)
                 directives.append(Directive.model_validate(envelope))
             except (ValidationError, ValueError) as e:
                 return ParseError(
@@ -187,26 +189,41 @@ class IntentParser:
         return result
 
     @staticmethod
-    def _normalize_directive_raw(d_raw: Any, user_text: str) -> dict[str, Any]:
+    def _normalize_directive_raw(
+        d_raw: Any, user_text: str, context: ParseContext | None = None
+    ) -> dict[str, Any]:
         """把 LLM 返回的 {type, payload, priority, ...} 转成 Directive envelope dict。
 
-        Directive 的 payload 字段本身是 discriminated union（含 type），
+        Directive 的 payload 字段本身是 discriminated union(含 type),
         因此把外层 type copy 进 payload 内层。
+
+        context: 可选,用于补 LLM 没给但 schema 必需的字段(如 expansion_override.target_count
+        玩家说"开矿",LLM 给不出具体数字,这里 fallback 到 current_expansion + 1)。
         """
         if not isinstance(d_raw, dict):
             raise ValueError(f"directive 不是 dict: {d_raw!r}")
         if "type" not in d_raw or "payload" not in d_raw:
             raise ValueError("directive 缺少 type 或 payload")
+        d_type = str(d_raw["type"])
         payload = dict(d_raw["payload"])
-        payload["type"] = d_raw["type"]
-        # 系统边界过滤：LLM 可能在 payload 里塞 schema 外字段（如 options:{}），
-        # 按目标 payload 模型的字段白名单过滤，避免 extra=forbid 整条拒绝。
-        model = PAYLOAD_MODELS.get(str(d_raw["type"]))
+        payload["type"] = d_type
+        # 系统边界过滤:LLM 可能在 payload 里塞 schema 外字段(如 options:{}),
+        # 按目标 payload 模型的字段白名单过滤,避免 extra=forbid 整条拒绝。
+        model = PAYLOAD_MODELS.get(d_type)
         if model is not None:
             payload = {k: v for k, v in payload.items() if k in model.model_fields}
+
+        # 字段兜底:LLM 给不出具体数字时,从 game context 推断
+        # expansion_override.target_count:玩家说"开矿"(没数字)→ current + 1
+        if d_type == "expansion_override" and "target_count" not in payload:
+            if context is not None:
+                payload["target_count"] = int(context.expansion_count) + 1
+            else:
+                payload["target_count"] = 2  # 最保守:开第二矿
+
         env: dict[str, Any] = {
             "payload": payload,
-            "issued_at": 0.0,  # IntentParser 不知道游戏时间；由 Board.submit() 时按 now 校正
+            "issued_at": 0.0,  # IntentParser 不知道游戏时间;由 Board.submit() 时按 now 校正
             "source_text": user_text,
         }
         if "priority" in d_raw:

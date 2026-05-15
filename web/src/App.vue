@@ -11,7 +11,7 @@ import CockpitView from '@/views/CockpitView.vue'
 import { useWs } from '@/composables/useWs'
 import type { CommandFrame } from '@/types'
 
-const { status, send, sendViewMove, token, snapshotStrategy, recentCommands, events, minimap } = useWs()
+const { status, send, sendViewMove, token, snapshotStrategy, recentCommands, events, minimap, lastEcho } = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
 const canSendCommand = computed(
@@ -83,6 +83,7 @@ const sc2Label = computed(() => {
         :events="events"
         :minimap="minimap"
         :can-send-command="canSendCommand"
+        :last-echo="lastEcho"
         @command="onCommand"
         @view-move="onViewMove"
       />
@@ -91,10 +92,9 @@ const sc2Label = computed(() => {
       <LaunchView
         v-else
         :can-start-game="canStartGame"
-        :can-send-command="canSendCommand"
         :sc2-label="sc2Label"
+        :status="status"
         @start-game="startGame"
-        @command="onCommand"
       />
     </template>
 

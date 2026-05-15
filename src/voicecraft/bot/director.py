@@ -112,6 +112,17 @@ class Director:
         """注入 snapshot 推送回调（game_process 在构造 bot 后调用）。"""
         self._snapshot_callback = cb
 
+    def set_initial_strategy(self, stage: StageKind, strategy_id: str, now: float) -> None:
+        """bot 启动时初始化某阶段剧本(反映 ares 选的默认 opening)。
+
+        - bypass board 1.5s commit delay,立即让手机 UI 看到剧本卡片
+        - 用 BOT_INTERNAL 来源,玩家 VOICE 指令随时可覆盖
+        - 立即 push 一次 snapshot,即使 _snapshot_callback 还没准备好也无害(callback None 时跳过)
+        - 幂等:若该 stage slot 已设,不动
+        """
+        if self.board.set_initial_slot(stage, strategy_id, now):
+            self._push_snapshot(now)
+
     def set_event_callback(self, cb: Callable[[dict[str, Any]], None]) -> None:
         """注入 event 推送回调（P1）。"""
         self._event_callback = cb
