@@ -303,21 +303,19 @@ class WsConnection:
             except Exception:
                 self._log.warning("ws_echo_send_failed")
         elif kind == "snapshot":
-            # P0-5：snapshot 帧，子进程已组好，直接转发（去掉 kind 字段）
-            payload = {k: v for k, v in raw.items() if k != "kind"}
-            frame = json.dumps(payload)
+            # P0-5：snapshot 帧嵌套在 raw["frame"]，子进程已组好，直接转发
+            snap_frame = raw["frame"]
             try:
-                await self._ws.send(frame)
-                self._log.debug("ws_snapshot_sent", ts=raw.get("ts"))
+                await self._ws.send(json.dumps(snap_frame))
+                self._log.debug("ws_snapshot_sent", ts=snap_frame.get("ts"))
             except Exception:
                 self._log.warning("ws_snapshot_send_failed")
         elif kind == "event":
-            # P1-5：event 帧，子进程已组好，直接转发（去掉 kind 字段）
-            payload = {k: v for k, v in raw.items() if k != "kind"}
-            frame = json.dumps(payload)
+            # P1-5：event 帧嵌套在 raw["frame"]（event 帧自身带 kind 字段），直接转发
+            ev_frame = raw["frame"]
             try:
-                await self._ws.send(frame)
-                self._log.debug("ws_event_sent", event_kind=raw.get("kind"))
+                await self._ws.send(json.dumps(ev_frame))
+                self._log.debug("ws_event_sent", event_kind=ev_frame.get("kind"))
             except Exception:
                 self._log.warning("ws_event_send_failed")
         else:

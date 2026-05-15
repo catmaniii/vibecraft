@@ -310,17 +310,20 @@ class TestDispatchUpstreamNoStatePollution:
 
         conn = WsConnection(ws_mock, registry, game_process=gp)
 
+        # 真实管线结构：snapshot 帧嵌套在 "frame" 里
         snapshot_raw = {
             "kind": "snapshot",
-            "type": "snapshot",
-            "ts": 120.0,
-            "strategy": {
-                "current_stage": "opening",
-                "opening": None,
-                "midgame": None,
-                "lategame": None,
+            "frame": {
+                "type": "snapshot",
+                "ts": 120.0,
+                "strategy": {
+                    "current_stage": "opening",
+                    "opening": None,
+                    "midgame": None,
+                    "lategame": None,
+                },
+                "recent_commands": [],
             },
-            "recent_commands": [],
         }
         await conn._dispatch_upstream(snapshot_raw)
 
@@ -350,11 +353,16 @@ class TestDispatchUpstreamNoStatePollution:
 
         conn = WsConnection(ws_mock, registry, game_process=gp)
 
+        # 真实管线结构：event 帧嵌套在 "frame" 里，且 event 帧自身带 kind
+        # （strategy.set）—— 回归测试守住「内层 kind 不会让外层认错消息类型」
         event_raw = {
             "kind": "event",
-            "type": "event",
-            "ts": 200.0,
-            "payload": {"stage": "midgame"},
+            "frame": {
+                "type": "event",
+                "kind": "strategy.set",
+                "ts": 200.0,
+                "payload": {"stage": "midgame", "strategy_id": "iac_2base"},
+            },
         }
         await conn._dispatch_upstream(event_raw)
 
@@ -364,9 +372,11 @@ class TestDispatchUpstreamNoStatePollution:
         ws_mock.send.assert_called_once()
         sent = json.loads(ws_mock.send.call_args[0][0])
         assert sent["type"] == "event"
+        # 内层 event 帧的 kind 正确转发（不是被外层 "event" 覆盖）
+        assert sent["kind"] == "strategy.set"
 
-    async def test_snapshot_kind_stripped_from_forwarded_frame(self) -> None:
-        """转发的 snapshot 帧不含 'kind' 键（只保留 snapshot payload）。"""
+    async def test_snapshot_forwards_inner_frame(self) -> None:
+        """转发的下行帧 = raw["frame"]（外层消息类型 kind 不进下行帧）。"""
         from voicecraft.server.game_process import GameProcess
         from voicecraft.server.tokens import RoomRegistry
         from voicecraft.server.ws import WsConnection
@@ -382,20 +392,24 @@ class TestDispatchUpstreamNoStatePollution:
         await conn._dispatch_upstream(
             {
                 "kind": "snapshot",
-                "type": "snapshot",
-                "ts": 50.0,
-                "strategy": {
-                    "current_stage": "opening",
-                    "opening": None,
-                    "midgame": None,
-                    "lategame": None,
+                "frame": {
+                    "type": "snapshot",
+                    "ts": 50.0,
+                    "strategy": {
+                        "current_stage": "opening",
+                        "opening": None,
+                        "midgame": None,
+                        "lategame": None,
+                    },
+                    "recent_commands": [],
                 },
-                "recent_commands": [],
             }
         )
 
         sent = json.loads(ws_mock.send.call_args[0][0])
-        # 'kind' 字段应被剥离（不存在于转发帧）
+        # 下行帧 = 内层 frame；外层标识消息类型的 kind 不出现在下行帧
+        assert sent["type"] == "snapshot"
+        assert sent["ts"] == 50.0
         assert "kind" not in sent
 
 

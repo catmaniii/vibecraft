@@ -145,22 +145,26 @@ def _child_entry(
     def _put_snapshot(d: dict[str, Any]) -> None:
         """向上行队列推一条 snapshot 消息（P0-4）。
 
-        消息格式：{"kind": "snapshot", ...snapshot_payload...}
-        WS 层在收到时转发给手机。
+        消息格式：{"kind": "snapshot", "frame": <snapshot 帧 dict>}。
+        用嵌套 "frame" 而非展开 —— 与 event 保持一致，且不会被帧内字段覆盖外层 kind。
+        WS 层 _dispatch_upstream 取 raw["frame"] 转发给手机。
         """
         try:
-            up_q.put_nowait({"kind": "snapshot", **d})
+            up_q.put_nowait({"kind": "snapshot", "frame": d})
         except Exception as exc:
             child_log.warning("up_queue_snapshot_failed: %s", exc)
 
     def _put_event(d: dict[str, Any]) -> None:
         """向上行队列推一条 event 消息（P1-4）。
 
-        消息格式：{"kind": "event", ...event_payload...}
-        WS 层在收到时转发给手机。
+        消息格式：{"kind": "event", "frame": <event 帧 dict>}。
+        event 帧自身有 "kind" 字段（strategy.set / directive.committed 等），
+        必须嵌套在 "frame" 里，否则 `{"kind": "event", **d}` 会被 d 的 kind 覆盖，
+        导致 _dispatch_upstream 认不出是 event、误当 game_status 处理。
+        WS 层 _dispatch_upstream 取 raw["frame"] 转发给手机。
         """
         try:
-            up_q.put_nowait({"kind": "event", **d})
+            up_q.put_nowait({"kind": "event", "frame": d})
         except Exception as exc:
             child_log.warning("up_queue_event_failed: %s", exc)
 
