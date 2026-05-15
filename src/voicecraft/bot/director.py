@@ -135,8 +135,11 @@ class Director:
         """组装 snapshot 帧 payload（§1.1 MVP 子集：strategy + recent_commands）。
 
         library 为 None 时，display 字段 fallback 成 id（向后兼容 + 单测用）。
+
+        M5: MidgameStance / LategameDoctrine 带 attack_window / micro_doctrine 文案，
+        让手机 UI 显示"当前剧本的进攻时机"，实现信息透明（bot 行为本身不变）。
         """
-        from voicecraft.strategy.models import OpeningBuild
+        from voicecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
 
         def _slot_view(stage: StageKind) -> dict[str, Any] | None:
             slot = self.board.slots.get(stage)
@@ -145,6 +148,8 @@ class Director:
             sid = slot.strategy_id
             display = sid  # fallback
             phases: list[dict[str, Any]] | None = None
+            attack_window: dict[str, Any] | None = None
+            micro_doctrine: list[str] | None = None
             if self.library is not None:
                 try:
                     strat = self.library.get(sid)
@@ -154,11 +159,27 @@ class Director:
                             {"id": p.id, "display": p.display, "subtitle": p.subtitle}
                             for p in strat.phases
                         ]
+                    elif isinstance(strat, MidgameStance):
+                        # M5: 透传 attack_window / micro_doctrine，供 PWA 剧本卡片展示
+                        if strat.attack_window is not None:
+                            attack_window = {
+                                "open_at": strat.attack_window.open_at,
+                                "close_at": strat.attack_window.close_at,
+                            }
+                        if strat.micro_doctrine:
+                            micro_doctrine = list(strat.micro_doctrine)
+                    elif isinstance(strat, LategameDoctrine) and strat.engagement_doctrine:
+                        # M5: lategame 用 engagement_doctrine 作为 micro_doctrine 展示
+                        micro_doctrine = list(strat.engagement_doctrine)
                 except Exception:
                     pass
             entry: dict[str, Any] = {"id": sid, "display": display}
             if phases is not None:
                 entry["phases"] = phases
+            if attack_window is not None:
+                entry["attack_window"] = attack_window
+            if micro_doctrine is not None:
+                entry["micro_doctrine"] = micro_doctrine
             return entry
 
         return {

@@ -38,13 +38,19 @@ src/voicecraft/
 │   ├── types.py         # Event / EventKind
 │   ├── sinks.py         # 文件 sink + 内存 sink（测试用）
 │   └── session.py       # GameSession（一局一个 session 目录）
-└── bot/                 # 唯一一个会碰 ares-sc2 的子包
+└── bot/                 # 唯一一个会碰 sharpy-sc2 的子包（M1+：ares → sharpy）
     ├── facade.py        # Sc2Facade Protocol + UnitRole + FakeFacade（测试用）
     ├── director.py      # 中央编排器，下面单独讲
-    └── ares_adapter.py  # ares.AresBot 子类工厂；仅 M0c+ 端到端 import
+    ├── sharpy_adapter.py  # make_bot_class() 工厂；仅真实对局 import（见 ADR 0009）
+    └── auto_combat/
+        ├── common.py    # build_role_map() + run_command_with_echo()
+        └── protoss/
+            └── bot.py   # _VoiceCraftProtossBot（KnowledgeBot 子类）+ _SharpyFacade
+
+vendor/sharpy/           # sharpy-sc2 源码（MIT，vendor 因不在 PyPI；见 ADR 0009）
 ```
 
-`bot/ares_adapter.py` 之外，**所有模块都不 import ares / sc2 / burnysc2**。
+`bot/sharpy_adapter.py` 之外，**所有模块都不 import sharpy / sc2 / burnysc2**。
 mypy override 把它们当 missing-imports，pyproject 已配。所有单测都用
 `FakeFacade`，不需要真 SC2。
 
@@ -87,10 +93,15 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
   在 `directives/types.py` 注册类型枚举 + 在 `directives/models.py` 加 Payload。
 - **VIEW directive 绕过 Board**：相机操作不走 1.5s commit delay，不占 overlay 槽。
   `directives/types.py::is_view_directive()` 是判定函数。
-- **`LLM_CONTROLLED` UnitRole 映射到 ares 的 `CONTROL_GROUP_ONE`**：ares 的
-  `UnitRole` 是固定 StrEnum 加不了成员，`CONTROL_GROUP_ONE` 是 ares 注释里
-  说的"留给用户的空槽"。bot 给单位贴这个 role 后，所有 ares Manager 默认 skip
-  它 —— 这就是设计文档 §3.4 设计的 role 隔离机制的物理实现。**改不了这个映射**。
+- **`LLM_CONTROLLED` UnitRole 映射到 sharpy `UnitTask.Reserved`**（M1+，原 ares
+  `CONTROL_GROUP_ONE` 已废弃）：`set_unit_role(tag, LLM_CONTROLLED)` 同时写入
+  `bot._llm_controlled_tags`，每 step `_refresh_llm_controlled_roles()` 重新声明
+  Reserved，确保 sharpy `UnitRoleManager.update()` 每帧清 `had_task_set` 后角色不丢。
+  `PlanZoneAttack` 的 `free_units`（Idle+Moving）天然不含 Reserved，Reserved 单位
+  不会被拉去出门攻击或守基地（见 ADR 0009 §Hook C）。
+- **`_VoiceCraftProtossBot` 继承 `KnowledgeBot`，`create_plan()` 返回
+  `BuildOrder(IfElse(...))` 树**：`active_recipe` flag 控制路由，`set_build()` 写入
+  后下一个 step IfElse 立即生效（lambda 每 step 重新求值）。见 ADR 0009 §Hook A。
 - **IntentParser 任何异常都不抛**：失败一律返回 `ParseError`，bot 状态完全不
   动。`anthropic` SDK 异常、`ValidationError`、超时、限频都走这条路。
 - **logging 是 first-class**：每条 LLM 调用 / 每个 Board 事件 / 每次 Facade
@@ -101,19 +112,19 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
 
 ---
 
-## 6 个 ares hook 点（设计文档 §3.2）和代码的映射
+## 6 个 hook 点（设计文档 §3.2）与 sharpy 实现映射（M1+ 已迁移）
 
-| Hook | ares 概念 | facade 上的方法 | 实现入口 |
-|---|---|---|---|
-| A Build Runner | 切换当前 build order | `set_build(build_name)` | `Director._apply_to_facade` → `STRATEGY_SET` |
-| B OverrideMediator | 强制某种单位 / 升级 | `set_production_override` / `set_tech_override` / `set_expansion_override` | 同上，多个 directive 类型 |
-| C Unit Role | 把单位拉出 Manager 视野 | `set_unit_role(tag, role)` | `UNIT_CLAIM` / `UNIT_RELEASE` |
-| D Rationale Logger | 记录决策原因 | （Director 自用 GameSession）| 全程贯穿 |
-| E ViewController | 相机操作 | `move_camera` / `follow_unit` / `set_camera_zoom` | VIEW directive，绕 Board |
-| F BuildLocationOverride | 指定建造点 | `set_build_location_override` | `BUILD_AT` |
+| Hook | 设计文档概念 | facade 上的方法 | sharpy 实现 | 状态 |
+|---|---|---|---|---|
+| A Build Runner | 切换当前 build order | `set_build(build_name)` | `active_recipe` flag + IfElse 路由树（ADR 0009） | ✅ M3 完成 |
+| B OverrideMediator | 强制某种单位 / 升级 | `set_production_override` / `set_tech_override` / `set_expansion_override` | noop，留 M5+接 sharpy ActUnit override | 占位 |
+| C Unit Role | 把单位拉出 Manager 视野 | `set_unit_role(tag, role)` | `UnitTask.Reserved` + `_llm_controlled_tags` 每 step refresh（ADR 0009 §Hook C） | ✅ M4 完成 |
+| D Rationale Logger | 记录决策原因 | （Director 自用 GameSession）| 同 M1，0 改动 | ✅ |
+| E ViewController | 相机操作 | `move_camera` / `follow_unit` / `set_camera_zoom` | python-sc2 `client.move_camera`（ADR 0008，暂存+drain） | ✅ |
+| F BuildLocationOverride | 指定建造点 | `set_build_location_override` | noop，留 M5+接 sharpy BuildingSolver | 占位 |
 
-实际 ares API 名（如 `mediator.assign_role` vs `mediator.set_role`）以
-端到端 smoke 校准为准；当前 `ares_adapter.py` 是占位骨架。
+vendor 段：sharpy-sc2 MIT，vendor 路径 `vendor/sharpy/`（不在 PyPI），
+`sys.path` 注入（lazy，单测 mock sys.modules 绕开）。见 `vendor/sharpy/ATTRIBUTION.md`。
 
 ---
 

@@ -52,6 +52,9 @@ export interface StrategySlotView {
   id: string
   display: string
   phases?: { id: string; display: string; subtitle: string }[]  // 仅 opening 有
+  // M5: midgame/lategame 字段透传，供剧本卡片展示进攻时机
+  attack_window?: { open_at: string; close_at: string }  // midgame_stance 进攻窗口
+  micro_doctrine?: string[]                               // midgame 口令 / lategame engagement_doctrine
 }
 
 export interface SnapshotFrame {

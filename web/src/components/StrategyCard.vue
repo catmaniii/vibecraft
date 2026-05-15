@@ -48,6 +48,24 @@ const stageLabel: Record<string, string> = {
           <span v-if="idx < props.slot.phases!.length - 1" class="text-xs text-border">·</span>
         </template>
       </div>
+      <!-- M5: attack_window 进攻时机（midgame_stance）-->
+      <div
+        v-if="props.slot.attack_window"
+        class="mt-1 text-xs text-amber-400"
+      >
+        出门 {{ props.slot.attack_window.open_at }}–{{ props.slot.attack_window.close_at }}
+      </div>
+      <!-- M5: micro_doctrine 战术口令（midgame/lategame）-->
+      <ul
+        v-if="props.slot.micro_doctrine && props.slot.micro_doctrine.length > 0"
+        class="mt-1 space-y-0.5"
+      >
+        <li
+          v-for="(rule, idx) in props.slot.micro_doctrine"
+          :key="idx"
+          class="text-xs text-muted"
+        >· {{ rule }}</li>
+      </ul>
     </div>
     <div v-else>
       <p class="text-sm text-muted italic">（未设置）</p>

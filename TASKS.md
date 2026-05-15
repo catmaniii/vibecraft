@@ -7,62 +7,40 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-15 深夜，session 自主收尾）
+## 当前状态（最近更新：2026-05-16，sharpy 迁移 M4+M5+M6 完成）
 
-- **里程碑**：M1 代码层完成 + **M1.6 真实 SC2 启动链路已跑通**（端到端骨架
-  → `0.1.0a3`，待真实验证后打 tag）。auto-pilot + cockpit-sync + minimap 拖拽
-  视野均已实现，PWA 驾驶舱架子按 §9.5 重排完成。
-- **本次 session（2026-05-15）做了什么** —— 真实启动 SC2 端到端，逐个暴露并修复
-  M0b-M1.5 全 mock 单测没覆盖的实现缺口：
-  - LLM provider 切 **DeepSeek V4**（ADR 0005，走 Anthropic 兼容端点 +
-    `disable_thinking`）+ 剧本解析治本（catalog 摘要 + 收敛规则 + 真实黑话别名）
-    + parser 边界过滤 schema 外字段
-  - 实心二维码（`██`）+ `scripts/start.ps1` 全 ASCII 重写（原脚本含中文/`█`，
-    PowerShell 5.1 按 GBK 解码 BOM-less UTF-8 直接 parser 报错，从没跑通过）
-  - M1.6 真实跑通修复：BuildChoices 注入（ares 进游戏即崩）/ GameMatch 路径
-    （窗口配置）/ 默认地图 `DaybreakLE` / 造农民（`ConstantWorkerProductionTill`）
-  - **auto-pilot**（ADR 0006 + `docs/plans/2026-05-15-auto-pilot.md`）：
-    `_VoiceCraftBot.on_step` 接 ares macro behaviors，两阶段（opening 期
-    `Mining`/`AutoSupply`；opening 跑完后 + `BuildWorkers`/`Gas`/`Expansion`/
-    `Production`/`Spawn`）。目标「无干预 ≈ 普通电脑级别」。role 隔离已调研验证
-    （不碰 `CONTROL_GROUP_ONE` = LLM 接管的特种兵）
-  - **对局 UI + 状态同步**（cockpit-sync，`docs/plans/2026-05-15-cockpit-sync.md`，
-    P0+P1 由 Sonnet subagent 实现、Opus review 修了一个 kind 覆盖 bug）：
-    snapshot/event 帧后端推送链路（`director.build_snapshot` + `on_tick` 两阶段推
-    → 上行队列嵌套 `frame` → `ws._dispatch_upstream` 分发）；PWA 拆「未开局/对局中」
-    两视图，对局界面有剧本卡片（三档当前剧本可见）+ bot 决策流 + 指令输入
-  - **小地图拖拽切视野 + PWA 架子重排**（minimap，
-    `docs/plans/2026-05-15-minimap.md`，Sonnet subagent 实现 + Opus review 通过）：
-    `MinimapBuilder` 每 N=5 tick 推 minimap 帧（playable/viewport/units_own/
-    units_enemy_visible），手机 Canvas 渲染 + pointer 拖拽 100ms 节流上报
-    `view_move` → 经 down_q → 子进程 `facade.move_camera`。**ADR 0007**：
-    `move_camera` 是 async 协程，同步姿势调它产生 unawaited coroutine 不发请求；
-    改用 `asyncio.create_task` fire-and-forget + done_callback log 异常。
-    PWA 驾驶舱按 §9.5 重排：资源条占位 / Minimap / 剧本 / SO 占位 / 决策流 /
-    最近指令 / 快捷栏占位 / 输入（`M3Placeholder` 灰底虚线 + 「M3 待做」徽章）
-- **真实 SC2 验证进展**：手机连接 → `start_game` → SC2 拉起 → ares 跑
-  `1g_robo_immortal` build → `bot=running`，**链路已通**（日志 `bcz59yaqv.output`，
-  但那是 auto-pilot 之前的旧 service）
-- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **355 passed**、
-  前端 vitest **37 passed**、ruff + ruff format + mypy strict 全干净、Vite build 通过
-- **下一步：用户醒来做真实端到端验证**（需看屏幕判断 auto-pilot + minimap 效果）：
-  1. `.\scripts\start.ps1`（一键启动，已修好；token 固定 `voicecraft-dev`）
-  2. 手机扫码 / 输 `http://<内网IP>:8080/?room=voicecraft-dev`
-  3. 点「开始对局」→ PWA 切到「对局界面」（小地图 + 剧本卡片 + 决策流）→ SC2 靠左
-     1707×960 拉起 → 看 auto-pilot：opening 按 `1g_robo_immortal` 跑、农民持续造 +
-     闲置农民采矿、opening 后 3-4 矿饱和 + 出兵
-  4. **小地图验证**：手机 Canvas 应实时显示自家/敌方单位 + 可见视野黄框；
-     拖拽小地图 → SC2 大屏视野跟着切（验 ADR 0007 的 fire-and-forget 修复）
-  5. 说「单BG VR出不朽」→ 手机收 `command_echo` + **对局界面剧本卡片应变化**
-     （这就是 cockpit-sync 解决的「判断剧本切没切」刚需）→ 约 1.5s 后 SC2 切 build
-  6. 对照 ADR 0006 §「待真实验证」spike A-D + cockpit-sync 方案 §6 + minimap §6 spike
+- **里程碑**：M1 代码层完成 + **sharpy 迁移 M4/M5/M6 完成（worktree，待合并）**
+  auto-pilot + cockpit-sync + minimap 拖拽视野均已实现，PWA 驾驶舱架子按 §9.5 重排完成。
+- **本次 session（2026-05-16）做了什么** —— sharpy 迁移 M4+M5+M6，在 worktree
+  `D:\code\claudecode\voicecraft\.claude\worktrees\agent-a3d18f8aa016633f0` 实现：
+  - **M4（LLM_CONTROLLED role 隔离）**：`_VoiceCraftProtossBot` 新增
+    `_llm_controlled_tags: set[int]`；`_SharpyFacade.set_unit_role()` 在设
+    `LLM_CONTROLLED` 时写入集合、设其他 role 时从集合移除；新增
+    `_refresh_llm_controlled_roles()` 每 step 对集合中每个 unit 重新声明
+    `UnitTask.Reserved`（防 `UnitRoleManager.update()` 每步 clear `had_task_set`）；
+    新增 `is_voicecraft_controlled(unit) -> bool`；`on_unit_destroyed` 清理死亡 tag
+  - **M5（attack_window / micro_doctrine 字段透传）**：`director.build_snapshot`
+    `_slot_view()` 扩展 `MidgameStance.attack_window` / `MidgameStance.micro_doctrine` /
+    `LategameDoctrine.engagement_doctrine`（as micro_doctrine）→ snapshot；
+    `web/src/types.ts` `StrategySlotView` 加两个可选字段；`StrategyCard.vue` 显示
+    「出门 9:30–11:30」和 doctrine 子弹点
+  - **M6（文档）**：ADR 0009 `docs/adr/0009-sharpy-migration.md`；
+    `ARCHITECTURE.md` 更新（模块图/不变量/hook 表/vendor 节）
+  - 新增 13 个单测（M4: 9 个 `TestLLMControlledTags`；M5: 4 个 cockpit-sync 快照测试）
+- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **389 passed, 6 skipped**（+13）；
+  前端 vitest **41 passed**；ruff + mypy strict 全干净；Vite build 通过
+- **阻塞 / 等待**：worktree 变更待用户合并（`git merge` 或 cherry-pick）。
+  合并后无需 SC2 即可完整验证；sharpy 真实 hook 验证需真实 SC2 对局
+- **下一步（合并后）**：
+  1. `git merge` 或 cherry-pick worktree → main
+  2. 真实 SC2 验证：sharpy Reserved 隔离 + attack_window / micro_doctrine PWA 显示
+  3. M2：midgame/lategame 剧本自动转（auto-pilot 按剧本切）
 - **已知未做（非 bug，是 M2/M3 范围）**：
   - 完整驾驶舱：资源条/SO 区/快捷栏内容（3 个 `M3Placeholder` 已挂位）
     —— **M3**。phase stepper 精确进度、撤销机制 —— **M3**
   - 「按 midgame/lategame 剧本自动转」—— **M2**（当前 auto-pilot 只是通用兜底）
   - 造建筑指令（「造水晶和BG」）—— directive schema 没这个类型，**M2**
-- **service 状态**：session 收尾时停掉了旧 service（跑 auto-pilot 之前的代码）。
-  用户醒来直接 `.\scripts\start.ps1` 即可（会加载所有新代码）
+- **service 状态**：停掉了旧 service。用户直接 `.\scripts\start.ps1` 即可
 - **模型**：真实验证若需 debug 用 Opus；M2 起写代码用 Sonnet
 - **环境就绪情况**：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久）；地图

@@ -624,11 +624,13 @@ class TestSetUnitRole:
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
         FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = set()
 
         with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
         fake_unit = MagicMock()
+        fake_unit.tag = 42
         instance.knowledge.unit_cache.by_tag.return_value = fake_unit
 
         instance.facade.set_unit_role(42, UnitRole.LLM_CONTROLLED)
@@ -1006,3 +1008,173 @@ class TestCreatePlan:
         BotClass = make_bot_class(lambda facade: None)
         # 直接访问类属性（类级别默认值）
         assert BotClass.active_recipe == "1g_robo_immortal"
+
+
+# ---------------------------------------------------------------------------
+# 测试：M4 LLM_CONTROLLED role 隔离 — _llm_controlled_tags / is_voicecraft_controlled
+# ---------------------------------------------------------------------------
+
+
+class TestLLMControlledTags:
+    """M4: set_unit_role(LLM_CONTROLLED) → _llm_controlled_tags 管理。"""
+
+    async def test_set_unit_role_llm_controlled_adds_to_tags(self) -> None:
+        """set_unit_role(tag, LLM_CONTROLLED) 后 _llm_controlled_tags 含该 tag。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.facade import UnitRole
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = set()
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        fake_unit = MagicMock()
+        fake_unit.tag = 101
+        instance.knowledge.unit_cache.by_tag.return_value = fake_unit
+
+        instance.facade.set_unit_role(101, UnitRole.LLM_CONTROLLED)
+
+        assert 101 in instance._llm_controlled_tags
+
+    async def test_set_unit_role_non_llm_does_not_add_to_tags(self) -> None:
+        """set_unit_role(tag, ARMY) 不写入 _llm_controlled_tags。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.facade import UnitRole
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = set()
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        fake_unit = MagicMock()
+        fake_unit.tag = 202
+        instance.knowledge.unit_cache.by_tag.return_value = fake_unit
+
+        instance.facade.set_unit_role(202, UnitRole.ARMY)
+
+        assert 202 not in instance._llm_controlled_tags
+
+    async def test_set_unit_role_reassign_removes_from_llm_tags(self) -> None:
+        """LLM_CONTROLLED 单位 release 时（设 ARMY）从 _llm_controlled_tags 移除。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.facade import UnitRole
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = {303}
+
+        with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
+            await instance.on_start()
+
+        fake_unit = MagicMock()
+        fake_unit.tag = 303
+        instance.knowledge.unit_cache.by_tag.return_value = fake_unit
+
+        instance.facade.set_unit_role(303, UnitRole.ARMY)
+
+        assert 303 not in instance._llm_controlled_tags
+
+    async def test_is_voicecraft_controlled_true_for_claimed_unit(self) -> None:
+        """is_voicecraft_controlled(unit) → True 当 tag 在 _llm_controlled_tags。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = {404}
+
+        unit_mock = MagicMock()
+        unit_mock.tag = 404
+
+        assert instance.is_voicecraft_controlled(unit_mock) is True
+
+    async def test_is_voicecraft_controlled_false_for_unclaimed_unit(self) -> None:
+        """is_voicecraft_controlled(unit) → False 当 tag 不在 _llm_controlled_tags。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = set()
+
+        unit_mock = MagicMock()
+        unit_mock.tag = 505
+
+        assert instance.is_voicecraft_controlled(unit_mock) is False
+
+    async def test_refresh_llm_controlled_roles_calls_set_task_each_step(self) -> None:
+        """_refresh_llm_controlled_roles() 对 _llm_controlled_tags 里的单位重新声明 Reserved。"""
+        FakeKnowledgeBot, FakeUnitTask, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = {601}
+
+        fake_unit = MagicMock()
+        instance.knowledge.unit_cache.by_tag.return_value = fake_unit
+
+        # 直接调 _refresh，不走 on_step
+        instance._refresh_llm_controlled_roles()
+
+        instance.knowledge.roles.set_task.assert_called_once_with(FakeUnitTask.Reserved, fake_unit)
+
+    async def test_refresh_llm_controlled_roles_removes_dead_units(self) -> None:
+        """unit_cache.by_tag 返回 None（单位已死）→ tag 从 _llm_controlled_tags 移除。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = {702}
+
+        # 单位不在 cache（已死）
+        instance.knowledge.unit_cache.by_tag.return_value = None
+
+        instance._refresh_llm_controlled_roles()
+
+        assert 702 not in instance._llm_controlled_tags
+
+    async def test_on_unit_destroyed_removes_from_llm_controlled_tags(self) -> None:
+        """on_unit_destroyed(tag) → tag 从 _llm_controlled_tags 移除。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = {801, 802}
+
+        await instance.on_unit_destroyed(801)
+
+        assert 801 not in instance._llm_controlled_tags
+        assert 802 in instance._llm_controlled_tags  # 未受影响
+
+    async def test_on_unit_destroyed_non_llm_tag_is_noop(self) -> None:
+        """on_unit_destroyed(tag) 当 tag 不在 _llm_controlled_tags 时不崩。"""
+        FakeKnowledgeBot, *_ = _inject_fake_sharpy()
+        from voicecraft.bot.sharpy_adapter import make_bot_class
+
+        BotClass = make_bot_class(lambda facade: None)
+        instance = object.__new__(BotClass)
+        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
+        instance._llm_controlled_tags = set()
+
+        # tag 不在集合 → 不崩
+        await instance.on_unit_destroyed(999)
+
+        assert instance._llm_controlled_tags == set()

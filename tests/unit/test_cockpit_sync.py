@@ -176,6 +176,108 @@ class TestBuildSnapshot:
         assert snap["strategy"]["midgame"] is None
         assert snap["strategy"]["lategame"] is None
 
+    # M5: attack_window / micro_doctrine 字段穿透
+
+    def test_midgame_slot_includes_attack_window(self) -> None:
+        """M5: MidgameStance 带 attack_window → snapshot midgame slot 包含 attack_window。"""
+        midgame_with_window = MidgameStance.model_validate(
+            {
+                "kind": "midgame_stance",
+                "id": "iac_window",
+                "display_name_zh": "IAC 进攻窗",
+                "attack_window": {
+                    "open_at": "9:30",
+                    "close_at": "11:30",
+                    "target_priority": ["army"],
+                },
+            }
+        )
+        lib = StrategyLibrary(openings=[], midgames=[midgame_with_window], lategames=[])
+        d = _make_director(library=lib)
+        board = DirectiveBoard(commit_delay_s=0.0)
+        d.board = board
+
+        board.submit(_make_strategy_directive("iac_window", StageKind.MIDGAME), now=0.0)
+        board.tick(1.0)
+
+        snap = d.build_snapshot(1.0)
+        midgame = snap["strategy"]["midgame"]
+        assert midgame is not None
+        assert "attack_window" in midgame
+        assert midgame["attack_window"]["open_at"] == "9:30"
+        assert midgame["attack_window"]["close_at"] == "11:30"
+
+    def test_midgame_slot_includes_micro_doctrine(self) -> None:
+        """M5: MidgameStance 带 micro_doctrine → snapshot midgame slot 包含 micro_doctrine。"""
+        midgame_with_doctrine = MidgameStance.model_validate(
+            {
+                "kind": "midgame_stance",
+                "id": "iac_doctrine",
+                "display_name_zh": "IAC 微操",
+                "micro_doctrine": ["archon focus_fire bio_clumps", "immortal target high_hp_armored"],
+            }
+        )
+        lib = StrategyLibrary(openings=[], midgames=[midgame_with_doctrine], lategames=[])
+        d = _make_director(library=lib)
+        board = DirectiveBoard(commit_delay_s=0.0)
+        d.board = board
+
+        board.submit(_make_strategy_directive("iac_doctrine", StageKind.MIDGAME), now=0.0)
+        board.tick(1.0)
+
+        snap = d.build_snapshot(1.0)
+        midgame = snap["strategy"]["midgame"]
+        assert midgame is not None
+        assert "micro_doctrine" in midgame
+        assert len(midgame["micro_doctrine"]) == 2
+        assert "archon focus_fire bio_clumps" in midgame["micro_doctrine"]
+
+    def test_midgame_slot_no_attack_window_omitted(self) -> None:
+        """M5: MidgameStance 无 attack_window → snapshot midgame slot 不含 attack_window 字段。"""
+        lib = _make_library()
+        d = _make_director(library=lib)
+        board = DirectiveBoard(commit_delay_s=0.0)
+        d.board = board
+
+        board.submit(_make_strategy_directive("iac_2base", StageKind.MIDGAME), now=0.0)
+        board.tick(1.0)
+
+        snap = d.build_snapshot(1.0)
+        midgame = snap["strategy"]["midgame"]
+        assert midgame is not None
+        # _make_library() 里的 iac_2base 无 attack_window，不应出现在 snapshot
+        assert "attack_window" not in midgame
+
+    def test_lategame_slot_includes_engagement_doctrine_as_micro_doctrine(self) -> None:
+        """M5: LategameDoctrine 带 engagement_doctrine → snapshot lategame slot 含 micro_doctrine。"""
+        lategame_with_doctrine = LategameDoctrine.model_validate(
+            {
+                "kind": "lategame_doctrine",
+                "id": "skytoss_doctrine",
+                "display_name_zh": "Skytoss 航母",
+                "target_composition": {"CARRIER": 6},
+                "engagement_doctrine": [
+                    "carrier_kite max_dist=12",
+                    "mass_recall when=fleet_total_hp<40%",
+                ],
+            }
+        )
+        lib = StrategyLibrary(openings=[], midgames=[], lategames=[lategame_with_doctrine])
+        d = _make_director(library=lib)
+        board = DirectiveBoard(commit_delay_s=0.0)
+        d.board = board
+
+        board.submit(
+            _make_strategy_directive("skytoss_doctrine", StageKind.LATEGAME), now=0.0
+        )
+        board.tick(1.0)
+
+        snap = d.build_snapshot(1.0)
+        lategame = snap["strategy"]["lategame"]
+        assert lategame is not None
+        assert "micro_doctrine" in lategame
+        assert "carrier_kite max_dist=12" in lategame["micro_doctrine"]
+
 
 # ---------------------------------------------------------------------------
 # P0：snapshot callback 触发（变化推 + 兜底）

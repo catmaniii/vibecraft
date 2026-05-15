@@ -191,3 +191,63 @@ class TestBot(KnowledgeBot):
 - **Hook C 精度（M2）**：`set_unit_role` 用 `knowledge.unit_cache.by_tag(tag)` 查 Unit 对象；sharpy manager 的 Reserved 过滤是 manager 级（非框架级），需验证各 manager 在 on_step 不干扰 Reserved 单位。
 - **sharpy config.ini**：sharpy 从 CWD 读 `config.ini`，game_process.py 启动时需确认 CWD 有该文件或显式 `os.chdir`（端到端验证时排查）。
 - **minimap 18 个失败**：`_collect_alerts` 方法逻辑 bug，与 sharpy 迁移无关，可独立处理。
+
+---
+
+## M4+M5+M6 spike 结论（2026-05-16）
+
+### M4：LLM_CONTROLLED role 隔离
+
+**核心发现**：`UnitRoleManager.update()` 每 step 执行 `self.had_task_set.clear()`，
+导致一次性 `set_task(Reserved, unit)` 在下一 step 失效。需要在每个 `on_step` 末尾
+重新声明。
+
+**实现方案**：
+- `_llm_controlled_tags: set[int]`：持久化"谁被 LLM 接管"的集合
+- `_refresh_llm_controlled_roles()`：每 step 对集合中每个存活 unit 调
+  `knowledge.roles.set_task(UnitTask.Reserved, unit)` → 续命
+- `getattr(self, "_llm_controlled_tags", set())`：防止测试 `object.__new__` 跳
+  `__init__` 导致 AttributeError
+- `PlanZoneAttack`（`free_units = Idle+Moving only`）和 `GroupCombatManager`
+  （explicit `add_unit()`）天然不碰 Reserved 单位 —— 经 grep sharpy 源码确认
+
+**测试**：9 个新用例，全 mock，验证 set/discard/refresh/cleanup 各路径。
+
+### M5：attack_window / micro_doctrine 字段透传
+
+**实现方案**：
+- `director._slot_view()` 在 `isinstance(strat, MidgameStance)` 分支提取
+  `attack_window.open_at/close_at` + `micro_doctrine`；在 `LategameDoctrine`
+  分支提取 `engagement_doctrine` as `micro_doctrine`
+- `types.ts`：`StrategySlotView` 加两个 `?` 可选字段
+- `StrategyCard.vue`：`v-if` guard 下显示「出门 9:30–11:30」+ `·` 子弹点列表
+
+**测试**：4 个新快照测试，覆盖有/无 attack_window、有 micro_doctrine、
+LategameDoctrine 的 engagement_doctrine 映射。
+
+### M6：文档更新
+
+- `docs/adr/0009-sharpy-migration.md`：决策背景 + Hook A/C + M5 透传 + 管理器兼容表
+  + 实现里程碑 + 许可证
+- `ARCHITECTURE.md`：模块图（ares_adapter → sharpy_adapter + auto_combat 目录）、
+  Hook 表（M3 A ✅ / M4 C ✅ 等）、新不变量（LLM_CONTROLLED = Reserved +
+  `_llm_controlled_tags`）、vendor 节
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| `uv run --no-sync pytest` | **389 passed, 6 skipped**（基线 376，+13） |
+| `uv run --no-sync ruff check .` | All checks passed |
+| `uv run --no-sync mypy src/voicecraft` | Success: 49 source files, 0 issues |
+| `npm test`（web/） | 41 passed |
+| `npm run build`（web/） | Vite build 通过，vue-tsc 无报错 |
+
+### 方案偏离记录
+
+1. **`getattr` 防御式访问**：`_refresh_llm_controlled_roles` 改用
+   `getattr(self, "_llm_controlled_tags", set())` 而非直接访问属性，因测试通过
+   `object.__new__` + `FakeKnowledgeBot.__init__` 绕过了 `__init__`，原始写法
+   产生 AttributeError。未影响设计意图，只是初始化路径的防御处理。
+2. **SIM102 ruff 规则**：`director._slot_view()` 的 `elif isinstance(...) and strat.xxx:`
+   单行合并，避免嵌套 if（原 plan 未预期，ruff strict 模式触发）。

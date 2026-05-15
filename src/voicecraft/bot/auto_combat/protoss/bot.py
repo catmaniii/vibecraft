@@ -89,6 +89,11 @@ def make_protoss_bot_class(
         camera 操作暂存模式(ADR 0008):
         move_camera / follow_unit **不直接** 发协议，只暂存最新目标点。
         on_step 末尾调 drain_pending_actions() 在 step await 链内串行发出。
+
+        M4: LLM_CONTROLLED role 隔离
+        set_unit_role(tag, LLM_CONTROLLED) 同时写入 bot._llm_controlled_tags，
+        每 step 开头 refresh_llm_controlled_roles() 重新声明 Reserved role，
+        防止 sharpy UnitRoleManager.update() 每帧清空 had_task_set 后丢失状态。
         """
 
         def __init__(self, bot: Any) -> None:
@@ -128,6 +133,10 @@ def make_protoss_bot_class(
 
             sharpy UnitRoleManager.set_task 接 Unit 对象（不接 tag），
             需先用 cache.by_tag 取 unit；找不到时 log warn，不崩。
+
+            M4: LLM_CONTROLLED → 同时写入 bot._llm_controlled_tags，确保每 step
+            通过 refresh_llm_controlled_roles() 持久化 Reserved 状态。
+            单位死亡后 tag 不在 cache，refresh 时自动跳过（cache.by_tag 返回 None）。
             """
             try:
                 from voicecraft.bot.auto_combat.common import build_role_map
@@ -141,6 +150,15 @@ def make_protoss_bot_class(
                     )
                     return
                 self.bot.knowledge.roles.set_task(task, unit)
+                # M4: LLM_CONTROLLED 额外记录在 _llm_controlled_tags，
+                # 每 step refresh_llm_controlled_roles() 会重新声明 Reserved，
+                # 防止 UnitRoleManager.update() 清空 had_task_set 后丢失。
+                if role == UnitRole.LLM_CONTROLLED:
+                    self.bot._llm_controlled_tags.add(unit_tag)
+                    logger.info("unit_claimed tag=%d added to _llm_controlled_tags", unit_tag)
+                else:
+                    # 非 LLM_CONTROLLED 角色赋值时从集合移除（e.g. release 归队）
+                    self.bot._llm_controlled_tags.discard(unit_tag)
             except Exception as exc:
                 logger.warning("set_unit_role failed tag=%d role=%s err=%s", unit_tag, role, exc)
 
@@ -247,9 +265,22 @@ def make_protoss_bot_class(
 
         on_step 顺序：
           1. await super().on_step(iteration)（KnowledgeBot.on_step：update + execute）
-          2. voicecraft down_q 消费 + minimap 推送 + director.on_tick
-          3. decision_watcher.tick
-          4. facade.drain_pending_actions（串行 camera 命令，ADR 0008）
+          2. M4: refresh_llm_controlled_roles()（每帧重声明 Reserved，防 had_task_set 清空）
+          3. voicecraft down_q 消费 + minimap 推送 + director.on_tick
+          4. decision_watcher.tick
+          5. facade.drain_pending_actions（串行 camera 命令，ADR 0008）
+
+        M4: _llm_controlled_tags
+          玩家 unit_claim 后通过 set_unit_role(tag, LLM_CONTROLLED) 写入此集合。
+          每 step 开头 refresh_llm_controlled_roles() 重新声明 UnitTask.Reserved，
+          防止 sharpy UnitRoleManager.update() 每帧清 had_task_set 后角色丢失。
+
+          已知未完成（文档化，留后续 M5+）：
+          - GroupCombatManager 的 add_unit()/execute() 是显式传参，不自动过滤 Reserved，
+            需要 zone_attack.py 里 free_units 链路保证（Reserved 不在 free_units）。
+          - zone_defense.py get_defenders() 只查 Idle/Moving/Fighting/Attacking，
+            Reserved 不会被拉去守基地。
+          - 死亡的 LLM_CONTROLLED 单位：on_unit_destroyed 从集合移除（防内存泄漏）。
         """
 
         director: Any = None
@@ -261,6 +292,8 @@ def make_protoss_bot_class(
         # 当前剧本名：IfElse 路由树每 step 检查此值；set_build 写入后下个 step 立即生效。
         # 默认 "1g_robo_immortal"（opening fallback），on_start 会根据 strategy_library 重设。
         active_recipe: str = "1g_robo_immortal"
+        # M4: LLM_CONTROLLED 单位的 tag 集合（跨 step 持久化）
+        _llm_controlled_tags: set[int]
 
         def __init__(self) -> None:
             super().__init__("VoiceCraft Protoss")
@@ -269,6 +302,47 @@ def make_protoss_bot_class(
             self._minimap_builder = None
             self._decision_watcher = None
             self.active_recipe = "1g_robo_immortal"
+            self._llm_controlled_tags = set()
+
+        def is_voicecraft_controlled(self, unit: Any) -> bool:
+            """M4: 判断单位是否被玩家 unit_claim 接管（不允许 sharpy manager 干预）。
+
+            用法示例（未来 manager subclass 里 filter selection 时用）：
+                units = [u for u in candidates if not bot.is_voicecraft_controlled(u)]
+            """
+            return unit.tag in self._llm_controlled_tags
+
+        def _refresh_llm_controlled_roles(self) -> None:
+            """M4: 每 step 重新声明 _llm_controlled_tags 里的单位为 Reserved。
+
+            背景：sharpy UnitRoleManager.update() 在每帧末尾清空 had_task_set，
+            下帧 update() 时未在 had_task_set 里的单位会被重置为 Idle/Gathering。
+            解法：在 super().on_step() 之后、voicecraft 逻辑之前，把所有
+            _llm_controlled_tags 重新 set_task(Reserved) + refresh_task()，
+            保证 had_task_set 在当帧 update 前已登记。
+
+            死亡单位：unit_cache.by_tag 返回 None → 跳过并从集合移除（防泄漏）。
+            """
+            tags: set[int] = getattr(self, "_llm_controlled_tags", set())
+            if not tags:
+                return
+            try:
+                from sharpy.managers.core.roles.unit_task import UnitTask
+
+                dead_tags: set[int] = set()
+                for tag in tags:
+                    unit = self.knowledge.unit_cache.by_tag(tag)
+                    if unit is None:
+                        dead_tags.add(tag)
+                        continue
+                    # refresh_task 仅把 tag 加进 had_task_set，不改 role，
+                    # 配合 set_task 使 update() 不会清掉这些单位的 Reserved role。
+                    self.knowledge.roles.set_task(UnitTask.Reserved, unit)
+                if dead_tags:
+                    self._llm_controlled_tags -= dead_tags
+                    logger.debug("llm_controlled_tags cleanup removed dead tags: %s", dead_tags)
+            except Exception as exc:
+                logger.warning("refresh_llm_controlled_roles failed: %s", exc)
 
         async def create_plan(self) -> BuildOrder:  # sharpy type; statically Any via overrides
             """M2+M3：IfElse 路由树，由 active_recipe 决定走哪个 sharpy dummy plan。
@@ -417,6 +491,10 @@ def make_protoss_bot_class(
             # KnowledgeBot.on_step 跑 knowledge.update + execute（含所有 Manager tick）
             await super().on_step(iteration)
 
+            # M4: 重新声明 LLM_CONTROLLED 单位的 Reserved role
+            # 必须在 super().on_step() 后调（knowledge.unit_cache 已更新）
+            self._refresh_llm_controlled_roles()
+
             # voicecraft down_q 消费
             if down_q is not None:
                 try:
@@ -473,7 +551,11 @@ def make_protoss_bot_class(
                 await super().on_unit_created(unit)
 
         async def on_unit_destroyed(self, unit_tag: int) -> None:
-            """单位死亡事件。调 super()（KnowledgeBot 需要通知 knowledge）。"""
+            """单位死亡事件。M4: 从 _llm_controlled_tags 移除死亡单位，防内存泄漏。"""
+            # 先从 voicecraft 集合清除，再通知 KnowledgeBot（sharpy 需要 knowledge 更新）
+            if unit_tag in self._llm_controlled_tags:
+                self._llm_controlled_tags.discard(unit_tag)
+                logger.info("unit_destroyed tag=%d removed from _llm_controlled_tags", unit_tag)
             await super().on_unit_destroyed(unit_tag)
 
         def _on_cmd_task_done(self, task: asyncio.Task[Any]) -> None:
