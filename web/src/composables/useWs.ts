@@ -17,6 +17,8 @@ import type {
   RecommendationView,
   TacticsView,
   PendingForceStrategyView,
+  StandingOrderView,
+  RevokeDirectiveFrame,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
 
@@ -55,6 +57,9 @@ export function useWs() {
 
   // P1：event ring buffer（最近 30 条，响应式）
   const events = ref<EventFrame[]>([])
+
+  // P1.5：L3 standing orders（snapshot 透传）
+  const standingOrders = ref<StandingOrderView[]>([])
 
   // command_echo（最新一条）
   const lastEcho = ref<CommandEchoFrame | null>(null)
@@ -108,6 +113,7 @@ export function useWs() {
             recommendation.value = f.recommendation ?? null
             tactics.value = f.tactics ?? null
             pendingForceStrategy.value = f.pending_force_strategy ?? null
+            standingOrders.value = f.standing_orders ?? []
             break
           }
           case 'event': {
@@ -179,6 +185,12 @@ export function useWs() {
     send({ type: 'cancel_force_strategy' })
   }
 
+  // 玩家撤销一条 standing order（P1.5）
+  function revokeDirective(directiveId: string) {
+    const frame: RevokeDirectiveFrame = { type: 'revoke_directive', directive_id: directiveId }
+    send(frame)
+  }
+
   function send(frame: UpFrame) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(frame))
@@ -217,12 +229,14 @@ export function useWs() {
     recommendation: readonly(recommendation),
     tactics: readonly(tactics),
     pendingForceStrategy: readonly(pendingForceStrategy),
+    standingOrders: readonly(standingOrders),
     send,
     sendViewMove,
     confirmRecommendation,
     dismissRecommendation,
     confirmForceStrategy,
     cancelForceStrategy,
+    revokeDirective,
     close,
     token,
   }
