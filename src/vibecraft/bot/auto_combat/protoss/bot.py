@@ -650,6 +650,7 @@ def make_protoss_bot_class(
             # set_by=BOT_INTERNAL → PWA badge 显示 "⚙️ bot 默认"。
             # 玩家随时可 voice 切其他剧本(VOICE > BOT_INTERNAL 优先级)。
             if strategy_library is not None:
+                import os
                 import random
 
                 from vibecraft.strategy.models import OpeningBuild
@@ -658,11 +659,21 @@ def make_protoss_bot_class(
                     s for s in strategy_library.all_strategies() if isinstance(s, OpeningBuild)
                 ]
                 if openings:
-                    chosen = random.choice(openings)
+                    # env VIBECRAFT_FORCE_INITIAL_OPENING=<id> 强制 default(测试用)
+                    forced_id = os.environ.get("VIBECRAFT_FORCE_INITIAL_OPENING")
+                    chosen = None
+                    if forced_id:
+                        chosen = next((o for o in openings if o.id == forced_id), None)
+                        if chosen is None:
+                            logger.warning(
+                                "forced initial opening %r 不在 catalog,回退 random", forced_id
+                            )
+                    if chosen is None:
+                        chosen = random.choice(openings)
                     # active_recipe 不依赖 director(create_plan() 在 KnowledgeBot.on_start
                     # 内被调用,此时 director 尚未构造,所以 active_recipe 是 plan 路由的真理源)
                     self.active_recipe = chosen.id
-                    logger.info("bot 随机选择开局剧本: %s (%s)", chosen.id, chosen.display_name_zh)
+                    logger.info("bot 选定开局剧本: %s (%s)", chosen.id, chosen.display_name_zh)
 
                     if self.director is not None:
                         from vibecraft.directives.types import StageKind

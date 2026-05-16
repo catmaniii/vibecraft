@@ -43,7 +43,17 @@ async def main() -> int:
     p.add_argument("--seconds", type=int, default=60, help="跑多少秒后 kill")
     p.add_argument("--map", default="DaybreakLE")
     p.add_argument(
+        "--fast",
+        action="store_true",
+        help="realtime=False,bot 全速跑(~10-100x),适合 smoke 验证。默认 1x。",
+    )
+    p.add_argument(
         "--inject", default=None, help='注入一条指令(等同手机说话),如 "切 4BG"'
+    )
+    p.add_argument(
+        "--initial-opening",
+        default=None,
+        help='强制 bot 启动默认 opening id(如 "1g_robo_immortal"),省去 random,验证切换用',
     )
     p.add_argument(
         "--inject-after",
@@ -59,12 +69,18 @@ async def main() -> int:
     if not os.environ.get("SC2PATH"):
         log.warning("SC2PATH not set,SC2 可能找不到")
 
+    if args.initial_opening:
+        os.environ["VIBECRAFT_FORCE_INITIAL_OPENING"] = args.initial_opening
+        log.info("force initial opening: %s", args.initial_opening)
+
     cfg = GameConfig(
         map_name=args.map,
         opponent_race="Random",
         opponent_difficulty="VeryHard",
-        realtime=True,
+        realtime=not args.fast,
     )
+    if args.fast:
+        log.info("fast mode: realtime=False,SC2 全速跑")
     log.info("spawning bot for %ds: map=%s inject=%r", args.seconds, args.map, args.inject)
     gp = GameProcess()
     gp.start(cfg)
@@ -73,8 +89,11 @@ async def main() -> int:
     seen_playing = asyncio.Event()
     injected = asyncio.Event() if args.inject else None
     interesting_events: list[tuple[float, str, dict]] = []
+    last_strat: tuple = ()
+    snap_count = [0]  # 用 list 避免 nonlocal
 
     async def collect() -> None:
+        nonlocal last_strat
         async for msg in gp.raw_events():
             elapsed = time.time() - start_ts
             kind = msg.get("kind")  # snapshot / event / echo / minimap
@@ -93,13 +112,28 @@ async def main() -> int:
                 if str(sc2) in ("crashed", "ended"):
                     return
             elif kind == "event":
-                ev_kind = msg.get("kind_name") or msg.get("event_kind") or "?"
-                # event 帧:msg 本身可能 nested(取决于 _put_event 怎么塞)
-                payload = msg.get("payload") or {}
-                # 只 log 关键事件
-                if any(k in str(msg) for k in ("strategy", "directive", "tactics")):
+                frame = msg.get("frame") or {}
+                ev_kind = frame.get("kind", "?")
+                payload = frame.get("payload") or {}
+                if any(k in ev_kind for k in ("strategy", "directive", "tactics", "set", "commit")):
                     log.info("[+%.1fs] EVENT %s %s", elapsed, ev_kind, payload)
-                    interesting_events.append((elapsed, ev_kind, msg))
+                    interesting_events.append((elapsed, ev_kind, frame))
+            elif kind == "snapshot":
+                # snapshot 帧透传 strategy 状态。debug 模式下也算 snapshot 计数。
+                snap_count[0] += 1
+                frame = msg.get("frame") or {}
+                strat = frame.get("strategy") or {}
+                opening = (strat.get("opening") or {}).get("id") if strat.get("opening") else None
+                midgame = (strat.get("midgame") or {}).get("id") if strat.get("midgame") else None
+                lategame = (strat.get("lategame") or {}).get("id") if strat.get("lategame") else None
+                current_stage = strat.get("current_stage", "?")
+                key = (opening, midgame, lategame, current_stage)
+                if key != last_strat:
+                    log.info(
+                        "[+%.1fs] SNAPSHOT #%d stage=%s opening=%s midgame=%s lategame=%s",
+                        elapsed, snap_count[0], current_stage, opening, midgame, lategame,
+                    )
+                    last_strat = key
             elif kind == "echo":
                 log.info(
                     "[+%.1fs] ECHO user=%r -> %r",
@@ -150,7 +184,8 @@ async def main() -> int:
     log.info("=" * 60)
     log.info("interesting events captured: %d", len(interesting_events))
     for ts, kind, m in interesting_events[:20]:
-        log.info("  +%6.1fs  %s  keys=%s", ts, kind, list(m.keys()))
+        log.info("  +%6.1fs  %s  payload=%s", ts, kind, m.get("payload", {}))
+    log.info("total snapshots: %d, final strategy key: %s", snap_count[0], last_strat)
     log.info("=" * 60)
     log.info("bot ran %ds. 完整日志见 logs/<latest game_id>/events.jsonl", args.seconds)
     return 0
