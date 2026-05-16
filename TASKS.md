@@ -7,34 +7,45 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `68f1ec5`，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17，HEAD `6665886`，tag `v0.1.0a3`）
 
-- **里程碑**：M1 出口已 verify + `v0.1.0a3` tag 已 push。M2（four-layer 实施）待开始，
-  P0 ADR skeleton 已写，P1-P6 待跑。
+- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1（L3 Standing Orders + EventBus）完成**，
+  e2e smoke verify schema gap 已修 + LLM 正确生成 `persistent=true`。P2-P6 待开始。
 - **本次 session 关键节点**：
-  - **M1 端到端真实 SC2 verify**（M1.6 切剧本 ✅ + M5 字段透传 ✅ + M4 mock ✅，
-    M4 e2e 发现 schema gap → 归 P1）
+  - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
-  - four-layer 指令架构 plan + ADR 0010 skeleton 写完（P0）
-  - 4 个决策拍板（plan §8）：verb 11 个 / override 隐藏 / persistent:bool / ADR 先写
-- **最近几个 commit（按时间倒序）**：
-  - `68f1ec5` ADR 0010 skeleton：四层指令架构（P0）
-  - `3572ff3` four-layer plan §8 4 个决策拍板 + §5 override 语义
-  - `8e264ca` CHANGELOG 0.1.0a3 M1 完成 + tag `v0.1.0a3` push
-  - `d03654e` iac_2base 叉球一波 数据对齐 spawning tool
-  - `1e1dd34` headless_smoke `--initial-opening` + snapshot 解析 + `--fast`
-  - `12d88b4` plan：四层指令架构设计
-  - `faba795` TASKS.md 刷新
-  - `8d46b99` CockpitView 删资源条 + headless_smoke `--inject`
-- **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync，tag `v0.1.0a3` 在 GitHub release
-- **阻塞 / 等待**：无，M2 P1 可开工
+  - four-layer 指令架构 plan + ADR 0010（P0 skeleton + P1 corner case）+ 4 决策拍板
+  - **M2 P1 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 协作模式跑通；
+    EventBus + 11 hook wire + standing_orders state/snapshot/UI/撤销 + M4 schema gap 修
+- **最近 commit（M2 P1 系列，按时间倒序）**：
+  - `6665886` P1 收尾：ADR Implementation Notes + TASKS.md 标 P1 done
+  - `d3e1a96` feat(pwa): StandingOrdersCard + 撤销 (P1.5)
+  - `571a157` feat(ws): revoke_directive 上行帧 + e2e wire (P1.4)
+  - `952d905` feat(snapshot): standing_orders 字段透传 (P1.3)
+  - `fa24be6` feat(director): standing_orders + persistent 路由 (P1.2)
+  - `3e4a5ec` feat(eventbus): wire 11 lifecycle hooks → EventBus (P1.0b)
+  - `0c98110` fix(directives): 修 M4 schema gap + persistent (P1.1)
+  - `83fddad` feat(eventbus): EventBus core skeleton (P1.0a)
+- **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
+- **阻塞 / 等待**：无，M2 P2 可开工
 - **下一步**（按 ADR 0010 / plan §7 次序）：
-  1. **M2 P1**：L3 standing orders 实施（~1d，见下 7 个 sub-task）
-  2. **M2 P2**：L4 production overrides（~1d）
-  3. **M2 P3**：L2 tactics + `TACTICAL_OBJECTIVE`（~3d）
-  4. **M2 P5**：sharpy plan 让位机制泛化（~1d）
-  5. **M2 P4**：LLM prompt 重写（~0.5d）
-  6. **M2 P6**：收尾 + ADR 补 corner case（~0.5d）
+  1. **M2 P2**：L4 production overrides 实施（state + snapshot + UI，~1d）
+  2. **M2 P3**：L2 tactics + `TACTICAL_OBJECTIVE` + task_monitor + 8 个 condition kind
+     dispatcher + LLM done_when prompt（~3d）
+  3. **M2 P5**：sharpy plan 让位机制泛化（reserved_tags + directive completed →
+     release `LLM_CONTROLLED` tags + `named_spot` registry）（~1d）
+  4. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
+  5. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
+- **P1 已知 deferred 到 P5（详 ADR 0010 Implementation Notes）**：
+  - sharpy 真让位 standing order 单位（P1 只进列表 + UI，不真 hold）
+  - `board.revoke()` 对已 committed standing order 返回 False（行为 OK 但不完整）
+  - `named_spot` registry（"enemy_main_gas" 等 spot name 到坐标的映射）
+- **本次 session 协作模式**（已 verified）：parallel subagent + 主 agent review
+  - 主 session (Opus, 我) = orchestrator + reviewer + debugger
+  - subagent (Sonnet, fresh context, worktree isolation) = implementer + tester
+  - 分波 dispatch (Wave 1: P1.0a+P1.1 / Wave 2: P1.0b+P1.2 / 等)
+  - 每波 cherry-pick 到 main + verify + push
+  - 实测：8 个 sub-task ~1d 完成（含 review + commit + e2e smoke + ADR notes）
 - **Hidden SC2 调研结论（2026-05-16）**：Windows + retail SC2 **不能真 headless**。
   D3D9 在 non-interactive desktop 立刻 Lost；ShowWindow 来不及第一帧前 hide；
   `-windowx -5000` 被 SC2 clamp。Linux native 永久卡 4.10。**项目设计接受 SC2 可见**；
