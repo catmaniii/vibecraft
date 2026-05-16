@@ -1,13 +1,13 @@
-# VoiceCraft
+# VibeCraft
 
-用语音 + 文字指挥 AI 替你操作 SC2 神族 —— 给操作不动的老 SC2 玩家。
+动动嘴 / 打打字指挥 AI 替你操作 SC2 神族 —— 给操作不动的老 SC2 玩家。
 
 ## 现在是什么状态
 
 设计完成，实现进行中。详见：
 
 - [`CLAUDE.md`](CLAUDE.md) —— Claude Code 启动指引，包含完整项目上下文
-- [`docs/plans/2026-05-14-voicecraft-design.md`](docs/plans/2026-05-14-voicecraft-design.md) —— 14 节设计真理源
+- [`docs/plans/2026-05-14-vibecraft-design.md`](docs/plans/2026-05-14-vibecraft-design.md) —— 14 节设计真理源
 - [`USER_GUIDE.md`](USER_GUIDE.md) —— 玩家入门手册
 
 ## 快速开始（开发）
@@ -26,7 +26,7 @@ uv run pytest
 # 4. lint + 类型检查
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy src/voicecraft
+uv run mypy src/vibecraft
 
 # 5. 装 pre-commit hook
 uv run pre-commit install
@@ -50,13 +50,13 @@ uv run python scripts/smoke_test.py
 ## 目录布局
 
 ```
-src/voicecraft/         # Python 包源码
+src/vibecraft/         # Python 包源码
   directives/           # Directive 数据模型 + Board
   strategy/             # 剧本库 + YAML schema
   dsl/                  # 条件 DSL parser/evaluator
   llm/                  # Intent Parser + Provider 抽象
   logging_/             # 结构化 JSONL 日志
-  bot/                  # VoiceCraftBot (ares-sc2 子类) + hooks
+  bot/                  # VibeCraftBot (ares-sc2 子类) + hooks
   server/               # WebSocket service + PWA static (M1+)
 tests/
   unit/                 # 单元测试 (默认 mock，无 SC2)
