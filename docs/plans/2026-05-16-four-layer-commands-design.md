@@ -120,7 +120,7 @@ class ProductionOverride:
 │ 小地图          │ 当前宏观策略 (L1)        │
 │ 触摸板          │ + 推荐/硬转 (L1)         │
 ├─────────────────┴──────────────────────────┤
-│ 🎯 bot 当前决策 BotDecisionCard (只读)    │
+│ 🎯 bot 当前决策 BotDecisionCard (只读)    │  ← 玩家 L2 active 时本卡隐藏
 │ ⚔️ Active Tactics (L2) [每条 × 撤销]      │  ← 新
 │ 🛡️ Standing Orders (L3) [每条 × 撤销]     │  ← 新
 │ ⚙️ Production Overrides (L4) [progress] │  ← 新
@@ -129,6 +129,17 @@ class ProductionOverride:
 └────────────────────────────────────────────┘
 固定底部:发号施令输入框
 ```
+
+**override 显示语义（决策 2）**:bot 推断的 stance 是兜底显示,**玩家在某一层
+下了指令就把 bot 在该层的自决策项隐藏**:
+- L2 玩家有 active tactics → BotDecisionCard 隐藏(玩家 override 了 attack/defend
+  这种 stance)
+- L3 玩家有 standing order(对特定单位) → 该单位不出现在 bot 决策流的"unit
+  rationale"里
+- L4 玩家有 production override → bot 的"自动出兵推断"那条不显示
+
+实现:UI 层 `v-if="!player_has_override_for_this_layer"` 即可,bot 状态机仍照常
+推断(只是不显示)。玩家撤销 override 后 bot 决策项自动浮回。
 
 ## 六、上行帧
 
@@ -149,12 +160,12 @@ class ProductionOverride:
 
 **总 ~7 天**。建议次序 P1 → P2 → P3 → P5 → P4 → P6。
 
-## 八、待用户拍的决策
+## 八、决策（2026-05-17 拍板）
 
-1. **TACTICAL_OBJECTIVE verb enum**:列了 11 个(attack/defend/scout/expand/harass/drop/vision/raze/retreat/regroup/split),够吗?
-2. **bot 自决策 vs 玩家战术 UI 关系**:`BotDecisionCard` 显示 bot 推断的 stance,L2 active_tactics 显示玩家命令 — 倾向**两块独立**,玩家一眼分清"bot 想干嘛 vs 我让它干嘛"
-3. **`UNIT_CLAIM` 跟 standing 的关系**:同一 directive 加 `persistent: bool` 字段(`true` 进 standing 列表)
-4. **要 ADR**:`docs/adr/0010-four-layer-commands.md` 等 P6 写
+1. ✅ **TACTICAL_OBJECTIVE verb enum** = 11 个(attack/defend/scout/expand/harass/drop/vision/raze/retreat/regroup/split)接受,实施中不够再加。
+2. ✅ **bot 自决策 vs 玩家战术 UI 关系** = **玩家 override 隐藏 bot 自决策**(不是两块独立)。bot 状态机仍照常推断,UI 层 `v-if !override` 控制显示。语义详见 §5 末尾。
+3. ✅ **UNIT_CLAIM 跟 standing 关系** = 同一 directive 加 `persistent: bool` 字段。`true` 进 standing 列表,`false` 一次性。
+4. ✅ **ADR 0010 写作时机** = P1 开始前先写 skeleton(把高层决策固定),实施过程补 corner case。文件 `docs/adr/0010-four-layer-commands.md`。
 
 ## 九、不在范围
 
