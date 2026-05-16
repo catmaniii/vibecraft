@@ -10,6 +10,7 @@
 - view_move → facade.move_camera 立即（不走 Board）
 - ParseError → facade 不变 (设计文档 §7.6)
 - ParseContext 从 facade.get_state() + board.overlays 正确构造
+- standing_orders 路由 + revoke（P1.2）
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from vibecraft.bot import BotState, Director, FakeFacade, UnitRole
+from vibecraft.directives.models import Directive
 from vibecraft.llm import (
     IntentParser,
     MockLLMProvider,
@@ -382,3 +384,71 @@ class TestLoggingIntegration:
         kinds = [e["kind"] for e in events]
         assert "directive.committed" in kinds
         assert "strategy.set" in kinds
+
+
+# =========================================================================
+# P1.2 Standing Order 路由（persistent=True → standing_orders；False → _in_flight）
+# =========================================================================
+
+
+def _make_unit_claim_directive(persistent: bool) -> Directive:
+    """构造一个 UNIT_CLAIM Directive，persistent 按参数。"""
+    from vibecraft.directives.models import UnitClaimPayload
+    from vibecraft.directives.scope import Selector, TargetKind, TargetSpec
+    from vibecraft.directives.task import Action, Task, Verb
+
+    payload = UnitClaimPayload(
+        selector=Selector(unit_type="Phoenix"),
+        task=Task(
+            primary_action=Action(
+                verb=Verb.LIFT_TARGET,
+                target=TargetSpec(kind=TargetKind.UNIT_TYPE, unit_type="Immortal"),
+            )
+        ),
+        persistent=persistent,
+    )
+    return Directive(payload=payload, issued_at=10.0)
+
+
+@pytest.fixture
+def director(session: GameSession) -> Director:
+    """最小 Director 实例，不需要 LLM provider（直接调 _submit_directives）。"""
+    from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+    facade = FakeFacade()
+    provider = MockLLMProvider(
+        scripted=[
+            ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)
+        ]
+    )
+    library_inst = StrategyLibrary.from_directories(
+        strategies_dir=PROJECT_ROOT / "strategies",
+        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+    )
+    parser = IntentParser(provider, library_inst, session=session)
+    return Director(facade=facade, parser=parser, session=session)
+
+
+class TestStandingOrderRouting:
+    """P1.2 Director 按 persistent 路由 directive 到 standing_orders 或 _in_flight。"""
+
+    def test_persistent_false_goes_to_in_flight(self, director: Director) -> None:
+        d = _make_unit_claim_directive(persistent=False)
+        director._submit_directives([d], now=10.0)
+        # 进 pending → 还没 committed，但 _in_flight 里已有（board.submit 之后）
+        assert d.id in director._in_flight
+        assert not any(s.id == d.id for s in director.standing_orders)
+
+    def test_persistent_true_goes_to_standing_orders(self, director: Director) -> None:
+        d = _make_unit_claim_directive(persistent=True)
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.standing_orders)
+        assert d.id not in director._in_flight
+
+    def test_revoke_standing_order_removes(self, director: Director) -> None:
+        d = _make_unit_claim_directive(persistent=True)
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.standing_orders)
+        result = director.revoke_standing_order(d.id, now=15.0)
+        assert result is True
+        assert not any(s.id == d.id for s in director.standing_orders)

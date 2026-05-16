@@ -128,6 +128,8 @@ class Director:
         # Board 的 strategy_set / unit_release 不会进 overlays，需要这层映射才能在
         # COMMITTED 事件里把 directive 取出来 dispatch。
         self._in_flight: dict[str, Directive] = {}
+        # P1.2 L3 standing orders（persistent=True 的 unit_claim 不走 _in_flight）
+        self.standing_orders: list[Directive] = []
         # snapshot / event 推送回调（P0 / P1）
         self._snapshot_callback: Callable[[dict[str, Any]], None] | None = None
         self._event_callback: Callable[[dict[str, Any]], None] | None = None
@@ -396,7 +398,14 @@ class Director:
                 self._in_flight[submitted.id] = submitted
             else:
                 submitted = self.board.submit(d_with_ts, now=now)
-                self._in_flight[submitted.id] = submitted
+                # P1.2: persistent=True 的 unit_claim 进 standing_orders，不进 _in_flight
+                if (
+                    isinstance(submitted.payload, UnitClaimPayload)
+                    and submitted.payload.persistent
+                ):
+                    self.standing_orders.append(submitted)
+                else:
+                    self._in_flight[submitted.id] = submitted
 
     # ------------------------------------------------------------------
     # 剧本时机偏差检测(自动从 yaml phase + steps 推断)
@@ -485,6 +494,22 @@ class Director:
     def cancel_force_strategy(self) -> None:
         """玩家在 PWA 点 [取消] → drop 被拦的 directive。"""
         self._pending_force_strategy = None
+
+    def revoke_standing_order(self, directive_id: str, now: float) -> bool:
+        """玩家通过 revoke_directive 上行帧撤销 standing order（P1.2）。
+
+        从 standing_orders 列表移除，通知 board（用于 sharpy 让位 release tag—P5 接），
+        并推一次 snapshot。
+        """
+        before = len(self.standing_orders)
+        self.standing_orders = [s for s in self.standing_orders if s.id != directive_id]
+        if len(self.standing_orders) < before:
+            # 通知 board（persistent directive 已 committed 进 overlays/pending，
+            # board.revoke 只能撤 pending；overlay 层 cleanup 留 P5 接）
+            self.board.revoke(directive_id, now)
+            self._push_snapshot(now)
+            return True
+        return False
 
     def _dispatch_cancel(self, directive: Directive, now: float) -> None:
         """处理 STRATEGY_CANCEL:清掉 board 对应 slot + 切 sustain plan。
