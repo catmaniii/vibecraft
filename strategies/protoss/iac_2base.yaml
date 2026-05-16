@@ -1,39 +1,55 @@
 kind: midgame_stance
 id: iac_2base
-display_name_zh: "双矿 IAC 重装地面"
-summary_zh: "双矿后以 不朽+白球+冲锋叉（IAC）为核心的重装地面中期推进，9:30-11:30 进攻窗口"
+display_name_zh: "叉球一波 (双矿 IAC)"
+summary_zh: "双矿冲锋叉+不朽+白球(IAC)一波 timing,6:15 出门 all-in。核心 chargelot 主力 + 2 不朽针对装甲 + 2-4 白球溅伤,7 BG 暴兵"
 sharpy_dummy_class: "dummies.protoss.macro_stalkers:MacroStalkers"
-aliases: ["叉光", "IAC", "重装地面", "叉光不朽推", "叉球", "叉球不朽推", "不朽光灵冲锋叉", "IAC双矿", "Immortal Archon Chargelot"]
+aliases: ["叉球一波", "叉球", "叉光", "IAC", "IAC一波", "重装地面", "叉光不朽推", "叉球不朽推", "不朽光灵冲锋叉", "IAC双矿", "Immortal Archon Chargelot", "I AC", "白球冲锋叉一波"]
 
 enter_when:
   - "self.tech.warpgate.done"
   - "self.expansion_count >= 2"
   - "from_opening in [1g_robo_immortal, 4_gateway_pressure]"
 
+# 数据来源:https://lotv.spawningtool.com/build/196674/ (2 Base PvX IAC all-in)
+# 关键 build 节点:
+# - 1:25 Natural (2nd Base)
+# - 1:35 Cybernetics Core
+# - 2:10 Warpgate research
+# - 2:22 Robotics Facility
+# - 3:25 / 4:05 Immortal x2
+# - 3:40 Twilight Council
+# - 4:27 Charge research
+# - 4:35 / 4:56 Gateway 暴兵 (7 BG 总数)
+# - 5:01 Templar Archives
+# - 6:15 出门 attack(Charge 完 + +1 武器中)
 commitments:
   units:
-    stalker: 8
-    sentry: 4
-    immortal: 3
-    archon: 3
-    zealot: 8
+    zealot: 16        # 主力(charge zealot)
+    immortal: 3       # 针对装甲(spawning tool 至少 2)
+    archon: 3         # 2-4 个,溅伤输出
+    stalker: 4        # 防空 / 增援
+    sentry: 2         # 力场切阵
   tech: [WarpGateResearch, Charge, ProtossGroundWeapons]
   structures:
-    gateway: 6
-    robo: 2
+    gateway: 7        # spawning tool 4:35+4:56 暴 7 BG
+    robo: 1
     twilight: 1
     templar_archives: 1
+    forge: 1
   expansions: 2
 
+# 一波 timing(spawning tool 6:15 出门;留窗口到 7:30 接 follow-up)
 attack_window:
-  open_at: "9:30"
-  close_at: "11:30"
-  target_priority: [army, third_base, production]
+  open_at: "6:15"
+  close_at: "7:30"
+  target_priority: [army, natural, production]
 
 micro_doctrine:
-  - "archon focus_fire bio_clumps"
-  - "immortal target high_hp_armored"
+  - "charge zealot 主力前压,接战时 charge 切入对方后排"
+  - "archon focus_fire bio_clumps / 远程单位"
+  - "immortal target high_hp_armored (Stalker / Roach / Marauder)"
   - "if has_sentry_energy: forcefield split_enemy_army"
+  - "warp prism 1-2 个增援 / pickup low_hp 单位"
 
 expire_action:
   - "transition: skytoss"

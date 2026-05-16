@@ -133,6 +133,17 @@ async def main() -> int:
                         "[+%.1fs] SNAPSHOT #%d stage=%s opening=%s midgame=%s lategame=%s",
                         elapsed, snap_count[0], current_stage, opening, midgame, lategame,
                     )
+                    # M5 verify: dump attack_window / micro_doctrine 字段(midgame/lategame)
+                    for sk in ("midgame", "lategame"):
+                        slot = strat.get(sk)
+                        if slot and isinstance(slot, dict):
+                            aw = slot.get("attack_window")
+                            md = slot.get("micro_doctrine")
+                            if aw or md:
+                                log.info(
+                                    "             %s: attack_window=%s micro_doctrine=%s",
+                                    sk, aw, md,
+                                )
                     last_strat = key
             elif kind == "echo":
                 log.info(
