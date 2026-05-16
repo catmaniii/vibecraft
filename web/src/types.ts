@@ -128,6 +128,14 @@ export interface StandingOrderView {
   task_summary: string
 }
 
+// P2 新增：production override 单条视图（来自 Director.production_overrides）
+export interface ProductionOverrideView {
+  id: string
+  display: string         // 中文，如 "出 2 哨兵" / "研 Blink" / "开 3 矿"
+  issued_at: number
+  directive_type: 'production_override' | 'tech_override' | 'expansion_override'
+}
+
 export interface SnapshotFrame {
   type: 'snapshot'
   ts: number
@@ -140,6 +148,8 @@ export interface SnapshotFrame {
   recent_commands: { text: string; ts: number }[]
   // P1.3 新增：L3 standing orders 列表
   standing_orders: StandingOrderView[]
+  // P2 新增：production overrides 列表
+  production_overrides?: ProductionOverrideView[]
   // bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
   recommendation?: RecommendationView
   // bot 内部意图(进攻/守家/开矿/探路/运营)

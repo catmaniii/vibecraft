@@ -17,6 +17,7 @@ import RecommendationCard from '@/components/RecommendationCard.vue'
 import BotDecisionCard from '@/components/BotDecisionCard.vue'
 import PendingForceCard from '@/components/PendingForceCard.vue'
 import StandingOrdersCard from '@/components/StandingOrdersCard.vue'
+import ProductionOverridesCard from '@/components/ProductionOverridesCard.vue'
 import type {
   SnapshotFrame,
   EventFrame,
@@ -27,6 +28,7 @@ import type {
   TacticsView,
   PendingForceStrategyView,
   StandingOrderView,
+  ProductionOverrideView,
 } from '@/types'
 
 const props = defineProps<{
@@ -40,6 +42,7 @@ const props = defineProps<{
   tactics: TacticsView | null
   pendingForceStrategy: PendingForceStrategyView | null
   standingOrders: readonly StandingOrderView[]
+  productionOverrides: readonly ProductionOverrideView[]
 }>()
 
 const currentStage = computed<'opening' | 'midgame' | 'lategame'>(
@@ -64,6 +67,7 @@ const emit = defineEmits<{
   confirmForceStrategy: []
   cancelForceStrategy: []
   revokeStanding: [id: string]
+  revokeProduction: [id: string]
 }>()
 
 // 触摸板 emit absolute 已是绝对坐标(基于按下时的基准 + dx/dy),直接转 viewMove
@@ -141,6 +145,11 @@ function fmtTs(ts: number): string {
         <StandingOrdersCard
           :orders="props.standingOrders"
           @revoke-order="(id) => emit('revokeStanding', id)"
+        />
+
+        <ProductionOverridesCard
+          :orders="props.productionOverrides"
+          @revoke="(id) => emit('revokeProduction', id)"
         />
 
         <div class="rounded-xl bg-surface-2 border border-border p-4">
