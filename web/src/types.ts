@@ -40,6 +40,12 @@ export interface CancelForceStrategyFrame {
   type: 'cancel_force_strategy'
 }
 
+// 上行：玩家撤销 standing order（P1.4）
+export interface RevokeDirectiveFrame {
+  type: 'revoke_directive'
+  directive_id: string
+}
+
 export type UpFrame =
   | StartGameFrame
   | CommandFrame
@@ -48,6 +54,7 @@ export type UpFrame =
   | DismissRecommendationFrame
   | ConfirmForceStrategyFrame
   | CancelForceStrategyFrame
+  | RevokeDirectiveFrame
 
 // ---- 下行帧（Bot → 手机）----
 

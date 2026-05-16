@@ -195,6 +195,9 @@ class WsConnection:
         elif frame_type in {"confirm_force_strategy", "cancel_force_strategy"}:
             # 玩家点 [硬转] / [取消] (voice 切剧本但时机已过 → 拦下来等确认)
             await self._handle_force_strategy_response(frame_type, frame)
+        elif frame_type == "revoke_directive":
+            # 玩家撤销 standing order（P1.4）
+            await self._handle_revoke_directive(frame)
         elif frame_type in {
             "view_follow",
             "view_zoom",
@@ -239,6 +242,24 @@ class WsConnection:
             return
         self._game_process.send_command({"type": frame_type})
         self._log.info("ws_force_strategy_sent", frame_type=frame_type)
+
+    async def _handle_revoke_directive(self, frame: dict[str, Any]) -> None:
+        """玩家在 PWA 点 [× 撤销] standing order → 转发到子进程（P1.4）。
+
+        bot._tick_view_channel 消费后调 director.revoke_standing_order(id, now)。
+        缺少 directive_id 时 warning 拒绝，不转发。
+        """
+        directive_id = frame.get("directive_id")
+        if not directive_id:
+            self._log.warning("ws_revoke_directive_missing_id", frame=frame)
+            return
+        if not self._game_process.is_running:
+            self._log.debug("ws_revoke_directive_no_game_running", directive_id=directive_id)
+            return
+        self._game_process.send_command(
+            {"type": "revoke_directive", "directive_id": directive_id}
+        )
+        self._log.info("ws_revoke_directive_sent", directive_id=directive_id)
 
     # ------------------------------------------------------------------
     # view_move 处理（minimap 拖拽切视野）

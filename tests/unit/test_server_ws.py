@@ -266,3 +266,38 @@ class TestMakeWsHandler:
 
         await handler(ws)
         assert old_conn.close_called is True
+
+
+# ---------------------------------------------------------------------------
+# P1.4: revoke_directive 上行帧
+# ---------------------------------------------------------------------------
+
+
+class TestRevokeDirectiveFrame:
+    """验证 ws.py 正确处理 revoke_directive 帧 → game_process.send_command。"""
+
+    def _make_conn_with_game(self) -> tuple[WsConnection, MagicMock]:
+        """构造 WsConnection，注入一个 running fake game_process。"""
+        registry = RoomRegistry(token="tok")
+        ws = _make_ws_mock()
+        mock_gp = MagicMock()
+        mock_gp.is_running = True
+        mock_gp.send_command = MagicMock()
+        conn = WsConnection(ws, registry, game_process=mock_gp)
+        return conn, mock_gp
+
+    async def test_revoke_directive_sent_to_game(self) -> None:
+        """有效 revoke_directive 帧 → game_process.send_command 收到完整 dict。"""
+        conn, mock_gp = self._make_conn_with_game()
+        await conn._handle_raw(
+            json.dumps({"type": "revoke_directive", "directive_id": "d_abc123"})
+        )
+        mock_gp.send_command.assert_called_once_with(
+            {"type": "revoke_directive", "directive_id": "d_abc123"}
+        )
+
+    async def test_revoke_directive_missing_id_rejected(self) -> None:
+        """缺少 directive_id 时 send_command 不应被调用。"""
+        conn, mock_gp = self._make_conn_with_game()
+        await conn._handle_raw(json.dumps({"type": "revoke_directive"}))
+        mock_gp.send_command.assert_not_called()
