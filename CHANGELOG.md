@@ -19,7 +19,61 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
-M1：Bot service + WS endpoint + 手机 PWA 框架 + 1 剧本 + LLM 单条话语解析。
+M2：按 `docs/plans/2026-05-16-four-layer-commands-design.md` 的 P1-P6 分期实施四层指令架构（L1 宏观 / L2 战术 / L3 standing / L4 产能）。需先拍 §8 的 4 个待决策点。
+
+---
+
+## [0.1.0a3] - 2026-05-17
+
+**M1 完成。** 真实 SC2 端到端验证通过 —— 切剧本端到端链路成立。**fast mode** smoke
+跑 ~60s wall-clock，force `1g_robo_immortal` 默认 opening + inject「切 4BG」→
+SNAPSHOT 从 `opening=1g_robo_immortal` → `opening=4bg`，配套 `strategy.set` +
+`directive.committed` 两条事件全到位。inject「切叉球一波」→ `strategy.phase_change`
+(opening→midgame) + `strategy.set` + SNAPSHOT `midgame.attack_window={6:15-7:30}` +
+5 条 `micro_doctrine` 完整透传。链路 `down_q → IntentParser → LLM (DeepSeek V4) →
+Director → board commit (1.5s grace) → STRATEGY_CHANGED → snapshot push` 全通。
+
+### 新增 (Added)
+
+- **sharpy 迁移完整**（M1-M6，全合并 main）：sharpy KnowledgeBot 替代 ares-sc2 作为 bot
+  框架；LLM_CONTROLLED role 隔离（M4，9 个 mock 单测）；attack_window / micro_doctrine
+  字段透传到 snapshot（M5）；ADR 0009 记录决策
+- **WS 多路复用 + auto-pilot + cockpit-sync + minimap 拖拽视野**：view 通道（高频，
+  view_move + minimap + drain）/ bot 通道（低频，sharpy super + ratio=5），iteration
+  remap 给 sharpy 自己的 namespace；PWA 驾驶舱按 §9.5 重排 + 推荐 / 硬转确认 / 多卡片
+- **4bg 流程优化**（gate4_pressure 自定义 plan）：3 BG 等折跃 ≥50% + 矿 ≥450 一次性下；
+  ForwardSupportPylonGateway（农民前线修 PY+BG）；首波 4 追猎即出门火力侦察
+- **iac_2base 数据对齐 Spawning Tool**（叉球一波 all-in）：6:15 timing + 7 BG +
+  chargelot 主力 + 2 不朽 + 2-4 白球；加别名「叉球一波」「IAC一波」「白球冲锋叉一波」
+- **四层指令架构设计**（M2/M3 蓝图）：
+  `docs/plans/2026-05-16-four-layer-commands-design.md` 定义 L1 宏观 / L2 战术 /
+  L3 standing / L4 产能 四层 directive；P1-P6 分期实施
+- **headless_smoke 测试基础设施**：`--fast` / `--initial-opening <id>` /
+  `--inject <text>` / `--inject-after N` / snapshot + event 帧解析
+- **驾驶舱真实截图嵌入 USER_GUIDE**（780×1908，mock 数据演示）；
+  md_to_pdf 加 base href + img CSS 让 PDF 正确渲染
+
+### 修正 (Fixed)
+
+- **项目改名 voicecraft → vibecraft**：源码包路径、import、CLI、pyproject、
+  scripts、web build、PWA 资源、设计文档全部刷新；GitHub repo
+  `catmaniii/voicecraft` → `catmaniii/vibecraft`
+- **CockpitView 资源条占位删除**：SC2 内置 HUD 已有，手机端不重复占屏
+- **README / USER_GUIDE 弱化"语音"主线**：VibeCraft 自己不做语音识别，录音/转字
+  外包给手机系统输入法，文本框是核心
+- **TASKS.md 顶部「当前状态」段刷新**：之前的"worktree 待合并"已 stale
+
+### 已知未做 / known issues
+
+- **LLM prompt ↔ Pydantic schema 不匹配**：M4 e2e 跑 inject standing order 类指令
+  暴露 schema 拒绝 `selector.count` / `target.structure_type` 字段。属 M3/four-layer
+  P1 standing order 实施范围
+- **完整驾驶舱**：Standing Orders / 快捷栏 / phase stepper 精确进度 / 撤销机制 — M3
+- **midgame/lategame 剧本自动转**：当前 auto-pilot 只是通用兜底，不按剧本切 — 转
+  four-layer P3 范围
+- **造建筑指令** schema — 同上，P1/P3 范围
+- **Windows + retail SC2 不能真 headless**：D3D9 在 non-interactive desktop 立刻 Lost；
+  Linux SC2 永久卡 4.10。本次 hidden 调研结论 — 接受 SC2 可见，smoke 走"弹窗 + 自动 kill"
 
 ---
 
