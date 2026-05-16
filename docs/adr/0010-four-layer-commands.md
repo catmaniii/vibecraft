@@ -105,17 +105,58 @@ class Director:
 - `revoke_directive {id}` —— 撤销 L2/L3/L4 中某条
 - 已有的 `confirm_recommendation` / `confirm_force_strategy` 等保持
 
+### 8. L2/L4 完成判定：LLM 输出 structured done_when + bot 内 task_monitor
+
+详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md`。要点：
+
+- **Director 加 `task_monitor`**，每 sharpy step（45ms）check in_flight directive
+  完成状态。bot 内闭环，**不调 LLM**
+- **LLM 在 IntentParser 同一次 call 输出 directive + done_when**（pydantic
+  discriminated union，不是 DSL 字符串），LLM prompt 教 8 个 condition kind
+- **8 个起步 kind**：`unit_count_built_since` / `tech_done` / `expansion_count`
+  / `target_destroyed` / `own_army_size_ratio` / `vision_acquired` /
+  `enemy_killed_in_area` / `time_elapsed_since`，加 `any_of` / `all_of` 复合
+- **validate + retry 1 次**：pydantic 不通过 → 错误回灌 LLM 重写；仍不通过 →
+  降级 EPHEMERAL + echo 告诉玩家
+- **每个 done_when 必带 `timeout_s`** 兜底（默认 by verb，见 design doc §五 决策 5）
+- **DSL 留给剧本 YAML 阵地不扩**（剧本 enter_when / abort_signals / reactions
+  仍走 DSL；LLM 即时生成场景走 structured done_when）
+
+### 9. EventBus（vibecraft 自建独立层）
+
+详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md` §三。要点：
+
+- **新文件 `src/vibecraft/bot/event_bus.py`**：`EventBus.subscribe(kind, handler,
+  filter)` / `unsubscribe(sub_id)` / `publish(event)`
+- `_VibeCraftProtossBot` override 11 个 python-sc2 lifecycle hook（`on_unit_created`
+  / `on_unit_destroyed` / `on_upgrade_complete` / ...），每个内部 publish 到
+  EventBus，然后 `await super()` 让 sharpy 自己的逻辑跑
+- **task_monitor 是首批 subscriber**：`unit_count_built_since` 订阅 `UNIT_CREATED`、
+  `enemy_killed_in_area` 订阅 `UNIT_DESTROYED` filter `owner=enemy`、`tech_done`
+  订阅 `UPGRADE_COMPLETE`。其它 kind 走 game_state polling（vision / army_ratio /
+  target_destroyed / expansion_count / time_elapsed）
+- **不复用 sharpy `register_on_unit_destroyed_listener`**：sharpy 只覆盖 1 个 hook
+  + 无 filter；vibecraft 自己造 EventBus 覆盖 11 个 hook + 支持 filter（by unit_type /
+  area / owner），且不碰 `vendor/sharpy/`
+- **handler 同步**（不 async），sharpy step 是同步调用栈
+- **directive complete/expire 时统一 unsubscribe** 避免内存泄漏（attach_directive
+  返回 sub_id list，TaskMonitor 跟踪）
+- **EventBus 是 vibecraft 内部实现细节，不暴露给 LLM**：LLM 看到的还是 8 个 kind，
+  EventBus 只是 kind 的"高效实现技术"
+
 ## 实施 phasing（P1-P6）
 
 | Phase | 内容 | 工作量 | blocked by |
 |---|---|---|---|
-| **P0** | 本 ADR skeleton | 0.5d | — |
-| **P1** | L3 Standing Orders：state + snapshot + UI + 撤销 + 修 schema mismatch（见后）| 1d | P0 |
-| **P2** | L4 Production Overrides：state + snapshot + UI | 1d | P0 |
-| **P3** | L2 Tactics：`TACTICAL_OBJECTIVE` + `ObjectiveExecutor` 框架 | 3d | P0 |
-| **P5** | sharpy plan 让位机制扩展（reserved_tags 通用化）| 1d | P1 + P3 |
-| **P4** | LLM prompt 重写：4 层例子 + 分类规则 | 0.5d | P1 + P2 + P3 |
-| **P6** | 收尾：测试 + headless 验证 + 本 ADR 补 corner case | 0.5d | P5 + P4 |
+| **P0** | 本 ADR skeleton（含 §8 完成判定 + §9 EventBus）| 0.5d | — |
+| **P1** | L3 Standing Orders：state + snapshot + UI + 撤销 + 修 schema mismatch + **EventBus skeleton + 11 hook publish + 单测**（done_when=`unit_count_built_since` 作为 reference 实现）| 1.5d | P0 |
+| **P2** | L4 Production Overrides：state + snapshot + UI + L4 走 done_when（决策 D 同 L2，3 个 kind 复用 P1 EventBus）| 1d | P1 |
+| **P3** | L2 Tactics：`TACTICAL_OBJECTIVE` + `ObjectiveExecutor` + **task_monitor 完整实现** + 8 个 kind dispatcher + validate retry + timeout | 3d | P1 + P2 |
+| **P5** | sharpy plan 让位机制扩展（`reserved_tags` 通用化）+ directive completed → release `LLM_CONTROLLED` tags | 1d | P1 + P3 |
+| **P4** | LLM prompt 重写：4 层例子 + 分类规则 + done_when few-shot + 8 kind schema | 0.5d | P1 + P2 + P3 |
+| **P6** | 收尾：测试 + headless 验证（inject「切 4BG，打到对方自然 OR 损失 70% 撤」）+ 本 ADR 补 corner case | 0.5d | P5 + P4 |
+
+**总 ~7.5d**（含 EventBus）。建议次序 P1 → P2 → P3 → P5 → P4 → P6。
 
 总 ~7 天。建议次序 P1 → P2 → P3 → P5 → P4 → P6。
 

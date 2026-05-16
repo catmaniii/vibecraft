@@ -109,10 +109,16 @@
 
 固化 4 个决策，P1-P6 实施基线。
 
-#### P1 L3 Standing Orders  🔄 待开（~1d）
+#### P1 L3 Standing Orders + EventBus 基建  🔄 待开（~1.5d）
 
-7 个 sub-task：
+详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md`。8 个 sub-task：
 
+- [ ] **P1.0** EventBus skeleton + 11 hook publish + 单测（~2h）
+  - `src/vibecraft/bot/event_bus.py`：`EventBus` 类 + `Event` dataclass +
+    `EventKind` enum（11 个 + sc2_alert）
+  - `_VibeCraftProtossBot` override 11 个 lifecycle hook，每个 publish 后
+    `await super()`
+  - 单测：subscribe/publish/filter/unsubscribe 基本路径
 - [ ] **P1.1** schema 改 + 修 M4 e2e schema gap（~1h）
   - `directives/models.py`：`UnitClaimPayload` 加 `persistent: bool = False`
   - 修 `target.kind` 接受 `'building_tag'` / `'named_spot'`，去 `selector.count`
