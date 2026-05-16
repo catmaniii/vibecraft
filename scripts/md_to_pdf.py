@@ -23,6 +23,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<base href="{base_href}">
 <style>
   @page {{ margin: 1.8cm 1.6cm; }}
   body {{
@@ -45,6 +46,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   blockquote {{ border-left: 3px solid #ccc; margin-left: 0;
                 padding-left: 12px; color: #555; }}
   hr {{ border: none; border-top: 1px solid #ddd; margin: 1.5em 0; }}
+  img {{ max-width: 65%; max-height: 22cm; display: block; margin: 0.6em auto;
+         border: 1px solid #ccc; border-radius: 4px; }}
 </style>
 </head>
 <body>
@@ -69,7 +72,9 @@ def main() -> int:
 
     md_text = src.read_text(encoding="utf-8")
     body = markdown.markdown(md_text, extensions=["tables", "fenced_code", "sane_lists"])
-    html = _HTML_TEMPLATE.format(body=body)
+    # base href = 源 markdown 所在目录,让 <img> 等相对路径基于这里解析
+    base_href = src.parent.as_uri() + "/"
+    html = _HTML_TEMPLATE.format(body=body, base_href=base_href)
 
     with tempfile.NamedTemporaryFile("w", suffix=".html", encoding="utf-8", delete=False) as fh:
         fh.write(html)
@@ -88,7 +93,7 @@ def main() -> int:
             ],
             check=True,
             capture_output=True,
-            timeout=60,
+            timeout=120,
         )
     finally:
         tmp_html.unlink(missing_ok=True)
