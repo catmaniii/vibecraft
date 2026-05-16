@@ -80,12 +80,9 @@ function fmtTs(ts: number): string {
   <div class="flex-1 overflow-y-auto pb-[72px]">
     <div class="flex flex-col">
 
-      <!-- 资源状态条占位（M3） -->
-      <div class="px-4 pt-3 pb-1 shrink-0">
-        <M3Placeholder label="资源 / 人口 / 时间" hint="M3：资源条 + 时间 + 人口" min-height="48px" />
-      </div>
-
-      <!-- 左:小地图 + 触摸板 / 右:宏观策略(左右等高;右侧不再嵌套 StrategyCard 边框) -->
+      <!-- 左:小地图 + 触摸板 / 右:宏观策略(左右等高;右侧不再嵌套 StrategyCard 边框)
+           资源 / 人口 / 时间 SC2 游戏内部 HUD 已有,手机端不重复 -->
+      <div class="px-4 pt-2"></div>
       <div class="px-4 py-2 shrink-0 flex gap-3 items-stretch">
         <div class="w-1/2 max-w-[260px] shrink-0 flex flex-col gap-2">
           <Minimap :frame="props.minimap" @view-move="(p) => emit('viewMove', p)" />

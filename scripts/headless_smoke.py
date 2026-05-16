@@ -1,14 +1,26 @@
-"""Headless 验证:spawn vibecraft bot + SC2,跑 N 秒后 kill,grep 关键事件。
+"""Headless 验证:spawn vibecraft bot + SC2,可选注入指令验证端到端切剧本。
 
 不依赖 PWA / service,直接用 game_process.GameProcess。SC2 窗口会弹出
-(Windows 不能完全 headless),但我们自动 kill 不需要看。
+(Windows + retail SC2 不能真 headless,详见 docs/plans/2026-05-14-vibecraft-design.md:137
+和本次 hidden 调研结论 — D3D9 device 在 non-interactive desktop 立刻 Lost,
+ShowWindow SW_HIDE 来不及第一帧前 hide),但我们自动 kill 不需要看。
 
-判定 bot 是否正常工作:
-- 关键事件:[ActUnit] PROBE / [GridBuilding] (无 "Can't find") / [ChronoUnit] / [Tech]
-- 失败信号:repeated "Can't find free position"
+判定 bot 正常工作:
+- sc2 状态进入 playing
+- bot 状态进入 running
+- 注入指令后 events 流里出现 strategy_set / directive_committed
+- 没有 crashed / Can't find free position 等失败信号
 
 用法:
-    uv run --no-sync python scripts/headless_smoke.py [--seconds 60]
+    # 仅验 bot 能起来跑(默认 60s):
+    uv run --no-sync python scripts/headless_smoke.py
+
+    # 注入指令验切剧本:
+    uv run --no-sync python scripts/headless_smoke.py --inject "切 4BG"
+
+    # 自定指令延迟 + 总时长:
+    uv run --no-sync python scripts/headless_smoke.py --inject "切 1 门 Robo" \\
+        --inject-after 30 --seconds 90
 """
 
 from __future__ import annotations
@@ -30,6 +42,15 @@ async def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--seconds", type=int, default=60, help="跑多少秒后 kill")
     p.add_argument("--map", default="DaybreakLE")
+    p.add_argument(
+        "--inject", default=None, help='注入一条指令(等同手机说话),如 "切 4BG"'
+    )
+    p.add_argument(
+        "--inject-after",
+        type=int,
+        default=20,
+        help="启动后 N 秒注入指令(等 bot 进入 playing/running 后再发)",
+    )
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -44,36 +65,82 @@ async def main() -> int:
         opponent_difficulty="VeryHard",
         realtime=True,
     )
-    log.info("spawning bot for %ds: map=%s", args.seconds, args.map)
+    log.info("spawning bot for %ds: map=%s inject=%r", args.seconds, args.map, args.inject)
     gp = GameProcess()
     gp.start(cfg)
 
-    # 收集 status 事件(non-blocking)
-    statuses: list[tuple[float, str, str]] = []
     start_ts = time.time()
+    seen_playing = asyncio.Event()
+    injected = asyncio.Event() if args.inject else None
+    interesting_events: list[tuple[float, str, dict]] = []
 
     async def collect() -> None:
         async for msg in gp.raw_events():
-            sc2 = msg.get("sc2") or "?"
-            bot = msg.get("bot") or "?"
-            statuses.append((time.time() - start_ts, str(sc2), str(bot)))
-            log.info(
-                "[+%.1fs] sc2=%s bot=%s detail=%s",
-                time.time() - start_ts,
-                sc2,
-                bot,
-                msg.get("detail", ""),
-            )
-            if str(sc2) in ("crashed", "ended"):
-                return
+            elapsed = time.time() - start_ts
+            kind = msg.get("kind")  # snapshot / event / echo / minimap
+            sc2 = msg.get("sc2")
+            bot = msg.get("bot")
+            if sc2 or bot:
+                log.info(
+                    "[+%.1fs] sc2=%s bot=%s detail=%s",
+                    elapsed,
+                    sc2 or "?",
+                    bot or "?",
+                    msg.get("detail", ""),
+                )
+                if str(sc2) == "playing":
+                    seen_playing.set()
+                if str(sc2) in ("crashed", "ended"):
+                    return
+            elif kind == "event":
+                ev_kind = msg.get("kind_name") or msg.get("event_kind") or "?"
+                # event 帧:msg 本身可能 nested(取决于 _put_event 怎么塞)
+                payload = msg.get("payload") or {}
+                # 只 log 关键事件
+                if any(k in str(msg) for k in ("strategy", "directive", "tactics")):
+                    log.info("[+%.1fs] EVENT %s %s", elapsed, ev_kind, payload)
+                    interesting_events.append((elapsed, ev_kind, msg))
+            elif kind == "echo":
+                log.info(
+                    "[+%.1fs] ECHO user=%r -> %r",
+                    elapsed,
+                    msg.get("user_text"),
+                    msg.get("interpretation"),
+                )
 
     collect_task = asyncio.create_task(collect())
 
-    # 等到 args.seconds 或 collect_task 提前完成
+    async def inject_after_delay() -> None:
+        if not args.inject:
+            return
+        # 先等 sc2 进 playing,再等 inject_after 秒(让 bot 进入稳定 step)
+        try:
+            await asyncio.wait_for(seen_playing.wait(), timeout=120)
+        except TimeoutError:
+            log.warning("sc2 没进 playing,放弃注入")
+            return
+        log.info("sc2 已 playing,等 %ds 后注入指令", args.inject_after)
+        await asyncio.sleep(args.inject_after)
+        cmd = {
+            "type": "command",
+            "text": args.inject,
+            "client_id": "smoke",
+            "issued_at": time.time(),
+        }
+        log.info("INJECTING %r", args.inject)
+        gp.send_command(cmd)
+        if injected:
+            injected.set()
+
+    inject_task = asyncio.create_task(inject_after_delay()) if args.inject else None
+
+    # 等总时长 / collect 提前完成
     try:
         await asyncio.wait_for(collect_task, timeout=args.seconds)
     except TimeoutError:
-        log.info("timeout reached %ds, stopping bot", args.seconds)
+        log.info("timeout %ds reached, stopping bot", args.seconds)
+        if inject_task and not inject_task.done():
+            inject_task.cancel()
         await gp.stop()
         try:
             await asyncio.wait_for(collect_task, timeout=5)
@@ -81,12 +148,11 @@ async def main() -> int:
             collect_task.cancel()
 
     log.info("=" * 60)
-    log.info("statuses observed:")
-    for ts, sc2, bot in statuses:
-        log.info("  +%6.1fs  sc2=%-10s bot=%-10s", ts, sc2, bot)
+    log.info("interesting events captured: %d", len(interesting_events))
+    for ts, kind, m in interesting_events[:20]:
+        log.info("  +%6.1fs  %s  keys=%s", ts, kind, list(m.keys()))
     log.info("=" * 60)
-    log.info("✓ bot ran %ds, kill called", args.seconds)
-    log.info("查 logs/<latest game_id>/ 验证 ActUnit/GridBuilding 事件")
+    log.info("bot ran %ds. 完整日志见 logs/<latest game_id>/events.jsonl", args.seconds)
     return 0
 
 
