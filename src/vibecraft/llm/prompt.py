@@ -142,7 +142,11 @@ def build_few_shot() -> str:
 → engagement_constraint: stance=defend
 
 例 5：「凤凰举不朽」
-→ unit_claim: selector={unit_type:"Phoenix"}, task={primary_action:{verb:"lift_target", target:{kind:"unit_type", unit_type:"Immortal"}}}
+→ unit_claim: selector={unit_type:"Phoenix"}, task={primary_action:{verb:"lift_target", target:{kind:"unit_type", unit_type:"Immortal"}}}, persistent=false
+
+例 5b：「那个探机守气矿别动」
+→ unit_claim: selector={unit_type:"Probe"}, task={primary_action:{verb:"hold_position", target:{kind:"named_spot", named_spot:"enemy_main_gas"}}}, persistent=true
+（persistent=true 表示 standing order；玩家明确说"一直守"/"别动"/"持续"时使用）
 
 例 6：「11 点盖水晶」
 → build_at: structure_type=Pylon, point=[11克坐标]   (M0：若给不出精确点，confidence 降低)

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from vibecraft.directives import (
     Action,
@@ -357,3 +358,62 @@ class TestScopeSpecValidation:
         s = ScopeSpec(kind=ScopeKind.DURATION)
         with pytest.raises(ValueError, match="duration_s"):
             s.validate_for_kind()
+
+
+# =========================================================================
+# TestStandingOrderSchema (P1.1)
+# =========================================================================
+
+
+class TestStandingOrderSchema:
+    """L3 standing order schema (P1.1)。
+
+    修 v0.1.0a3 M4 e2e 发现的 LLM prompt ↔ Pydantic schema 不匹配：
+    - UnitClaimPayload 加 persistent: bool = False
+    - TargetSpec 已支持 building_tag / named_spot（验证存在）
+    - Selector 已拒绝 count（验证 extra=forbid 生效）
+    """
+
+    def test_unit_claim_payload_persistent_default_false(self) -> None:
+        """persistent 默认 False。"""
+        p = UnitClaimPayload(
+            selector=Selector(unit_type="Phoenix"),
+            task=Task(
+                primary_action=Action(
+                    verb=Verb.PATROL,
+                    target=TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="natural"),
+                )
+            ),
+        )
+        assert p.persistent is False
+
+    def test_unit_claim_payload_persistent_true(self) -> None:
+        """persistent=True 可以传入并保存。"""
+        p = UnitClaimPayload(
+            selector=Selector(unit_type="Zealot"),
+            task=Task(
+                primary_action=Action(
+                    verb=Verb.HOLD_POSITION,
+                    target=TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="main_ramp"),
+                )
+            ),
+            persistent=True,
+        )
+        assert p.persistent is True
+
+    def test_target_kind_building_tag(self) -> None:
+        """target.kind 支持 building_tag（M4 e2e schema gap 验证）。"""
+        t = TargetSpec(kind=TargetKind.BUILDING_TAG, building_tag=12345)
+        assert t.kind == TargetKind.BUILDING_TAG
+        assert t.building_tag == 12345
+
+    def test_target_kind_named_spot(self) -> None:
+        """守气矿等场景用 named_spot。"""
+        t = TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="enemy_main_gas")
+        assert t.kind == TargetKind.NAMED_SPOT
+        assert t.named_spot == "enemy_main_gas"
+
+    def test_selector_no_count_field(self) -> None:
+        """UnitSelector 不接 count（extra=forbid 已实现）。"""
+        with pytest.raises(ValidationError):
+            Selector(unit_type="Probe", count=1)  # type: ignore[call-arg]

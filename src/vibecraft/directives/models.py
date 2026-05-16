@@ -86,6 +86,8 @@ class UnitClaimPayload(_PayloadBase):
     type: Literal[DirectiveType.UNIT_CLAIM] = DirectiveType.UNIT_CLAIM
     selector: Selector
     task: Task
+    # P1.1 新增：true 进 Director.standing_orders（L3 standing order），false 一次性
+    persistent: bool = False
 
 
 class ScoutPayload(_PayloadBase):
