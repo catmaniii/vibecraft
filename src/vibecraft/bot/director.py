@@ -286,6 +286,8 @@ class Director:
             "recent_commands": [
                 {"text": c.text, "ts": round(c.ts, 3)} for c in self._recent_commands
             ],
+            # P1.3 L3 standing orders 透传
+            "standing_orders": [self._standing_order_view(s) for s in self.standing_orders],
         }
         # bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
         if self._pending_recommendation is not None:
@@ -333,6 +335,40 @@ class Director:
         """推 snapshot（若 callback 已注入）。"""
         if self._snapshot_callback is not None:
             self._snapshot_callback(self.build_snapshot(now))
+
+    def _standing_order_view(self, d: Directive) -> dict[str, Any]:
+        """把一条 standing order Directive 转成 snapshot 里的 view dict（P1.3）。
+
+        字段：id / display / issued_at / selector / task_summary。
+        """
+        payload = d.payload
+        display = self._format_standing_order_display(payload)
+        view: dict[str, Any] = {
+            "id": d.id,
+            "display": display,
+            "issued_at": d.issued_at,
+        }
+        if isinstance(payload, UnitClaimPayload):
+            view["selector"] = payload.selector.model_dump(mode="json", exclude_none=True)
+            view["task_summary"] = payload.task.primary_action.verb.value
+        else:
+            view["selector"] = {}
+            view["task_summary"] = ""
+        return view
+
+    def _format_standing_order_display(self, payload: Any) -> str:
+        """中文人话格式：'{unit_type} {verb} {target_display}'（P1.3）。
+
+        例：'Phoenix patrol natural' / 'Probe hold_position enemy_main_gas'。
+        target_display 优先 named_spot，次 unit_type，fallback '?'。
+        """
+        if not isinstance(payload, UnitClaimPayload):
+            return "未知 standing"
+        unit_type = payload.selector.unit_type or "单位"
+        verb = payload.task.primary_action.verb.value
+        target = payload.task.primary_action.target
+        target_display = target.named_spot or target.unit_type or "?"
+        return f"{unit_type} {verb} {target_display}"
 
     def _push_event(self, event_dict: dict[str, Any]) -> None:
         """推 event 帧（若 callback 已注入）。"""

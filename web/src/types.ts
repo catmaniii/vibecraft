@@ -112,6 +112,15 @@ export interface PendingForceStrategyView {
   reasons: string[]    // 偏差原因列表(已造 X / supply 已 N / ...)
 }
 
+// P1.3 新增：standing order 单条视图（来自 Director._standing_order_view）
+export interface StandingOrderView {
+  id: string
+  display: string         // 中文人话，如 "Phoenix patrol natural"
+  issued_at: number
+  selector: Record<string, unknown>
+  task_summary: string
+}
+
 export interface SnapshotFrame {
   type: 'snapshot'
   ts: number
@@ -122,6 +131,8 @@ export interface SnapshotFrame {
     lategame: StrategySlotView | null
   }
   recent_commands: { text: string; ts: number }[]
+  // P1.3 新增：L3 standing orders 列表
+  standing_orders: StandingOrderView[]
   // bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
   recommendation?: RecommendationView
   // bot 内部意图(进攻/守家/开矿/探路/运营)

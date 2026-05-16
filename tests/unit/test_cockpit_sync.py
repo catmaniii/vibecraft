@@ -749,3 +749,62 @@ class TestStatusEventsFiltersNewKinds:
         assert "ended" in sc2_states
         for s in statuses:
             assert s.sc2 not in ("snapshot", "event")
+
+
+# ---------------------------------------------------------------------------
+# P1.3：Snapshot standing_orders 字段
+# ---------------------------------------------------------------------------
+
+
+def _make_unit_claim_directive_persistent() -> Directive:
+    """构造一个 persistent=True 的 UNIT_CLAIM Directive（凤凰 patrol natural）。"""
+    from vibecraft.directives.models import UnitClaimPayload
+    from vibecraft.directives.scope import Selector, TargetKind, TargetSpec
+    from vibecraft.directives.task import Action, Task, Verb
+
+    payload = UnitClaimPayload(
+        selector=Selector(unit_type="Phoenix"),
+        task=Task(
+            primary_action=Action(
+                verb=Verb.PATROL,
+                target=TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="natural"),
+            )
+        ),
+        persistent=True,
+    )
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestSnapshotStandingOrders:
+    """P1.3 build_snapshot 加 standing_orders 字段。"""
+
+    def test_snapshot_includes_standing_orders_field(self) -> None:
+        """build_snapshot 返回 dict 包含 standing_orders 且是 list。"""
+        d = _make_director()
+        snap = d.build_snapshot(now=10.0)
+        assert "standing_orders" in snap
+        assert isinstance(snap["standing_orders"], list)
+
+    def test_snapshot_standing_orders_empty_by_default(self) -> None:
+        """没有 standing order 时，standing_orders 是空 list。"""
+        d = _make_director()
+        snap = d.build_snapshot(now=10.0)
+        assert snap["standing_orders"] == []
+
+    def test_snapshot_standing_order_view_fields(self) -> None:
+        """submit persistent=True 的 unit_claim 后，snapshot 含 standing_orders 条目，
+        含 id / display / issued_at 三个核心字段。
+        """
+        d = _make_director()
+        directive = _make_unit_claim_directive_persistent()
+        d._submit_directives([directive], now=10.0)
+        snap = d.build_snapshot(now=11.0)
+        assert len(snap["standing_orders"]) == 1
+        view = snap["standing_orders"][0]
+        assert view["id"] == directive.id
+        # display 应为 "Phoenix patrol natural"
+        assert view["display"]
+        assert "Phoenix" in view["display"]
+        assert "patrol" in view["display"]
+        assert "natural" in view["display"]
+        assert view["issued_at"] == 10.0
