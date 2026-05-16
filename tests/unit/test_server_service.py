@@ -13,8 +13,8 @@ import contextlib
 import pathlib
 from unittest.mock import AsyncMock, patch
 
-from voicecraft.server.service import BotService, ServiceConfig
-from voicecraft.server.tokens import RoomRegistry
+from vibecraft.server.service import BotService, ServiceConfig
+from vibecraft.server.tokens import RoomRegistry
 
 
 class TestServiceConfig:
@@ -74,8 +74,8 @@ class TestBotService:
         server_mock.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("voicecraft.server.service.serve", return_value=server_mock),
-            patch("voicecraft.server.service.print_connect_info"),
+            patch("vibecraft.server.service.serve", return_value=server_mock),
+            patch("vibecraft.server.service.print_connect_info"),
         ):
             task = asyncio.create_task(svc.run())
             # serve_forever 抛 CancelledError → run() 向上传播 → task done
@@ -94,8 +94,8 @@ class TestBotService:
         server_mock.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("voicecraft.server.service.serve", return_value=server_mock),
-            patch("voicecraft.server.service.print_connect_info") as mock_print,
+            patch("vibecraft.server.service.serve", return_value=server_mock),
+            patch("vibecraft.server.service.print_connect_info") as mock_print,
             contextlib.suppress(asyncio.CancelledError, Exception),
         ):
             await svc.run()

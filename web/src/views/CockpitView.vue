@@ -169,6 +169,10 @@ function fmtTs(ts: number): string {
 
   <!-- 指令输入区:fixed 始终悬浮在屏幕最底部(z-50,极简单行) -->
   <div class="fixed bottom-0 left-0 right-0 z-50 bg-surface/95 backdrop-blur border-t border-border px-3 py-2 shadow-[0_-8px_16px_-4px_rgba(0,0,0,0.5)]">
-    <CommandInput :can-send="props.canSendCommand" @send="(f) => emit('command', f)" />
+    <CommandInput
+      :can-send="props.canSendCommand"
+      :last-echo="props.lastEcho"
+      @send="(f) => emit('command', f)"
+    />
   </div>
 </template>

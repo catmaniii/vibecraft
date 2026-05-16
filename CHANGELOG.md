@@ -3,7 +3,7 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；版本号遵循
 [PEP 440](https://peps.python.org/pep-0440/)。
 
-VoiceCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-voicecraft-design.md` §12）：
+VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraft-design.md` §12）：
 
 | Milestone | 版本号 | 含义 |
 |---|---|---|
@@ -35,7 +35,7 @@ M1：Bot service + WS endpoint + 手机 PWA 框架 + 1 剧本 + LLM 单条话语
 
 - **`LLM_CONTROLLED` 映射到 ares 的 `CONTROL_GROUP_ONE`**：ares 的 `UnitRole`
   是固定 StrEnum 无法动态加成员；先前假设可以直接传字符串 `"LLM_CONTROLLED"`
-  会立即挂。`ares_adapter` 现内置 voicecraft UnitRole → ares UnitRole 映射表。
+  会立即挂。`ares_adapter` 现内置 vibecraft UnitRole → ares UnitRole 映射表。
 - **`scripts/smoke_test.py` 用真实 ares API**：`mediator.assign_role(tag=, role=)`
   + `mediator.get_units_from_role(role=, unit_type=)`（按 role 反查池），且 role
   传 ares 真实 enum 而非字符串。

@@ -5,7 +5,7 @@
 | 起草日期 | 2026-05-15 |
 | 状态 | 设计预研，待实现 |
 | 触发 | M1.6 真实端到端验证。手机侧没有对局 UI，玩家判断不出宏观剧本切没切（光看游戏微观操作看不出来）|
-| 上游真理源 | `docs/plans/2026-05-14-voicecraft-design.md` §9.3（WS schema）/ §9.4（事件 taxonomy）/ §9.5（UI 布局）|
+| 上游真理源 | `docs/plans/2026-05-14-vibecraft-design.md` §9.3（WS schema）/ §9.4（事件 taxonomy）/ §9.5（UI 布局）|
 | 范围 | 实现设计文档已规划的 `snapshot` / `event` 帧的**最小可用版**；M3「手机驾驶舱完整」是终态，这里只做能验证的子集 |
 
 > 本文档不重新设计 schema。`snapshot` / `event` 帧 schema 在设计文档 §9.3 已定义，
@@ -132,7 +132,7 @@ status_callback(sc2,bot,d)                                      → send command
 
 ### 1.4 ⚠️ current_phase_id 的陷阱
 
-`OpeningBuild.phases` 是给玩家看的**展示用阶段标签**，跟 `OpeningBuild.steps`（supply-keyed build steps）**没有结构化对应关系** —— phases 是 4 个，steps 是 11 步，没有字段把某步归到某 phase。ares 的 `build_order_runner` 也只知道"build 跑到第几步 / `build_completed`"，不知道 voicecraft 的 phase。
+`OpeningBuild.phases` 是给玩家看的**展示用阶段标签**，跟 `OpeningBuild.steps`（supply-keyed build steps）**没有结构化对应关系** —— phases 是 4 个，steps 是 11 步，没有字段把某步归到某 phase。ares 的 `build_order_runner` 也只知道"build 跑到第几步 / `build_completed`"，不知道 vibecraft 的 phase。
 
 **P0 处理**：`current_phase_id` 用**粗启发式**，别花时间做精确映射：
 - MVP 公式：opening 未完成 → `phases[0]`；`build_order_runner.build_completed` → `phases[-1]`（最后一个 phase，通常是"出发/执行"）。中间 phase 先不点亮。
@@ -147,7 +147,7 @@ status_callback(sc2,bot,d)                                      → send command
 
 ### 2.1 问题定义
 
-voicecraft 当前没有显式 "decision" 数据源。用户要的是"bot 自己的决策（宏观战术 + 微观决策状态机）实时同步到手机"。但**别过度设计** —— M1.6 阶段 bot 的"决策"其实很少：auto-pilot 是固定的两阶段 + ares 内部黑盒。真正有信息量、玩家需要据此干预的"决策点"是有限的。
+vibecraft 当前没有显式 "decision" 数据源。用户要的是"bot 自己的决策（宏观战术 + 微观决策状态机）实时同步到手机"。但**别过度设计** —— M1.6 阶段 bot 的"决策"其实很少：auto-pilot 是固定的两阶段 + ares 内部黑盒。真正有信息量、玩家需要据此干预的"决策点"是有限的。
 
 ### 2.2 要不要新建 decision 数据结构
 
@@ -217,9 +217,9 @@ voicecraft 当前没有显式 "decision" 数据源。用户要的是"bot 自己�
 
 snapshot 和 event 都需要 `id → display / phases`。当前 `Director.__init__` 没有 library 参数。
 
-**改 `src/voicecraft/bot/director.py`**：
+**改 `src/vibecraft/bot/director.py`**：
 - `Director.__init__` 增加可选参数 `library: StrategyLibrary | None = None`，存为 `self.library`。
-- **改 `src/voicecraft/server/game_process.py`** 的 `director_factory`：`Director(facade=facade, parser=parser, session=session, library=strategy_library)` —— `strategy_library` 在 `_build_bot_class` 里已经构造好了，直接传。
+- **改 `src/vibecraft/server/game_process.py`** 的 `director_factory`：`Director(facade=facade, parser=parser, session=session, library=strategy_library)` —— `strategy_library` 在 `_build_bot_class` 里已经构造好了，直接传。
 - 单测：`Director` 现有单测不传 library 仍能跑（None 时 snapshot 的 display 字段 fallback 成 id）。
 
 ### 3.2 App.vue：拆成「未开局 / 对局中」两视图
@@ -236,7 +236,7 @@ P0+P1 完成后的最小形态（ASCII 布局，对齐 §9.5 但砍到 MVP）：
 
 ```
 ┌─────────────────────────────────────────┐
-│ (header: VoiceCraft + StatusChain)       │  ← App.vue 提供，不在 CockpitView 里
+│ (header: VibeCraft + StatusChain)       │  ← App.vue 提供，不在 CockpitView 里
 ├─────────────────────────────────────────┤
 │ ▼ 当前剧本                                │  ← P0：核心，三档剧本卡片
 │  ┌─ 开局 ──────────────────────────────┐ │
@@ -340,11 +340,11 @@ export interface CommandEchoFrame {        // ⚠️ 现在就存在但 types.ts
 
 | # | 改哪个文件 | 加什么 | ⚠️ spike |
 |---|---|---|---|
-| P0-1 | `src/voicecraft/bot/director.py` | `__init__` 加 `library` 参数存 `self.library`；新增 `build_snapshot(now) -> dict` 方法（读 `board.current_stage` + `board.slots` + `library.get(id)` + `_recent_commands`，组装 §1.1 的 dict）；`current_phase_id` 不推（§1.4）| — |
-| P0-2 | `src/voicecraft/bot/director.py` | `on_tick` 里：若本 tick events 含 `STRATEGY_CHANGED`/`PHASE_TRANSITIONED` → 标记需推；另维护 tick 计数器做 ~2s 兜底；需推时调 `self._snapshot_callback(self.build_snapshot(now))`（callback 可为 None） | S1（兜底周期 N）|
-| P0-3 | `src/voicecraft/bot/ares_adapter.py` | `make_bot_class` 加参数 `snapshot_callback`；`director_factory` 调用处不变（director 自己持 callback）—— 实际把 `snapshot_callback` 透传给 `Director`：改 `director_factory` 签名让它能拿到 callback，或 `make_bot_class` 构造 Director 后 `director.set_snapshot_callback(cb)`。**推荐后者**（`Director.set_snapshot_callback`），避免改 `director_factory` 协议 | — |
-| P0-4 | `src/voicecraft/server/game_process.py` | `_child_entry` 加 `_put_snapshot(d)` 闭包（`up_q.put_nowait({"kind":"snapshot", **d})`）；`_build_bot_class` 把它透传给 `make_bot_class(snapshot_callback=...)`；`director_factory` 里 `Director(... library=strategy_library)` | — |
-| P0-5 | `src/voicecraft/server/ws.py` | `_dispatch_upstream` 加 `kind == "snapshot"` 分支 → `json.dumps({"type":"snapshot", ...})` 发给手机（payload 直接转发，子进程已组好）| — |
+| P0-1 | `src/vibecraft/bot/director.py` | `__init__` 加 `library` 参数存 `self.library`；新增 `build_snapshot(now) -> dict` 方法（读 `board.current_stage` + `board.slots` + `library.get(id)` + `_recent_commands`，组装 §1.1 的 dict）；`current_phase_id` 不推（§1.4）| — |
+| P0-2 | `src/vibecraft/bot/director.py` | `on_tick` 里：若本 tick events 含 `STRATEGY_CHANGED`/`PHASE_TRANSITIONED` → 标记需推；另维护 tick 计数器做 ~2s 兜底；需推时调 `self._snapshot_callback(self.build_snapshot(now))`（callback 可为 None） | S1（兜底周期 N）|
+| P0-3 | `src/vibecraft/bot/ares_adapter.py` | `make_bot_class` 加参数 `snapshot_callback`；`director_factory` 调用处不变（director 自己持 callback）—— 实际把 `snapshot_callback` 透传给 `Director`：改 `director_factory` 签名让它能拿到 callback，或 `make_bot_class` 构造 Director 后 `director.set_snapshot_callback(cb)`。**推荐后者**（`Director.set_snapshot_callback`），避免改 `director_factory` 协议 | — |
+| P0-4 | `src/vibecraft/server/game_process.py` | `_child_entry` 加 `_put_snapshot(d)` 闭包（`up_q.put_nowait({"kind":"snapshot", **d})`）；`_build_bot_class` 把它透传给 `make_bot_class(snapshot_callback=...)`；`director_factory` 里 `Director(... library=strategy_library)` | — |
+| P0-5 | `src/vibecraft/server/ws.py` | `_dispatch_upstream` 加 `kind == "snapshot"` 分支 → `json.dumps({"type":"snapshot", ...})` 发给手机（payload 直接转发，子进程已组好）| — |
 | P0-6 | `web/src/types.ts` | 加 `SnapshotFrame / StrategySlotView / CommandEchoFrame`；`DownFrame` union 扩展 | S3 |
 | P0-7 | `web/src/composables/useWs.ts` | `onmessage` 改 `switch(frame.type)`；加 `snapshotStrategy / recentCommands` ref；返回值暴露 | S3 |
 | P0-8 | `web/src/views/LaunchView.vue`（新）| 把现 `App.vue` 的 `<main>` 内容搬过来（状态卡片 + 开始对局 + 话语示例）| — |
@@ -362,11 +362,11 @@ export interface CommandEchoFrame {        // ⚠️ 现在就存在但 types.ts
 
 | # | 改哪个文件 | 加什么 | ⚠️ spike |
 |---|---|---|---|
-| P1-1 | `src/voicecraft/bot/director.py` | `_dispatch_event` 里：把 `BoardEvent` 转 `event` 帧 dict（kind 用 §9.4 taxonomy，strategy 类的 payload 补 `display`），调 `self._event_callback(event_dict)`（A 组埋点，§2.3）| S2（频率/防洪）|
-| P1-2 | `src/voicecraft/bot/ares_adapter.py` | `_VoiceCraftBot` 加 instance 变量 `_autopilot_started: bool = False`；`_register_auto_pilot` 里 `runner.build_completed` 从 false→true 的边沿，调一次 `event_callback({"type":"event","kind":"decision.autopilot_phase",...})`（B 组埋点）| — |
-| P1-3 | `src/voicecraft/bot/ares_adapter.py` + `director.py` | 新增 `event_callback` 透传链：`make_bot_class(event_callback=...)` → `Director.set_event_callback(cb)`（同 P0-3 的模式）| — |
-| P1-4 | `src/voicecraft/server/game_process.py` | `_put_event` 闭包（`up_q.put_nowait({"kind":"event", ...})`）；透传给 `make_bot_class(event_callback=...)` | — |
-| P1-5 | `src/voicecraft/server/ws.py` | `_dispatch_upstream` 加 `kind == "event"` 分支 → 发 `{"type":"event",...}` 给手机 | — |
+| P1-1 | `src/vibecraft/bot/director.py` | `_dispatch_event` 里：把 `BoardEvent` 转 `event` 帧 dict（kind 用 §9.4 taxonomy，strategy 类的 payload 补 `display`），调 `self._event_callback(event_dict)`（A 组埋点，§2.3）| S2（频率/防洪）|
+| P1-2 | `src/vibecraft/bot/ares_adapter.py` | `_VibeCraftBot` 加 instance 变量 `_autopilot_started: bool = False`；`_register_auto_pilot` 里 `runner.build_completed` 从 false→true 的边沿，调一次 `event_callback({"type":"event","kind":"decision.autopilot_phase",...})`（B 组埋点）| — |
+| P1-3 | `src/vibecraft/bot/ares_adapter.py` + `director.py` | 新增 `event_callback` 透传链：`make_bot_class(event_callback=...)` → `Director.set_event_callback(cb)`（同 P0-3 的模式）| — |
+| P1-4 | `src/vibecraft/server/game_process.py` | `_put_event` 闭包（`up_q.put_nowait({"kind":"event", ...})`）；透传给 `make_bot_class(event_callback=...)` | — |
+| P1-5 | `src/vibecraft/server/ws.py` | `_dispatch_upstream` 加 `kind == "event"` 分支 → 发 `{"type":"event",...}` 给手机 | — |
 | P1-6 | `web/src/types.ts` | 加 `EventFrame`；`DownFrame` union 扩展 | — |
 | P1-7 | `web/src/composables/useWs.ts` | `onmessage` 加 `event` 分支 → push 进 `events` ring buffer（裁到 ~30 条）；重连不清空 | — |
 | P1-8 | `web/src/components/DecisionFeed.vue`（新）| 接 `events`，倒序渲染；内含 `kind → 中文文案` 映射表 | — |

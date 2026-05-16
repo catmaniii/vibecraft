@@ -1,4 +1,4 @@
-# VoiceCraft one-click launcher.
+# VibeCraft one-click launcher.
 # Usage: run  .\scripts\start.ps1  from a PowerShell window.
 #   (Double-clicking a .ps1 opens it in Notepad and will NOT run it.)
 #
@@ -50,17 +50,17 @@ if (-not $env:SC2PATH) {
     Write-Host "WARNING: SC2PATH not set -- cannot launch SC2 on start_game." -ForegroundColor Yellow
 }
 
-# Build 'voicecraft serve' args. --extra dev --extra sc2 keeps the ares stack
+# Build 'vibecraft serve' args. --extra dev --extra sc2 keeps the ares stack
 # installed; a bare 'uv run' would sync to the pyproject default and uninstall
 # ares, breaking start_game.
 $ServeArgs = @(
     "run", "--extra", "dev", "--extra", "sc2",
-    "voicecraft", "serve", "--port", $Port
+    "vibecraft", "serve", "--port", $Port
 )
 if ($Token -ne "") { $ServeArgs += @("--token", $Token) }
 if ($Ip -ne "") { $ServeArgs += @("--ip", $Ip) }
 
-Write-Host "VoiceCraft starting... (Ctrl+C to stop)" -ForegroundColor Cyan
+Write-Host "VibeCraft starting... (Ctrl+C to stop)" -ForegroundColor Cyan
 Write-Host ""
 
 & uv @ServeArgs

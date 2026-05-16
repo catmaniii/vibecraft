@@ -134,7 +134,7 @@ export function useWs() {
             break
         }
       } catch {
-        console.warn('[voicecraft] WS 帧解析失败', evt.data)
+        console.warn('[vibecraft] WS 帧解析失败', evt.data)
       }
     }
 
@@ -153,7 +153,7 @@ export function useWs() {
 
     ws.onerror = () => {
       // onerror 之后 onclose 一定会触发，重连逻辑交给 onclose
-      console.warn('[voicecraft] WebSocket error，等待 onclose 触发重连')
+      console.warn('[vibecraft] WebSocket error，等待 onclose 触发重连')
     }
   }
 
@@ -183,7 +183,7 @@ export function useWs() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(frame))
     } else {
-      console.warn('[voicecraft] WS 未连接，帧丢弃', frame.type)
+      console.warn('[vibecraft] WS 未连接，帧丢弃', frame.type)
     }
   }
 

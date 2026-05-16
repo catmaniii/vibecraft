@@ -1,11 +1,11 @@
 # 通用 Auto-Pilot 实现方案（2026-05-15）
 
-> 目标：无玩家干预时 `_VoiceCraftBot` 自动运营到「普通电脑（Medium AI）」级别 ——
+> 目标：无玩家干预时 `_VibeCraftBot` 自动运营到「普通电脑（Medium AI）」级别 ——
 > 采矿、补农民、补 supply、补气、扩张、出兵。opening 期间只跑不冲突的 behavior，
 > opening 跑完后启用会造东西的 controller。
 >
 > 约束铁律：auto-pilot 的所有 behavior **绝对不能动** `UnitRole.CONTROL_GROUP_ONE`
-> 的单位（VoiceCraft 把它当「被玩家语音接管的特种兵」标记，见 `ares_adapter.py`
+> 的单位（VibeCraft 把它当「被玩家语音接管的特种兵」标记，见 `ares_adapter.py`
 > `role_map[UnitRole.LLM_CONTROLLED] = CONTROL_GROUP_ONE`）。
 
 ---
@@ -39,7 +39,7 @@
    behavior 之间无强耦合，但 `register_behavior` 顺序决定同 tick 内谁先抢资源）。
 
 > ⚠️ spike 验证点 A：确认 `super().on_step()` 内部 `build_order_runner.run_build()`
-> 抛异常时不会吞掉我们后面的 `register_behavior`。当前 `_VoiceCraftBot.on_step` 直接
+> 抛异常时不会吞掉我们后面的 `register_behavior`。当前 `_VibeCraftBot.on_step` 直接
 > `await super().on_step(iteration)` 无 try/except —— 若 ares 内部炸了，auto-pilot 也
 > 不会注册。本方案不改这个行为（保持和现状一致），但端到端 smoke 时留意日志。
 
@@ -264,12 +264,12 @@ auto-pilot 跑起来后不会莫名减少。
 
 ---
 
-## 5. `_VoiceCraftBot.on_step` 落地伪代码
+## 5. `_VibeCraftBot.on_step` 落地伪代码
 
-> 改动只在 `make_bot_class` 的 `_VoiceCraftBot` 类内。不动 `_AresFacade` / director /
+> 改动只在 `make_bot_class` 的 `_VibeCraftBot` 类内。不动 `_AresFacade` / director /
 > command queue 逻辑。下面用 `# === AUTO-PILOT ===` 标注新增块。
 
-### 5.1 模块顶部新增常量（放在 `make_bot_class` 内、`_VoiceCraftBot` 定义之前）
+### 5.1 模块顶部新增常量（放在 `make_bot_class` 内、`_VibeCraftBot` 定义之前）
 
 ```python
 # === AUTO-PILOT === 通用神族军队组合（追猎为主 + 不朽 + 叉子，普通电脑级别）
@@ -325,7 +325,7 @@ def _register_auto_pilot(self) -> None:
 
     隔离保证：所有这些 behavior 选 worker 都走 mediator.select_worker（只取
     UnitRole.GATHERING），出兵只操作生产建筑 —— 不会碰 CONTROL_GROUP_ONE
-    （= voicecraft 的 LLM_CONTROLLED 特种兵）。详见 docs/plans/2026-05-15-auto-pilot.md §4。
+    （= vibecraft 的 LLM_CONTROLLED 特种兵）。详见 docs/plans/2026-05-15-auto-pilot.md §4。
     """
     # build_order_runner 在 super().on_start() 末尾才构造；防御性 hasattr。
     runner = getattr(self, "build_order_runner", None)
@@ -358,7 +358,7 @@ def _register_auto_pilot(self) -> None:
 
 ### 5.3 实现注意
 
-- `_register_auto_pilot` 放 `_VoiceCraftBot` 类内即可，不需要进 `_AresFacade`
+- `_register_auto_pilot` 放 `_VibeCraftBot` 类内即可，不需要进 `_AresFacade`
   （它操作的是 ares behavior，是 bot 层的事，不是 facade 抽象的事）。
 - `self.start_location` / `self.townhalls` / `self.time` 都是 `AresBot` 继承自
   python-sc2 的属性，`on_start` 后随时可读。

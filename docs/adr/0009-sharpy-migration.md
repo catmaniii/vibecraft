@@ -8,11 +8,11 @@
 
 ## 背景
 
-voicecraft M1 完成后，底层 bot 框架仍沿用 Aristaeus（ares-sc2 的 starter 模板）。
+vibecraft M1 完成后，底层 bot 框架仍沿用 Aristaeus（ares-sc2 的 starter 模板）。
 问题：
 
-1. Aristaeus 没有完整战术（cannon rush + oracle，与 voicecraft 4 剧本毫无重叠）
-2. voicecraft 4 剧本（1门Robo / 4BG / IAC / Skytoss）在 ares 框架里完全没有接对应
+1. Aristaeus 没有完整战术（cannon rush + oracle，与 vibecraft 4 剧本毫无重叠）
+2. vibecraft 4 剧本（1门Robo / 4BG / IAC / Skytoss）在 ares 框架里完全没有接对应
    Manager，所有剧本口令只停留在 IntentParser → Director，到 Facade 就断了
 3. ares `BuildOrderRunner.switch_opening()` 是唯一运行时切剧本的 API，但它只支持
    opening 阶段，midgame / lategame 无 API
@@ -21,7 +21,7 @@ voicecraft M1 完成后，底层 bot 框架仍沿用 Aristaeus（ares-sc2 的 st
 
 | 维度 | ares / Aristaeus | sharpy-sc2 |
 |---|---|---|
-| 战术覆盖与 voicecraft 4 剧本对应度 | ~10% | ~70%（robo/gate4/macro_stalkers/voidray 直接对应）|
+| 战术覆盖与 vibecraft 4 剧本对应度 | ~10% | ~70%（robo/gate4/macro_stalkers/voidray 直接对应）|
 | 单 dummy 完整度 | starter 模板 | 真实完整对战 bot（robo.py 95 行就有 build + 扩张 + 攻防 + 微操）|
 | Combat/Production Manager | 各 bot 自包，质量参差 | 框架级共享，12 dummy 共用同一套成熟 manager |
 | Ladder 战绩 | Aristaeus 没成绩 | SharpenedEdge 长期前 10，MMR 1953 |
@@ -29,7 +29,7 @@ voicecraft M1 完成后，底层 bot 框架仍沿用 Aristaeus（ares-sc2 的 st
 ## 决策
 
 整体迁移到 sharpy-sc2，vendor 在 `vendor/sharpy/`（sharpy 不在 PyPI）。
-`_VoiceCraftProtossBot` 继承 `sharpy.knowledges.KnowledgeBot`。
+`_VibeCraftProtossBot` 继承 `sharpy.knowledges.KnowledgeBot`。
 
 ## Hook A 问题与解法
 
@@ -59,7 +59,7 @@ IfElse 立即走新分支。
 **问题**：sharpy `UnitTask.Reserved` 并非框架级 skip —— `UnitRoleManager.update()`
 每帧清空 `had_task_set`，下帧 update 时未声明的单位会被重置为 Idle/Gathering。
 
-**解法**：在 `_VoiceCraftProtossBot` 维护 `_llm_controlled_tags: set[int]`，
+**解法**：在 `_VibeCraftProtossBot` 维护 `_llm_controlled_tags: set[int]`，
 每 step `super().on_step()` 之后调 `_refresh_llm_controlled_roles()`，对集合里
 的每个存活单位重新调 `roles.set_task(UnitTask.Reserved, unit)`，确保当帧
 `had_task_set` 已登记。
@@ -78,13 +78,13 @@ IfElse 立即走新分支。
 
 ## M5 attack_window / micro_doctrine 字段穿透
 
-voicecraft YAML 的 `attack_window` / `micro_doctrine` 字段在 `director.build_snapshot`
+vibecraft YAML 的 `attack_window` / `micro_doctrine` 字段在 `director.build_snapshot`
 里穿透到 snapshot 帧，供手机 PWA 剧本卡片展示"出门 9:30–11:30"等信息。
 bot 行为本身不变（仍用 sharpy dummy 自带 timing），这是纯信息透明层。
 
 ## 不变量更新
 
-- `_VoiceCraftProtossBot` 继承 `KnowledgeBot`，通过 `create_plan()` 返回
+- `_VibeCraftProtossBot` 继承 `KnowledgeBot`，通过 `create_plan()` 返回
   `BuildOrder(IfElse(...))` 树，由 `active_recipe` flag 路由
 - `_llm_controlled_tags` 持久化 LLM_CONTROLLED 单位 tag，每 step refresh Reserved
 - sharpy vendor 在 `vendor/sharpy/`，`sys.path` 注入（lazy，单测 mock sys.modules 绕开）

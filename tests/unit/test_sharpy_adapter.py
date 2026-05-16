@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from voicecraft.strategy.library import StrategyLibrary
-from voicecraft.strategy.models import OpeningBuild
+from vibecraft.strategy.library import StrategyLibrary
+from vibecraft.strategy.models import OpeningBuild
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -226,7 +226,7 @@ def _inject_fake_sharpy() -> tuple[type, type, type, type]:
 @pytest.fixture(autouse=True)
 def _clean_sharpy_modules() -> Any:
     """每个测试前后清理 sharpy 模块缓存，保证测试互相隔离。"""
-    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -246,21 +246,21 @@ class TestMakeBotClass:
 
     def test_returns_class(self) -> None:
         _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         assert isinstance(BotClass, type)
 
     def test_class_is_knowledgebot_subclass(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         assert issubclass(BotClass, FakeKnowledgeBot)
 
     def test_unsupported_race_raises(self) -> None:
         _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         with pytest.raises(NotImplementedError):
             make_bot_class(lambda facade: None, race="Zerg")
@@ -276,7 +276,7 @@ class TestSetBuild:
 
     def test_set_build_updates_active_recipe(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -295,7 +295,7 @@ class TestSetBuild:
 
     def test_set_build_different_names(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -324,7 +324,7 @@ class TestOnStart:
 
     async def test_facade_created_after_on_start(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -337,7 +337,7 @@ class TestOnStart:
 
     async def test_director_created_after_on_start(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
         BotClass = make_bot_class(lambda facade: director_mock)
@@ -351,7 +351,7 @@ class TestOnStart:
 
     async def test_snapshot_callback_injected(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         snap_calls: list[Any] = []
         director_mock = MagicMock()
@@ -371,7 +371,7 @@ class TestOnStart:
 
     async def test_status_callback_on_start(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
 
@@ -394,7 +394,7 @@ class TestOnStart:
 
     async def test_no_strategy_library_is_fine(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -406,7 +406,7 @@ class TestOnStart:
 
     async def test_strategy_library_sets_initial_recipe(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         lib = _make_library("build_alpha", "build_beta")
         director_mock = MagicMock()
@@ -440,13 +440,13 @@ class TestOnStep:
 
     async def test_on_step_creates_task_for_command(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         parse_calls: list[tuple[str, float]] = []
 
         async def fake_on_player_command(text: str, now: float) -> Any:
             parse_calls.append((text, now))
-            from voicecraft.llm.schema import ParseError, ParseErrorKind
+            from vibecraft.llm.schema import ParseError, ParseErrorKind
 
             return ParseError(kind=ParseErrorKind.PROVIDER_ERROR, message="test")
 
@@ -482,7 +482,7 @@ class TestOnStep:
 
     async def test_on_step_view_move_calls_facade_move_camera(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
         director_mock.on_tick = MagicMock()
@@ -509,7 +509,7 @@ class TestOnStep:
 
     async def test_director_tick_called_each_step(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
         director_mock.on_tick = MagicMock()
@@ -540,7 +540,7 @@ class TestMoveCameraStaged:
 
     def test_move_camera_stores_pending_point(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -557,7 +557,7 @@ class TestMoveCameraStaged:
 
     def test_multiple_move_camera_collapses_to_latest(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -576,7 +576,7 @@ class TestMoveCameraStaged:
 
     async def test_drain_pending_actions_calls_client_move_camera(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -595,7 +595,7 @@ class TestMoveCameraStaged:
 
     async def test_drain_no_pending_is_noop(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -621,8 +621,8 @@ class TestSetUnitRole:
 
     async def test_set_unit_role_calls_set_task(self) -> None:
         FakeKnowledgeBot, FakeUnitTask, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.facade import UnitRole
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -643,8 +643,8 @@ class TestSetUnitRole:
 
     async def test_set_unit_role_warns_if_unit_not_found(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.facade import UnitRole
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -672,7 +672,7 @@ class TestOnEnd:
 
     async def test_on_end_calls_status_callback(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[str] = []
 
@@ -689,7 +689,7 @@ class TestOnEnd:
 
     async def test_on_end_awaits_cmd_tasks(self) -> None:
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         task_finished = asyncio.Event()
         status_calls: list[str] = []
@@ -723,17 +723,17 @@ class TestOnEnd:
 class TestBuildRoleMap:
     """auto_combat.common.build_role_map 返回 sharpy UnitTask 映射。"""
 
-    def test_role_map_contains_all_voicecraft_roles(self) -> None:
+    def test_role_map_contains_all_vibecraft_roles(self) -> None:
         _inject_fake_sharpy()
         # 注意：build_role_map 依赖 _ensure_sharpy_on_path，需要先注入
 
         # 覆盖注入，让 sharpy 模块从 sys.modules 获取
         with patch(
-            "voicecraft.bot.auto_combat.protoss.bot._ensure_sharpy_on_path",
+            "vibecraft.bot.auto_combat.protoss.bot._ensure_sharpy_on_path",
             return_value=None,
         ):
-            from voicecraft.bot.auto_combat.common import build_role_map
-            from voicecraft.bot.facade import UnitRole
+            from vibecraft.bot.auto_combat.common import build_role_map
+            from vibecraft.bot.facade import UnitRole
 
             role_map = build_role_map()
 
@@ -742,13 +742,13 @@ class TestBuildRoleMap:
 
     def test_llm_controlled_maps_to_reserved(self) -> None:
         _, FakeUnitTask, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
+        from vibecraft.bot.facade import UnitRole
 
         with patch(
-            "voicecraft.bot.auto_combat.protoss.bot._ensure_sharpy_on_path",
+            "vibecraft.bot.auto_combat.protoss.bot._ensure_sharpy_on_path",
             return_value=None,
         ):
-            from voicecraft.bot.auto_combat.common import build_role_map
+            from vibecraft.bot.auto_combat.common import build_role_map
 
             role_map = build_role_map()
 
@@ -762,7 +762,7 @@ class TestBuildRoleMap:
 
 def _make_opening_with_dummy(opening_id: str, dummy_spec: str) -> Any:
     """构造带 sharpy_dummy_class 字段的 OpeningBuild。"""
-    from voicecraft.strategy.models import OpeningBuild
+    from vibecraft.strategy.models import OpeningBuild
 
     return OpeningBuild.model_validate(
         {
@@ -782,7 +782,7 @@ def _make_library_with_dummies(*specs: tuple[str, str]) -> Any:
 
     specs: list of (opening_id, dummy_spec)
     """
-    from voicecraft.strategy.library import StrategyLibrary
+    from vibecraft.strategy.library import StrategyLibrary
 
     openings = [_make_opening_with_dummy(oid, spec) for oid, spec in specs]
     return StrategyLibrary(openings=openings, midgames=[], lategames=[])
@@ -794,7 +794,7 @@ class TestCreatePlan:
     async def test_create_plan_returns_build_order_with_dummies(self) -> None:
         """create_plan() 成功 import dummy + 返回包含 IfElse 的 BuildOrder。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, _FakeIfElse = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         # 构造 fake dummy module
         fake_dummy_plan = FakeBuildOrder([])
@@ -828,7 +828,7 @@ class TestCreatePlan:
     async def test_create_plan_builds_ifl_else_for_multiple_recipes(self) -> None:
         """多个 dummy → IfElse 嵌套结构（BuildOrder args 非空）。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, FakeIfElse = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         class FakeDummyA:
             def create_plan(self) -> Any:
@@ -878,7 +878,7 @@ class TestCreatePlan:
     async def test_set_build_then_lambda_condition_matches(self) -> None:
         """set_build("recipe_b") 后，active_recipe == "recipe_b" → IfElse condition 为 True。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, FakeIfElse = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         class FakeDummyA:
             def create_plan(self) -> Any:
@@ -935,7 +935,7 @@ class TestCreatePlan:
     async def test_set_build_invalid_still_works(self) -> None:
         """set_build("nonexistent") 不崩，active_recipe 更新；IfElse 条件全 False 走 else 兜底。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, _FakeIfElse = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         class FakeDummyA:
             def create_plan(self) -> Any:
@@ -968,7 +968,7 @@ class TestCreatePlan:
     async def test_create_plan_fallback_on_import_error(self) -> None:
         """dummy import 失败 → fallback BuildOrder，不抛，整体 create_plan 仍返回 BuildOrder。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, _ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         # "dummies.protoss.bad_module" 不在 sys.modules → importlib.import_module 失败
         # （确保不意外在 sys.modules 里）
@@ -995,7 +995,7 @@ class TestCreatePlan:
     async def test_create_plan_no_strategy_library_returns_empty(self) -> None:
         """无 strategy_library 时 create_plan 返回空 BuildOrder。"""
         FakeKnowledgeBot, *_, FakeBuildOrder, _ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)  # no strategy_library
         instance = object.__new__(BotClass)
@@ -1008,9 +1008,9 @@ class TestCreatePlan:
         assert isinstance(plan, FakeBuildOrder)
 
     def test_default_active_recipe_is_1g_robo_immortal(self) -> None:
-        """_VoiceCraftProtossBot.__init__ 设 active_recipe = '1g_robo_immortal'。"""
+        """_VibeCraftProtossBot.__init__ 设 active_recipe = '1g_robo_immortal'。"""
         _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         # 直接访问类属性（类级别默认值）
@@ -1018,7 +1018,7 @@ class TestCreatePlan:
 
 
 # ---------------------------------------------------------------------------
-# 测试：M4 LLM_CONTROLLED role 隔离 — _llm_controlled_tags / is_voicecraft_controlled
+# 测试：M4 LLM_CONTROLLED role 隔离 — _llm_controlled_tags / is_vibecraft_controlled
 # ---------------------------------------------------------------------------
 
 
@@ -1028,8 +1028,8 @@ class TestLLMControlledTags:
     async def test_set_unit_role_llm_controlled_adds_to_tags(self) -> None:
         """set_unit_role(tag, LLM_CONTROLLED) 后 _llm_controlled_tags 含该 tag。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.facade import UnitRole
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1050,8 +1050,8 @@ class TestLLMControlledTags:
     async def test_set_unit_role_non_llm_does_not_add_to_tags(self) -> None:
         """set_unit_role(tag, ARMY) 不写入 _llm_controlled_tags。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.facade import UnitRole
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1072,8 +1072,8 @@ class TestLLMControlledTags:
     async def test_set_unit_role_reassign_removes_from_llm_tags(self) -> None:
         """LLM_CONTROLLED 单位 release 时（设 ARMY）从 _llm_controlled_tags 移除。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.facade import UnitRole
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.facade import UnitRole
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1091,10 +1091,10 @@ class TestLLMControlledTags:
 
         assert 303 not in instance._llm_controlled_tags
 
-    async def test_is_voicecraft_controlled_true_for_claimed_unit(self) -> None:
-        """is_voicecraft_controlled(unit) → True 当 tag 在 _llm_controlled_tags。"""
+    async def test_is_vibecraft_controlled_true_for_claimed_unit(self) -> None:
+        """is_vibecraft_controlled(unit) → True 当 tag 在 _llm_controlled_tags。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1104,12 +1104,12 @@ class TestLLMControlledTags:
         unit_mock = MagicMock()
         unit_mock.tag = 404
 
-        assert instance.is_voicecraft_controlled(unit_mock) is True
+        assert instance.is_vibecraft_controlled(unit_mock) is True
 
-    async def test_is_voicecraft_controlled_false_for_unclaimed_unit(self) -> None:
-        """is_voicecraft_controlled(unit) → False 当 tag 不在 _llm_controlled_tags。"""
+    async def test_is_vibecraft_controlled_false_for_unclaimed_unit(self) -> None:
+        """is_vibecraft_controlled(unit) → False 当 tag 不在 _llm_controlled_tags。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1119,12 +1119,12 @@ class TestLLMControlledTags:
         unit_mock = MagicMock()
         unit_mock.tag = 505
 
-        assert instance.is_voicecraft_controlled(unit_mock) is False
+        assert instance.is_vibecraft_controlled(unit_mock) is False
 
     async def test_refresh_llm_controlled_roles_calls_set_task_each_step(self) -> None:
         """_refresh_llm_controlled_roles() 对 _llm_controlled_tags 里的单位重新声明 Reserved。"""
         FakeKnowledgeBot, FakeUnitTask, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1142,7 +1142,7 @@ class TestLLMControlledTags:
     async def test_refresh_llm_controlled_roles_removes_dead_units(self) -> None:
         """unit_cache.by_tag 返回 None（单位已死）→ tag 从 _llm_controlled_tags 移除。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1159,7 +1159,7 @@ class TestLLMControlledTags:
     async def test_on_unit_destroyed_removes_from_llm_controlled_tags(self) -> None:
         """on_unit_destroyed(tag) → tag 从 _llm_controlled_tags 移除。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)
@@ -1174,7 +1174,7 @@ class TestLLMControlledTags:
     async def test_on_unit_destroyed_non_llm_tag_is_noop(self) -> None:
         """on_unit_destroyed(tag) 当 tag 不在 _llm_controlled_tags 时不崩。"""
         FakeKnowledgeBot, *_ = _inject_fake_sharpy()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         instance = object.__new__(BotClass)

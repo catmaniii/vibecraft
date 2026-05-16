@@ -1,7 +1,7 @@
 {
-  "name": "voicecraft-pwa",
+  "name": "vibecraft-pwa",
   "version": "0.1.0",
-  "description": "VoiceCraft 手机驾驶舱 PWA",
+  "description": "VibeCraft 手机驾驶舱 PWA",
   "private": true,
   "type": "module",
   "scripts": {

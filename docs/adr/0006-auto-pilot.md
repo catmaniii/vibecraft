@@ -6,7 +6,7 @@
 ## 背景
 
 M1.6 真实启动 SC2 端到端时,用户(资深 SC2 玩家)反馈基础 bot「太弱」——闲置农民
-不采矿、opening build 跑完后 bot 躺平。根因:`_VoiceCraftBot` 只接了 ares 的
+不采矿、opening build 跑完后 bot 躺平。根因:`_VibeCraftBot` 只接了 ares 的
 opening `build_order_runner`,**没接 ares 的 macro behaviors**(Mining / 出兵 /
 扩张等),所以 opening steps 之外没有任何自动运营。
 
@@ -15,7 +15,7 @@ opening `build_order_runner`,**没接 ares 的 macro behaviors**(Mining / 出兵
 
 ## 决策
 
-`_VoiceCraftBot.on_step` 每 tick `register_behavior()` 一套 ares macro behaviors
+`_VibeCraftBot.on_step` 每 tick `register_behavior()` 一套 ares macro behaviors
 (`behavior_executioner` 每 `_after_step` 清空注册列表,故必须每 tick 重注册)。
 **两阶段**,用 `build_order_runner.build_completed` 分界:
 
@@ -36,7 +36,7 @@ midgame/lategame 的 ares 接入留给 M2)。本 ADR 是「通用兜底」,让 b
 
 ## role 隔离(关键约束)
 
-auto-pilot 的所有 behavior **不碰** `UnitRole.CONTROL_GROUP_ONE`(voicecraft 把它
+auto-pilot 的所有 behavior **不碰** `UnitRole.CONTROL_GROUP_ONE`(vibecraft 把它
 当「被玩家语音接管的特种兵」标记)。调研结论:所有造建筑/扩张/补气类 behavior 选
 worker 都走 `mediator.select_worker`(只取 `UnitRole.GATHERING`);`SpawnController`
 / `ProductionController` 只操作生产建筑、不按角色抓 army 单位;ares 的 `catch_unit`
@@ -44,10 +44,10 @@ worker 都走 `mediator.select_worker`(只取 `UnitRole.GATHERING`);`SpawnContro
 
 ## 实现
 
-`src/voicecraft/bot/ares_adapter.py` `make_bot_class` 内:
+`src/vibecraft/bot/ares_adapter.py` `make_bot_class` 内:
 - import 块加 `ares.behaviors.macro` 的 7 个 behavior + `sc2.ids.unit_typeid`
 - `generic_army` 常量 + `target_worker_count` / `target_base_count`
-- `_VoiceCraftBot.on_step` 调 `self._register_auto_pilot()`
+- `_VibeCraftBot.on_step` 调 `self._register_auto_pilot()`
 - 新增 `_register_auto_pilot()` 方法(两阶段注册)
 
 完整方案 + 4 个 spike 验证点见 `docs/plans/2026-05-15-auto-pilot.md`。

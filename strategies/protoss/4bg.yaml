@@ -2,7 +2,7 @@ kind: opening_build
 id: 4bg
 display_name_zh: "4 门 BG 早压"
 summary_zh: "经典 4 BG 折跃压制(无闪烁):单 BG → BC → 升折跃,补 3 BG,折跃完成 + 探机前线修 PY+BG → 出门压制 + 火力侦察"
-sharpy_dummy_class: "voicecraft.bot.auto_combat.protoss.plans.gate4_pressure:Gate4Pressure"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.gate4_pressure:Gate4Pressure"
 aliases:
   - "4BG"
   - "4bg"

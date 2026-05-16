@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import pytest
 
-from voicecraft.dsl import (
+from vibecraft.dsl import (
     DSLEvalError,
     DSLSyntaxError,
     GameContext,
     evaluate,
     parse,
 )
-from voicecraft.dsl.ast_nodes import BoolOp, Compare, FieldAccess, In, Literal, Not
-from voicecraft.dsl.lexer import TokKind, tokenize
+from vibecraft.dsl.ast_nodes import BoolOp, Compare, FieldAccess, In, Literal, Not
+from vibecraft.dsl.lexer import TokKind, tokenize
 
 # =========================================================================
 # Lexer

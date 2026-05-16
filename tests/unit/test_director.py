@@ -18,14 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from voicecraft.bot import BotState, Director, FakeFacade, UnitRole
-from voicecraft.llm import (
+from vibecraft.bot import BotState, Director, FakeFacade, UnitRole
+from vibecraft.llm import (
     IntentParser,
     MockLLMProvider,
     ProviderResponse,
 )
-from voicecraft.logging_ import GameSession, GameSessionConfig
-from voicecraft.strategy import StrategyLibrary
+from vibecraft.logging_ import GameSession, GameSessionConfig
+from vibecraft.strategy import StrategyLibrary
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -251,7 +251,7 @@ class TestParseErrorIsNoop:
                 ],
             },
         )
-        from voicecraft.llm import ParseError
+        from vibecraft.llm import ParseError
 
         outcome = await director.on_player_command("...", now=10.0)
         assert isinstance(outcome, ParseError)
@@ -358,7 +358,7 @@ class TestLoggingIntegration:
     async def test_committed_event_logged(
         self, library: StrategyLibrary, session: GameSession
     ) -> None:
-        from voicecraft.logging_ import LogStream
+        from vibecraft.logging_ import LogStream
 
         facade = FakeFacade()
         director = _make_director(

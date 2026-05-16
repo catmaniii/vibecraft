@@ -1,4 +1,4 @@
-"""Headless 验证:spawn voicecraft bot + SC2,跑 N 秒后 kill,grep 关键事件。
+"""Headless 验证:spawn vibecraft bot + SC2,跑 N 秒后 kill,grep 关键事件。
 
 不依赖 PWA / service,直接用 game_process.GameProcess。SC2 窗口会弹出
 (Windows 不能完全 headless),但我们自动 kill 不需要看。
@@ -20,10 +20,10 @@ import os
 import sys
 import time
 
-# 父进程不需要装 sharpy(子进程会装),但 import voicecraft 需要 path
+# 父进程不需要装 sharpy(子进程会装),但 import vibecraft 需要 path
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "src"))
 
-from voicecraft.server.game_process import GameConfig, GameProcess  # noqa: E402
+from vibecraft.server.game_process import GameConfig, GameProcess
 
 
 async def main() -> int:
@@ -57,7 +57,13 @@ async def main() -> int:
             sc2 = msg.get("sc2") or "?"
             bot = msg.get("bot") or "?"
             statuses.append((time.time() - start_ts, str(sc2), str(bot)))
-            log.info("[+%.1fs] sc2=%s bot=%s detail=%s", time.time() - start_ts, sc2, bot, msg.get("detail", ""))
+            log.info(
+                "[+%.1fs] sc2=%s bot=%s detail=%s",
+                time.time() - start_ts,
+                sc2,
+                bot,
+                msg.get("detail", ""),
+            )
             if str(sc2) in ("crashed", "ended"):
                 return
 

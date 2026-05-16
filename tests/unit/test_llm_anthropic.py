@@ -21,10 +21,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from voicecraft.llm.anthropic_provider import AnthropicProvider
-from voicecraft.llm.config import LLMConfig
-from voicecraft.llm.errors import LLMError
-from voicecraft.llm.provider import ProviderResponse
+from vibecraft.llm.anthropic_provider import AnthropicProvider
+from vibecraft.llm.config import LLMConfig
+from vibecraft.llm.errors import LLMError
+from vibecraft.llm.provider import ProviderResponse
 
 # ======================================================================
 # 工具函数：构造 fake anthropic Message
@@ -481,7 +481,7 @@ class TestIntentParserWithAnthropicProvider:
 
     @pytest.fixture(scope="class")
     def library(self):  # type: ignore[no-untyped-def]
-        from voicecraft.strategy import StrategyLibrary
+        from vibecraft.strategy import StrategyLibrary
 
         return StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
@@ -491,9 +491,9 @@ class TestIntentParserWithAnthropicProvider:
     @pytest.mark.asyncio
     async def test_successful_parse_via_real_provider_mock(self, library) -> None:  # type: ignore[no-untyped-def]
         """AnthropicProvider（mock SDK）→ IntentParser → IntentParseResult。"""
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, IntentParseResult
-        from voicecraft.llm.prompt import ParseContext
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, IntentParseResult
+        from vibecraft.llm.prompt import ParseContext
 
         provider = _make_provider()
         raw_data: dict[str, Any] = {
@@ -523,9 +523,9 @@ class TestIntentParserWithAnthropicProvider:
         """RateLimitError → ParseError(PROVIDER_ERROR)，bot 状态不变。"""
         import anthropic
 
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, ParseError, ParseErrorKind
-        from voicecraft.llm.prompt import ParseContext
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, ParseError, ParseErrorKind
+        from vibecraft.llm.prompt import ParseContext
 
         provider = _make_provider()
         fake_response = MagicMock()
@@ -553,9 +553,9 @@ class TestIntentParserWithAnthropicProvider:
         """
         import anthropic
 
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, ParseError, ParseErrorKind
-        from voicecraft.llm.prompt import ParseContext
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, ParseError, ParseErrorKind
+        from vibecraft.llm.prompt import ParseContext
 
         provider = _make_provider()
         fake_request = MagicMock()
@@ -572,9 +572,9 @@ class TestIntentParserWithAnthropicProvider:
     @pytest.mark.asyncio
     async def test_asyncio_timeout_becomes_timeout_error(self, library) -> None:  # type: ignore[no-untyped-def]
         """asyncio.wait_for 超时（慢响应）→ ParseError(TIMEOUT)。"""
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, ParseError, ParseErrorKind, ParserConfig
-        from voicecraft.llm.prompt import ParseContext
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, ParseError, ParseErrorKind, ParserConfig
+        from vibecraft.llm.prompt import ParseContext
 
         provider = _make_provider()
 
@@ -593,9 +593,9 @@ class TestIntentParserWithAnthropicProvider:
     @pytest.mark.asyncio
     async def test_llm_error_no_tool_use_becomes_provider_error(self, library) -> None:  # type: ignore[no-untyped-def]
         """tool_use 缺失 → LLMError → ParseError(PROVIDER_ERROR)。"""
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, ParseError, ParseErrorKind
-        from voicecraft.llm.prompt import ParseContext
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, ParseError, ParseErrorKind
+        from vibecraft.llm.prompt import ParseContext
 
         provider = _make_provider()
         # 返回只有 text block 的消息
@@ -611,10 +611,10 @@ class TestIntentParserWithAnthropicProvider:
     @pytest.mark.asyncio
     async def test_logging_writes_full_prompt_to_llm_calls(self, library) -> None:  # type: ignore[no-untyped-def]
         """parse 成功 → llm_calls/call_NNN.json 含 system_prompt + dynamic_context。"""
-        from voicecraft.directives.types import StageKind
-        from voicecraft.llm import IntentParser, IntentParseResult
-        from voicecraft.llm.prompt import ParseContext
-        from voicecraft.logging_ import GameSession, GameSessionConfig
+        from vibecraft.directives.types import StageKind
+        from vibecraft.llm import IntentParser, IntentParseResult
+        from vibecraft.llm.prompt import ParseContext
+        from vibecraft.logging_ import GameSession, GameSessionConfig
 
         session = GameSession(GameSessionConfig(use_null_sinks=True))
         provider = _make_provider()

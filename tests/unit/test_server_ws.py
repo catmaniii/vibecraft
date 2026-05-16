@@ -12,8 +12,8 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from voicecraft.server.tokens import RoomRegistry
-from voicecraft.server.ws import WsConnection, make_ws_handler
+from vibecraft.server.tokens import RoomRegistry
+from vibecraft.server.ws import WsConnection, make_ws_handler
 
 # ---------------------------------------------------------------------------
 # 测试桩
@@ -191,7 +191,7 @@ class TestHeartbeat:
 
         ws.send = capture_send  # type: ignore[method-assign]
 
-        with patch("voicecraft.server.ws._PING_INTERVAL", 0.01):
+        with patch("vibecraft.server.ws._PING_INTERVAL", 0.01):
             task = asyncio.create_task(conn._heartbeat_loop())
             await asyncio.sleep(0.05)
             task.cancel()

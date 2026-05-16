@@ -1,11 +1,11 @@
 [project]
-name = "voicecraft"
+name = "vibecraft"
 version = "0.1.0a1"
 description = "用语音 + 文字指挥 AI 替你操作 SC2 神族"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "Proprietary" }
-authors = [{ name = "VoiceCraft team" }]
+authors = [{ name = "VibeCraft team" }]
 
 dependencies = [
     "pydantic>=2.7,<3",
@@ -41,14 +41,14 @@ sc2 = [
 ]
 
 [project.scripts]
-voicecraft = "voicecraft.cli:main"
+vibecraft = "vibecraft.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/voicecraft"]
+packages = ["src/vibecraft"]
 
 # ----------------------------------------------------------------------
 # uv sources —— 把 sc2 extra 里的 git 依赖映射到源（uv 专用，pip 不读这段）。
@@ -159,7 +159,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-source = ["src/voicecraft"]
+source = ["src/vibecraft"]
 omit = [
     "*/__init__.py",
     "*/cli.py",                    # CLI 入口，靠端到端覆盖

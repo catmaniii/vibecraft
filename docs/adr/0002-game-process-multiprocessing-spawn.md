@@ -72,5 +72,5 @@ proc.exitcode != 0 (兜底)→ sc2: "crashed", bot: "error"
 ## 未决 / 留给后续里程碑
 
 - **M1.4+**：下行队列激活（`leave` / `command` 传进子进程）
-- **M1.5**：`_build_bot_class` 里的 stub `_M12Bot` 替换为真正的 `VoiceCraftBot`
+- **M1.5**：`_build_bot_class` 里的 stub `_M12Bot` 替换为真正的 `VibeCraftBot`
 - **watchdog 超时**：`_LAUNCH_TIMEOUT = 120s` 是保守值，M0c 实测 5-6s；未来可加 launching 超时判定

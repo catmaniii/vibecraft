@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from voicecraft.strategy import (
+from vibecraft.strategy import (
     AliasTable,
     BuildStep,
     LategameDoctrine,
@@ -26,7 +26,7 @@ from voicecraft.strategy import (
     StrategyNotFoundError,
     VerbHint,
 )
-from voicecraft.strategy.errors import StrategyValidationError
+from vibecraft.strategy.errors import StrategyValidationError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -224,7 +224,7 @@ class TestStrategyLibrary:
         ob = lib.get_opening("1g_robo_immortal")
         assert isinstance(ob, OpeningBuild)
         assert "1门Robo" in ob.aliases
-        # 第一步：13 build PY(voicecraft 用快捷键命名,PY=Pylon)
+        # 第一步：13 build PY(vibecraft 用快捷键命名,PY=Pylon)
         steps = ob.parsed_steps()
         assert steps[0].supply == 13
         assert steps[0].verb == "build"

@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from voicecraft.bot.build_translator import (
+from vibecraft.bot.build_translator import (
     opening_to_ares_builds_entry,
     openings_to_ares_config_builds,
     translate_opening_to_ares_steps,
 )
-from voicecraft.strategy.models import OpeningBuild
+from vibecraft.strategy.models import OpeningBuild
 
 # ---------------------------------------------------------------------------
 # 工具函数：从字符串快速构造单步 OpeningBuild

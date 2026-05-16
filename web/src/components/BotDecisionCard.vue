@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // bot 当前决策(独立大卡片,放在 standing orders 上方)
-// stance 来自 voicecraft 状态机:attacking/defending/expanding/scouting/harassing/sustaining
+// stance 来自 vibecraft 状态机:attacking/defending/expanding/scouting/harassing/sustaining
 // 未来 plan 加新行为(偷矿/空投 等)→ stance 扩展,这里 stanceMeta 加新条目
 import { computed } from 'vue'
 import type { TacticsView } from '@/types'

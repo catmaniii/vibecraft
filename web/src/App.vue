@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// VoiceCraft PWA 主组件（P0-11）
+// VibeCraft PWA 主组件（P0-11）
 // - 三段式系统状态链（header 常驻）
 // - sc2 === 'playing' → CockpitView（对局驾驶舱）
 // - 其他 → LaunchView（启动 + 话语示例）
@@ -65,7 +65,7 @@ const sc2Label = computed(() => {
 
     <!-- 顶栏：Logo + 状态链（常驻） -->
     <header class="flex items-center justify-between px-4 py-3 bg-surface-2 border-b border-border">
-      <span class="font-bold tracking-wide text-accent">VoiceCraft</span>
+      <span class="font-bold tracking-wide text-accent">VibeCraft</span>
       <StatusChain :status="status" />
     </header>
 
@@ -73,7 +73,7 @@ const sc2Label = computed(() => {
     <div v-if="!token" class="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
       <p class="text-2xl font-bold text-accent">扫码启动</p>
       <p class="text-muted text-sm leading-relaxed">
-        请在 PC 端运行 <code class="bg-surface-3 px-1 rounded">voicecraft serve</code>，<br/>
+        请在 PC 端运行 <code class="bg-surface-3 px-1 rounded">vibecraft serve</code>，<br/>
         然后用手机扫码或输入显示的地址访问。
       </p>
     </div>

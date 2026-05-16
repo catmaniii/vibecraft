@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from voicecraft.directives import (
+from vibecraft.directives import (
     Action,
     BoardEventKind,
     Directive,
@@ -35,8 +35,8 @@ from voicecraft.directives import (
     Verb,
     ViewMovePayload,
 )
-from voicecraft.directives.board import DirectiveBoardError
-from voicecraft.directives.scope import TargetKind
+from vibecraft.directives.board import DirectiveBoardError
+from vibecraft.directives.scope import TargetKind
 
 # =========================================================================
 # Payload models

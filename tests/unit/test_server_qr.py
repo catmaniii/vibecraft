@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from voicecraft.server.qr import build_connect_url, get_lan_ip, print_connect_info, render_qr_ascii
+from vibecraft.server.qr import build_connect_url, get_lan_ip, print_connect_info, render_qr_ascii
 
 
 class TestBuildConnectUrl:
@@ -60,7 +60,7 @@ class TestGetLanIp:
 
     def test_fallback_on_error(self) -> None:
         """socket.connect 抛 OSError 时 fallback 127.0.0.1。"""
-        with patch("voicecraft.server.qr.socket.socket") as mock_socket_cls:
+        with patch("vibecraft.server.qr.socket.socket") as mock_socket_cls:
             mock_sock = MagicMock()
             mock_sock.connect.side_effect = OSError("no network")
             mock_socket_cls.return_value = mock_sock
@@ -70,7 +70,7 @@ class TestGetLanIp:
 
     def test_normal_path_returns_socket_ip(self) -> None:
         """正常情况下返回 getsockname()[0] 的结果。"""
-        with patch("voicecraft.server.qr.socket.socket") as mock_socket_cls:
+        with patch("vibecraft.server.qr.socket.socket") as mock_socket_cls:
             mock_sock = MagicMock()
             mock_sock.getsockname.return_value = ("192.168.0.42", 0)
             mock_socket_cls.return_value = mock_sock
@@ -99,6 +99,6 @@ class TestPrintConnectInfo:
 
     def test_auto_ip_detection(self) -> None:
         """ip=None 时应当自动检测（不抛异常）。"""
-        with patch("voicecraft.server.qr.get_lan_ip", return_value="192.168.99.1"):
+        with patch("vibecraft.server.qr.get_lan_ip", return_value="192.168.99.1"):
             url = print_connect_info(port=8080, token="t")
         assert "192.168.99.1" in url

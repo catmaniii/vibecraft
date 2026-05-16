@@ -1,8 +1,8 @@
 # ARCHITECTURE.md
 
-VoiceCraft 当前代码里**实际**的形态。
+VibeCraft 当前代码里**实际**的形态。
 
-- **WHY**（为什么这样设计）→ `docs/plans/2026-05-14-voicecraft-design.md`（14 节真理源）
+- **WHY**（为什么这样设计）→ `docs/plans/2026-05-14-vibecraft-design.md`（14 节真理源）
 - **WHAT IS**（代码现状，跟代码同步）→ 本文档
 - **WHAT NEXT**（待办 + 进度）→ `TASKS.md`
 - **HOW TO WORK**（约定 + 指针）→ `CLAUDE.md`
@@ -14,7 +14,7 @@ VoiceCraft 当前代码里**实际**的形态。
 ## 模块图
 
 ```
-src/voicecraft/
+src/vibecraft/
 ├── directives/          # 纯数据 + 状态机
 │   ├── models.py        # Directive + 各 Payload 多态（pydantic v2）
 │   ├── types.py         # DirectiveType / StageKind / IssuedBy / 优先级映射
@@ -45,7 +45,7 @@ src/voicecraft/
     └── auto_combat/
         ├── common.py    # build_role_map() + run_command_with_echo()
         └── protoss/
-            └── bot.py   # _VoiceCraftProtossBot（KnowledgeBot 子类）+ _SharpyFacade
+            └── bot.py   # _VibeCraftProtossBot（KnowledgeBot 子类）+ _SharpyFacade
 
 vendor/sharpy/           # sharpy-sc2 源码（MIT，vendor 因不在 PyPI；见 ADR 0009）
 ```
@@ -99,7 +99,7 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
   Reserved，确保 sharpy `UnitRoleManager.update()` 每帧清 `had_task_set` 后角色不丢。
   `PlanZoneAttack` 的 `free_units`（Idle+Moving）天然不含 Reserved，Reserved 单位
   不会被拉去出门攻击或守基地（见 ADR 0009 §Hook C）。
-- **`_VoiceCraftProtossBot` 继承 `KnowledgeBot`，`create_plan()` 返回
+- **`_VibeCraftProtossBot` 继承 `KnowledgeBot`，`create_plan()` 返回
   `BuildOrder(IfElse(...))` 树**：`active_recipe` flag 控制路由，`set_build()` 写入
   后下一个 step IfElse 立即生效（lambda 每 step 重新求值）。见 ADR 0009 §Hook A。
 - **IntentParser 任何异常都不抛**：失败一律返回 `ParseError`，bot 状态完全不

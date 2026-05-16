@@ -2,7 +2,7 @@
 
 测试策略：不需要真实 SC2 / ares，全部 mock。验证：
 1. Gap 2：WS command handler → send_command
-2. Gap 2：_VoiceCraftBot.on_step 消费下行队列
+2. Gap 2：_VibeCraftBot.on_step 消费下行队列
 3. Gap 3：on_player_command 用 create_task fire-and-forget（不阻塞 on_step）
 4. Gap 5：status_callback 在 on_start/on_end 调用
 5. 基础 echo：parse 完成后调 echo_callback
@@ -146,7 +146,7 @@ def _inject_fake_ares() -> tuple[type, type]:
 
 @pytest.fixture(autouse=True)
 def _clean_ares_modules() -> Any:
-    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -166,9 +166,9 @@ class TestWsCommandHandler:
 
     async def test_command_sent_to_game_process(self) -> None:
         """command 帧里的 text 应通过 send_command 发到子进程。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -197,9 +197,9 @@ class TestWsCommandHandler:
 
     async def test_command_dropped_when_no_game(self) -> None:
         """对局没开（is_running=False）时，command 应被静默丢弃。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -218,9 +218,9 @@ class TestWsCommandHandler:
 
     async def test_empty_text_ignored(self) -> None:
         """text 为空时不发送。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -242,9 +242,9 @@ class TestWsCommandHandler:
 
     async def test_dispatch_command_calls_handle_command(self) -> None:
         """_dispatch 收到 command 帧时调用 _handle_command（不再是 stub）。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -270,7 +270,7 @@ class TestWsCommandHandler:
 
 
 # ---------------------------------------------------------------------------
-# Gap 2 + Gap 3：_VoiceCraftBot.on_step 消费下行队列 + fire-and-forget
+# Gap 2 + Gap 3：_VibeCraftBot.on_step 消费下行队列 + fire-and-forget
 # ---------------------------------------------------------------------------
 
 
@@ -280,14 +280,14 @@ class TestBotOnStepConsumesQueue:
     async def test_on_step_creates_task_for_command(self) -> None:
         """on_step 里收到 command 消息，应 create_task 调 director.on_player_command。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         parse_calls: list[tuple[str, float]] = []
 
         async def fake_on_player_command(text: str, now: float) -> Any:
             parse_calls.append((text, now))
             # 返回一个 ParseError 模拟 LLM 完成
-            from voicecraft.llm.schema import ParseError, ParseErrorKind
+            from vibecraft.llm.schema import ParseError, ParseErrorKind
 
             return ParseError(kind=ParseErrorKind.PROVIDER_ERROR, message="test")
 
@@ -327,7 +327,7 @@ class TestBotOnStepConsumesQueue:
     async def test_on_step_does_not_await_command(self) -> None:
         """on_step 在 task 完成前就返回（不阻塞 realtime loop）。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         parse_started = asyncio.Event()
         parse_can_finish = asyncio.Event()
@@ -335,7 +335,7 @@ class TestBotOnStepConsumesQueue:
         async def slow_parse(text: str, now: float) -> Any:
             parse_started.set()
             await parse_can_finish.wait()  # 模拟 LLM 慢调用
-            from voicecraft.llm.schema import ParseError, ParseErrorKind
+            from vibecraft.llm.schema import ParseError, ParseErrorKind
 
             return ParseError(kind=ParseErrorKind.TIMEOUT, message="slow")
 
@@ -375,7 +375,7 @@ class TestBotOnStepConsumesQueue:
     async def test_cmd_task_exception_is_logged_not_raised(self) -> None:
         """后台 cmd task 异常时 log 不向上传播（不崩 bot）。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         async def failing_parse(text: str, now: float) -> Any:
             raise RuntimeError("parse 崩了")
@@ -414,7 +414,7 @@ class TestBotOnStepConsumesQueue:
     async def test_empty_queue_does_not_crash(self) -> None:
         """下行队列空时 on_step 正常跑。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
         director_mock.on_tick = MagicMock()
@@ -448,7 +448,7 @@ class TestStatusCallback:
     async def test_status_callback_on_start(self) -> None:
         """on_start 应调 status_callback("in_game", ...) 和 status_callback("playing", ...)。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
 
@@ -474,7 +474,7 @@ class TestStatusCallback:
     async def test_status_callback_on_end(self) -> None:
         """on_end 应调 status_callback("ended", ...)。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
 
@@ -497,7 +497,7 @@ class TestStatusCallback:
     async def test_no_status_callback_is_backward_compatible(self) -> None:
         """status_callback=None 时，on_start / on_end 不抛异常（向后兼容）。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(
             director_factory=lambda facade: MagicMock(),
@@ -525,8 +525,8 @@ class TestEchoCallback:
     async def test_echo_on_successful_parse(self) -> None:
         """IntentParseResult → echo_callback(text, interpretation_zh)。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
-        from voicecraft.llm.schema import IntentParseResult
+        from vibecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.llm.schema import IntentParseResult
 
         echo_calls: list[tuple[str, str]] = []
 
@@ -568,8 +568,8 @@ class TestEchoCallback:
     async def test_echo_on_parse_error(self) -> None:
         """ParseError → echo_callback(text, '[解析失败] ...')。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
-        from voicecraft.llm.schema import ParseError, ParseErrorKind
+        from vibecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.llm.schema import ParseError, ParseErrorKind
 
         echo_calls: list[tuple[str, str]] = []
 
@@ -606,8 +606,8 @@ class TestEchoCallback:
     async def test_no_echo_callback_is_fine(self) -> None:
         """echo_callback=None 时，parse 完成后不抛异常。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
-        from voicecraft.llm.schema import IntentParseResult
+        from vibecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.llm.schema import IntentParseResult
 
         async def fake_parse(text: str, now: float) -> Any:
             return IntentParseResult(
@@ -665,7 +665,7 @@ class TestRawEvents:
     """raw_events() 上行流：game_status + echo 消息都 yield（Gap 2 上行）。"""
 
     async def test_raw_events_yields_game_status(self) -> None:
-        from voicecraft.server.game_process import GameProcess
+        from vibecraft.server.game_process import GameProcess
 
         gp = GameProcess()
         gp._up_q = _make_q({"sc2": "playing", "bot": "running"})
@@ -679,7 +679,7 @@ class TestRawEvents:
 
     async def test_raw_events_yields_echo_messages(self) -> None:
         """echo 消息也应被 raw_events() yield 出来。"""
-        from voicecraft.server.game_process import GameProcess
+        from vibecraft.server.game_process import GameProcess
 
         gp = GameProcess()
         gp._up_q = _make_q(
@@ -698,7 +698,7 @@ class TestRawEvents:
 
     async def test_status_events_filters_echo(self) -> None:
         """status_events()（向后兼容）应过滤掉 echo 消息。"""
-        from voicecraft.server.game_process import GameProcess, GameStatus
+        from vibecraft.server.game_process import GameProcess, GameStatus
 
         gp = GameProcess()
         gp._up_q = _make_q(
@@ -731,9 +731,9 @@ class TestStatusPumpEcho:
 
     async def test_echo_message_sent_as_command_echo_frame(self) -> None:
         """上行 echo 消息 → WS 下行 command_echo 帧。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -764,9 +764,9 @@ class TestStatusPumpEcho:
 
     async def test_game_status_message_dispatched_correctly(self) -> None:
         """上行 game_status 消息 → WS 下行 game_status 帧（正常路径不破坏）。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -798,7 +798,7 @@ class TestBackwardCompatibility:
     async def test_old_usage_no_new_params(self) -> None:
         """旧版 make_bot_class(director_factory) 签名不破坏。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
 
@@ -829,7 +829,7 @@ class TestOnEndWaitsForTasks:
     async def test_on_end_awaits_cmd_tasks(self) -> None:
         """on_end 应 gather 所有 _cmd_tasks 才调 status_callback("ended")。"""
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         task_finished = asyncio.Event()
         status_calls: list[str] = []
@@ -871,13 +871,13 @@ class TestAutoPilot:
     """auto-pilot 行为注册。
 
     S2 后：神族 bot 改继承 Aristaeus MyBot，Mining / ProductionManager 由 Aristaeus 自己管，
-    _register_auto_pilot 已从 _VoiceCraftProtossBot 移除。
+    _register_auto_pilot 已从 _VibeCraftProtossBot 移除。
     原有的阶段测试不再适用；保留占位以记录变更历史。
     """
 
     def _make_instance(self, build_completed: bool) -> Any:
         FakeKnowledgeBot, _ = _inject_fake_ares()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(director_factory=lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -887,7 +887,7 @@ class TestAutoPilot:
         return instance
 
     @pytest.mark.skip(
-        reason="S2 后 _VoiceCraftProtossBot 继承 Aristaeus MyBot，Mining/AutoSupply 由 Aristaeus 管"
+        reason="S2 后 _VibeCraftProtossBot 继承 Aristaeus MyBot，Mining/AutoSupply 由 Aristaeus 管"
     )
     def test_phase_one_registers_mining_autosupply_only(self) -> None:
         """opening 未跑完（build_completed=False）：只注册 Mining + AutoSupply。"""
@@ -896,7 +896,7 @@ class TestAutoPilot:
         assert instance.register_behavior.call_count == 2
 
     @pytest.mark.skip(
-        reason="S2 后 _VoiceCraftProtossBot 继承 Aristaeus MyBot，macro behavior 由 Aristaeus 管"
+        reason="S2 后 _VibeCraftProtossBot 继承 Aristaeus MyBot，macro behavior 由 Aristaeus 管"
     )
     def test_phase_two_registers_all_controllers(self) -> None:
         """opening 跑完（build_completed=True）：注册全部 7 个 behavior。"""

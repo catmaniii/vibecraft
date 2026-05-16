@@ -13,8 +13,8 @@ export default defineConfig({
       // （目前 UI 还没接 prompt → 实际上等于不会自动 reload，开局后无中断）。
       registerType: 'prompt',
       manifest: {
-        name: 'VoiceCraft',
-        short_name: 'VoiceCraft',
+        name: 'VibeCraft',
+        short_name: 'VibeCraft',
         description: '语音指挥 SC2 神族 bot',
         theme_color: '#0d1117',
         background_color: '#0d1117',
@@ -47,7 +47,7 @@ export default defineConfig({
   },
   // build 产物输出到后端 static 目录，供 http.py serve
   build: {
-    outDir: path.resolve(__dirname, '../src/voicecraft/server/static'),
+    outDir: path.resolve(__dirname, '../src/vibecraft/server/static'),
     emptyOutDir: true,
   },
 })

@@ -11,7 +11,7 @@ import pathlib
 from typing import Any
 from unittest.mock import MagicMock
 
-from voicecraft.server.http import make_process_request
+from vibecraft.server.http import make_process_request
 
 # ---------------------------------------------------------------------------
 # 测试桩

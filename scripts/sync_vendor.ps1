@@ -27,7 +27,7 @@ $repoMap = @{
 
 $upstream = $repoMap[$Repo]
 $vendorDir = Join-Path (Split-Path $PSScriptRoot -Parent) "vendor" $Repo
-$tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "voicecraft_vendor_$Repo"
+$tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "vibecraft_vendor_$Repo"
 
 Write-Host "Syncing $Repo from $upstream ..."
 

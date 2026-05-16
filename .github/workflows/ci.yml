@@ -34,7 +34,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Mypy
-        run: uv run mypy src/voicecraft
+        run: uv run mypy src/vibecraft
 
       - name: Pytest (unit + integration)
         run: uv run pytest --cov --cov-report=term-missing -m "not e2e"

@@ -72,7 +72,7 @@ class _AresFacade:
             logger.warning("move_camera_failed point=%s err=%s", pt, exc)
 
 
-class _VoiceCraftBot(AresBot):
+class _VibeCraftBot(AresBot):
     async def on_step(self, iteration):
         ...
         if self.director is not None:

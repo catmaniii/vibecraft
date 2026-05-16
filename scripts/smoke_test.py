@@ -2,7 +2,7 @@
 
 设计文档 §3.4 / §12.1 M0 出口标准：
 - 在真实 SC2 客户端里启 bot
-- bot 把若干探机置入"voicecraft 自己用的 role"（实际映射到 ares 的
+- bot 把若干探机置入"vibecraft 自己用的 role"（实际映射到 ares 的
   `UnitRole.CONTROL_GROUP_ONE`：ares 留给用户的空槽，无 Manager 内部引用它）
 - 监测窗口期内每秒采样：
   * `mediator.get_units_from_role(role=CONTROL_GROUP_ONE, unit_type=PROBE)`
@@ -32,7 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from voicecraft.logging_ import (
+from vibecraft.logging_ import (
     Event,
     EventKind,
     GameSession,
@@ -46,7 +46,7 @@ from voicecraft.logging_ import (
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="VoiceCraft M0 smoke test")
+    p = argparse.ArgumentParser(description="VibeCraft M0 smoke test")
     p.add_argument("--map", default="Goldenaura LE", help="SC2 地图名（地图文件名去掉 .SC2Map）")
     p.add_argument(
         "--opponent-difficulty",
@@ -324,7 +324,7 @@ def main() -> int:
         run_game(
             maps.get(args.map),
             [
-                Bot(Race.Protoss, bot, name="VoiceCraftSmoke"),
+                Bot(Race.Protoss, bot, name="VibeCraftSmoke"),
                 Computer(Race[args.opponent_race], Difficulty[args.opponent_difficulty]),
             ],
             realtime=args.realtime,

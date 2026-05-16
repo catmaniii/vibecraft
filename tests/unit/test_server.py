@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from voicecraft.server import RoomRegistry, generate_room_token
+from vibecraft.server import RoomRegistry, generate_room_token
 
 
 class _FakeConn:

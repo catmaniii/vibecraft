@@ -23,7 +23,7 @@ M0b 的 `_AresFacade.set_build` 写的是 `self.bot.build_runner.set_build(build
 2. `UpgradeId[cmd.upper()]`（升级 ID）
 3. `BuildOrderOptions[cmd.upper()]`（`SUPPLY`/`GAS`/`EXPAND`/`WORKER_SCOUT`/`CHRONO` 等）
 
-voicecraft 的 step 里已经用了 ares 的 UnitID 名（`Pylon`/`Assimilator`/`Nexus`），
+vibecraft 的 step 里已经用了 ares 的 UnitID 名（`Pylon`/`Assimilator`/`Nexus`），
 **直接大写后传给 ares**，不需要语义别名。例外：
 - `send_probe` → `WORKER_SCOUT`（ares BuildOrderOptions）
 - `research X @chrono` → `X` + 单独的 `CHRONO @ <building>` 步骤
@@ -63,7 +63,7 @@ async def on_start(self) -> None:
 
 ### 2. @chrono modifier 翻译
 
-voicecraft schema 用 `@chrono` 作为步骤 modifier，ares 用独立的 `CHRONO @ <building>` 步骤。
+vibecraft schema 用 `@chrono` 作为步骤 modifier，ares 用独立的 `CHRONO @ <building>` 步骤。
 翻译时，遇到 `research X @chrono` 插入两条 ares 步骤：
 
 ```
@@ -82,7 +82,7 @@ voicecraft schema 用 `@chrono` 作为步骤 modifier，ares 用独立的 `CHRON
 ### 4. midgame/lategame 不注入
 
 M1.5 仅接 `opening_build` kind，这是 ares build runner 能管的。
-`MidgameStance` / `LategameDoctrine` 由 voicecraft 自己的 Board/DSL 管理（M2+）。
+`MidgameStance` / `LategameDoctrine` 由 vibecraft 自己的 Board/DSL 管理（M2+）。
 
 ---
 

@@ -16,13 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from voicecraft.directives.models import (
+from vibecraft.directives.models import (
     EngagementConstraintPayload,
     ProductionOverridePayload,
     StrategySetPayload,
 )
-from voicecraft.directives.types import DirectiveType, StageKind
-from voicecraft.llm import (
+from vibecraft.directives.types import DirectiveType, StageKind
+from vibecraft.llm import (
     AmbiguousParse,
     IntentParser,
     IntentParseResult,
@@ -37,7 +37,7 @@ from voicecraft.llm import (
     build_strategy_catalog,
     build_system_prompt,
 )
-from voicecraft.strategy import StrategyLibrary
+from vibecraft.strategy import StrategyLibrary
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -422,7 +422,7 @@ class TestParserLogging:
     async def test_logs_llm_call_to_session(
         self, library: StrategyLibrary, default_ctx: ParseContext
     ) -> None:
-        from voicecraft.logging_ import GameSession, GameSessionConfig
+        from vibecraft.logging_ import GameSession, GameSessionConfig
 
         session = GameSession(GameSessionConfig(use_null_sinks=True))
         provider = MockLLMProvider(

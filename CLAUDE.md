@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-# VoiceCraft 项目交接文档
+# VibeCraft 项目交接文档
 
 > 这份文档由上一次 brainstorming session (2026-05-14) 生成。Claude Code 启动时会自动加载此文件，新会话进项目即拥有完整上下文。
 
@@ -45,19 +45,19 @@ uv run pytest tests/unit/test_director.py::test_view_directive_bypasses_board
                                         # 跑单条用例
 uv run pytest -m integration            # 集成层（mock python-sc2）
 uv run pytest -m e2e                    # 端到端（需 SC2 客户端；default 跳过）
-uv run pytest --cov=src/voicecraft --cov-report=term-missing
+uv run pytest --cov=src/vibecraft --cov-report=term-missing
                                         # 覆盖率报告
 
 uv run ruff check .                     # lint
 uv run ruff check --fix .               # lint + 自动修
 uv run ruff format .                    # 格式化（写回）
 uv run ruff format --check .            # 仅检查
-uv run mypy src/voicecraft              # 严格类型检查（strict mode）
+uv run mypy src/vibecraft              # 严格类型检查（strict mode）
 
 uv run pre-commit install               # 装 hook（首次 clone）
 uv run pre-commit run --all-files       # 在所有文件上跑一次
 
-uv run voicecraft --version             # CLI 占位（M0 stub）
+uv run vibecraft --version             # CLI 占位（M0 stub）
 ```
 
 **端到端 smoke**（需 Windows + SC2 + `SC2PATH` 环境变量；详见
@@ -77,7 +77,7 @@ pytest 配置（`pyproject.toml`）开了 `filterwarnings = ["error", ...]` —�
 
 ## 项目速览
 
-**VoiceCraft** —— 用语音 + 文字指挥 AI 替你操作 SC2 神族，给操作不动的老 SC2 玩家。
+**VibeCraft** —— 用语音 + 文字指挥 AI 替你操作 SC2 神族，给操作不动的老 SC2 玩家。
 
 - **当前状态**：设计完成（2026-05-14），实现进行中 —— 见仓库实际代码状态
 - **MVP 范围**：神族 vs SC2 内置 AI，3 个剧本（1门Robo opening / IAC midgame / Skytoss lategame）
@@ -87,7 +87,7 @@ pytest 配置（`pyproject.toml`）开了 `filterwarnings = ["error", ...]` —�
 
 | 文档 | 内容 | 何时看 |
 |---|---|---|
-| **`docs/plans/2026-05-14-voicecraft-design.md`** | WHY：14 节完整设计真理源 | 任何架构层面工作 |
+| **`docs/plans/2026-05-14-vibecraft-design.md`** | WHY：14 节完整设计真理源 | 任何架构层面工作 |
 | **`ARCHITECTURE.md`** | WHAT IS：当前代码实际形态 + 不变量 + 数据流 | 动代码前 |
 | **`TASKS.md`** | WHAT NEXT：里程碑拆解 + 当前状态 + 用户环境快照 | **新 session 起手必看** |
 | **`USER_GUIDE.md`** | 玩家入门手册 + 话语示例 + FAQ | 改面向玩家功能时 |
@@ -165,9 +165,9 @@ CLAUDE.md 只保留**约定 / 工作模式 / 关键决策摘要**，详细内容
 
 - 旧：SpeechCraft / speech_craft（废弃，过于功能性）
 - 备选：Adjutant（被用户否决，太 geek）
-- **新**：VoiceCraft / voicecraft（直白，玩家秒懂）
+- **新**：VibeCraft / vibecraft（直白，玩家秒懂）
 
-如果根目录仍叫 `speech_craft`，不影响代码 —— 但终态会改为 `voicecraft`。
+如果根目录仍叫 `speech_craft`，不影响代码 —— 但终态会改为 `vibecraft`。
 
 ---
 

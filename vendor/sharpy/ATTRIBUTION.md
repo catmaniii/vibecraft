@@ -24,7 +24,7 @@ The only sys.path requirement:
   - `from config import get_config` resolves to `vendor/sharpy/config.py`
 
 Both are handled by `_ensure_sharpy_on_path()` in
-`src/voicecraft/bot/auto_combat/protoss/bot.py`.
+`src/vibecraft/bot/auto_combat/protoss/bot.py`.
 
 ## M1 integration notes
 

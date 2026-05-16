@@ -1,6 +1,6 @@
 # TASKS.md
 
-任务拆解 + 进展。设计真理源在 `docs/plans/2026-05-14-voicecraft-design.md`；
+任务拆解 + 进展。设计真理源在 `docs/plans/2026-05-14-vibecraft-design.md`；
 代码现状在 `ARCHITECTURE.md`；约定在 `CLAUDE.md`；已发版历史在 `CHANGELOG.md`。
 
 **新 session 起手先看本文档「当前状态」段** —— 它取代了原 CLAUDE.md HANDOFF 块的角色。
@@ -12,13 +12,13 @@
 - **里程碑**：M1 代码层完成 + **sharpy 迁移 M4/M5/M6 完成（worktree，待合并）**
   auto-pilot + cockpit-sync + minimap 拖拽视野均已实现，PWA 驾驶舱架子按 §9.5 重排完成。
 - **本次 session（2026-05-16）做了什么** —— sharpy 迁移 M4+M5+M6，在 worktree
-  `D:\code\claudecode\voicecraft\.claude\worktrees\agent-a3d18f8aa016633f0` 实现：
-  - **M4（LLM_CONTROLLED role 隔离）**：`_VoiceCraftProtossBot` 新增
+  `D:\code\claudecode\vibecraft\.claude\worktrees\agent-a3d18f8aa016633f0` 实现：
+  - **M4（LLM_CONTROLLED role 隔离）**：`_VibeCraftProtossBot` 新增
     `_llm_controlled_tags: set[int]`；`_SharpyFacade.set_unit_role()` 在设
     `LLM_CONTROLLED` 时写入集合、设其他 role 时从集合移除；新增
     `_refresh_llm_controlled_roles()` 每 step 对集合中每个 unit 重新声明
     `UnitTask.Reserved`（防 `UnitRoleManager.update()` 每步 clear `had_task_set`）；
-    新增 `is_voicecraft_controlled(unit) -> bool`；`on_unit_destroyed` 清理死亡 tag
+    新增 `is_vibecraft_controlled(unit) -> bool`；`on_unit_destroyed` 清理死亡 tag
   - **M5（attack_window / micro_doctrine 字段透传）**：`director.build_snapshot`
     `_slot_view()` 扩展 `MidgameStance.attack_window` / `MidgameStance.micro_doctrine` /
     `LategameDoctrine.engagement_doctrine`（as micro_doctrine）→ snapshot；
@@ -62,9 +62,9 @@
   Cache 提取的 `(2)DaybreakLE`）。Maps 目录原本不存在，已建
 - `.venv` = Python 3.11.14（**不能用 3.12**，sc2-helper 无 cp312 wheel）；
   ares 全家桶已装。重建 venv 的完整流程见 runbook §1
-- 用户已装 uv；本地仓库目录是 `voicecraft`（旧名 `voice_craft` 已废弃）
+- 用户已装 uv；本地仓库目录是 `vibecraft`（旧名 `voice_craft` 已废弃）
 - 用户 GitHub：`catmaniii`，gh CLI 已认证（HTTPS + keyring token），
-  remote `origin = https://github.com/catmaniii/voicecraft`
+  remote `origin = https://github.com/catmaniii/vibecraft`
 
 ---
 
@@ -100,7 +100,7 @@ pyproject / 目录 / lint / mypy / pytest / pre-commit / CI 模板。出口：
 
 ### M0b smoke 代码  ✅ done
 
-最小 VoiceCraftBot + Unit Role 排除 demo + mock 单测（126 个用例全过）+
+最小 VibeCraftBot + Unit Role 排除 demo + mock 单测（126 个用例全过）+
 一份给用户跑的 SC2 启动脚本。出口：mock 验证 role 隔离。
 
 完成于 `44159e1`，后续 `47d2b1e` 修正 `LLM_CONTROLLED` 映射到 ares 的
@@ -134,7 +134,7 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 帧 + 三段式状态链）。按依赖排序：
 
 **M1.1 bot service 骨架** ✅ 全完成
-- [x] `src/voicecraft/server/` 包骨架 + `tokens.py`：`room_token` 生成 / 验证 /
+- [x] `src/vibecraft/server/` 包骨架 + `tokens.py`：`room_token` 生成 / 验证 /
       `RoomRegistry` 单活跃连接顶旧（10 单测，ruff + mypy 干净）
 - [x] WS endpoint（`websockets`，listen `0.0.0.0:<port>`，**不硬编码 localhost**）
       `server/ws.py`：token 验证握手、帧收发循环（stub）、5s 心跳、重连顶旧
@@ -142,7 +142,7 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
       与 WS 共端口，SPA fallback，路径遍历防护
 - [x] PC 端二维码显示 `server/qr.py`：ASCII 二维码（##/空格，绕 Windows GBK），
       UDP socket 局域网 IP 自动检测
-- [x] 一键启动脚本 `scripts/start.ps1` + `voicecraft serve` CLI 子命令；
+- [x] 一键启动脚本 `scripts/start.ps1` + `vibecraft serve` CLI 子命令；
       `server/service.py` BotService + ServiceConfig
 
 **M1.2 SC2 子进程生命周期管理**（依赖 M1.1）✅ 完成
@@ -168,7 +168,7 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 **M1.5 第 1 个剧本接通 set_build**（依赖 M0c 环境，已就绪）✅ 完成
 - [x] spike：ares 真实 API —— `BuildOrderRunner.switch_opening(name)`，name 须
       预先在 `bot.config["Builds"]`；step 直接用 `UnitID` 大写名（ADR 0003）
-- [x] `bot/build_translator.py`：voicecraft `opening_build` 剧本 → ares builds
+- [x] `bot/build_translator.py`：vibecraft `opening_build` 剧本 → ares builds
       格式的纯函数翻译层（`@chrono` → 独立 CHRONO step、`send_probe` → WORKER_SCOUT）
 - [x] `ares_adapter.set_build` 真实现 → `build_order_runner.switch_opening()`；
       `make_bot_class` 加 `strategy_library` 参数，`on_start` 在 `super()` 前注入
@@ -193,4 +193,4 @@ Manager 都 skip 它（`role_changed_away`=0，`in_role` 全程 true）。enroll
 ## 历史 / 已废决策
 
 - 项目曾叫 `speech_craft` / `SpeechCraft`，已废，与 GitHub repo 一致用
-  `voicecraft`。备选 `Adjutant` 被用户否决（太 geek）。
+  `vibecraft`。备选 `Adjutant` 被用户否决（太 geek）。

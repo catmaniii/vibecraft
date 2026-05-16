@@ -1,7 +1,7 @@
 # M0 Smoke Test 运行手册
 
 **目的**：在真实 SC2 + ares-sc2 环境里，验证一个核心假设——
-**当我们把若干探机置入一个 "voicecraft 自用 role" 后，ares 的所有 Manager 都会跳过这些单位，既不改它们的 role，也不下达行动指令**。
+**当我们把若干探机置入一个 "vibecraft 自用 role" 后，ares 的所有 Manager 都会跳过这些单位，既不改它们的 role，也不下达行动指令**。
 
 实现细节：ares 的 `UnitRole` 是固定 StrEnum（无法动态加成员），所以我们把
 "LLM_CONTROLLED" 实际**映射到 ares 的 `UnitRole.CONTROL_GROUP_ONE`**——这是
@@ -99,14 +99,14 @@ Remove-Item -Recurse -Force .venv
 uv venv          # 读 .python-version，用 3.11
 ```
 
-### 1.2 装 voicecraft + ares 全家桶
+### 1.2 装 vibecraft + ares 全家桶
 
 ares-sc2 / burnysc2 / map-analyzer 不在 PyPI（git 源），sc2-helper 在 PyPI。
 它们都归到 `pyproject.toml` 的 `sc2` extra，git URL 已写进 `[tool.uv.sources]`：
 
 ```powershell
-# 在项目根目录（注意目录名是 voicecraft，不是 voice_craft）
-cd D:\code\claudecode\voicecraft
+# 在项目根目录（注意目录名是 vibecraft，不是 voice_craft）
+cd D:\code\claudecode\vibecraft
 
 uv sync --extra dev --extra sc2     # 一条命令装全：dev 工具链 + ares 全家桶
 ```
@@ -138,7 +138,7 @@ $sp = (uv run python -c "import sysconfig; print(sysconfig.get_path('purelib'))"
 ### 1.4 验证
 
 ```powershell
-uv run python -c "import ares, sc2, voicecraft; print('ok')"
+uv run python -c "import ares, sc2, vibecraft; print('ok')"
 ```
 
 输出 `ok` 即环境就绪。如果报 `os error 32` / `DLL load failed` / 误报

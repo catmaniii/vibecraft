@@ -15,7 +15,7 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from voicecraft.server.game_process import (
+from vibecraft.server.game_process import (
     GameConfig,
     GameProcess,
     GameStatus,
@@ -178,7 +178,7 @@ class TestGameProcessStart:
         config = GameConfig(map_name="DaybreakLE", realtime=False)
 
         # patch multiprocessing.Process.start 让它不真的 spawn
-        with patch("voicecraft.server.game_process.multiprocessing") as mock_mp:
+        with patch("vibecraft.server.game_process.multiprocessing") as mock_mp:
             ctx = MagicMock()
             mock_proc = _make_fake_proc()
             ctx.Queue.return_value = MagicMock()
@@ -194,7 +194,7 @@ class TestGameProcessStart:
         gp = GameProcess()
         config = GameConfig(realtime=False)
 
-        with patch("voicecraft.server.game_process.multiprocessing") as mock_mp:
+        with patch("vibecraft.server.game_process.multiprocessing") as mock_mp:
             ctx = MagicMock()
             first_proc = _make_fake_proc(pid=1001, alive=True)
             second_proc = _make_fake_proc(pid=1002, alive=True)
@@ -370,8 +370,8 @@ class TestWsStartGameIntegration:
         """收到 start_game 帧 → GameProcess.start() 被调用，config 正确解析。"""
         from unittest.mock import AsyncMock, patch
 
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -418,8 +418,8 @@ class TestWsStartGameIntegration:
 
     async def test_start_game_sends_launching_frame(self) -> None:
         """start_game 处理后应立即发一帧 game_status{sc2: launching}。"""
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -452,8 +452,8 @@ class TestWsStartGameIntegration:
 
     async def test_start_game_default_config_when_no_config_field(self) -> None:
         """start_game 帧不带 config 字段 → 使用 GameConfig 默认值。"""
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -488,7 +488,7 @@ class TestGameStatusFrameFormat:
     def test_frame_has_required_fields(self) -> None:
         import json
 
-        from voicecraft.server.ws import _build_game_status_frame
+        from vibecraft.server.ws import _build_game_status_frame
 
         status = GameStatus(sc2="playing", bot="running", ts=500.0)
         frame_str = _build_game_status_frame(status)
@@ -504,7 +504,7 @@ class TestGameStatusFrameFormat:
     def test_crashed_frame_has_detail(self) -> None:
         import json
 
-        from voicecraft.server.ws import _build_game_status_frame
+        from vibecraft.server.ws import _build_game_status_frame
 
         status = GameStatus(sc2="crashed", bot="error", detail="地图未找到")
         frame_str = _build_game_status_frame(status)

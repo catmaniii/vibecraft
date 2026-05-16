@@ -22,15 +22,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from voicecraft.bot import BotState, FakeFacade
-from voicecraft.bot.director import Director, _RecentCommand
-from voicecraft.directives.board import DirectiveBoard
-from voicecraft.directives.models import Directive, StrategySetPayload
-from voicecraft.directives.types import StageKind
-from voicecraft.llm import IntentParser, MockLLMProvider
-from voicecraft.logging_ import GameSession, GameSessionConfig
-from voicecraft.strategy.library import StrategyLibrary
-from voicecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+from vibecraft.bot import BotState, FakeFacade
+from vibecraft.bot.director import Director, _RecentCommand
+from vibecraft.directives.board import DirectiveBoard
+from vibecraft.directives.models import Directive, StrategySetPayload
+from vibecraft.directives.types import StageKind
+from vibecraft.llm import IntentParser, MockLLMProvider
+from vibecraft.logging_ import GameSession, GameSessionConfig
+from vibecraft.strategy.library import StrategyLibrary
+from vibecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -214,7 +214,10 @@ class TestBuildSnapshot:
                 "kind": "midgame_stance",
                 "id": "iac_doctrine",
                 "display_name_zh": "IAC 微操",
-                "micro_doctrine": ["archon focus_fire bio_clumps", "immortal target high_hp_armored"],
+                "micro_doctrine": [
+                    "archon focus_fire bio_clumps",
+                    "immortal target high_hp_armored",
+                ],
             }
         )
         lib = StrategyLibrary(openings=[], midgames=[midgame_with_doctrine], lategames=[])
@@ -267,9 +270,7 @@ class TestBuildSnapshot:
         board = DirectiveBoard(commit_delay_s=0.0)
         d.board = board
 
-        board.submit(
-            _make_strategy_directive("skytoss_doctrine", StageKind.LATEGAME), now=0.0
-        )
+        board.submit(_make_strategy_directive("skytoss_doctrine", StageKind.LATEGAME), now=0.0)
         board.tick(1.0)
 
         snap = d.build_snapshot(1.0)
@@ -397,9 +398,9 @@ class TestDispatchUpstreamNoStatePollution:
 
     async def test_snapshot_kind_does_not_update_sc2_state(self) -> None:
         """上行 snapshot 消息 → 下行 snapshot 帧，sc2_state/bot_state 不变。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -440,9 +441,9 @@ class TestDispatchUpstreamNoStatePollution:
 
     async def test_event_kind_does_not_update_sc2_state(self) -> None:
         """上行 event 消息 → 下行 event 帧，sc2_state/bot_state 不变。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -479,9 +480,9 @@ class TestDispatchUpstreamNoStatePollution:
 
     async def test_snapshot_forwards_inner_frame(self) -> None:
         """转发的下行帧 = raw["frame"]（外层消息类型 kind 不进下行帧）。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -522,7 +523,7 @@ class TestDispatchUpstreamNoStatePollution:
 
 @pytest.fixture(autouse=True)
 def _clean_ares() -> Any:
-    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -645,13 +646,13 @@ def _inject_fake_ares_minimal() -> type:
 class TestAutopilotEventCallback:
     """P1-2：build_completed false→true 时推一次 decision.autopilot_phase event。
 
-    S2 后：_VoiceCraftProtossBot 继承 Aristaeus MyBot，_register_auto_pilot 已移除。
+    S2 后：_VibeCraftProtossBot 继承 Aristaeus MyBot，_register_auto_pilot 已移除。
     auto-pilot event 逻辑需要在 Aristaeus 框架内重新设计；当前测试 skip 保留历史。
     """
 
     def _make_instance(self, event_cb: Any) -> Any:
         FakeKnowledgeBot = _inject_fake_ares_minimal()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(
             director_factory=lambda facade: MagicMock(),
@@ -708,7 +709,7 @@ class TestStatusEventsFiltersNewKinds:
     """status_events() 过滤 snapshot/event 消息（不当 GameStatus 返回）。"""
 
     async def test_status_events_filters_snapshot_and_event(self) -> None:
-        from voicecraft.server.game_process import GameProcess
+        from vibecraft.server.game_process import GameProcess
 
         def _make_q(*messages: dict) -> queue.Queue:  # type: ignore[type-arg]
             q: queue.Queue = queue.Queue()  # type: ignore[type-arg]

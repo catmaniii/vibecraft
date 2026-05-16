@@ -1,7 +1,7 @@
 # 剧本 vs 兜底 bot 决策优先级机制设计
 
 **日期**: 2026-05-16
-**触发**: 用户反馈 Aristaeus 一直只出一种兵 + 不开矿。诊断:**voicecraft 现有 strategies 的 mid/lategame commitments 完全没接到任何 bot Manager**,bot 自己 hardcoded army comp 单调。
+**触发**: 用户反馈 Aristaeus 一直只出一种兵 + 不开矿。诊断:**vibecraft 现有 strategies 的 mid/lategame commitments 完全没接到任何 bot Manager**,bot 自己 hardcoded army comp 单调。
 
 ---
 
@@ -41,7 +41,7 @@
 ### 用户感受到的"bot 弱"的真实原因
 
 ```
-voicecraft 现有路径:
+vibecraft 现有路径:
   玩家说"切 IAC" → set_build(iac_2base) → switch_opening 失败(iac_2base 是 midgame 不是 opening)
                                           ↓
                                        commitment 数据完全没用到
@@ -50,7 +50,7 @@ voicecraft 现有路径:
                               (Aristaeus 是 starter 模板,army_comp 单调)
 ```
 
-**这是设计层 gap,不是 bot 选错**。即便换 ZerGreenBot/HarstemsAunt,如果不接 voicecraft commitments,bot 还是按自己默认决策。
+**这是设计层 gap,不是 bot 选错**。即便换 ZerGreenBot/HarstemsAunt,如果不接 vibecraft commitments,bot 还是按自己默认决策。
 
 ---
 
@@ -58,7 +58,7 @@ voicecraft 现有路径:
 
 ### 2.1 注入接口(StrategyApplier)
 
-新增 `src/voicecraft/bot/strategy_applier.py`,**每个 stage slot 变化时翻译成 bot manager 的 override**:
+新增 `src/vibecraft/bot/strategy_applier.py`,**每个 stage slot 变化时翻译成 bot manager 的 override**:
 
 ```
 opening_build  → build_order_runner.switch_opening(steps yaml)      [已有]
@@ -91,7 +91,7 @@ lategame_doctrine → ProductionController.set_army_composition(target_compositi
 | `army_composition[Stalker]` | iac_2base 指定 8 | Aristaeus default 0.55 | **听剧本**(override) |
 | `army_composition[Phoenix]` | iac_2base **没说** | Aristaeus 不出 | **听 bot**(默认值生效) |
 | `target_expansion_count` | iac_2base 指定 2 | bot 默认 4 | **听剧本** |
-| 单位 micro 行为 | iac_2base 给 `micro_doctrine` 但 voicecraft 还没实现 | Aristaeus 自己微操 | **听 bot**(剧本未接) |
+| 单位 micro 行为 | iac_2base 给 `micro_doctrine` 但 vibecraft 还没实现 | Aristaeus 自己微操 | **听 bot**(剧本未接) |
 
 实现机制:`StrategyApplier` 持有 `Optional[Override]` 对象,每个 stage 一组。每 tick 在 `on_step` 把 override 注入到对应 manager;**override 为 None 的字段保持 bot 自己的默认**。
 
@@ -120,7 +120,7 @@ Aristaeus 的 `ProductionManager` 是它自己写的,**不是直接用 ares Prod
 | **A1** | 新增 `bot/strategy_applier.py`(~150 行) | 0.5d |
 | **A2** | strategies yaml 加字段:opening 的 `army_composition_after_build`(opening 跑完后注入到 mid stage 的初始 army comp);midgame 的 `commitments.units` → proportion 翻译辅助函数 | 0.3d |
 | **A3** | `Director` hook STRATEGY_CHANGED event → 调 StrategyApplier | 0.3d |
-| **A4** | `_VoiceCraftProtossBot.on_step` 每 tick 调 `StrategyApplier.apply_to_bot_managers()` 注入到 Production / Upgrade / Expansion / Structure Controller | 0.5d |
+| **A4** | `_VibeCraftProtossBot.on_step` 每 tick 调 `StrategyApplier.apply_to_bot_managers()` 注入到 Production / Upgrade / Expansion / Structure Controller | 0.5d |
 | **A5** | 自动 transition:监听 `runner.build_completed` → submit `STRATEGY_SET(midgame)` directive(BOT_INTERNAL 来源,玩家可覆盖) | 0.3d |
 | **A6** | strategy schema 升级 + 单测覆盖 commitments → proportion 翻译 | 0.5d |
 | **B1** | 真实 SC2 端到端验证:切 IAC → 看到出叉子/不朽/白球;切 Skytoss → 看到航母 | 1d |

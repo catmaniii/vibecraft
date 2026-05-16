@@ -18,12 +18,12 @@ import asyncio
 import sys
 from pathlib import Path
 
-from voicecraft.directives.types import StageKind
-from voicecraft.llm.config import LLMConfig
-from voicecraft.llm.parser import IntentParser, ParserConfig
-from voicecraft.llm.prompt import ParseContext
-from voicecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
-from voicecraft.strategy.library import StrategyLibrary
+from vibecraft.directives.types import StageKind
+from vibecraft.llm.config import LLMConfig
+from vibecraft.llm.parser import IntentParser, ParserConfig
+from vibecraft.llm.prompt import ParseContext
+from vibecraft.llm.schema import AmbiguousParse, IntentParseResult, ParseError
+from vibecraft.strategy.library import StrategyLibrary
 
 _ROOT = Path(__file__).resolve().parents[1]
 

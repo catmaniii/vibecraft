@@ -106,7 +106,7 @@ class TestMinimapBuilderBuild:
     """build() 输出字段基本正确性。"""
 
     def _make_builder(self) -> Any:
-        from voicecraft.bot.minimap import MinimapBuilder
+        from vibecraft.bot.minimap import MinimapBuilder
 
         bot = FakeBot()
         return MinimapBuilder(bot), bot
@@ -164,7 +164,7 @@ class TestMinimapBuilderCollectOwn:
     """_collect_own：Nexus / 探机 / 建筑 / 战斗单位分类。"""
 
     def _make_builder(self) -> Any:
-        from voicecraft.bot.minimap import MinimapBuilder
+        from vibecraft.bot.minimap import MinimapBuilder
 
         return MinimapBuilder(FakeBot())
 
@@ -213,7 +213,7 @@ class TestMinimapBuilderCollectEnemy:
     """_collect_enemy_visible：is_visible 过滤 + 工人识别。"""
 
     def _make_builder(self) -> Any:
-        from voicecraft.bot.minimap import MinimapBuilder
+        from vibecraft.bot.minimap import MinimapBuilder
 
         return MinimapBuilder(FakeBot())
 
@@ -255,7 +255,7 @@ class TestMinimapBuilderStaticCache:
     """_ensure_static_cached：playable/map_size 只算一次。"""
 
     def test_static_cached_after_first_build(self) -> None:
-        from voicecraft.bot.minimap import MinimapBuilder
+        from vibecraft.bot.minimap import MinimapBuilder
 
         bot = FakeBot()
         builder = MinimapBuilder(bot)
@@ -272,7 +272,7 @@ class TestMinimapBuilderCoordRounding:
     """unit 坐标四舍五入到小数点后一位。"""
 
     def test_coords_rounded_to_one_decimal(self) -> None:
-        from voicecraft.bot.minimap import MinimapBuilder
+        from vibecraft.bot.minimap import MinimapBuilder
 
         bot = FakeBot()
         builder = MinimapBuilder(bot)
@@ -298,8 +298,8 @@ def _inject_fake_sharpy_for_move_camera() -> type:
     for key in list(sys.modules.keys()):
         if (
             key.startswith("sharpy")
-            or key.startswith("voicecraft.bot.sharpy_adapter")
-            or key.startswith("voicecraft.bot.auto_combat")
+            or key.startswith("vibecraft.bot.sharpy_adapter")
+            or key.startswith("vibecraft.bot.auto_combat")
         ):
             del sys.modules[key]
 
@@ -411,7 +411,7 @@ def _inject_fake_sharpy_for_move_camera() -> type:
 
 @pytest.fixture(autouse=True)
 def _clean_ares_modules_minimap() -> Any:
-    _prefixes = ("sharpy", "voicecraft.bot.sharpy_adapter", "voicecraft.bot.auto_combat")
+    _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]
@@ -430,7 +430,7 @@ class TestAresFacadeMoveCameraStaged:
     async def test_move_camera_stages_point_not_immediate_call(self) -> None:
         """move_camera 只暂存 point,**不**立即调 client.move_camera。"""
         FakeKnowledgeBot = _inject_fake_sharpy_for_move_camera()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -452,7 +452,7 @@ class TestAresFacadeMoveCameraStaged:
     async def test_drain_pending_actions_awaits_move_camera(self) -> None:
         """drain_pending_actions 应 await client.move_camera 并清空 pending。"""
         FakeKnowledgeBot = _inject_fake_sharpy_for_move_camera()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -471,7 +471,7 @@ class TestAresFacadeMoveCameraStaged:
     async def test_drain_with_no_pending_is_noop(self) -> None:
         """无暂存时 drain 不调 client.move_camera。"""
         FakeKnowledgeBot = _inject_fake_sharpy_for_move_camera()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -486,7 +486,7 @@ class TestAresFacadeMoveCameraStaged:
     async def test_move_camera_does_not_raise_sync(self) -> None:
         """move_camera 是同步方法,调用不抛异常。"""
         FakeKnowledgeBot = _inject_fake_sharpy_for_move_camera()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
         instance = object.__new__(BotClass)
@@ -502,7 +502,7 @@ class TestAresFacadeMoveCameraStaged:
         import queue
 
         FakeKnowledgeBot = _inject_fake_sharpy_for_move_camera()
-        from voicecraft.bot.sharpy_adapter import make_bot_class
+        from vibecraft.bot.sharpy_adapter import make_bot_class
 
         move_camera_calls: list[tuple[float, float]] = []
         drain_calls = 0
@@ -550,9 +550,9 @@ class TestWsHandleViewMove:
 
     async def test_valid_point_sent_to_game_process(self) -> None:
         """合法 target_point → send_command view_move。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -576,9 +576,9 @@ class TestWsHandleViewMove:
 
     async def test_invalid_point_dropped(self) -> None:
         """target_point 不合法时静默丢弃。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -602,9 +602,9 @@ class TestWsHandleViewMove:
 
     async def test_no_game_running_dropped(self) -> None:
         """对局未在跑时 view_move 静默丢弃。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -623,9 +623,9 @@ class TestWsHandleViewMove:
 
     async def test_dispatch_view_move_calls_handle(self) -> None:
         """_dispatch 收到 view_move 帧时调 _handle_view_move。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -660,9 +660,9 @@ class TestDispatchUpstreamMinimap:
 
     async def test_minimap_frame_forwarded(self) -> None:
         """kind=minimap 消息 → 取 raw['frame'] 直接转发给手机。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)
@@ -695,9 +695,9 @@ class TestDispatchUpstreamMinimap:
 
     async def test_minimap_not_treated_as_game_status(self) -> None:
         """minimap 消息不被当 game_status 处理（不改 sc2_state）。"""
-        from voicecraft.server.game_process import GameProcess
-        from voicecraft.server.tokens import RoomRegistry
-        from voicecraft.server.ws import WsConnection
+        from vibecraft.server.game_process import GameProcess
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
 
         ws_mock = MagicMock()
         ws_mock.remote_address = ("127.0.0.1", 9999)

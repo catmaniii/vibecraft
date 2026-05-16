@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from voicecraft.logging_ import (
+from vibecraft.logging_ import (
     Event,
     EventKind,
     GameSession,

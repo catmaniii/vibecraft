@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from voicecraft import __version__
-from voicecraft.cli import main
+from vibecraft import __version__
+from vibecraft.cli import main
 
 
 def test_version_is_set() -> None:
@@ -24,4 +24,4 @@ def test_cli_default(capsys) -> None:  # type: ignore[no-untyped-def]
     exit_code = main([])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "voicecraft" in captured.out
+    assert "vibecraft" in captured.out
