@@ -24,7 +24,30 @@ export interface ViewMoveFrame {
   target_point: [number, number]   // [x, y] 世界坐标
 }
 
-export type UpFrame = StartGameFrame | CommandFrame | ViewMoveFrame
+// 上行：玩家在 PWA 点 [确认] / [忽略] bot 推荐的下一阶段剧本
+export interface ConfirmRecommendationFrame {
+  type: 'confirm_recommendation'
+}
+export interface DismissRecommendationFrame {
+  type: 'dismiss_recommendation'
+}
+
+// 上行：玩家 voice 切剧本时机已过被拦下 → 点 [硬转] / [取消]
+export interface ConfirmForceStrategyFrame {
+  type: 'confirm_force_strategy'
+}
+export interface CancelForceStrategyFrame {
+  type: 'cancel_force_strategy'
+}
+
+export type UpFrame =
+  | StartGameFrame
+  | CommandFrame
+  | ViewMoveFrame
+  | ConfirmRecommendationFrame
+  | DismissRecommendationFrame
+  | ConfirmForceStrategyFrame
+  | CancelForceStrategyFrame
 
 // ---- 下行帧（Bot → 手机）----
 
@@ -51,10 +74,42 @@ export interface PingFrame {
 export interface StrategySlotView {
   id: string
   display: string
+  // 来源标识:voice(玩家显式) / auto_transition(bot 自动转) / bot_internal(开局默认)
+  set_by: 'voice' | 'auto_transition' | 'bot_internal' | 'abort'
   phases?: { id: string; display: string; subtitle: string }[]  // 仅 opening 有
-  // M5: midgame/lategame 字段透传，供剧本卡片展示进攻时机
-  attack_window?: { open_at: string; close_at: string }  // midgame_stance 进攻窗口
-  micro_doctrine?: string[]                               // midgame 口令 / lategame engagement_doctrine
+  // phase stepper:后端 PhaseTracker 推断的当前 phase id
+  current_phase_id?: string
+  // phase 全完成标志(current = 最后一个 phase id):
+  // PWA 据此把卡片暗化为"完成态",bot 自动转下一阶段或等待玩家显式指令
+  all_phases_complete?: boolean
+  // M5: midgame/lategame 字段透传
+  attack_window?: { open_at: string; close_at: string }
+  micro_doctrine?: string[]
+}
+
+// bot 推荐下一阶段剧本(等玩家 confirm,不自动 submit)
+export interface RecommendationView {
+  stage: 'opening' | 'midgame' | 'lategame'
+  strategy_id: string
+  display_name: string
+  reason: string  // 推荐理由,UI 直接显示
+  source: 'default' | 'abort' | 'llm'
+}
+
+// bot 内部宏观意图(rule-based 推断,attacking/defending/expanding/scouting/sustaining)
+export interface TacticsView {
+  stance: string
+  label: string  // 中文 + emoji,UI 一行展示
+  reason: string
+}
+
+// 待玩家确认的"硬转":voice 切剧本但时机已过被 Director 拦下
+export interface PendingForceStrategyView {
+  stage: 'opening' | 'midgame' | 'lategame'
+  strategy_id: string
+  display_name: string
+  source_text: string  // 玩家原话(若有)
+  reasons: string[]    // 偏差原因列表(已造 X / supply 已 N / ...)
 }
 
 export interface SnapshotFrame {
@@ -67,6 +122,12 @@ export interface SnapshotFrame {
     lategame: StrategySlotView | null
   }
   recent_commands: { text: string; ts: number }[]
+  // bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
+  recommendation?: RecommendationView
+  // bot 内部意图(进攻/守家/开矿/探路/运营)
+  tactics?: TacticsView
+  // 时机已过被拦的硬转 directive(玩家未 confirm/cancel 前一直 carry)
+  pending_force_strategy?: PendingForceStrategyView
 }
 
 // P1：event 帧（Bot → 手机）—— 设计文档 §9.4 taxonomy

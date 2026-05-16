@@ -11,7 +11,12 @@ import CockpitView from '@/views/CockpitView.vue'
 import { useWs } from '@/composables/useWs'
 import type { CommandFrame } from '@/types'
 
-const { status, send, sendViewMove, token, snapshotStrategy, recentCommands, events, minimap, lastEcho } = useWs()
+const {
+  status, send, sendViewMove, token,
+  snapshotStrategy, recentCommands, events, minimap, lastEcho,
+  recommendation, tactics, confirmRecommendation, dismissRecommendation,
+  pendingForceStrategy, confirmForceStrategy, cancelForceStrategy,
+} = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
 const canSendCommand = computed(
@@ -84,8 +89,15 @@ const sc2Label = computed(() => {
         :minimap="minimap"
         :can-send-command="canSendCommand"
         :last-echo="lastEcho"
+        :recommendation="recommendation"
+        :tactics="tactics"
+        :pending-force-strategy="pendingForceStrategy"
         @command="onCommand"
         @view-move="onViewMove"
+        @confirm-recommendation="confirmRecommendation"
+        @dismiss-recommendation="dismissRecommendation"
+        @confirm-force-strategy="confirmForceStrategy"
+        @cancel-force-strategy="cancelForceStrategy"
       />
 
       <!-- 其他状态 → LaunchView -->

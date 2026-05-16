@@ -70,10 +70,12 @@ class TestGameConfig:
         cfg = GameConfig()
         assert cfg.map_name == "DaybreakLE"
         assert cfg.opponent_race == "Random"
-        assert cfg.opponent_difficulty == "Easy"
+        assert cfg.opponent_difficulty == "VeryHard"
         assert cfg.realtime is True
+        assert cfg.fullscreen is False
         assert (cfg.window_x, cfg.window_y) == (0, 0)
-        assert (cfg.window_width, cfg.window_height) == (1707, 960)
+        # window_height=0 是 sentinel(子进程自动 detect workarea);window_width 固定 1720
+        assert (cfg.window_width, cfg.window_height) == (1720, 0)
 
     def test_picklable(self) -> None:
         """GameConfig 必须跨 spawn 边界传递，需能 pickle。"""

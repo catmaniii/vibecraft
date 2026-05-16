@@ -57,6 +57,8 @@ class BotState:
     expansion_count: int = 1
     army_summary: dict[str, int] = field(default_factory=dict)
     enemy_summary: dict[str, int] = field(default_factory=dict)
+    # 已造建筑名集合(全大写 UnitTypeId.name,含 ready + pending);用于剧本时机检测
+    structures_built: frozenset[str] = field(default_factory=frozenset)
 
 
 # =========================================================================

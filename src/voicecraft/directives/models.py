@@ -32,6 +32,16 @@ class StrategySetPayload(_PayloadBase):
     strategy_id: str
 
 
+class StrategyCancelPayload(_PayloadBase):
+    """取消(单/全)阶段剧本:清掉 board slot,bot 降级 sustain plan(不主动出门)。
+
+    stage="all" 取消所有阶段,bot 完全停在 sustain 模式等下个指令。
+    """
+
+    type: Literal[DirectiveType.STRATEGY_CANCEL] = DirectiveType.STRATEGY_CANCEL
+    stage: Literal["opening", "midgame", "lategame", "all"] = "all"
+
+
 class ProductionOverridePayload(_PayloadBase):
     """中粒度：override 当前剧本的生产计划。
 
@@ -123,6 +133,7 @@ class ViewZoomPayload(_PayloadBase):
 
 Payload = Annotated[
     StrategySetPayload
+    | StrategyCancelPayload
     | ProductionOverridePayload
     | TechOverridePayload
     | ExpansionOverridePayload

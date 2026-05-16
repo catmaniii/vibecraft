@@ -74,6 +74,36 @@ class _RecentCommand:
     ts: float
 
 
+@dataclass(slots=True)
+class Recommendation:
+    """bot 推荐玩家可以接的下一阶段剧本(等玩家 confirm,不自动 submit)。
+
+    source 标识推荐来源:
+      - default: yaml default_transitions[0]
+      - abort:   yaml abort_signals 命中
+      - llm:     LLM 兜底(yaml 没匹配上时)
+    """
+
+    stage: StageKind
+    strategy_id: str
+    display_name: str
+    reason: str
+    source: str  # "default" / "abort" / "llm"
+
+
+@dataclass(slots=True)
+class Tactics:
+    """bot 当前内部宏观意图(rule-based 推断,非 sharpy 自带概念)。
+
+    stance 取值:
+      attacking / defending / expanding / scouting / harassing / sustaining
+    """
+
+    stance: str
+    label: str  # 中文 + emoji,直接给 UI 显示
+    reason: str  # "优势 Overwhelming,4 BG 折跃完"
+
+
 class Director:
     """主编排器。"""
 
@@ -103,6 +133,14 @@ class Director:
         self._event_callback: Callable[[dict[str, Any]], None] | None = None
         # snapshot 兜底周期计数器
         self._tick_count: int = 0
+        # 当前 bot 推荐(snapshot 透传给 PWA,等玩家 confirm 才 submit;不自动转)
+        self._pending_recommendation: Recommendation | None = None
+        # 玩家已忽略过的推荐(key=(stage,strategy_id)),不再重复推
+        self._dismissed_recommendations: set[tuple[StageKind, str]] = set()
+        # 当前 bot 内部意图(rule-based,见 _compute_tactics)
+        self._tactics: Tactics | None = None
+        # 玩家 voice 切剧本但时机已过 → 拦下来等"硬转"确认;(directive, reasons)
+        self._pending_force_strategy: tuple[Directive, list[str]] | None = None
 
     # ------------------------------------------------------------------
     # snapshot / event 回调注入（P0 / P1）
@@ -131,6 +169,30 @@ class Director:
     # snapshot 构造（P0-1）
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _compute_current_phase_id(
+        phases: list[Any], supply_used: int, game_time: float
+    ) -> str | None:
+        """根据 supply / time 阈值推断 OpeningBuild 的 current phase id。
+
+        当前 phase = 最后一个"已开始"的 phase。
+        phase 已开始 iff (start_at_supply 非 None 且 supply >= 它) 或
+                       (start_at_time 非 None 且 time >= 它)。
+        都没 phase 满足时返回第一个 phase id(默认开局)。
+        """
+        if not phases:
+            return None
+        current: str = str(phases[0].id)  # 默认第一个
+        for p in phases:
+            started = False
+            if p.start_at_supply is not None and supply_used >= p.start_at_supply:
+                started = True
+            if p.start_at_time is not None and game_time >= p.start_at_time:
+                started = True
+            if started:
+                current = str(p.id)
+        return current
+
     def build_snapshot(self, now: float) -> dict[str, Any]:
         """组装 snapshot 帧 payload（§1.1 MVP 子集：strategy + recent_commands）。
 
@@ -138,8 +200,21 @@ class Director:
 
         M5: MidgameStance / LategameDoctrine 带 attack_window / micro_doctrine 文案，
         让手机 UI 显示"当前剧本的进攻时机"，实现信息透明（bot 行为本身不变）。
+
+        phase stepper(2026-05-16): OpeningBuild slot 带 current_phase_id,
+        PWA stepper 据此渲染"已完成 ✓ / 当前 ▶ / 未来 ○"。推断依据
+        Phase.start_at_supply / start_at_time 阈值,bot.time / supply_used 从 facade.get_state() 取。
         """
         from voicecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+
+        # 取一次 bot state 用于 phase tracking(facade 可能 raise,容错)
+        try:
+            state = self.facade.get_state()
+            cur_supply = int(state.supply_used)
+            cur_time = float(state.game_time)
+        except Exception:
+            cur_supply = 0
+            cur_time = 0.0
 
         def _slot_view(stage: StageKind) -> dict[str, Any] | None:
             slot = self.board.slots.get(stage)
@@ -150,6 +225,7 @@ class Director:
             phases: list[dict[str, Any]] | None = None
             attack_window: dict[str, Any] | None = None
             micro_doctrine: list[str] | None = None
+            current_phase_id: str | None = None
             if self.library is not None:
                 try:
                     strat = self.library.get(sid)
@@ -159,6 +235,9 @@ class Director:
                             {"id": p.id, "display": p.display, "subtitle": p.subtitle}
                             for p in strat.phases
                         ]
+                        current_phase_id = self._compute_current_phase_id(
+                            strat.phases, cur_supply, cur_time
+                        )
                     elif isinstance(strat, MidgameStance):
                         # M5: 透传 attack_window / micro_doctrine，供 PWA 剧本卡片展示
                         if strat.attack_window is not None:
@@ -173,16 +252,27 @@ class Director:
                         micro_doctrine = list(strat.engagement_doctrine)
                 except Exception:
                     pass
-            entry: dict[str, Any] = {"id": sid, "display": display}
+            entry: dict[str, Any] = {
+                "id": sid,
+                "display": display,
+                # 来源标识:voice(玩家) / auto_transition(剧本完成自动) / bot_internal(开局默认)
+                # PWA 据此渲染 badge 区分"玩家安排"vs"bot 自选"
+                "set_by": slot.set_by.value,
+            }
             if phases is not None:
                 entry["phases"] = phases
+            if current_phase_id is not None:
+                entry["current_phase_id"] = current_phase_id
+                # phase 全完成标志:current = 最后一个 phase id
+                if phases and current_phase_id == phases[-1]["id"]:
+                    entry["all_phases_complete"] = True
             if attack_window is not None:
                 entry["attack_window"] = attack_window
             if micro_doctrine is not None:
                 entry["micro_doctrine"] = micro_doctrine
             return entry
 
-        return {
+        snapshot: dict[str, Any] = {
             "type": "snapshot",
             "ts": round(now, 3),
             "strategy": {
@@ -195,6 +285,47 @@ class Director:
                 {"text": c.text, "ts": round(c.ts, 3)} for c in self._recent_commands
             ],
         }
+        # bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
+        if self._pending_recommendation is not None:
+            r = self._pending_recommendation
+            snapshot["recommendation"] = {
+                "stage": r.stage.value,
+                "strategy_id": r.strategy_id,
+                "display_name": r.display_name,
+                "reason": r.reason,
+                "source": r.source,
+            }
+        # bot 内部意图(进攻/守家/开矿/...)
+        if self._tactics is not None:
+            t = self._tactics
+            snapshot["tactics"] = {
+                "stance": t.stance,
+                "label": t.label,
+                "reason": t.reason,
+            }
+        # 待玩家确认的"硬转":voice 切剧本但时机已过,被拦下
+        if self._pending_force_strategy is not None:
+            d, reasons = self._pending_force_strategy
+            from voicecraft.directives.models import StrategySetPayload
+
+            payload = d.payload
+            if isinstance(payload, StrategySetPayload):
+                # 取剧本显示名
+                display = payload.strategy_id
+                if self.library is not None:
+                    try:
+                        s = self.library.get(payload.strategy_id)
+                        display = getattr(s, "display_name_zh", payload.strategy_id)
+                    except Exception:
+                        pass
+                snapshot["pending_force_strategy"] = {
+                    "stage": payload.stage,
+                    "strategy_id": payload.strategy_id,
+                    "display_name": display,
+                    "source_text": d.source_text or "",
+                    "reasons": reasons,
+                }
+        return snapshot
 
     def _push_snapshot(self, now: float) -> None:
         """推 snapshot（若 callback 已注入）。"""
@@ -243,13 +374,162 @@ class Director:
             self._submit_directives(ambiguous.result.directives, now)
 
     def _submit_directives(self, directives: list[Directive], now: float) -> None:
+        from voicecraft.directives.types import IssuedBy
+
         for d in directives:
             d_with_ts = d.model_copy(update={"issued_at": now})
             if is_view_directive(d_with_ts.type):
                 self._dispatch_view(d_with_ts, now)
+            elif d_with_ts.type == DirectiveType.STRATEGY_CANCEL:
+                self._dispatch_cancel(d_with_ts, now)
+            elif (
+                d_with_ts.type == DirectiveType.STRATEGY_SET
+                and d_with_ts.issued_by == IssuedBy.VOICE
+            ):
+                # VOICE 切剧本前先检测时机;过期 → 拦下来等玩家硬转确认
+                reasons = self._check_strategy_obsolete(d_with_ts)
+                if reasons:
+                    self._pending_force_strategy = (d_with_ts, reasons)
+                    self._push_snapshot(now)
+                    continue
+                submitted = self.board.submit(d_with_ts, now=now)
+                self._in_flight[submitted.id] = submitted
             else:
                 submitted = self.board.submit(d_with_ts, now=now)
                 self._in_flight[submitted.id] = submitted
+
+    # ------------------------------------------------------------------
+    # 剧本时机偏差检测(自动从 yaml phase + steps 推断)
+    # ------------------------------------------------------------------
+
+    # 神族 tech 建筑全集(只看科技建筑,不含 Pylon/Nexus/Assimilator/兵营 BG)
+    _PROTOSS_TECH_STRUCTURES: frozenset[str] = frozenset(
+        {
+            "ROBOTICSFACILITY",
+            "ROBOTICSBAY",
+            "STARGATE",
+            "FLEETBEACON",
+            "TWILIGHTCOUNCIL",
+            "TEMPLARARCHIVES",
+            "DARKSHRINE",
+            "FORGE",
+        }
+    )
+
+    def _check_strategy_obsolete(self, directive: Directive) -> list[str]:
+        """检测剧本时机偏差。返回偏差原因列表(空 → 没过期)。
+
+        判定:
+        1. 建筑偏差:已造科技建筑中,有"该剧本 build steps 不需要的"
+           (4bg 只需 CyberneticsCore → 若已有 RoboticsFacility,偏差)
+        2. 时间/supply 偏差:当前 supply 超过该剧本最后一个 build step supply + 10
+           (整个 build 早就应该跑完,玩家现在再切来不及)
+
+        只对 OpeningBuild 检测(midgame / lategame 没有"必须前置建筑"语义)。
+        """
+        from voicecraft.directives.models import StrategySetPayload
+        from voicecraft.strategy.models import OpeningBuild
+
+        payload = directive.payload
+        if not isinstance(payload, StrategySetPayload):
+            return []
+        if self.library is None:
+            return []
+        try:
+            strat = self.library.get(payload.strategy_id)
+        except Exception:
+            return []
+        if not isinstance(strat, OpeningBuild):
+            return []  # midgame/lategame 不检测
+
+        reasons: list[str] = []
+        try:
+            state = self.facade.get_state()
+        except Exception:
+            return []
+
+        # 1. 建筑偏差
+        allowed = {step.obj.upper() for step in strat.parsed_steps() if step.verb == "build"}
+        forbidden = self._PROTOSS_TECH_STRUCTURES - allowed
+        actual_forbidden = state.structures_built & forbidden
+        if actual_forbidden:
+            names = "/".join(sorted(actual_forbidden))
+            reasons.append(f"已造 {names},该剧本走的是不同科技路线")
+
+        # 2. supply 偏差
+        max_step_supply = max(
+            (step.supply for step in strat.parsed_steps()), default=0
+        )
+        threshold = max_step_supply + 10
+        if state.supply_used > threshold > 0:
+            reasons.append(
+                f"当前 supply {state.supply_used},该剧本 build 应在 supply {max_step_supply} 前完成"
+            )
+
+        return reasons
+
+    def confirm_force_strategy(self, now: float) -> None:
+        """玩家在 PWA 点 [硬转] → 强制 submit 之前被拦的 STRATEGY_SET。"""
+        if self._pending_force_strategy is None:
+            return
+        directive, _reasons = self._pending_force_strategy
+        self._pending_force_strategy = None
+        directive = directive.model_copy(
+            update={
+                "issued_at": now,
+                "source_text": (directive.source_text or "voice") + " (force)",
+            }
+        )
+        submitted = self.board.submit(directive, now=now)
+        self._in_flight[submitted.id] = submitted
+        self._push_snapshot(now)
+
+    def cancel_force_strategy(self) -> None:
+        """玩家在 PWA 点 [取消] → drop 被拦的 directive。"""
+        self._pending_force_strategy = None
+
+    def _dispatch_cancel(self, directive: Directive, now: float) -> None:
+        """处理 STRATEGY_CANCEL:清掉 board 对应 slot + 切 sustain plan。
+
+        玩家说"取消" / "停下" / "等等" → bot 切到 Sustain plan(macro + 守家,不出门),
+        等下个剧本指令。
+        """
+        from voicecraft.directives.models import StrategyCancelPayload
+
+        payload = directive.payload
+        if not isinstance(payload, StrategyCancelPayload):
+            return
+        cleared_stages: list[StageKind] = []
+        targets: list[StageKind] = (
+            list(StageKind) if payload.stage == "all" else [StageKind(payload.stage)]
+        )
+        for stage in targets:
+            if self.board.slots.get(stage) is not None:
+                self.board.slots[stage] = None
+                cleared_stages.append(stage)
+        # 切 sustain plan(facade.set_build 即时生效)
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            self.facade.set_build("sustain")
+        # 清掉推荐(也许之前推荐是基于刚被清的 opening 算的)
+        self._pending_recommendation = None
+        # log 事件,触发 snapshot 刷新
+        self.session.log_event(
+            Event(
+                ts=now,
+                kind=EventKind.STRATEGY_SET,  # 复用,payload 标记是 cancel
+                payload={
+                    "action": "cancel",
+                    "cleared_stages": [s.value for s in cleared_stages],
+                    "directive_id": directive.id,
+                },
+                priority="medium",
+                caused_by=directive.source_text or "voice",
+            )
+        )
+        # 主动推 snapshot
+        self._push_snapshot(now)
 
     def _remember_command(self, text: str, now: float) -> None:
         self._recent_commands.append(_RecentCommand(text=text, ts=now))
@@ -269,6 +549,14 @@ class Director:
             if ev.kind in (BoardEventKind.STRATEGY_CHANGED, BoardEventKind.PHASE_TRANSITIONED):
                 need_snapshot = True
 
+        # 不再自动 submit transition directive;只更新 self._pending_recommendation,
+        # 等玩家 confirm_recommendation 才真正 submit(见 game_process 上行帧)。
+        prev_reco = self._pending_recommendation
+        self._update_recommendation(now)
+        # 推荐变化时也推一次 snapshot(否则用户要等下次兜底周期)
+        if prev_reco != self._pending_recommendation:
+            need_snapshot = True
+
         # 兜底周期推（P0-2）
         self._tick_count += 1
         if self._tick_count >= self.config.snapshot_interval_ticks:
@@ -279,6 +567,104 @@ class Director:
             self._push_snapshot(now)
 
         return events
+
+    def _update_recommendation(self, now: float) -> None:
+        """计算 self._pending_recommendation(opening 完成 → 推荐 midgame)。
+
+        判定:opening 已设 + 当前 phase = last phase + midgame 空 → 推荐
+        来源优先级:abort_signals 命中 > default_transitions[0] > LLM 兜底(留 TODO)
+
+        不再自动 submit;玩家 confirm 后才走 submit_directives。
+        如果当前推荐被玩家"忽略"(暂时没实现忽略状态,clear 由玩家点其它剧本或 voice 切覆盖)
+        """
+        if self.library is None:
+            self._pending_recommendation = None
+            return
+
+        # 当前 stage 已有 slot 时不推荐(玩家已经决策)
+        # opening → midgame
+        if self.board.slots.get(StageKind.MIDGAME) is not None:
+            self._pending_recommendation = None
+            return
+        opening_slot = self.board.slots.get(StageKind.OPENING)
+        if opening_slot is None:
+            self._pending_recommendation = None
+            return
+
+        try:
+            from voicecraft.strategy.models import OpeningBuild
+
+            strat = self.library.get(opening_slot.strategy_id)
+            if not isinstance(strat, OpeningBuild) or not strat.phases:
+                self._pending_recommendation = None
+                return
+            state = self.facade.get_state()
+            current_phase = self._compute_current_phase_id(
+                strat.phases, int(state.supply_used), float(state.game_time)
+            )
+            if current_phase != strat.phases[-1].id:
+                self._pending_recommendation = None
+                return
+
+            # opening 完成 → 找推荐
+            # TODO: abort_signals 需要 enemy state context 才能 eval,M5+ 接入
+            #       现在只走 default_transitions 路径
+            if strat.default_transitions:
+                target_mid = strat.default_transitions[0].midgame_id
+                # 玩家已忽略过这条推荐 → 不再推
+                if (StageKind.MIDGAME, target_mid) in self._dismissed_recommendations:
+                    self._pending_recommendation = None
+                    return
+                target_strat = self.library.get(target_mid)
+                display = getattr(target_strat, "display_name_zh", target_mid)
+                self._pending_recommendation = Recommendation(
+                    stage=StageKind.MIDGAME,
+                    strategy_id=target_mid,
+                    display_name=display,
+                    reason=f"{strat.display_name_zh} 完成 → yaml 默认转 {display}",
+                    source="default",
+                )
+                return
+
+            # TODO: LLM 兜底(default 也没匹配 → 让 LLM 推荐)
+            # 异步触发,完成回写 self._pending_recommendation,需要 _llm_recommendation_task 保护
+            # 不阻塞 on_tick
+
+            self._pending_recommendation = None
+        except Exception:
+            self._pending_recommendation = None
+
+    def confirm_recommendation(self, now: float) -> None:
+        """玩家在 PWA 点 [确认] → 把 self._pending_recommendation submit 成 VOICE directive。
+
+        用 VOICE 来源(不用 AUTO_TRANSITION):玩家显式认可了,等价 voice 命令。
+        Submit 后立即 clear self._pending_recommendation,避免下个 snapshot 还推荐这一个。
+        """
+        reco = self._pending_recommendation
+        if reco is None:
+            return
+        from voicecraft.directives.models import Directive, StrategySetPayload
+        from voicecraft.directives.types import IssuedBy
+
+        directive = Directive(
+            payload=StrategySetPayload(stage=reco.stage.value, strategy_id=reco.strategy_id),
+            issued_at=now,
+            issued_by=IssuedBy.VOICE,  # 玩家确认 → 等价 voice
+            source_text=f"confirm_recommendation:{reco.stage.value}→{reco.strategy_id}",
+        )
+        self._pending_recommendation = None
+        self._submit_directives([directive], now)
+
+    def dismiss_recommendation(self) -> None:
+        """玩家在 PWA 点 [忽略] → 清掉当前推荐,并记入 dismissed 黑名单。
+
+        后续 _update_recommendation 重新计算时跳过同 (stage, strategy_id),
+        不再重复推这条。如果换了别的推荐(不同 strategy_id),仍会推新的。
+        """
+        if self._pending_recommendation is not None:
+            r = self._pending_recommendation
+            self._dismissed_recommendations.add((r.stage, r.strategy_id))
+        self._pending_recommendation = None
 
     def _dispatch_event(self, ev: BoardEvent) -> None:
         # log 每个事件

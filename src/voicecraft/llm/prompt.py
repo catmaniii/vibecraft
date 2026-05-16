@@ -152,6 +152,11 @@ def build_few_shot() -> str:
 
 例 8：「切到双矿凤凰，然后凤凰好提对方农民」
 → [strategy_set, unit_claim(selector=phoenix, task=harass_workers)]
+
+例 9：「取消当前剧本」/「停下」/「等等」/「先别按剧本走」/「取消所有剧本」/「停止刷兵」
+→ strategy_cancel: stage=all
+（玩家想清掉 bot 当前的宏观策略,bot 切到 sustain 模式：只 macro/守家,不主动出门。
+  若玩家明确指定 stage：「取消开局剧本」→ stage=opening；「取消中期」→ stage=midgame）
 """
 
 
@@ -230,6 +235,7 @@ def build_tool_schema() -> dict[str, Any]:
                                 "type": "string",
                                 "description": (
                                     "DirectiveType enum value: strategy_set / "
+                                    "strategy_cancel / "
                                     "production_override / tech_override / "
                                     "expansion_override / engagement_constraint / "
                                     "unit_claim / scout / move / build_at / unit_release / "

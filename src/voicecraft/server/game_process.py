@@ -63,9 +63,9 @@ class GameConfig:
     M2+ 可做成 PWA 可选 / 配置项。"""
 
     opponent_race: str = "Random"
-    """内置 AI 种族：Protoss / Terran / Zerg / Random。"""
+    """内置 AI 种族：Protoss / Terran / Zerg / Random（默认随机）。"""
 
-    opponent_difficulty: str = "Easy"
+    opponent_difficulty: str = "VeryHard"
     """内置 AI 难度：VeryEasy / Easy / Medium / Hard / Harder / VeryHard / CheatVision。"""
 
     realtime: bool = True
@@ -74,12 +74,16 @@ class GameConfig:
     llm_controlled_probes: int = 0
     """预留：开局置入 LLM 控制 role 的探机数（M1.5 用，M1.2 暂 0）。"""
 
-    # SC2 客户端窗口（窗口模式，靠左上角，撑满高度，右边留给 bot 状态面板）。
-    # 默认值针对当前显示器 2293x960；换屏需调整（M2+ 可做成自动检测 / PWA 可配）。
+    # SC2 客户端窗口设置(windowed mode)。
+    # window_y=0 贴顶,window_x=0 贴左。
+    # window_height=0 时子进程入口自动取 workarea 高度(屏幕减任务栏,不遮)。
+    # window_width 默认 1720(用户实测合适的尺寸)。
+    # 用户屏 3440×1440 + DPI 150% 缩放,子进程会用 DPI-aware API 拿物理像素值。
+    fullscreen: bool = False
     window_x: int = 0
     window_y: int = 0
-    window_width: int = 1707
-    window_height: int = 960
+    window_width: int = 1720
+    window_height: int = 0  # 0 = workarea 全高(自动 detect)
 
 
 @dataclass
@@ -123,6 +127,50 @@ def _child_entry(
     # 子进程需要重新配置日志（spawn 后父进程 logging state 不继承）
     logging.basicConfig(level=log_level)
     child_log = logging.getLogger(__name__)
+
+    # window_height = 0 → 自动取 workarea 高度(屏幕减任务栏);window_y = 0 贴顶
+    # DPI-aware:用户屏 3440×1440 + 150% 缩放,默认 GetSystemMetrics 返回 scaled (2293×960)
+    # SetProcessDpiAwareness(2)= PerMonitor V2,拿到物理像素(3440×1440)
+    if config.window_height <= 0:
+        detected_h = 1440
+        try:
+            import ctypes
+            import sys
+
+            if sys.platform == "win32":
+                # 启用 DPI 感知:返回物理像素(否则在 high-DPI 屏被 cap 到 scaled 值)
+                import contextlib
+
+                try:
+                    # PROCESS_PER_MONITOR_DPI_AWARE = 2(Win 8.1+)
+                    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                except Exception:
+                    # fallback: 老 Windows
+                    with contextlib.suppress(Exception):
+                        ctypes.windll.user32.SetProcessDPIAware()
+
+                # SPI_GETWORKAREA:屏幕减任务栏的可用区域
+                class _RECT(ctypes.Structure):
+                    _fields_ = [
+                        ("left", ctypes.c_long),
+                        ("top", ctypes.c_long),
+                        ("right", ctypes.c_long),
+                        ("bottom", ctypes.c_long),
+                    ]
+
+                rect = _RECT()
+                if ctypes.windll.user32.SystemParametersInfoW(
+                    0x0030, 0, ctypes.byref(rect), 0
+                ):
+                    detected_h = int(rect.bottom - rect.top)
+        except Exception as exc:
+            child_log.warning("workarea_detect_failed, fallback 1440: %s", exc)
+        config.window_height = detected_h
+        config.window_y = 0
+    child_log.info(
+        "sc2_window: x=%d y=%d w=%d h=%d (windowed, DPI-aware, workarea height)",
+        config.window_x, config.window_y, config.window_width, config.window_height,
+    )
 
     def _put(sc2: Sc2State, bot: BotState, detail: str = "") -> None:
         """向上行队列推一条状态消息。queue 是进程安全的。"""
@@ -226,7 +274,7 @@ def _child_entry(
                     realtime=config.realtime,
                     sc2_config=[
                         {
-                            "fullscreen": False,
+                            "fullscreen": config.fullscreen,
                             "resolution": (config.window_width, config.window_height),
                             "placement": (config.window_x, config.window_y),
                         }

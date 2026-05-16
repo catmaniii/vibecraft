@@ -27,10 +27,16 @@ _VENDOR_SHARPY = Path(__file__).parents[5] / "vendor" / "sharpy"
 
 
 def _ensure_sharpy_on_path() -> None:
-    """把 vendor/sharpy 加进 sys.path（幂等）。
+    """把 vendor/sharpy 加进 sys.path + 修正 config.get_config 路径（幂等）。
 
     sharpy 所有模块（sharpy.*、config、bot_loader 等）都在 vendor/sharpy/ 下，
     直接把该目录加进 sys.path 即可解析。
+
+    config.get_config monkey-patch：sharpy SkeletonBot.__init__ 调
+    get_config()，原实现用相对路径 "config.ini"，依赖 cwd == vendor/sharpy。
+    voicecraft 子进程 cwd 是 repo 根，找不到 → ValueError。
+    必须在 sharpy.knowledges.* 被 import 之前 patch（那些模块用
+    `from config import get_config` 把名字 bind 到 module top-level）。
 
     无 cython_extensions / CombatBehavior 漂移：sharpy 的 pure Python 实现
     不需要 Aristaeus 那套 patch。详见 vendor/sharpy/ATTRIBUTION.md（M1 新建）。
@@ -38,6 +44,31 @@ def _ensure_sharpy_on_path() -> None:
     target = str(_VENDOR_SHARPY)
     if target not in sys.path:
         sys.path.insert(0, target)
+
+    # monkey-patch get_config 用 vendor/sharpy 绝对路径（幂等）
+    from configparser import ConfigParser
+
+    import config as _sharpy_config
+
+    if getattr(_sharpy_config.get_config, "_voicecraft_patched", False):  # type: ignore[attr-defined]
+        return
+
+    def _patched_get_config(local: bool = True) -> ConfigParser:
+        paths = [_VENDOR_SHARPY / "config.ini"]
+        if local:
+            paths.append(_VENDOR_SHARPY / "config-local.ini")
+        if any(p.is_file() for p in paths):
+            cfg = ConfigParser()
+            cfg.read([str(p) for p in paths])
+            return cfg
+        raise ValueError(f"sharpy config 找不到: {paths}")
+        # 注:不 override game_step_size。sharpy SkeletonBot.on_step 在
+        # realtime mode 下会自动设 client.game_step=1(detect 同 game_loop 被调两次)
+        # 我们的 on_step 在 client.game_step=1 频率被调(~0.045s),多路复用按这个
+        # 频率分发(view 高频每 step / sharpy 低频按 ratio)
+
+    _patched_get_config._voicecraft_patched = True  # type: ignore[attr-defined]
+    _sharpy_config.get_config = _patched_get_config  # type: ignore[attr-defined]
 
 
 # -----------------------------------------------------------------------
@@ -68,8 +99,9 @@ def make_protoss_bot_class(
         from sharpy.knowledges.knowledge_bot import KnowledgeBot
         from sharpy.plans import BuildOrder
     except ImportError as e:
+        # 带原因 + 重复 repr：log 默认只打 str(e),容易把真因丢了
         raise ImportError(
-            "无法 import sharpy.knowledges.knowledge_bot；"
+            f"无法 import sharpy.knowledges.knowledge_bot（真因: {e!r}）；"
             "确认 vendor/sharpy/ 已 clone 且 python-sc2 已装。"
         ) from e
 
@@ -222,6 +254,11 @@ def make_protoss_bot_class(
 
         def get_state(self) -> BotState:
             b = self.bot
+            # 已造 + 在造的所有建筑名(大写,与 SC2 UnitTypeId.name 一致)
+            try:
+                built = frozenset(str(s.type_id.name).upper() for s in b.structures)
+            except Exception:
+                built = frozenset()
             return BotState(
                 game_time=float(b.time),
                 minerals=int(b.minerals),
@@ -231,6 +268,7 @@ def make_protoss_bot_class(
                 expansion_count=len(b.townhalls),
                 army_summary={},  # M1 占位
                 enemy_summary={},
+                structures_built=built,
             )
 
         def resolve_selector(
@@ -294,6 +332,33 @@ def make_protoss_bot_class(
         active_recipe: str = "1g_robo_immortal"
         # M4: LLM_CONTROLLED 单位的 tag 集合（跨 step 持久化）
         _llm_controlled_tags: set[int]
+        # tactics 节流
+        _tactics_last_s: float = 0.0
+
+        # ============================================================
+        # 多路复用 step 设计(view 与 bot 通信通过独立 channel 解耦)
+        # ============================================================
+        # 物理约束:python-sc2 client 是单 socket ws,所有调用必须在 on_step 内串行
+        # sharpy 在 realtime mode 自动设 client.game_step=1 → on_step ~0.045s/次
+        #
+        # 两个逻辑 channel,共享同一个 on_step 物理执行点:
+        #
+        # 1. ViewChannel (每 on_step 触发,~0.045s):
+        #    - 消费 down_q 里的 view_move 帧 → facade.move_camera 暂存
+        #    - 末尾 await facade.drain_pending_actions() → 真正发 SC2 client.move_camera
+        #    - minimap 帧推送(自带节流计数)
+        #
+        # 2. BotChannel (每 _SHARPY_STEP_RATIO 次触发,~0.225s 一次):
+        #    - super().on_step(remapped_iter):sharpy manager update + plan execute
+        #    - 关键:传 remap 的 iter(从 0 开始),让 sharpy 看到自己 namespace
+        #      (BuildingSolver `if iteration==0` 等条件依赖)
+        #    - _refresh_llm_controlled_roles / director / tactics 等下层逻辑
+        #
+        # 扩展:加新 channel(如 metric 推送 / event ack)只需在 on_step 加分支
+        # ============================================================
+        _voice_step_count: int = 0
+        _sharpy_iteration: int = 0
+        _SHARPY_STEP_RATIO: int = 5
 
         def __init__(self) -> None:
             super().__init__("VoiceCraft Protoss")
@@ -303,6 +368,93 @@ def make_protoss_bot_class(
             self._decision_watcher = None
             self.active_recipe = "1g_robo_immortal"
             self._llm_controlled_tags = set()
+            self._tactics_last_s = 0.0
+            self._voice_step_count = 0
+            self._sharpy_iteration = 0
+
+        def _update_tactics_throttled(self, now: float) -> None:
+            """每 ~1s 算一次 stance,写到 director._tactics。
+
+            stance 优先级(高到低):
+              - expanding: 有 Nexus pending(正在 warp in)
+              - attacking: 我方军队 > 6 单位且重心离最近基地 > 25 距离(在敌方半场)
+              - defending: 敌方单位在我方任意基地 < 20 距离内可见
+              - scouting: 有 probe 在主基地 > 50 距离
+              - sustaining: 都没匹配
+
+            label/reason 直接给 PWA 一行展示。
+            """
+            if now - self._tactics_last_s < 1.0:
+                return
+            self._tactics_last_s = now
+            if self.director is None:
+                return
+            try:
+                from voicecraft.bot.director import Tactics
+
+                stance, label, reason = self._compute_stance()
+                self.director._tactics = Tactics(stance=stance, label=label, reason=reason)
+            except Exception as exc:
+                logger.debug("tactics_compute_failed: %s", exc)
+
+        def _compute_stance(self) -> tuple[str, str, str]:
+            """返回 (stance, label, reason)。纯 rule-based,看 sharpy 已有状态。
+
+            没有"意图"概念 → 用观察到的事实倒推:army 在哪 / 谁打谁 / 有没有 Nexus pending。
+            """
+            from sc2.ids.unit_typeid import UnitTypeId
+
+            townhalls = self.townhalls
+            home = townhalls.first.position if townhalls else self.start_location
+
+            # expanding
+            pending_nexus = self.structures(UnitTypeId.NEXUS).not_ready.amount
+            if pending_nexus > 0:
+                return (
+                    "expanding",
+                    f"🏗️ 开矿中(+{pending_nexus} 矿)",
+                    f"已有 {townhalls.amount} 矿,扩 {townhalls.amount + pending_nexus} 矿",
+                )
+
+            # 自家 army(不含探机/Observer)
+            army = self.units.exclude_type(
+                {UnitTypeId.PROBE, UnitTypeId.OBSERVER, UnitTypeId.WARPPRISM}
+            )
+
+            # defending:敌人 < 25 距离我方任何基地
+            for th in townhalls:
+                enemies_near = self.enemy_units.closer_than(25.0, th)
+                if enemies_near.amount >= 2:
+                    return (
+                        "defending",
+                        f"🛡️ 守家({enemies_near.amount} 敌单位逼近)",
+                        f"{th.type_id.name} 附近 {enemies_near.amount} 敌单位",
+                    )
+
+            # attacking:army > 6 且重心离家 > 25
+            if army.amount >= 6:
+                center = army.center
+                dist = center.distance_to(home)
+                if dist > 25.0:
+                    return (
+                        "attacking",
+                        f"⚔️ 进攻中({army.amount} 单位出门)",
+                        f"军队重心离家 {int(dist)} 距离",
+                    )
+
+            # scouting:有 probe 离家 > 50
+            scouts = [
+                p for p in self.units(UnitTypeId.PROBE) if p.distance_to(home) > 50.0
+            ]
+            if scouts:
+                return (
+                    "scouting",
+                    f"🔍 探路({len(scouts)} 探机外出)",
+                    "探机在敌方区域",
+                )
+
+            # sustaining
+            return ("sustaining", "⚙️ 运营中", f"{townhalls.amount} 矿, {army.amount} 兵")
 
         def is_voicecraft_controlled(self, unit: Any) -> bool:
             """M4: 判断单位是否被玩家 unit_claim 接管（不允许 sharpy manager 干预）。
@@ -416,19 +568,51 @@ def make_protoss_bot_class(
                     )
                     plans[recipe_id] = _make_fallback_plan()
 
+            # --- Sustain 兜底 plan(active_recipe="sustain"或没人匹配时 fallback)---
+            # voicecraft 自带,不是 yaml 剧本(玩家不能 voice 切"sustain"),
+            # 由 cancel_strategy directive / voice 取消时由 facade.set_build 切到这里
+            try:
+                from voicecraft.bot.auto_combat.protoss.plans.sustain import Sustain
+
+                sustain_inst = Sustain()
+                sustain_plan = await sustain_inst.create_plan()
+                logger.info("create_plan: Sustain 兜底 plan 装载成功")
+            except Exception as exc:
+                logger.warning("create_plan: Sustain 装载失败,用空 BuildOrder 兜底: %s", exc)
+                sustain_plan = _make_fallback_plan()
+
+            # --- 通用层:所有 recipe 共享的行为 ---
+            # ScoutWorker:派 1 农民探路,保命优先,与 IfElse 路由独立(任何 plan 都跑)
+            # 容错:单测里 sharpy 是 fake,import 会失败,fallback 为 None
+            scout_act: Any = None
+            try:
+                from voicecraft.bot.auto_combat.protoss.plans.scout_worker import (
+                    ScoutWorker,
+                )
+
+                scout_act = ScoutWorker()
+            except Exception as exc:
+                logger.warning("ScoutWorker 装载失败: %s — 跳过通用探路层", exc)
+
+            def _wrap(plan: Any) -> Any:
+                """把 scout_act + plan 包成 BuildOrder list;scout_act 为 None 时只返 plan。"""
+                if scout_act is None:
+                    return BuildOrder(plan)
+                return BuildOrder([scout_act, plan])
+
             if not plans:
-                return BuildOrder([])
+                return _wrap(sustain_plan)
 
             # --- 构建 IfElse 嵌套树 ---
-            # 顺序：candidates 的顺序决定 IfElse 嵌套深度；最后一个作 else 兜底。
+            # 顺序：candidates 的顺序决定 IfElse 嵌套深度；
+            # 最深 else 是 sustain_plan(active_recipe 都不匹配时降级 → 不主动出门)
             # lambda 捕获 recipe_id 参数（避免 late-binding 坑：用默认参数绑定）
             from sharpy.plans.if_else import IfElse
 
-            # 从最后一个往前折叠，构成嵌套 IfElse 树
             recipe_ids = [rid for rid, _ in candidates]
-            # 兜底分支（最后一个 recipe 的 plan）
-            result: Any = plans[recipe_ids[-1]]
-            for rid in reversed(recipe_ids[:-1]):
+            # 兜底分支:Sustain plan(玩家 cancel 后 / active_recipe="sustain" 时)
+            result: Any = sustain_plan
+            for rid in reversed(recipe_ids):
                 _rid = rid  # loop var capture
                 result = IfElse(
                     lambda k, r=_rid: self.active_recipe == r,
@@ -436,7 +620,8 @@ def make_protoss_bot_class(
                     result,
                 )
 
-            return BuildOrder(result)
+            # 顶层 BuildOrder:ScoutWorker(通用) + IfElse 路由(具体 plan)
+            return _wrap(result)
 
         async def on_start(self) -> None:
             # KnowledgeBot.on_start() 初始化所有 Manager（含 roles / unit_cache 等）
@@ -463,24 +648,31 @@ def make_protoss_bot_class(
 
                 self._decision_watcher = DecisionWatcher(event_callback)
 
-            # 初始化 active_recipe + 把第一个 opening 落到 board.opening slot，
-            # 让手机 UI 一进对局就显示当前宏观剧本（否则空着等玩家发指令才亮）。
+            # 初始化 active_recipe:bot 从所有 opening 剧本里随机挑一个,
+            # set_by=BOT_INTERNAL → PWA badge 显示 "⚙️ bot 默认"。
+            # 玩家随时可 voice 切其他剧本(VOICE > BOT_INTERNAL 优先级)。
             if strategy_library is not None:
+                import random
+
                 from voicecraft.strategy.models import OpeningBuild
 
                 openings = [
                     s for s in strategy_library.all_strategies() if isinstance(s, OpeningBuild)
                 ]
                 if openings:
-                    # 设 active_recipe 不依赖 director（create_plan() 在 KnowledgeBot.on_start
-                    # 内被调用，此时 director 尚未构造）
-                    self.active_recipe = openings[0].id
+                    chosen = random.choice(openings)
+                    # active_recipe 不依赖 director(create_plan() 在 KnowledgeBot.on_start
+                    # 内被调用,此时 director 尚未构造,所以 active_recipe 是 plan 路由的真理源)
+                    self.active_recipe = chosen.id
+                    logger.info(
+                        "bot 随机选择开局剧本: %s (%s)", chosen.id, chosen.display_name_zh
+                    )
 
                     if self.director is not None:
                         from voicecraft.directives.types import StageKind
 
                         self.director.set_initial_strategy(
-                            StageKind.OPENING, openings[0].id, float(self.time)
+                            StageKind.OPENING, chosen.id, float(self.time)
                         )
 
             if status_callback is not None:
@@ -488,14 +680,40 @@ def make_protoss_bot_class(
                 status_callback("playing", "running", "")
 
         async def on_step(self, iteration: int) -> None:
-            # KnowledgeBot.on_step 跑 knowledge.update + execute（含所有 Manager tick）
-            await super().on_step(iteration)
+            """多路复用 step:view channel(高频)+ bot channel(低频,remap iteration)。
 
-            # M4: 重新声明 LLM_CONTROLLED 单位的 Reserved role
-            # 必须在 super().on_step() 后调（knowledge.unit_cache 已更新）
-            self._refresh_llm_controlled_roles()
+            sharpy realtime mode 自动设 game_step=1 → on_step ~0.045s/次。
+            我们在这个频率上做逻辑多路复用,bot channel 节流到原 sharpy 节奏。
 
-            # voicecraft down_q 消费
+            关键设计:sharpy 看到的 iteration 是 voicecraft 重映射的(_sharpy_iteration),
+            从 0 开始每次 sharpy beat +1。否则 sharpy 内部 `if iteration == 0` 类
+            一次性 init 条件(如 BuildingSolver.solve_grid)永远不触发 → bot 不造水晶。
+
+            扩展:加新通道(metric/event push 等)按延迟需求挂高频或低频。
+            """
+            self._voice_step_count += 1
+            now_s = float(self.time)
+
+            # ---- ViewChannel(每 step,~0.045s)----
+            # 只处理与视角强相关的消息(view_move),其它消息(command/confirm)等
+            # bot channel 时再批处理,避免在 sharpy state 未更新时误调 director
+            await self._tick_view_channel(now_s)
+
+            # ---- BotChannel(每 _SHARPY_STEP_RATIO step,~0.225s)----
+            if self._voice_step_count % self._SHARPY_STEP_RATIO == 0:
+                await self._tick_bot_channel(iteration, now_s)
+
+        async def _tick_view_channel(self, now_s: float) -> None:
+            """高频通道(每 step,~0.045s):input 消费 + view 反馈。
+
+            包含:
+            - 所有 down_q 消息(view_move 立即暂存 / command 创 async task / confirm 调 director)
+            - minimap 帧推送(节流 N=2 → ~0.09s/帧 ≈ 11Hz 接近实时)
+            - 末尾 await facade.drain_pending_actions(view_move 真正发到 SC2,延迟 ≤ 0.045s)
+
+            消息处理本身都是轻量(create_task / 暂存 / director 接口调用),不阻塞 step。
+            director 内部 board 仲裁基于 wall-time,不依赖 sharpy state。
+            """
             if down_q is not None:
                 try:
                     while True:
@@ -503,13 +721,12 @@ def make_protoss_bot_class(
                         msg_type = msg.get("type")
                         if msg_type == "command":
                             text = str(msg.get("text", ""))
-                            game_now = float(self.time)
                             if self.director is not None:
                                 task = asyncio.create_task(
                                     run_command_with_echo_fn(
-                                        self.director, text, game_now, echo_callback
+                                        self.director, text, now_s, echo_callback
                                     ),
-                                    name=f"cmd-{game_now:.3f}",
+                                    name=f"cmd-{now_s:.3f}",
                                 )
                                 self._cmd_tasks.append(task)
                                 task.add_done_callback(self._on_cmd_task_done)
@@ -517,33 +734,56 @@ def make_protoss_bot_class(
                             target = msg.get("target_point", [0.0, 0.0])
                             if self.facade is not None:
                                 self.facade.move_camera((float(target[0]), float(target[1])))
+                        elif msg_type == "confirm_recommendation":
+                            if self.director is not None:
+                                self.director.confirm_recommendation(now_s)
+                        elif msg_type == "dismiss_recommendation":
+                            if self.director is not None:
+                                self.director.dismiss_recommendation()
+                        elif msg_type == "confirm_force_strategy":
+                            if self.director is not None:
+                                self.director.confirm_force_strategy(now_s)
+                        elif msg_type == "cancel_force_strategy":
+                            if self.director is not None:
+                                self.director.cancel_force_strategy()
                         elif msg_type == "leave":
                             logger.info("bot 收到 leave 信号，等待 on_end")
                 except queue_module.Empty:
                     pass
 
-            # minimap 推送（§1.3，N=5 ≈ 4.5Hz）
+            # minimap 帧推送(节流 N=2 → ~0.09s/帧 ≈ 11Hz,接近实时)
             if minimap_callback is not None and self._minimap_builder is not None:
                 self._minimap_tick_count += 1
-                if self._minimap_tick_count >= 5:
+                if self._minimap_tick_count >= 2:
                     self._minimap_tick_count = 0
                     try:
-                        frame = self._minimap_builder.build(float(self.time))
+                        frame = self._minimap_builder.build(now_s)
                         minimap_callback(frame)
                     except Exception as exc:
                         logger.warning("minimap_build_failed: %s", exc)
 
-            # director tick
-            if self.director is not None:
-                self.director.on_tick(now=float(self.time))
-
-            # bot 自动决策 watcher（状态 diff → event 帧）
-            if self._decision_watcher is not None:
-                self._decision_watcher.tick(self, float(self.time))
-
-            # step 末尾串行 await 暂存的 camera 调用（ADR 0008）
+            # drain camera(ADR 0008):view_move 延迟 ≤ ~0.045s 接近实时
             if self.facade is not None:
                 await self.facade.drain_pending_actions()
+
+            # voicecraft 慢逻辑放这(本身已 throttle,每 step 调只多 if check):
+            # director 决定 board commit / push snapshot,需要每 step 推进 wall-time
+            self._update_tactics_throttled(now_s)
+            if self.director is not None:
+                self.director.on_tick(now=now_s)
+            if self._decision_watcher is not None:
+                self._decision_watcher.tick(self, now_s)
+
+        async def _tick_bot_channel(self, py_sc2_iteration: int, now_s: float) -> None:
+            """低频通道(每 _SHARPY_STEP_RATIO step,~0.225s):只跑 sharpy 主流程。
+
+            sharpy super().on_step 调 knowledge.update(iteration) + execute(plan)。
+            传 remap iter 让 sharpy 看到自己 namespace(0,1,2,...),
+            保证 BuildingSolver 的 `if iteration == 0` 首次 init 条件命中。
+            """
+            await super().on_step(self._sharpy_iteration)
+            self._sharpy_iteration += 1
+            self._refresh_llm_controlled_roles()
 
         async def on_unit_created(self, unit: Any) -> None:
             """单位创建事件。M1 无 voicecraft 逻辑，M4 加 LLM_CONTROLLED role 时再用。"""

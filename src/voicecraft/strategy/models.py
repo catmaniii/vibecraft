@@ -24,13 +24,20 @@ class StrategyKind(str, Enum):
 
 
 class Phase(BaseModel):
-    """剧本的阶段标识，UI 用 phase stepper 渲染。"""
+    """剧本的阶段标识，UI 用 phase stepper 渲染。
+
+    `start_at_supply` / `start_at_time` 任一非 None 时,PhaseTracker 用阈值
+    推断 current phase(已完成的 ✓ / 当前的 ▶ / 未来的 ○)。两者皆 None 时
+    该 phase 无法被推断为"已开始",停在前一个 phase 上。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
     display: str
     subtitle: str = ""
+    start_at_supply: int | None = None
+    start_at_time: float | None = None  # 游戏内秒
 
 
 # Build step 紧凑三段式："<supply> <verb> <object> [@modifier]"

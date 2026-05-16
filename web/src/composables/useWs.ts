@@ -14,6 +14,9 @@ import type {
   CommandEchoFrame,
   MinimapFrame,
   ViewMoveFrame,
+  RecommendationView,
+  TacticsView,
+  PendingForceStrategyView,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
 
@@ -42,6 +45,13 @@ export function useWs() {
   // P0：snapshot strategy + recent_commands（响应式）
   const snapshotStrategy = ref<SnapshotFrame['strategy'] | null>(null)
   const recentCommands = ref<{ text: string; ts: number }[]>([])
+
+  // bot 推荐(snapshot 透传,玩家未 confirm 前一直 carry)
+  const recommendation = ref<RecommendationView | null>(null)
+  // bot 内部意图(进攻/守家/...)
+  const tactics = ref<TacticsView | null>(null)
+  // 时机过被拦的硬转 directive(玩家未 confirm/cancel 前一直 carry)
+  const pendingForceStrategy = ref<PendingForceStrategyView | null>(null)
 
   // P1：event ring buffer（最近 30 条，响应式）
   const events = ref<EventFrame[]>([])
@@ -91,10 +101,13 @@ export function useWs() {
             break
           }
           case 'snapshot': {
-            // P0：更新剧本状态 + 最近指令
+            // P0：更新剧本状态 + 最近指令 + 推荐 + 内部意图 + 待硬转
             const f = frame as SnapshotFrame
             snapshotStrategy.value = f.strategy
             recentCommands.value = f.recent_commands
+            recommendation.value = f.recommendation ?? null
+            tactics.value = f.tactics ?? null
+            pendingForceStrategy.value = f.pending_force_strategy ?? null
             break
           }
           case 'event': {
@@ -150,6 +163,22 @@ export function useWs() {
     send(frame)
   }
 
+  // 玩家点 [确认] / [忽略] bot 推荐
+  function confirmRecommendation() {
+    send({ type: 'confirm_recommendation' })
+  }
+  function dismissRecommendation() {
+    send({ type: 'dismiss_recommendation' })
+  }
+
+  // 玩家点 [硬转] / [取消硬转](voice 切剧本时机已过被拦下)
+  function confirmForceStrategy() {
+    send({ type: 'confirm_force_strategy' })
+  }
+  function cancelForceStrategy() {
+    send({ type: 'cancel_force_strategy' })
+  }
+
   function send(frame: UpFrame) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(frame))
@@ -185,8 +214,15 @@ export function useWs() {
     events: readonly(events),
     lastEcho: readonly(lastEcho),
     minimap: readonly(minimap),
+    recommendation: readonly(recommendation),
+    tactics: readonly(tactics),
+    pendingForceStrategy: readonly(pendingForceStrategy),
     send,
     sendViewMove,
+    confirmRecommendation,
+    dismissRecommendation,
+    confirmForceStrategy,
+    cancelForceStrategy,
     close,
     token,
   }

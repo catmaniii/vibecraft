@@ -224,11 +224,11 @@ class TestStrategyLibrary:
         ob = lib.get_opening("1g_robo_immortal")
         assert isinstance(ob, OpeningBuild)
         assert "1门Robo" in ob.aliases
-        # 第一步：13 build Pylon
+        # 第一步：13 build PY(voicecraft 用快捷键命名,PY=Pylon)
         steps = ob.parsed_steps()
         assert steps[0].supply == 13
         assert steps[0].verb == "build"
-        assert steps[0].obj == "Pylon"
+        assert steps[0].obj == "PY"
 
     def test_loaded_midgame(self) -> None:
         lib = StrategyLibrary.from_directories(

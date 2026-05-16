@@ -1,7 +1,7 @@
 kind: opening_build
 id: 1g_robo_immortal
 display_name_zh: "1门Robo 不朽开"
-summary_zh: "单 BG 速开机械科技出不朽的标准开局：13农BG→BC→VR，出 OB+不朽，走双矿"
+summary_zh: "单 BG 速开机械科技出不朽的标准开局:13 农 BG → BC → VR,出 OB+不朽,走双矿"
 sharpy_dummy_class: "dummies.protoss.robo:MacroRobo"
 aliases: ["1门Robo", "速不朽", "1G Robo", "1门机械", "单BG VR出不朽", "单BG出不朽", "1BG VR不朽", "1 Gate Robo"]
 matchup: [PvT, PvZ, PvP]
@@ -10,28 +10,33 @@ phases:
   - id: opening
     display: "开局"
     subtitle: "13 农 BG"
+    start_at_supply: 13
   - id: tech
     display: "上折跃"
     subtitle: "WG 研究"
+    start_at_supply: 22
   - id: rallying
     display: "集结追猎"
     subtitle: "14 追猎"
+    start_at_supply: 32
   - id: executing
     display: "出发压制"
     subtitle: "6:00 出门"
+    start_at_supply: 38
+    start_at_time: 360
 
 steps:
-  - "13 build Pylon"
-  - "14 build Gateway"
-  - "14 build Assimilator"
-  - "16 build Pylon"
-  - "17 build CyberneticsCore"
-  - "20 build Nexus"
-  - "21 build Assimilator"
-  - "22 research WarpGateResearch @chrono"
-  - "24 build RoboticsFacility"
-  - "32 train Observer"
-  - "34 train Immortal"
+  - "13 build PY"
+  - "14 build BG"
+  - "14 build VC"
+  - "16 build PY"
+  - "17 build BC"
+  - "20 build NX"
+  - "21 build VC"
+  - "22 research 折跃 @chrono"
+  - "24 build VR"
+  - "32 train OB"
+  - "34 train 不朽"
 
 scout_at: "17 send_probe enemy_natural"
 

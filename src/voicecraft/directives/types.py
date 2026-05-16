@@ -17,6 +17,8 @@ class DirectiveType(str, Enum):
 
     # 剧本切换
     STRATEGY_SET = "strategy_set"
+    # 剧本取消(玩家 voice "取消当前剧本"/"停下"):清掉 board slot,bot 降级 sustain
+    STRATEGY_CANCEL = "strategy_cancel"
 
     # 中粒度 override
     PRODUCTION_OVERRIDE = "production_override"

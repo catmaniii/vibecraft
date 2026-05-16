@@ -421,10 +421,13 @@ class TestOnStart:
         with patch.object(FakeKnowledgeBot, "on_start", new_callable=AsyncMock):
             await instance.on_start()
 
-        # 第一个 opening 被设为 active_recipe
-        assert instance.active_recipe == "build_alpha"
+        # bot 从所有 opening 中 random.choice 选一个(不绑定具体值,避免 random seed 依赖)
+        assert instance.active_recipe in {"build_alpha", "build_beta"}
         # director.set_initial_strategy 被调
         director_mock.set_initial_strategy.assert_called_once()
+        # 第二参数(strategy_id)也应是 random 选中的那个 id
+        called_id = director_mock.set_initial_strategy.call_args.args[1]
+        assert called_id == instance.active_recipe
 
 
 # ---------------------------------------------------------------------------
@@ -915,14 +918,18 @@ class TestCreatePlan:
         plan = await instance.create_plan()
         inner = plan.args[0]  # top-level IfElse
 
-        # 初始 active_recipe = "recipe_a"（on_start 设第一个）
+        # on_start 用 random.choice 从 [recipe_a, recipe_b] 选一个 →
+        # 顶层 IfElse 的 condition 是 lambda: active_recipe == "recipe_a"
+        # (candidates 顺序;最外层是第一个 candidate)
         assert isinstance(inner, FakeIfElse)
-        assert inner.check(None) is True  # lambda: active_recipe == "recipe_a"
+        # 不绑定具体值,只校验 lambda 评估结果与 active_recipe 一致
+        expected_initial = instance.active_recipe == "recipe_a"
+        assert inner.check(None) is expected_initial
 
         # set_build 切到 recipe_b
         instance.facade.set_build("recipe_b")
         assert instance.active_recipe == "recipe_b"
-        # top IfElse condition 现在 false（recipe_a != recipe_b）
+        # 切到 recipe_b 后,top IfElse condition 必定 false(它判 recipe_a)
         assert inner.check(None) is False
 
     async def test_set_build_invalid_still_works(self) -> None:

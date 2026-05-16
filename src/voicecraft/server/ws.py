@@ -189,6 +189,12 @@ class WsConnection:
         elif frame_type == "view_move":
             # minimap 拖拽 → 切 SC2 大屏视野
             await self._handle_view_move(frame)
+        elif frame_type in {"confirm_recommendation", "dismiss_recommendation"}:
+            # 玩家点 [确认] / [忽略] bot 推荐
+            await self._handle_recommendation_response(frame_type, frame)
+        elif frame_type in {"confirm_force_strategy", "cancel_force_strategy"}:
+            # 玩家点 [硬转] / [取消] (voice 切剧本但时机已过 → 拦下来等确认)
+            await self._handle_force_strategy_response(frame_type, frame)
         elif frame_type in {
             "view_follow",
             "view_zoom",
@@ -207,6 +213,36 @@ class WsConnection:
             self._log.info("ws_stub_other", frame_type=frame_type)
         else:
             self._log.warning("ws_unknown_frame_type", frame_type=frame_type)
+
+    # ------------------------------------------------------------------
+    # 推荐 confirm / dismiss
+    # ------------------------------------------------------------------
+
+    async def _handle_recommendation_response(
+        self, frame_type: str, frame: dict[str, Any]
+    ) -> None:
+        """玩家在 PWA 点 [确认] / [忽略] bot 推荐 → 转发到子进程。
+
+        Director.confirm_recommendation / dismiss_recommendation 处理。
+        """
+        if not self._game_process.is_running:
+            self._log.debug("ws_recommendation_no_game_running", frame_type=frame_type)
+            return
+        self._game_process.send_command({"type": frame_type})
+        self._log.info("ws_recommendation_sent", frame_type=frame_type)
+
+    async def _handle_force_strategy_response(
+        self, frame_type: str, frame: dict[str, Any]
+    ) -> None:
+        """玩家在 PWA 点 [硬转] / [取消硬转] → 转发到子进程。
+
+        Director.confirm_force_strategy / cancel_force_strategy 处理。
+        """
+        if not self._game_process.is_running:
+            self._log.debug("ws_force_strategy_no_game_running", frame_type=frame_type)
+            return
+        self._game_process.send_command({"type": frame_type})
+        self._log.info("ws_force_strategy_sent", frame_type=frame_type)
 
     # ------------------------------------------------------------------
     # view_move 处理（minimap 拖拽切视野）
