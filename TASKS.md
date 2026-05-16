@@ -7,40 +7,46 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-16，sharpy 迁移 M4+M5+M6 完成）
+## 当前状态（最近更新：2026-05-16，HEAD `8d46b99`）
 
-- **里程碑**：M1 代码层完成 + **sharpy 迁移 M4/M5/M6 完成（worktree，待合并）**
-  auto-pilot + cockpit-sync + minimap 拖拽视野均已实现，PWA 驾驶舱架子按 §9.5 重排完成。
-- **本次 session（2026-05-16）做了什么** —— sharpy 迁移 M4+M5+M6，在 worktree
-  `D:\code\claudecode\vibecraft\.claude\worktrees\agent-a3d18f8aa016633f0` 实现：
-  - **M4（LLM_CONTROLLED role 隔离）**：`_VibeCraftProtossBot` 新增
-    `_llm_controlled_tags: set[int]`；`_SharpyFacade.set_unit_role()` 在设
-    `LLM_CONTROLLED` 时写入集合、设其他 role 时从集合移除；新增
-    `_refresh_llm_controlled_roles()` 每 step 对集合中每个 unit 重新声明
-    `UnitTask.Reserved`（防 `UnitRoleManager.update()` 每步 clear `had_task_set`）；
-    新增 `is_vibecraft_controlled(unit) -> bool`；`on_unit_destroyed` 清理死亡 tag
-  - **M5（attack_window / micro_doctrine 字段透传）**：`director.build_snapshot`
-    `_slot_view()` 扩展 `MidgameStance.attack_window` / `MidgameStance.micro_doctrine` /
-    `LategameDoctrine.engagement_doctrine`（as micro_doctrine）→ snapshot；
-    `web/src/types.ts` `StrategySlotView` 加两个可选字段；`StrategyCard.vue` 显示
-    「出门 9:30–11:30」和 doctrine 子弹点
-  - **M6（文档）**：ADR 0009 `docs/adr/0009-sharpy-migration.md`；
-    `ARCHITECTURE.md` 更新（模块图/不变量/hook 表/vendor 节）
-  - 新增 13 个单测（M4: 9 个 `TestLLMControlledTags`；M5: 4 个 cockpit-sync 快照测试）
-- **验证（无 SC2，mock）**：`uv run --no-sync pytest` **389 passed, 6 skipped**（+13）；
-  前端 vitest **41 passed**；ruff + mypy strict 全干净；Vite build 通过
-- **阻塞 / 等待**：worktree 变更待用户合并（`git merge` 或 cherry-pick）。
-  合并后无需 SC2 即可完整验证；sharpy 真实 hook 验证需真实 SC2 对局
-- **下一步（合并后）**：
-  1. `git merge` 或 cherry-pick worktree → main
-  2. 真实 SC2 验证：sharpy Reserved 隔离 + attack_window / micro_doctrine PWA 显示
-  3. M2：midgame/lategame 剧本自动转（auto-pilot 按剧本切）
+- **里程碑**：M1 代码层完成 + sharpy 迁移 M1-M6 已合并 main + 项目改名 vibecraft 完成。
+  端到端真实 SC2 验证待跑（M1.6 + M4 + M5 出口）。
+- **最近几个 commit（按时间倒序）**：
+  - `8d46b99` CockpitView 删资源条占位（SC2 内置 HUD 已有）+ headless_smoke 加 `--inject` 指令注入
+  - `000f46c` USER_GUIDE 加手机驾驶舱真实截图（780×1908，page 3）
+  - `32ba1b4` README + USER_GUIDE 弱化"语音"措辞 + 重生 PDF
+  - `0eda771` voicecraft → vibecraft 全局改名（127 文件）
+  - `701d1dc` M4+：多路复用 + 4bg 流程 + 推荐/硬转/取消 + PWA 多卡片
+  - `13092d4` M4+M5+M6: LLM_CONTROLLED 隔离 + attack_window 透传 + ADR 0009
+  - `9f089d6` M2+M3: IfElse 路由 + 4 sharpy dummy 映射
+  - `147b06e` M1: ares → sharpy 骨架替换
+- **GitHub repo**：已从 `catmaniii/voicecraft` 改名为 `catmaniii/vibecraft`，本地 remote 自动 update
+- **Hidden SC2 调研结论（2026-05-16）**：Windows + retail SC2 **不能真 headless**。
+  尝试过：`-windowx -5000`（被 SC2 clamp 回屏内）/ `ShowWindow SW_HIDE` 后台 thread
+  （来不及第一帧前 hide）/ `CreateDesktopW + STARTUPINFO.lpDesktop`（D3D9 device 在
+  non-interactive desktop 立刻 `Lost`）—— 三条路全堵。Linux native SC2 永久卡 4.10
+  （2019 至今），Wine + retail 可行但 setup 3-4h。**项目设计本来就接受 SC2 可见**
+  （PC 当显示器，玩家是观众）。`headless_smoke.py` 策略是"弹窗 + 自动 kill"。
+- **验证（无 SC2，mock）**：`uv run --no-sync pytest` 389 passed, 6 skipped；
+  前端 vitest 41 passed；ruff + mypy strict 全干净；Vite build 通过
+- **阻塞 / 等待**：等用户跑真实 SC2 端到端（手动启动 SC2 + 手机说指令）
+- **下一步**：
+  1. **M1 端到端验证**（接受 SC2 可见）：手机点开始对局 → SC2 启动 → 说「切 1 门 Robo」
+     / 「切 4BG」/ 「叉子守这里」验三件事 — (M1.6) bot 真切到对应 build，
+     StrategyCard phase 推进；(M4) sharpy `LLM_CONTROLLED` 隔离生效；
+     (M5) midgame/lategame 剧本的 attack_window / micro_doctrine 在 PWA 显示
+  2. 通过后打 `v0.1.0a3` tag + 更新 CHANGELOG.md
+  3. **M2**：midgame/lategame 剧本自动转（auto-pilot 按剧本切）+ 造建筑指令 schema
+  4. **M3**：填 3 个 `M3Placeholder`（Standing Orders / 快捷栏 / phase stepper / 撤销机制）
 - **已知未做（非 bug，是 M2/M3 范围）**：
-  - 完整驾驶舱：资源条/SO 区/快捷栏内容（3 个 `M3Placeholder` 已挂位）
-    —— **M3**。phase stepper 精确进度、撤销机制 —— **M3**
+  - 完整驾驶舱：Standing Orders 区 / 快捷栏内容（资源条占位已删）—— **M3**
+  - phase stepper 精确进度、撤销机制 —— **M3**
   - 「按 midgame/lategame 剧本自动转」—— **M2**（当前 auto-pilot 只是通用兜底）
-  - 造建筑指令（「造水晶和BG」）—— directive schema 没这个类型，**M2**
-- **service 状态**：停掉了旧 service。用户直接 `.\scripts\start.ps1` 即可
+  - 造建筑指令（「造水晶和 BG」）—— directive schema 没这个类型 —— **M2**
+- **未 commit 的悬挂文件**：
+  - `docs/plans/2026-05-16-four-layer-commands-design.md`（untracked 新 plan，待分类）
+  - `src/vibecraft/server/static/assets/index-BweSwhv7.js`（vite build 副产物）
+- **service 状态**：用户跑过 `start.ps1 -Token vibecraft-dev`，手机连上（37972 active）
 - **模型**：真实验证若需 debug 用 Opus；M2 起写代码用 Sonnet
 - **环境就绪情况**：
   - `SC2PATH` = `D:\StarCraft II`（user-level 永久）；地图
@@ -51,6 +57,7 @@
     不带 `--extra sc2` 会**卸载** ares —— 跑 pytest / smoke 用 `uv run --no-sync`
   - `.venv/.../ares_sc2_src.pth`（内容 `src`）—— 修 ares src-layout 打包 bug；
     `uv sync` 不碰它，但**重建 venv 后需重新创建**（runbook §1.3）
+  - WSL2 + Ubuntu 已装（Python 3.14，无 SC2）；hidden 调研中未实际用
 
 ---
 
