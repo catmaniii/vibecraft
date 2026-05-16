@@ -203,4 +203,43 @@ P1 实施时定义 standing 守建筑的 schema 形态（**倾向**：用 `targe
 
 实施过程发现的 corner case 在此追加（边写边改）：
 
-- TBD（P1 开始后补）
+### P1 实施（2026-05-17）
+
+- **schema gap 实际只缺 `persistent` 字段**：plan P1.1 写要修 `target.kind`
+  加 `building_tag` / `named_spot` + `Selector` `extra="forbid"`，实测发现这两项
+  已经在代码里。真正缺的只有 `UnitClaimPayload.persistent: bool = False`。Plan
+  对 M4 e2e 输出的归因不够精细（M4 e2e 失败 actually 是 LLM prompt 教 LLM 输出
+  schema 不支持的字段，而非 schema 真缺）。
+- **类名跟 plan 不符**：plan 用 `UnitSelector / UnitTask / Target`，实际代码是
+  `Selector / Task / TargetSpec`。`UnitClaimPayload` 名字对的。后续 plan 写作要
+  先 grep 现有 schema 类名。
+- **`board.revoke()` 对已 committed standing order 返回 `False`**：standing 路径
+  下，directive 一秒后 board 把它从 pending 切到 committed overlays，此时
+  `board.revoke()` 看不到它在 pending → 返回 `False`。`revoke_standing_order`
+  方法目前从 `self.standing_orders` list 移除 + 调 board.revoke + push snapshot，
+  即使 board.revoke 返回 False 也算成功。**P5 实现 sharpy 让位 + reserved_tags 通用化
+  时**要让 `board.revoke` 支持 committed overlays 的 revocation。
+- **`_dispatch_committed_to_facade` 跳过 standing order id**：directive 不进
+  `_in_flight`，dispatch loop 找不到 id 静默跳过 —— standing order 在 P1 阶段
+  **只进列表 + UI 可见，sharpy 端不真的 hold 单位**。**P5 实现** sharpy 让位机制
+  时要让 dispatch 知道 standing_orders 也要处理。
+- **`named_spot` 注册不完整**：LLM P1.6 e2e 输出 `named_spot="enemy_main_gas"`，
+  但 sharpy zone manager 是否注册了这个 spot name 未实际验证。当前 named_spot 的
+  到 sharpy game-state 坐标的解析 未实现。**P5 阶段**做 spot name registry
+  （natural / main_ramp / enemy_main / enemy_natural / *_gas 等），含 fallback
+  `closest_to(known_spot)`。
+- **`_VibeCraftProtossBot` `__init__` 绕过 issue**：旧测试 `TestLLMControlledTags`
+  用 `object.__new__` + `FakeKnowledgeBot.__init__` 绕过 `_VibeCraftProtossBot.__init__`，
+  导致 `event_bus` / `_enemy_units_dict` 未初始化。`_publish_unit_destroyed` helper
+  对两个 dict 用 `getattr(..., {})` 兜底，`on_unit_destroyed` 加 `hasattr` guard
+  保持向后兼容。**未来重写测试**时应走 `_VibeCraftProtossBot()` 正常构造。
+- **worktree 共享主 `.venv` editable install**：parallel subagent 在 worktree 跑
+  时，`.venv` editable install 指向主仓 `src/`，pytest 跑 worktree 自己的代码需要
+  `PYTHONPATH=worktree/src` 或 `pyproject.toml` 加 `pythonpath = ["src"]`。P1.2
+  subagent 已加 pyproject 配置作为永久 workaround。
+- **`uv run` trampoline canonicalize error**：本 session cherry-pick 后
+  `uv run --no-sync pytest` / `mypy` 突然报 "uv trampoline failed to canonicalize
+  script path"（但 `uv run --no-sync python -c '...'` OK）。原因未确认，可能跟
+  worktree 切换 / uv cache 状态有关。**workaround**：直接调
+  `.venv/Scripts/python.exe -m pytest` / `-m mypy` 绕开 uv shim。CI 不受影响
+  （fresh venv 没这问题）。

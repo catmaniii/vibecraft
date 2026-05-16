@@ -109,31 +109,31 @@
 
 固化 4 个决策，P1-P6 实施基线。
 
-#### P1 L3 Standing Orders + EventBus 基建  🔄 待开（~1.5d）
+#### P1 L3 Standing Orders + EventBus 基建  ✅ done（2026-05-17，~1d 实际）
 
 详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md`。8 个 sub-task：
 
-- [ ] **P1.0** EventBus skeleton + 11 hook publish + 单测（~2h）
+- [x] **P1.0** EventBus skeleton + 11 hook publish + 单测（~2h）
   - `src/vibecraft/bot/event_bus.py`：`EventBus` 类 + `Event` dataclass +
     `EventKind` enum（11 个 + sc2_alert）
   - `_VibeCraftProtossBot` override 11 个 lifecycle hook，每个 publish 后
     `await super()`
   - 单测：subscribe/publish/filter/unsubscribe 基本路径
-- [ ] **P1.1** schema 改 + 修 M4 e2e schema gap（~1h）
+- [x] **P1.1** schema 改 + 修 M4 e2e schema gap（~1h）
   - `directives/models.py`：`UnitClaimPayload` 加 `persistent: bool = False`
   - 修 `target.kind` 接受 `'building_tag'` / `'named_spot'`，去 `selector.count`
   - LLM `prompt.py` 对应例子改用 schema 合法字段
-- [ ] **P1.2** Director state（~2h）
+- [x] **P1.2** Director state（~2h）
   - `self.standing_orders: list[StandingOrder]`
   - `_submit_directives` 按 `persistent` 路由（true 进 standing，false 进 in_flight）
-- [ ] **P1.3** Snapshot 加 `standing_orders` 字段 + 单测（~1h）
-- [ ] **P1.4** `revoke_directive {id}` 上行帧 + ws handler（~30min）
-- [ ] **P1.5** PWA `StandingOrdersCard.vue` + CockpitView 装载（~2h）
+- [x] **P1.3** Snapshot 加 `standing_orders` 字段 + 单测（~1h）
+- [x] **P1.4** `revoke_directive {id}` 上行帧 + ws handler（~30min）
+- [x] **P1.5** PWA `StandingOrdersCard.vue` + CockpitView 装载（~2h）
   - 替换 `M3Placeholder` "Standing Orders" 占位
   - 每条 standing order + × 撤销按钮
-- [ ] **P1.6** e2e smoke verify（~30min）
+- [x] **P1.6** e2e smoke verify（~30min）
   - 重跑 inject「那个农民守气矿别动」case，验 schema 不再 fail + 进 standing list
-- [ ] **P1.7** 更新 ADR 0010 Implementation Notes corner case（~10min）
+- [x] **P1.7** 更新 ADR 0010 Implementation Notes corner case（~10min）
 
 #### P2 L4 Production Overrides  ⏸️ blocked by P1（~1d）
 
