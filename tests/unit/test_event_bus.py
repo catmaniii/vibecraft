@@ -1,6 +1,8 @@
-"""EventBus 核心 pub/sub 单测(P1.0a)。"""
+"""EventBus 核心 pub/sub 单测(P1.0a) + bot lifecycle hook wire 测试(P1.0b)。"""
 
 from __future__ import annotations
+
+from unittest.mock import MagicMock
 
 from vibecraft.bot.event_bus import Event, EventBus, EventKind
 
@@ -80,3 +82,210 @@ class TestEventBus:
         bus.subscribe(EventKind.UNIT_DESTROYED, b.append)
         bus.publish(_make_event())
         assert len(a) == 1 and len(b) == 1
+
+
+def _make_mock_unit(tag: int, alliance: int, type_name: str, x: float = 10.0, y: float = 20.0) -> MagicMock:
+    """构造 mock sc2 Unit 对象。"""
+    unit = MagicMock()
+    unit.tag = tag
+    unit.alliance = alliance
+    unit.type_id.__str__ = lambda self: type_name
+    unit.position.x = x
+    unit.position.y = y
+    return unit
+
+
+def _make_mock_bot(bus: EventBus | None = None) -> MagicMock:
+    """构造 mock bot_self：只含 _publish_xxx helpers 需要的最小接口。"""
+    bot = MagicMock()
+    bot.time = 12.5
+    bot.event_bus = bus if bus is not None else EventBus()
+    bot._enemy_units_dict = {}
+    bot._own_units_dict = {}
+    return bot
+
+
+class TestBotEventWiring:
+    """验 _VibeCraftProtossBot override 的 lifecycle hooks 正确 publish 到 EventBus (P1.0b)。"""
+
+    def test_on_unit_created_own_unit_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_CREATED, received.append)
+
+        unit = _make_mock_unit(tag=100, alliance=1, type_name="PROBE", x=50.0, y=60.0)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_created
+        _publish_unit_created(bot, unit)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.UNIT_CREATED
+        assert e.owner == "own"
+        assert e.unit_tag == 100
+        assert e.position == (50.0, 60.0)
+
+    def test_on_unit_created_enemy_unit_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_CREATED, received.append)
+
+        unit = _make_mock_unit(tag=200, alliance=4, type_name="ZERGLING", x=5.0, y=5.0)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_created
+        _publish_unit_created(bot, unit)
+
+        assert len(received) == 1
+        assert received[0].owner == "enemy"
+
+    def test_on_unit_destroyed_publishes_with_enemy_lookup(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        enemy_unit = _make_mock_unit(tag=200, alliance=4, type_name="STALKER", x=10.0, y=20.0)
+        bot._enemy_units_dict = {200: enemy_unit}
+
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+        _publish_unit_destroyed(bot, 200)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.UNIT_DESTROYED
+        assert e.unit_tag == 200
+        assert e.owner == "enemy"
+        assert e.unit_type == "STALKER"
+
+    def test_on_unit_destroyed_unknown_tag_publishes_minimal(self):
+        """tag 不在任何 dict(已被清)时,publish 仍发出,owner/type 为 None。"""
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+        _publish_unit_destroyed(bot, 999)
+
+        assert len(received) == 1
+        assert received[0].unit_tag == 999
+        assert received[0].owner is None
+
+    def test_on_unit_type_changed_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_TYPE_CHANGED, received.append)
+
+        unit = _make_mock_unit(tag=300, alliance=1, type_name="WARPGATE")
+        previous_type = MagicMock()
+        previous_type.__str__ = lambda self: "GATEWAY"
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_type_changed
+        _publish_unit_type_changed(bot, unit, previous_type)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.UNIT_TYPE_CHANGED
+        assert e.payload["previous_type"] == "GATEWAY"
+        assert e.payload["current_type"] == "WARPGATE"
+
+    def test_on_building_started_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.BUILDING_STARTED, received.append)
+
+        unit = _make_mock_unit(tag=400, alliance=1, type_name="GATEWAY", x=30.0, y=40.0)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_building_started
+        _publish_building_started(bot, unit)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.BUILDING_STARTED
+        assert e.owner == "own"
+        assert e.unit_tag == 400
+        assert e.position == (30.0, 40.0)
+
+    def test_on_building_complete_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.BUILDING_COMPLETE, received.append)
+
+        unit = _make_mock_unit(tag=401, alliance=1, type_name="CYBERNETICSCORE")
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_building_complete
+        _publish_building_complete(bot, unit)
+
+        assert len(received) == 1
+        assert received[0].kind == EventKind.BUILDING_COMPLETE
+
+    def test_on_upgrade_complete_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UPGRADE_COMPLETE, received.append)
+
+        upgrade = MagicMock()
+        upgrade.__str__ = lambda self: "BLINKTECH"
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_upgrade_complete
+        _publish_upgrade_complete(bot, upgrade)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.UPGRADE_COMPLETE
+        assert e.payload["upgrade_id"] == "BLINKTECH"
+
+    def test_on_unit_took_damage_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_TOOK_DAMAGE, received.append)
+
+        unit = _make_mock_unit(tag=500, alliance=1, type_name="STALKER")
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_took_damage
+        _publish_unit_took_damage(bot, unit, 35.5)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.UNIT_TOOK_DAMAGE
+        assert e.payload["amount"] == 35.5
+        assert e.unit_tag == 500
+
+    def test_on_enemy_unit_entered_vision_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.ENEMY_UNIT_ENTERED_VISION, received.append)
+
+        unit = _make_mock_unit(tag=600, alliance=4, type_name="ROACH", x=70.0, y=80.0)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_enemy_unit_entered_vision
+        _publish_enemy_unit_entered_vision(bot, unit)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.ENEMY_UNIT_ENTERED_VISION
+        assert e.owner == "enemy"
+        assert e.unit_tag == 600
+
+    def test_on_enemy_unit_left_vision_publishes(self):
+        bus = EventBus()
+        bot = _make_mock_bot(bus)
+        received: list[Event] = []
+        bus.subscribe(EventKind.ENEMY_UNIT_LEFT_VISION, received.append)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_enemy_unit_left_vision
+        _publish_enemy_unit_left_vision(bot, 700)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.kind == EventKind.ENEMY_UNIT_LEFT_VISION
+        assert e.unit_tag == 700
+        assert e.owner == "enemy"

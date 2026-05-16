@@ -18,7 +18,159 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from vibecraft.bot.event_bus import Event, EventBus, EventKind
+
 logger = logging.getLogger(__name__)
+
+# -----------------------------------------------------------------------
+# EventBus publishing helpers (P1.0b)
+# module-level 函数方便单测 mock bot_self + bus，不需要起完整 sharpy。
+# 每个 helper 对应一个 python-sc2 lifecycle hook。
+# -----------------------------------------------------------------------
+
+
+def _publish_unit_created(bot_self: Any, unit: Any) -> None:
+    owner = "own" if getattr(unit, "alliance", 0) == 1 else "enemy"
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.UNIT_CREATED,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit.tag, "unit_obj": unit},
+            owner=owner,
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+            position=(float(unit.position.x), float(unit.position.y)),
+        )
+    )
+
+
+def _publish_unit_destroyed(bot_self: Any, unit_tag: int) -> None:
+    # 死亡时 unit 对象可能已 invalid，从 cached dicts 找（getattr 兜底：旧测试用 object.__new__ 绕过 __init__）
+    enemy_dict: dict[int, Any] = getattr(bot_self, "_enemy_units_dict", {})
+    own_dict: dict[int, Any] = getattr(bot_self, "_own_units_dict", {})
+    unit = enemy_dict.get(unit_tag) or own_dict.get(unit_tag)
+    owner: str | None = None
+    unit_type: str | None = None
+    position: tuple[float, float] | None = None
+    if unit is not None:
+        owner = "own" if getattr(unit, "alliance", 0) == 1 else "enemy"
+        unit_type = str(unit.type_id)
+        position = (float(unit.position.x), float(unit.position.y))
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.UNIT_DESTROYED,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit_tag, "unit_obj": unit},
+            owner=owner,
+            unit_tag=unit_tag,
+            unit_type=unit_type,
+            position=position,
+        )
+    )
+
+
+def _publish_unit_type_changed(bot_self: Any, unit: Any, previous_type: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.UNIT_TYPE_CHANGED,
+            ts=float(bot_self.time),
+            payload={
+                "unit_tag": unit.tag,
+                "previous_type": str(previous_type),
+                "current_type": str(unit.type_id),
+            },
+            owner="own" if getattr(unit, "alliance", 0) == 1 else "enemy",
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+        )
+    )
+
+
+def _publish_building_started(bot_self: Any, unit: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.BUILDING_STARTED,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit.tag, "unit_obj": unit},
+            owner="own",  # 只有自方触发
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+            position=(float(unit.position.x), float(unit.position.y)),
+        )
+    )
+
+
+def _publish_building_complete(bot_self: Any, unit: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.BUILDING_COMPLETE,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit.tag, "unit_obj": unit},
+            owner="own",
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+            position=(float(unit.position.x), float(unit.position.y)),
+        )
+    )
+
+
+def _publish_upgrade_complete(bot_self: Any, upgrade: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.UPGRADE_COMPLETE,
+            ts=float(bot_self.time),
+            payload={"upgrade_id": str(upgrade)},
+            owner="own",
+        )
+    )
+
+
+def _publish_unit_took_damage(bot_self: Any, unit: Any, amount: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.UNIT_TOOK_DAMAGE,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit.tag, "amount": float(amount)},
+            owner="own",  # python-sc2 只通知自方
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+            position=(float(unit.position.x), float(unit.position.y)),
+        )
+    )
+
+
+def _publish_enemy_unit_entered_vision(bot_self: Any, unit: Any) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.ENEMY_UNIT_ENTERED_VISION,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit.tag, "unit_obj": unit},
+            owner="enemy",
+            unit_tag=unit.tag,
+            unit_type=str(unit.type_id),
+            position=(float(unit.position.x), float(unit.position.y)),
+        )
+    )
+
+
+def _publish_enemy_unit_left_vision(bot_self: Any, unit_tag: int) -> None:
+    bot_self.event_bus.publish(
+        Event(
+            kind=EventKind.ENEMY_UNIT_LEFT_VISION,
+            ts=float(bot_self.time),
+            payload={"unit_tag": unit_tag},
+            owner="enemy",
+            unit_tag=unit_tag,
+        )
+    )
+
+
+def _make_event_publisher() -> None:
+    """占位：让单测可以 from vibecraft.bot.auto_combat.protoss.bot import _make_event_publisher 不报错。
+
+    plan P1.0b 测试 fixture 里有 _make_event_publisher 的 import，实际逻辑由各
+    _publish_xxx 函数承担，此处仅作标记性导出。
+    """
 
 # -----------------------------------------------------------------------
 # vendor path 注入（单测先 mock sys.modules 绕开）
@@ -371,6 +523,12 @@ def make_protoss_bot_class(
             self._tactics_last_s = 0.0
             self._voice_step_count = 0
             self._sharpy_iteration = 0
+            # P1.0b: EventBus — vibecraft 内部 pub/sub，lifecycle hook → subscriber 分发
+            self.event_bus = EventBus()
+            # P1.0b: 单位状态缓存（on_unit_destroyed 时 unit 对象可能已 invalid，
+            # 从这里取 owner/type。sharpy knowledge.unit_cache 是权威源，这是补充 lookup。）
+            self._enemy_units_dict: dict[int, Any] = {}
+            self._own_units_dict: dict[int, Any] = {}
 
         def _update_tactics_throttled(self, now: float) -> None:
             """每 ~1s 算一次 stance,写到 director._tactics。
@@ -793,17 +951,76 @@ def make_protoss_bot_class(
             self._refresh_llm_controlled_roles()
 
         async def on_unit_created(self, unit: Any) -> None:
-            """单位创建事件。M1 无 vibecraft 逻辑，M4 加 LLM_CONTROLLED role 时再用。"""
+            """单位创建事件。P1.0b: publish UNIT_CREATED event 到 EventBus。"""
+            _publish_unit_created(self, unit)
+            # 更新 own/enemy 单位缓存（供 on_unit_destroyed lookup 用）
+            if getattr(unit, "alliance", 0) == 1:
+                self._own_units_dict[unit.tag] = unit
+            else:
+                self._enemy_units_dict[unit.tag] = unit
             if hasattr(super(), "on_unit_created"):
                 await super().on_unit_created(unit)
 
         async def on_unit_destroyed(self, unit_tag: int) -> None:
-            """单位死亡事件。M4: 从 _llm_controlled_tags 移除死亡单位，防内存泄漏。"""
-            # 先从 vibecraft 集合清除，再通知 KnowledgeBot（sharpy 需要 knowledge 更新）
+            """单位死亡事件。P1.0b: publish UNIT_DESTROYED + M4 _llm_controlled_tags 清理。"""
+            # publish 在前（此时 cached dict 还有这个 unit）
+            # guard: 旧测试 object.__new__ 绕过 __init__，event_bus 可能未初始化
+            if hasattr(self, "event_bus"):
+                _publish_unit_destroyed(self, unit_tag)
+            # M4: 从 _llm_controlled_tags 移除死亡单位，防内存泄漏（保留已有逻辑）
             if unit_tag in self._llm_controlled_tags:
                 self._llm_controlled_tags.discard(unit_tag)
                 logger.info("unit_destroyed tag=%d removed from _llm_controlled_tags", unit_tag)
+            # 清理单位缓存
+            if hasattr(self, "_own_units_dict"):
+                self._own_units_dict.pop(unit_tag, None)
+            if hasattr(self, "_enemy_units_dict"):
+                self._enemy_units_dict.pop(unit_tag, None)
             await super().on_unit_destroyed(unit_tag)
+
+        async def on_unit_type_changed(self, unit: Any, previous_type: Any) -> None:
+            """单位类型变化（如 Gateway → Warpgate）。P1.0b: publish UNIT_TYPE_CHANGED。"""
+            _publish_unit_type_changed(self, unit, previous_type)
+            if hasattr(super(), "on_unit_type_changed"):
+                await super().on_unit_type_changed(unit, previous_type)
+
+        async def on_building_construction_started(self, unit: Any) -> None:
+            """建筑开始建造。P1.0b: publish BUILDING_STARTED。"""
+            _publish_building_started(self, unit)
+            if hasattr(super(), "on_building_construction_started"):
+                await super().on_building_construction_started(unit)
+
+        async def on_building_construction_complete(self, unit: Any) -> None:
+            """建筑建造完成。P1.0b: publish BUILDING_COMPLETE。"""
+            _publish_building_complete(self, unit)
+            if hasattr(super(), "on_building_construction_complete"):
+                await super().on_building_construction_complete(unit)
+
+        async def on_upgrade_complete(self, upgrade: Any) -> None:
+            """科技研究完成。P1.0b: publish UPGRADE_COMPLETE。"""
+            _publish_upgrade_complete(self, upgrade)
+            if hasattr(super(), "on_upgrade_complete"):
+                await super().on_upgrade_complete(upgrade)
+
+        async def on_unit_took_damage(self, unit: Any, amount_damage_taken: Any) -> None:
+            """自方单位受伤。P1.0b: publish UNIT_TOOK_DAMAGE。"""
+            _publish_unit_took_damage(self, unit, amount_damage_taken)
+            if hasattr(super(), "on_unit_took_damage"):
+                await super().on_unit_took_damage(unit, amount_damage_taken)
+
+        async def on_enemy_unit_entered_vision(self, unit: Any) -> None:
+            """敌方单位进入视野。P1.0b: publish ENEMY_UNIT_ENTERED_VISION。"""
+            _publish_enemy_unit_entered_vision(self, unit)
+            # 加入 enemy 缓存
+            self._enemy_units_dict[unit.tag] = unit
+            if hasattr(super(), "on_enemy_unit_entered_vision"):
+                await super().on_enemy_unit_entered_vision(unit)
+
+        async def on_enemy_unit_left_vision(self, unit_tag: int) -> None:
+            """敌方单位离开视野。P1.0b: publish ENEMY_UNIT_LEFT_VISION。"""
+            _publish_enemy_unit_left_vision(self, unit_tag)
+            if hasattr(super(), "on_enemy_unit_left_vision"):
+                await super().on_enemy_unit_left_vision(unit_tag)
 
         def _on_cmd_task_done(self, task: asyncio.Task[Any]) -> None:
             import contextlib
