@@ -238,7 +238,8 @@ class TestStrategyLibrary:
         mg = lib.get_midgame("iac_2base")
         assert isinstance(mg, MidgameStance)
         assert mg.attack_window is not None
-        assert mg.attack_window.open_at == "9:30"
+        # iac_2base attack_window 在 commit d03654e 改为「叉球一波」6:15 timing
+        assert mg.attack_window.open_at == "6:15"
 
     def test_loaded_lategame(self) -> None:
         lib = StrategyLibrary.from_directories(
