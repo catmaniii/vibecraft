@@ -344,3 +344,35 @@ P1 实施时定义 standing 守建筑的 schema 形态（**倾向**：用 `targe
   full suite 偶发 fail，单跑永远 PASS。推测 pytest fixture / module-level state
   污染。**P6 排查**：用 `pytest -p no:randomly` 或 `--forked` 隔离，或 grep
   module-level mutable state。
+
+### P4 实施（2026-05-17）
+
+- **prompt 追加而非重写**：在现有 System prompt 末尾加 "4 层指令分类" 段（L1/L2/L3/L4
+  规则）+ 5 个新 few-shot 边界 case（复合 L1+L3 / L2 engagement+done / 撤销
+  / 含糊 ambiguous / unit_count_hint）。**保留**现有 prompt 内容不删。
+- **selector 不带 count**：边界 case 4 "3 个凤凰巡逻自然" 教 LLM 用
+  `unit_count_hint:3` 而非 `selector.count` (P1.1 已禁 count 字段，prompt 同步)。
+
+### P6 实施（2026-05-17）
+
+- **JsonlSink 必须 line-buffered**：subagent P6.A 加了 Director→directives.jsonl
+  落盘，mock session 测试通过但 e2e 跑后 jsonl 还是空 0 字节。原因：JsonlSink
+  `open("a", encoding="utf-8")` 在子进程 spawn 时 stdout 非 tty → Python text
+  mode 默认 block buffered。子进程被 `gp.stop()` kill 时来不及 flush。
+  **修**：`open(..., buffering=1)` 强制 line buffering。每行 write 立刻刷 OS。
+  e2e verify 后 events.jsonl + directives.jsonl 真有内容。
+- **e2e 全链路 verify**：inject "5秒后撤" → directives.jsonl 落盘
+  `submitted(issued_at=93.75, effective_at=95.25)` + `committed(ts=143.30)`
+  （1.5s grace 在 game time 下变 ~50s game time，因 fast mode）。但 `directive_completed`
+  event 还没 verify —— SC2 bot 在 timer 到之前可能被 AI 打死 ended，需要更稳的
+  long-game 验证（M3 真实玩家对局）。
+- **3 个 flaky cross-test 留 backlog**：`test_loads_real_strategies` /
+  `test_transitions_of` /
+  `test_not_triggered_when_visible_but_insufficient_duration` 单跑永远 PASS，
+  full suite 偶发 fail。不阻塞产线（单测 isolated 都 OK）。**未来 P6+** 用
+  pytest-forked 或排查 module-level mutable state。
+- **L4 production override sharpy 真出兵 → M3 范围**：P3 task_monitor 检测
+  L4 done_when（"出 N 哨兵"），但 sharpy 端不主动响应 production_override（sharpy
+  plan 系统自己出兵节奏）。让 sharpy 真按 L4 directive 出兵需要 wire
+  `bot.facade.set_production_target` 或扩 sharpy BuildOrderRunner。**M3 阶段做**
+  （跟完整驾驶舱 + 玩家真用一起）。

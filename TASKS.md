@@ -7,13 +7,15 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `d1f795d` + P5 收尾待 commit，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17，HEAD `4b104dd` + P6 收尾 commit 后，tag `v0.1.0a3`）
 
-- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 + P3 + P5 完成**：
-  L1/L3/L4/L2 完整 directive 链路 + task_monitor + 8-kind done_when dispatcher +
-  LLM prompt 教 done_when + 4 个 PWA cards + **NamedSpotRegistry + sharpy 让位
-  机制 + Director bot backref + 6 game-state checker 真路径**。剩 P4（LLM prompt
-  精修）/ P6（收尾 + 真实 SC2 全链路 verify + 修 events.jsonl sinks）。
+- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1+P2+P3+P5+P4+P6 全部完成**（4 决策
+  + 8 sub-task per P + ADR Implementation Notes 全段）：L1/L3/L4/L2 完整 directive
+  链路 + task_monitor + 8-kind done_when dispatcher + LLM prompt 教 done_when +
+  4 PWA cards + NamedSpotRegistry + sharpy 让位机制 + 6 game-state checker 真路径 +
+  JsonlSink line-buffered (jsonl 不再空) + ADR 0010 完整 corner case 记录。
+- **M2 可以打 `v0.1.0a4` tag** —— 待用户决定 + 实际真实 SC2 长游戏 verify (`directive_completed`
+  在 timer 到之前 bot 没死)。
 - **本次 session 关键节点**：
   - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
@@ -33,13 +35,19 @@
   - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
   - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
-- **阻塞 / 等待**：无，M2 P4 可开工
-- **下一步**（按 ADR 0010 / plan §7 次序）：
-  1. **M2 P4**：LLM prompt 重写精修（P3.4 已加 verb/done_when few-shot，P4 精修
-     4 层分类规则 + 边界 case 例子）（~0.5d）
-  2. **M2 P6**：收尾 + ADR 补 corner case + headless 全链路验证 + 修
-     headless_smoke 子进程 GameSession sinks（让 events.jsonl 不空）+ 排查 cross-test
-     pollution flaky tests（~0.5d）
+- **阻塞 / 等待**：无。M2 全部 P1-P6 done，可打 `v0.1.0a4` tag
+- **下一步**：
+  1. **真实长 SC2 对局验证**：现在 e2e smoke fast mode bot 在 30s 内被 AI 打死，
+     timer-based directive 没机会 mark completed。要在真实 SC2 客户端 + 玩家
+     surviving 长一些的对局验 `directive_completed` event fire
+  2. **打 `v0.1.0a4` tag**：跑通真实 verify 后 + 更新 CHANGELOG + tag + push
+  3. **M3 开始**：完整驾驶舱（剩余 PWA UI 精修）+ L4 production override sharpy
+     真出兵 wire（task_monitor 检测 done 后让 sharpy plan 知道）+ phase stepper
+     精确进度
+  4. **backlog**：3 个 flaky cross-test pollution（`test_loads_real_strategies` /
+     `test_transitions_of` /
+     `test_not_triggered_when_visible_but_insufficient_duration`）排查；用 pytest-forked
+     或 grep module-level mutable state
 - **P1/P2/P3 deferred items（P5 已全部完成 ✅）**：
   - ✅ sharpy 真让位 standing order 单位 → P5.E
   - ✅ Director bot backref 让 6 game-state checker 真工作 → P5.C
@@ -222,6 +230,24 @@ P3 总计 527 后端 + 50 前端 passed（+109 since P2 done）。
 
 P5 总计 591 后端 passed（+64 since P3 done）。1 个 P3 deferred 还在（L4 sharpy
 真出兵）→ M3 范围。
+
+#### P4 LLM prompt 精修  ✅ done（2026-05-17，~10min，1 subagent）
+
+- [x] **P4** prompt.py 追加 "4 层指令分类" 段（L1/L2/L3/L4 规则）+ 5 个边界 case
+  few-shot（复合 L1+L3 / L2 engagement+done / 撤销 / 含糊 ambiguous /
+  unit_count_hint 教 LLM 不写 selector.count）+ 3 个新单测
+
+#### P6 收尾 + e2e verify  ✅ done（2026-05-17，~30min）
+
+- [x] **P6.A** Director 接 session → directives.jsonl 生命周期落盘
+  (submitted/committed/released/rejected/revoked)
+- [x] **P6.B** JsonlSink line-buffered fix（修 jsonl 子进程空 bug）+ e2e verify
+- [x] **P6.C** ADR Implementation Notes 加 P4/P6 corner case + TASKS.md 收尾
+
+**P6 deferred 到 backlog（不阻塞 v0.1.0a4 tag）**：
+- 3 个 flaky cross-test pollution 排查
+- 真实 SC2 长游戏 verify `directive_completed` event（fast mode bot 死太快）
+- L4 production override sharpy 真出兵 wire → M3 范围
 
 #### ~~P3 L2 Tactics~~ ✅ done（见上一段）
 
