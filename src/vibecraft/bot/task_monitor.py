@@ -143,8 +143,8 @@ class TaskMonitor:
         self._tech_done_flags: dict[str, bool] = {}
         # directive_id → 初始 army supply snapshot (own_army_size_ratio checker)
         self._initial_army_supply: dict[str, float] = {}
-        # directive_id → vision hold 累计秒数 (vision_acquired checker)
-        self._vision_hold_counter: dict[str, float] = {}
+        # directive_id → vision spell 开始时的 ts (None = 上 tick 不可见)
+        self._vision_first_visible_ts: dict[str, float | None] = {}
         # directive_id → 累计 enemy killed 数量 (enemy_killed_in_area checker)
         self._enemy_killed_counts: dict[str, int] = {}
 
@@ -250,9 +250,9 @@ class TaskMonitor:
             )
             self._sub_ids[directive_id].append(sub_id)
 
-        # vision_acquired: 初始化 hold counter
+        # vision_acquired: 初始化 first_visible_ts (None = 当前不可见)
         elif kind == "vision_acquired":
-            self._vision_hold_counter[directive_id] = 0.0
+            self._vision_first_visible_ts[directive_id] = None
 
     def detach(self, directive_id: str) -> None:
         """directive complete/expire 时 unsubscribe 全部 listener + 清状态。"""
@@ -264,7 +264,7 @@ class TaskMonitor:
         self._timeout_s.pop(directive_id, None)
         self._tech_done_flags.pop(directive_id, None)
         self._initial_army_supply.pop(directive_id, None)
-        self._vision_hold_counter.pop(directive_id, None)
+        self._vision_first_visible_ts.pop(directive_id, None)
         self._enemy_killed_counts.pop(directive_id, None)
 
     def tick(self, now: float, game_state: Any) -> list[str]:
@@ -300,32 +300,12 @@ class TaskMonitor:
             ):
                 self._initial_army_supply[directive_id] = _supply_now(game_state)
 
-            # vision_acquired: 每 tick 累计 hold time (用 1 step = 1s 估算)
-            if (
-                done_when
-                and done_when.get("kind") == "vision_acquired"
-                and game_state is not None
-            ):
-                area_name = done_when.get("area", "")
-                spot = _resolve_named_spot(area_name, game_state)
-                if spot is not None:
-                    # 检查视野: P3 用 game_state.is_visible(spot) (如有)
-                    try:
-                        visible = bool(game_state.is_visible(spot))
-                    except Exception:
-                        visible = False
-                    if visible:
-                        self._vision_hold_counter[directive_id] = (
-                            self._vision_hold_counter.get(directive_id, 0.0) + 1.0
-                        )
-                    # else: 不重置 counter (保持累计)
-
             # done_when 检查 (仅 done_when 非空时)
             if done_when:
                 kind = done_when.get("kind")
                 if kind is not None and kind in DONE_CHECKERS:
                     try:
-                        if DONE_CHECKERS[kind](done_when, directive_id, game_state, self):
+                        if DONE_CHECKERS[kind](done_when, directive_id, game_state, self, now):
                             logger.debug(
                                 "task_monitor done directive_id=%s kind=%s",
                                 directive_id,
@@ -354,6 +334,7 @@ def _check_time_elapsed_since(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, seconds, ref}
 
@@ -394,6 +375,7 @@ def _check_unit_count_built_since(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, unit_type, op, value}
 
@@ -418,6 +400,7 @@ def _check_expansion_count(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, op, value} — 己方分基 (townhalls) 数量满足条件。
 
@@ -441,6 +424,7 @@ def _check_tech_done(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, upgrade_id} — 升级完成。
 
@@ -456,6 +440,7 @@ def _check_target_destroyed(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, target_kind, target_param, area}
 
@@ -504,6 +489,7 @@ def _check_own_army_size_ratio(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, op, value} — 己方军队 supply 比初始快照满足条件。
 
@@ -533,16 +519,35 @@ def _check_vision_acquired(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
-    """done_when: {kind, area, hold_seconds} — 在指定区域保持视野 N 秒。
+    """done_when: {kind, area, hold_seconds} — 在指定区域保持连续视野 >= hold_seconds 秒。
 
-    hold_counter 在 tick() 里每帧累加（1 step ≈ 1s 估算）。
+    实现: 用 wall-clock ts diff 而非 step count 计时。
+    - 可见 → 如果 first_ts 为 None: 设 first_ts = now; 比较 now - first_ts >= hold_seconds
+    - 不可见 → reset first_ts = None
     """
     if game_state is None:
         return False
+    area_name = done_when.get("area", "")
     hold_seconds = float(done_when.get("hold_seconds", 0.0))
-    counter = monitor._vision_hold_counter.get(directive_id, 0.0)
-    return counter >= hold_seconds
+
+    point = _resolve_named_spot(area_name, game_state)
+    if point is None:
+        return False
+
+    try:
+        is_visible = bool(game_state.is_visible(point))
+    except Exception:
+        is_visible = False
+
+    if is_visible:
+        if monitor._vision_first_visible_ts.get(directive_id) is None:
+            monitor._vision_first_visible_ts[directive_id] = now
+        elapsed = now - monitor._vision_first_visible_ts[directive_id]  # type: ignore[operator]
+        return elapsed >= hold_seconds
+    monitor._vision_first_visible_ts[directive_id] = None
+    return False
 
 
 @register("enemy_killed_in_area")
@@ -551,6 +556,7 @@ def _check_enemy_killed_in_area(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, area, unit_type, op, value} — 区域内击杀敌方单位数满足条件。
 
@@ -573,6 +579,7 @@ def _check_any_of(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, conditions: [...]} — 任意一个子条件满足即 done。"""
     conditions = done_when.get("conditions", [])
@@ -586,7 +593,7 @@ def _check_any_of(
         kind = cond_dict.get("kind")
         if kind and kind in DONE_CHECKERS:
             try:
-                if DONE_CHECKERS[kind](cond_dict, directive_id, game_state, monitor):
+                if DONE_CHECKERS[kind](cond_dict, directive_id, game_state, monitor, now):
                     return True
             except Exception as exc:
                 logger.warning("any_of sub-checker error kind=%s: %s", kind, exc)
@@ -599,6 +606,7 @@ def _check_all_of(
     directive_id: str,
     game_state: Any,
     monitor: TaskMonitor,
+    now: float = 0.0,
 ) -> bool:
     """done_when: {kind, conditions: [...]} — 所有子条件都满足才 done。"""
     conditions = done_when.get("conditions", [])
@@ -614,7 +622,7 @@ def _check_all_of(
         kind = cond_dict.get("kind")
         if kind and kind in DONE_CHECKERS:
             try:
-                if not DONE_CHECKERS[kind](cond_dict, directive_id, game_state, monitor):
+                if not DONE_CHECKERS[kind](cond_dict, directive_id, game_state, monitor, now):
                     return False
             except Exception as exc:
                 logger.warning("all_of sub-checker error kind=%s: %s", kind, exc)

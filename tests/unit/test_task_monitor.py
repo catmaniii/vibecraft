@@ -595,27 +595,16 @@ class TestOwnArmySizeRatio:
 
 
 # ---------------------------------------------------------------------------
-# P3.3: vision_acquired checker
+# P5.B: vision_acquired checker (ts-diff based, 修复 step-count bug)
 # ---------------------------------------------------------------------------
 
 
 class TestVisionAcquired:
-    def test_triggers_after_hold_seconds_visible(self) -> None:
-        """每 tick 可见累计，达到 hold_seconds 后 done。"""
-        bus = EventBus()
-        monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 3.0}
-        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+    def test_triggers_when_continuously_visible_for_hold_seconds(self) -> None:
+        """连续可见 >= hold_seconds 秒 → done。
 
-        gs = MagicMock()
-        gs.is_visible.return_value = True  # 每次都可见
-
-        # 3 次 tick 后 hold_counter=3 >= hold_seconds=3 → done
-        for i in range(3):
-            result = monitor.tick(now=float(i), game_state=gs)
-        assert "d1" in result  # type: ignore[possibly-undefined]
-
-    def test_not_triggered_before_hold_seconds(self) -> None:
+        now=100 首次可见 (first_ts=100), now=105 elapsed=5 >= hold_seconds=5 → done。
+        """
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
         done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
@@ -624,13 +613,83 @@ class TestVisionAcquired:
         gs = MagicMock()
         gs.is_visible.return_value = True
 
-        # 只跑 2 tick (counter=2 < 5)
-        for i in range(2):
-            result = monitor.tick(now=float(i), game_state=gs)
-        assert "d1" not in result  # type: ignore[possibly-undefined]
+        # tick 1: now=100 → first_ts=100, elapsed=0 → not done
+        result = monitor.tick(now=100.0, game_state=gs)
+        assert "d1" not in result
+
+        # tick 2: now=105 → elapsed=5 >= 5 → done
+        result = monitor.tick(now=105.0, game_state=gs)
+        assert "d1" in result
+
+    def test_not_triggered_when_visible_but_insufficient_duration(self) -> None:
+        """连续可见 < hold_seconds 秒 → not done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.is_visible.return_value = True
+
+        # tick 1: now=100 → first_ts=100, elapsed=0
+        result = monitor.tick(now=100.0, game_state=gs)
+        assert "d1" not in result
+
+        # tick 2: now=104 → elapsed=4 < 5 → not done
+        result = monitor.tick(now=104.0, game_state=gs)
+        assert "d1" not in result
+
+    def test_vision_interrupted_resets_counter(self) -> None:
+        """可见 → 不可见 → 可见: counter 需重置，从头计时。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs_visible = MagicMock()
+        gs_visible.is_visible.return_value = True
+
+        gs_hidden = MagicMock()
+        gs_hidden.is_visible.return_value = False
+
+        # tick 1: now=100 → first_ts=100
+        monitor.tick(now=100.0, game_state=gs_visible)
+        assert monitor._vision_first_visible_ts["d1"] == 100.0
+
+        # tick 2: now=103 → 不可见 → reset
+        monitor.tick(now=103.0, game_state=gs_hidden)
+        assert monitor._vision_first_visible_ts["d1"] is None
+
+        # tick 3: now=107 → 再次可见 → first_ts=107 (重新开始)
+        result = monitor.tick(now=107.0, game_state=gs_visible)
+        assert monitor._vision_first_visible_ts["d1"] == 107.0
+        # elapsed=0 → not done (hold_seconds=5)
+        assert "d1" not in result
+
+        # tick 4: now=112 → elapsed=5 → done
+        result = monitor.tick(now=112.0, game_state=gs_visible)
+        assert "d1" in result
+
+    def test_detach_clears_vision_first_visible_ts(self) -> None:
+        """detach 后 _vision_first_visible_ts 无残留；再次 attach 干净。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.is_visible.return_value = True
+        monitor.tick(now=100.0, game_state=gs)  # first_ts 设为 100.0
+
+        monitor.detach("d1")
+        assert "d1" not in monitor._vision_first_visible_ts
+
+        # 再次 attach → first_ts 应为 None (干净状态)
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+        assert monitor._vision_first_visible_ts["d1"] is None
 
     def test_unsupported_area_name_returns_false(self) -> None:
-        """area 不在白名单 → named_spot 解析返回 None → 不累计 → not done。"""
+        """area 不在白名单 → named_spot 解析返回 None → not done。"""
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
         done_when = {"kind": "vision_acquired", "area": "unknown_spot", "hold_seconds": 1.0}
@@ -639,10 +698,10 @@ class TestVisionAcquired:
         gs = MagicMock()
         gs.is_visible.return_value = True
 
-        # 多次 tick 也不 done（area 解析失败）
-        for i in range(5):
-            result = monitor.tick(now=float(i), game_state=gs)
-        assert "d1" not in result  # type: ignore[possibly-undefined]
+        # 多次 tick 经过足够时间也不 done（area 解析失败）
+        result = monitor.tick(now=100.0, game_state=gs)
+        result = monitor.tick(now=110.0, game_state=gs)
+        assert "d1" not in result
 
     def test_none_game_state_returns_false(self) -> None:
         bus = EventBus()
@@ -650,7 +709,7 @@ class TestVisionAcquired:
         done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 1.0}
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
-        completed = monitor.tick(now=1.0, game_state=None)
+        completed = monitor.tick(now=100.0, game_state=None)
         assert "d1" not in completed
 
 
