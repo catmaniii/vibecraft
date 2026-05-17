@@ -53,15 +53,23 @@ def _publish_unit_destroyed(bot_self: Any, unit_tag: int) -> None:
     owner: str | None = None
     unit_type: str | None = None
     position: tuple[float, float] | None = None
+    area: str | None = None
     if unit is not None:
         owner = "own" if getattr(unit, "alliance", 0) == 1 else "enemy"
         unit_type = str(unit.type_id)
         position = (float(unit.position.x), float(unit.position.y))
+        # P5.D: area inference via NamedSpotRegistry reverse lookup
+        named_spots = getattr(bot_self, "named_spots", None)
+        if named_spots is not None:
+            try:
+                area = named_spots.closest_named_spot(unit.position, bot_self)
+            except Exception:
+                area = None
     bot_self.event_bus.publish(
         Event(
             kind=EventKind.UNIT_DESTROYED,
             ts=float(bot_self.time),
-            payload={"unit_tag": unit_tag, "unit_obj": unit},
+            payload={"unit_tag": unit_tag, "unit_obj": unit, "area": area},
             owner=owner,
             unit_tag=unit_tag,
             unit_type=unit_type,
@@ -127,11 +135,19 @@ def _publish_upgrade_complete(bot_self: Any, upgrade: Any) -> None:
 
 
 def _publish_unit_took_damage(bot_self: Any, unit: Any, amount: Any) -> None:
+    # P5.D: area inference via NamedSpotRegistry reverse lookup
+    area: str | None = None
+    named_spots = getattr(bot_self, "named_spots", None)
+    if named_spots is not None:
+        try:
+            area = named_spots.closest_named_spot(unit.position, bot_self)
+        except Exception:
+            area = None
     bot_self.event_bus.publish(
         Event(
             kind=EventKind.UNIT_TOOK_DAMAGE,
             ts=float(bot_self.time),
-            payload={"unit_tag": unit.tag, "amount": float(amount)},
+            payload={"unit_tag": unit.tag, "amount": float(amount), "area": area},
             owner="own",  # python-sc2 只通知自方
             unit_tag=unit.tag,
             unit_type=str(unit.type_id),

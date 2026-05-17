@@ -95,13 +95,23 @@ def _make_mock_unit(tag: int, alliance: int, type_name: str, x: float = 10.0, y:
     return unit
 
 
-def _make_mock_bot(bus: EventBus | None = None) -> MagicMock:
-    """构造 mock bot_self：只含 _publish_xxx helpers 需要的最小接口。"""
+def _make_mock_bot(bus: EventBus | None = None, with_named_spots: bool = False) -> MagicMock:
+    """构造 mock bot_self：只含 _publish_xxx helpers 需要的最小接口。
+
+    with_named_spots=True 时注入一个 named_spots mock，返回固定 area="enemy_natural"。
+    """
     bot = MagicMock()
     bot.time = 12.5
     bot.event_bus = bus if bus is not None else EventBus()
     bot._enemy_units_dict = {}
     bot._own_units_dict = {}
+    if with_named_spots:
+        ns = MagicMock()
+        ns.closest_named_spot.return_value = "enemy_natural"
+        bot.named_spots = ns
+    else:
+        # 旧测试：不传 named_spots → getattr 返回 None → area=None
+        del bot.named_spots  # MagicMock 默认会 auto-create attr，需显式删掉
     return bot
 
 
@@ -158,6 +168,9 @@ class TestBotEventWiring:
         assert e.unit_tag == 200
         assert e.owner == "enemy"
         assert e.unit_type == "STALKER"
+        # P5.D: area key must exist in payload (None when no named_spots)
+        assert "area" in e.payload
+        assert e.payload["area"] is None
 
     def test_on_unit_destroyed_unknown_tag_publishes_minimal(self):
         """tag 不在任何 dict(已被清)时,publish 仍发出,owner/type 为 None。"""
@@ -172,6 +185,27 @@ class TestBotEventWiring:
         assert len(received) == 1
         assert received[0].unit_tag == 999
         assert received[0].owner is None
+        # P5.D: area key still present even when unit not found
+        assert "area" in received[0].payload
+
+    def test_on_unit_destroyed_with_named_spots_fills_area(self):
+        """P5.D: named_spots.closest_named_spot 被调用且 area 写入 payload。"""
+        bus = EventBus()
+        bot = _make_mock_bot(bus, with_named_spots=True)
+        enemy_unit = _make_mock_unit(tag=201, alliance=4, type_name="ROACH", x=55.0, y=30.0)
+        bot._enemy_units_dict = {201: enemy_unit}
+
+        received: list[Event] = []
+        bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
+
+        from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+        _publish_unit_destroyed(bot, 201)
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.payload["area"] == "enemy_natural"
+        # 验证 closest_named_spot 被调用且传入了 position
+        bot.named_spots.closest_named_spot.assert_called_once()
 
     def test_on_unit_type_changed_publishes(self):
         bus = EventBus()

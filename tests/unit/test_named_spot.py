@@ -311,3 +311,108 @@ class TestNaturalRamp:
         bot = _make_bot_with_zone_manager(own_zones, enemy_zones=[])
         reg = NamedSpotRegistry()
         assert reg.resolve("natural_ramp", bot) is None
+
+
+# ---------------------------------------------------------------------------
+# TestClosestNamedSpot (P5.D)
+# ---------------------------------------------------------------------------
+
+
+def _make_point(x: float, y: float) -> MagicMock:
+    """构造有 .x/.y 属性的 Point2 mock。"""
+    p = MagicMock()
+    p.x = x
+    p.y = y
+    return p
+
+
+class TestClosestNamedSpot:
+    """closest_named_spot(point, bot, max_distance) 反向查找测试。"""
+
+    def _make_bot_with_spots(
+        self,
+        own_main: tuple[float, float] | None = None,
+        enemy_natural: tuple[float, float] | None = None,
+        enemy_main: tuple[float, float] | None = None,
+    ) -> MagicMock:
+        """构造只有少数 spot 可解析的 bot mock（简化 resolve 结果）。"""
+        bot = MagicMock(spec=[])
+        # enemy_main 通过 enemy_start_locations
+        if enemy_main is not None:
+            ep = _make_point(*enemy_main)
+            bot.enemy_start_locations = [ep]
+        else:
+            bot.enemy_start_locations = []
+
+        # own_main 通过 townhalls.first.position
+        if own_main is not None:
+            mp = _make_point(*own_main)
+            townhalls = MagicMock()
+            townhalls.__bool__ = lambda self: True
+            townhalls.first.position = mp
+            bot.townhalls = townhalls
+        else:
+            townhalls = MagicMock()
+            townhalls.__bool__ = lambda self: False
+            bot.townhalls = townhalls
+
+        # enemy_natural 通过 zone_manager.enemy_expansion_zones
+        if enemy_natural is not None:
+            enp = _make_point(*enemy_natural)
+            en_zone1 = _make_zone("em")
+            en_zone2 = _make_zone(enp)
+            # 让 en_zone2.center_location.x/.y 可访问
+            en_zone2.center_location = enp
+            knowledge = MagicMock(spec=[])
+            zone_mgr = MagicMock(spec=[])
+            zone_mgr.expansion_zones = []
+            zone_mgr.enemy_expansion_zones = [en_zone1, en_zone2]
+            knowledge.zone_manager = zone_mgr
+            bot.knowledge = knowledge
+        return bot
+
+    def test_spot_within_range_returns_name(self) -> None:
+        """单位坐标在 enemy_main 15 格内 → 返回 'enemy_main'。"""
+        bot = self._make_bot_with_spots(enemy_main=(100.0, 100.0))
+        reg = NamedSpotRegistry()
+        point = _make_point(105.0, 105.0)  # dist ≈ 7.07 < 15
+        result = reg.closest_named_spot(point, bot)
+        assert result == "enemy_main"
+
+    def test_spot_outside_range_returns_none(self) -> None:
+        """单位坐标离所有 spot 都 > max_distance → None。"""
+        bot = self._make_bot_with_spots(enemy_main=(100.0, 100.0))
+        reg = NamedSpotRegistry()
+        point = _make_point(120.0, 120.0)  # dist ≈ 28.3 > 15
+        result = reg.closest_named_spot(point, bot)
+        assert result is None
+
+    def test_returns_closest_of_multiple_spots(self) -> None:
+        """两个 spot 都在范围内 → 返回距离更近的那个。"""
+        # own_main=(0,0), enemy_main=(100,100)
+        # point=(8,8): dist_to_main≈11.3, dist_to_enemy_main≈129 → 返回 "main"
+        bot = self._make_bot_with_spots(
+            own_main=(0.0, 0.0),
+            enemy_main=(100.0, 100.0),
+        )
+        reg = NamedSpotRegistry()
+        point = _make_point(8.0, 8.0)
+        result = reg.closest_named_spot(point, bot)
+        assert result == "main"
+
+    def test_custom_max_distance(self) -> None:
+        """max_distance=5 时，距离 7 的 spot 不匹配。"""
+        bot = self._make_bot_with_spots(enemy_main=(100.0, 100.0))
+        reg = NamedSpotRegistry()
+        point = _make_point(105.0, 105.0)  # dist ≈ 7.07
+        result = reg.closest_named_spot(point, bot, max_distance=5.0)
+        assert result is None
+
+    def test_no_resolvable_spots_returns_none(self) -> None:
+        """所有 spot 都无法解析（bot 没有任何数据）→ None。"""
+        bot = MagicMock(spec=[])
+        # spec=[] 让 getattr 返回 AttributeError，NamedSpotRegistry 兜底 None
+        reg = NamedSpotRegistry()
+        point = _make_point(50.0, 50.0)
+        result = reg.closest_named_spot(point, bot)
+        assert result is None

@@ -185,6 +185,50 @@ class NamedSpotRegistry:
                     return getattr(ramp, "top_center", None)
         return None
 
+    def closest_named_spot(
+        self,
+        point: Any,
+        bot: Any,
+        max_distance: float = 15.0,
+    ) -> str | None:
+        """反向查找：point 附近 max_distance 内最近的 named spot 名字。
+
+        只遍历 KNOWN_SPOTS 中非 _gas 变种（避免双重解析噪音）。
+
+        Args:
+            point: SC2 Point2 或有 .x/.y 的对象
+            bot: sharpy KnowledgeBot，传给 resolve()
+            max_distance: 距离阈值（game units，默认 15）
+
+        Returns:
+            spot 名字（如 "enemy_natural"）或 None（没有匹配的 spot 在范围内）
+        """
+        non_gas = [s for s in self.KNOWN_SPOTS if not s.endswith("_gas")]
+        best_name: str | None = None
+        best_dist: float = max_distance  # 只取 < max_distance 的
+
+        try:
+            px = float(point.x)
+            py = float(point.y)
+        except (AttributeError, TypeError):
+            return None
+
+        for name in non_gas:
+            spot_pos = self.resolve(name, bot)
+            if spot_pos is None:
+                continue
+            try:
+                sx = float(spot_pos.x)
+                sy = float(spot_pos.y)
+            except (AttributeError, TypeError):
+                continue
+            dist = ((px - sx) ** 2 + (py - sy) ** 2) ** 0.5
+            if dist < best_dist:
+                best_dist = dist
+                best_name = name
+
+        return best_name
+
     def _closest_gas_to(self, base_pos: Any, bot: Any) -> Any | None:
         """找最近的 vespene geyser 到 base_pos。
 
