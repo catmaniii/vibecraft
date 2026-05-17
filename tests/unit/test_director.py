@@ -775,3 +775,168 @@ class TestDirectorBotBackref:
         with patch.object(d.task_monitor, "tick", return_value=[]) as mock_tick:
             d.on_tick(now=10.0)
             mock_tick.assert_called_once_with(10.0, game_state=mock_bot)
+
+
+# =========================================================================
+# P5.E: Standing order unit assign + sharpy 让位 + revoke release
+# =========================================================================
+
+
+def _make_persistent_unit_claim_directive(unit_type: str = "Phoenix") -> Directive:
+    """构造 persistent=True 的 unit_claim Directive，用于 standing order 测试。"""
+    from vibecraft.directives.models import UnitClaimPayload
+    from vibecraft.directives.scope import Selector, TargetKind, TargetSpec
+    from vibecraft.directives.task import Action, Task, Verb
+
+    payload = UnitClaimPayload(
+        selector=Selector(unit_type=unit_type),
+        task=Task(
+            primary_action=Action(
+                verb=Verb.PATROL,
+                target=TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="enemy_natural"),
+            )
+        ),
+        persistent=True,
+    )
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestStandingOrderUnitAssign:
+    """P5.E: persistent unit_claim 进 standing_orders 时 resolve selector + 通知 sharpy 让位。"""
+
+    def test_persistent_claim_calls_set_unit_role_on_submit(self, session: GameSession) -> None:
+        """submit persistent unit_claim → facade.set_unit_role(LLM_CONTROLLED) 被调用。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [1001, 1002]
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        director = Director(facade=facade, parser=parser, session=session)
+
+        d = _make_persistent_unit_claim_directive("Phoenix")
+        director._submit_directives([d], now=10.0)
+
+        # standing_orders に入っていること
+        assert any(s.id == d.id for s in director.standing_orders)
+        # set_unit_role(LLM_CONTROLLED) が両 tag に呼ばれること
+        assert facade.unit_roles == {1001: UnitRole.LLM_CONTROLLED, 1002: UnitRole.LLM_CONTROLLED}
+        set_role_calls = [c for c in facade.calls if c.method == "set_unit_role"]
+        assert len(set_role_calls) == 2
+        tags_called = {c.args[0] for c in set_role_calls}
+        assert tags_called == {1001, 1002}
+
+    def test_tags_tracked_in_standing_order_tags(self, session: GameSession) -> None:
+        """_standing_order_tags directive_id → assigned tags 被正确记录。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [2001, 2002]
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        director = Director(facade=facade, parser=parser, session=session)
+
+        d = _make_persistent_unit_claim_directive("Phoenix")
+        director._submit_directives([d], now=10.0)
+
+        assert d.id in director._standing_order_tags
+        assert director._standing_order_tags[d.id] == {2001, 2002}
+
+    def test_revoke_standing_order_calls_release_unit_role(self, session: GameSession) -> None:
+        """revoke_standing_order → facade.release_unit_role 被每个 tag 调用。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [3001, 3002]
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        director = Director(facade=facade, parser=parser, session=session)
+
+        d = _make_persistent_unit_claim_directive("Phoenix")
+        director._submit_directives([d], now=10.0)
+
+        # revoke 前 unit_roles 已记录
+        assert 3001 in facade.unit_roles
+        assert 3002 in facade.unit_roles
+
+        result = director.revoke_standing_order(d.id, now=15.0)
+        assert result is True
+
+        # release_unit_role 被调用，unit_roles 从 FakeFacade 移除
+        assert 3001 not in facade.unit_roles
+        assert 3002 not in facade.unit_roles
+        release_calls = [c for c in facade.calls if c.method == "release_unit_role"]
+        assert len(release_calls) == 2
+        released_tags = {c.args[0] for c in release_calls}
+        assert released_tags == {3001, 3002}
+
+    def test_revoke_clears_standing_order_tags(self, session: GameSession) -> None:
+        """revoke 后 _standing_order_tags 中移除该 directive_id。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [4001]
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        director = Director(facade=facade, parser=parser, session=session)
+
+        d = _make_persistent_unit_claim_directive("Phoenix")
+        director._submit_directives([d], now=10.0)
+        assert d.id in director._standing_order_tags
+
+        director.revoke_standing_order(d.id, now=15.0)
+        assert d.id not in director._standing_order_tags
+
+    def test_non_persistent_claim_does_not_assign_units_early(
+        self, session: GameSession
+    ) -> None:
+        """non-persistent unit_claim 不走 _assign_standing_order_units（不提前 set_unit_role）。
+
+        set_unit_role 在 committed 时由 _apply_unit_claim 处理（现有逻辑）。
+        """
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [5001]
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        director = Director(facade=facade, parser=parser, session=session)
+
+        d = _make_unit_claim_directive(persistent=False)
+        director._submit_directives([d], now=10.0)
+
+        # submit 时 _standing_order_tags 不应有记录
+        assert d.id not in director._standing_order_tags
+        # 且还未调 set_unit_role（committed 前不调）
+        set_role_calls = [c for c in facade.calls if c.method == "set_unit_role"]
+        assert len(set_role_calls) == 0

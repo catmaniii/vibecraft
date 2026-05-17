@@ -647,6 +647,81 @@ class TestTacticalObjectivePayload:
         assert p.done_when is None
         assert p.timeout_s is None
 
+
+# =========================================================================
+# P5.E: board.revoke 支持 committed overlays (TestRevokeCommitted)
+# =========================================================================
+
+
+class TestRevokeCommitted:
+    """P5 扩展：board.revoke 支持已 committed（进 overlays）的 directive 撤销。"""
+
+    def test_revoke_committed_overlay_returns_true(self) -> None:
+        """已 committed 的 standing order 可以 revoke，返回 True。"""
+        board = DirectiveBoard()
+        d = _claim(tag=100, issued_at=10.0, scope=ScopeSpec(kind=ScopeKind.PERSISTENT))
+        board.submit(d, now=10.0)
+        board.tick(now=12.0)  # commit
+        assert board.is_claimed(100)
+        assert any(o.id == d.id for o in board.overlays)
+
+        result = board.revoke(d.id, now=15.0)
+        assert result is True
+
+    def test_revoke_committed_overlay_removes_from_overlays(self) -> None:
+        """revoke committed overlay 后从 board.overlays 移除。"""
+        board = DirectiveBoard()
+        d = _claim(tag=101, issued_at=10.0, scope=ScopeSpec(kind=ScopeKind.PERSISTENT))
+        board.submit(d, now=10.0)
+        board.tick(now=12.0)
+
+        board.revoke(d.id, now=15.0)
+        assert not any(o.id == d.id for o in board.overlays)
+
+    def test_revoke_committed_releases_unit_claims(self) -> None:
+        """revoke committed standing order 同时释放 unit_claims。"""
+        board = DirectiveBoard()
+        d = _claim(tag=102, issued_at=10.0, scope=ScopeSpec(kind=ScopeKind.PERSISTENT))
+        board.submit(d, now=10.0)
+        board.tick(now=12.0)
+        assert board.is_claimed(102)
+
+        board.revoke(d.id, now=15.0)
+        assert not board.is_claimed(102)
+
+    def test_revoke_committed_fires_revoked_event(self) -> None:
+        """revoke committed overlay 触发 DIRECTIVE_REVOKED event。"""
+        board = DirectiveBoard()
+        d = _claim(tag=103, issued_at=10.0, scope=ScopeSpec(kind=ScopeKind.PERSISTENT))
+        board.submit(d, now=10.0)
+        board.tick(now=12.0)
+        # 消费掉 tick 产生的事件，以便只看 revoke 产生的
+        board.consume_events()
+
+        board.revoke(d.id, now=15.0)
+        events = board.consume_events()
+        revoked = [e for e in events if e.kind == BoardEventKind.REVOKED]
+        assert len(revoked) == 1
+        assert revoked[0].directive_id == d.id
+
+    def test_revoke_pending_still_works(self) -> None:
+        """revoke pending（未 committed）逻辑不受 P5 改动影响。"""
+        board = DirectiveBoard()
+        d = _claim(tag=104, issued_at=10.0)
+        submitted = board.submit(d, now=10.0)
+        # 没 tick → 还在 pending
+        assert board.revoke(submitted.id, now=10.5) is True
+        assert board.pending == []
+
+    def test_revoke_unknown_still_returns_false(self) -> None:
+        """既不在 pending 也不在 overlays → 返回 False（回归）。"""
+        board = DirectiveBoard()
+        assert board.revoke("d_nothere", now=1.0) is False
+
+
+class TestTacticalObjectivePayloadExtra:
+    """TacticalObjectivePayload 附加测试（P3 extended）。"""
+
     def test_unit_hints_accepted(self) -> None:
         p = TacticalObjectivePayload(
             verb="harass",

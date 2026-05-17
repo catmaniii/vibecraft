@@ -144,6 +144,8 @@ class Director:
         self._in_flight: dict[str, Directive] = {}
         # P1.2 L3 standing orders（persistent=True 的 unit_claim 不走 _in_flight）
         self.standing_orders: list[Directive] = []
+        # P5.E: standing order directive_id → resolved unit tags（sharpy 让位跟踪）
+        self._standing_order_tags: dict[str, set[int]] = {}
         # P2 L4 production overrides（PRODUCTION/TECH/EXPANSION_OVERRIDE 不走 _in_flight）
         self.production_overrides: list[Directive] = []
         # snapshot / event 推送回调（P0 / P1）
@@ -611,6 +613,8 @@ class Director:
                     and submitted.payload.persistent
                 ):
                     self.standing_orders.append(submitted)
+                    # P5.E: 立即 resolve selector + 让 sharpy 让位（set_unit_role）
+                    self._assign_standing_order_units(submitted)
                 # P2: L4 production/tech/expansion override 进 production_overrides
                 elif submitted.type in (
                     DirectiveType.PRODUCTION_OVERRIDE,
@@ -622,6 +626,37 @@ class Director:
                     self._in_flight[submitted.id] = submitted
                 # P3.2: 注册到 task_monitor（有 done_when 时才有意义，但 attach 本身 None-safe）
                 self._maybe_attach_task_monitor(submitted)
+
+    def _assign_standing_order_units(self, submitted: Directive) -> None:
+        """P5.E: standing order submit 时解析 selector → tags + 通知 sharpy 让位。
+
+        bot 不存在（单测/unit-only 场景）时 hasattr 兜底跳过，不影响现有测试。
+        tags 记录到 _standing_order_tags，revoke 时反向 release。
+        """
+        if not isinstance(submitted.payload, UnitClaimPayload):
+            return
+        payload = submitted.payload
+        tags = self.facade.resolve_selector(
+            unit_type=payload.selector.unit_type,
+            tag=payload.selector.tag,
+            tags=payload.selector.tags,
+        )
+        if not tags:
+            return
+        self._standing_order_tags[submitted.id] = set(tags)
+        for tag in tags:
+            self.facade.set_unit_role(tag, UnitRole.LLM_CONTROLLED)
+
+    def _release_standing_order_units(self, directive_id: str) -> None:
+        """P5.E: revoke_standing_order 时归还 sharpy 让位（set_unit_role 的反向）。
+
+        调用 facade.release_unit_role 把单位从 LLM_CONTROLLED 移出，
+        让 sharpy Manager 在下一轮重新接管。
+        """
+        tags = self._standing_order_tags.pop(directive_id, set())
+        for tag in tags:
+            if hasattr(self.facade, "release_unit_role"):
+                self.facade.release_unit_role(tag)
 
     # ------------------------------------------------------------------
     # 剧本时机偏差检测(自动从 yaml phase + steps 推断)
@@ -714,14 +749,16 @@ class Director:
     def revoke_standing_order(self, directive_id: str, now: float) -> bool:
         """玩家通过 revoke_directive 上行帧撤销 standing order（P1.2）。
 
-        从 standing_orders 列表移除，通知 board（用于 sharpy 让位 release tag—P5 接），
-        并推一次 snapshot。向后兼容保留；P1.4+ 的新代码改用 revoke_directive。
+        从 standing_orders 列表移除，释放 sharpy 让位（P5.E），
+        通知 board（P5 已支持 committed overlay 撤销），并推一次 snapshot。
+        向后兼容保留；P1.4+ 的新代码改用 revoke_directive。
         """
         before = len(self.standing_orders)
         self.standing_orders = [s for s in self.standing_orders if s.id != directive_id]
         if len(self.standing_orders) < before:
-            # 通知 board（persistent directive 已 committed 进 overlays/pending，
-            # board.revoke 只能撤 pending；overlay 层 cleanup 留 P5 接）
+            # P5.E: 归还 sharpy 让位（LLM_CONTROLLED → sharpy 重新接管）
+            self._release_standing_order_units(directive_id)
+            # 通知 board（P5: board.revoke 现已支持 committed overlays）
             self.board.revoke(directive_id, now)
             self._push_snapshot(now)
             return True

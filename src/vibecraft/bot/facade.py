@@ -92,6 +92,14 @@ class Sc2Facade(Protocol):
 
     def set_unit_role(self, unit_tag: int, role: UnitRole) -> None: ...
 
+    def release_unit_role(self, unit_tag: int) -> None:
+        """归还 unit role 到 sharpy 默认（LLM_CONTROLLED 的反向操作）。
+
+        实现层映射到 sharpy UnitTask.Idle 或 None，让 sharpy Manager
+        在下一轮重新接管该单位（移出 Reserved slot）。
+        """
+        ...
+
     def execute_unit_action(
         self,
         unit_tag: int,
@@ -194,6 +202,11 @@ class FakeFacade:
     def set_unit_role(self, unit_tag: int, role: UnitRole) -> None:
         self.unit_roles[unit_tag] = role
         self._record("set_unit_role", unit_tag, role)
+
+    def release_unit_role(self, unit_tag: int) -> None:
+        """LLM_CONTROLLED 让位的反向操作：从 unit_roles 移除，还给 sharpy。"""
+        self.unit_roles.pop(unit_tag, None)
+        self._record("release_unit_role", unit_tag)
 
     def execute_unit_action(
         self,

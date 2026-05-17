@@ -164,12 +164,25 @@ class DirectiveBoard:
         return d
 
     def revoke(self, directive_id: str, now: float) -> bool:
-        """撤销 pending（未 commit）的 directive。"""
+        """撤销 directive：先尝试 pending，再尝试 committed overlays。
+
+        P5 扩展：支持 committed standing order 撤销 —— 从 overlays 删除 +
+        释放关联 unit_claims + fire DIRECTIVE_REVOKED event。
+        """
+        # 先尝试撤 pending（最常见）
         for i, d in enumerate(self.pending):
             if d.id == directive_id:
                 self.pending.pop(i)
                 self._emit(BoardEventKind.REVOKED, now, directive_id)
                 return True
+        # 再尝试撤 committed overlays（P5：standing order 已 committed 时）
+        before = len(self.overlays)
+        self.overlays = [d for d in self.overlays if d.id != directive_id]
+        if len(self.overlays) < before:
+            # 释放关联 unit_claims
+            self._release_claims_for(directive_id)
+            self._emit(BoardEventKind.REVOKED, now, directive_id)
+            return True
         return False
 
     def complete(self, directive_id: str, now: float) -> bool:
