@@ -34,8 +34,61 @@
   - `7c6a8de` P3 收尾 + `936dcc2 ... 50aac9b`（P3 系列 7 commit）
   - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
   - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
-- **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
-- **阻塞 / 等待**：无。M2 全部 P1-P6 done，可打 `v0.1.0a4` tag
+- **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync。**`v0.1.0a4` 已 tag + push**（M2 完成）
+- **阻塞 / 等待**：**🚧 待用户拍 SC2 卡死检测设计**（见下「待拍决策」段）
+
+---
+
+## 🚧 待拍决策：SC2 卡死自动检测设计
+
+**触发场景**（2026-05-17 用户实际遇到）：跑 e2e smoke 时 SC2 卡死 —— **UI 还能选单位但单位都不响应**。说明 SC2 客户端活着，但 bot ↔ SC2 protobuf 通信循环卡死。可能原因：
+- bot.on_step 内部 deadlock / 无限循环（sharpy / vibecraft / LLM call 阻塞 main step）
+- single step CPU 重活 > SC2 timeout
+- sharpy 内部异常被 try/except 吞 → loop 看似活着实则空跑
+
+### 设计维度（3 个独立轴）
+
+**维度 1 — 检测信号**：
+| 信号 | 实现难度 | 误报率 |
+|---|---|---|
+| **A. bot.time 不前进** （wall-clock N 秒内 bot.time 不变 = 卡）| 简单 | 极低（最 reliable）|
+| B. on_step 单次时延 > 阈值 | 中等 | 中（重活帧会误报）|
+| C. snapshot 帧 ts 不更新（父进程视角）| 简单 | 跟 A 等效但延迟更大 |
+| D. SC2_x64.exe CPU 使用率 < 阈值 | 复杂 | 高（高速 step 也低 CPU）|
+
+**维度 2 — 处置**：
+| 处置 | 说明 |
+|---|---|
+| W1 仅 log warning | 写 jsonl + console，玩家自己决定 |
+| **W2 推 PWA 告警 + 提供「重启 SC2」按钮** | 玩家手机看到 "bot 卡死，要重启吗"，点按钮 → 父进程 kill SC2 |
+| W3 自动 kill SC2 + 通知玩家 | 检测到立刻 kill，不问玩家 |
+| W4 自动 kill + 自动重启 SC2 进新对局 | 最自动化，但 false positive 风险大 |
+
+**维度 3 — 实现位置**：
+| 位置 | 优点 | 缺点 |
+|---|---|---|
+| 子进程内 watchdog thread | 直接访问 bot.time，秒级反应 | 子进程自己卡 watchdog 也卡 |
+| 父进程（service）query 子进程 | 子进程卡也能检测 | IPC 延迟 |
+| **两层都做**：子进程自检 + 父进程兜底 | 互为保险 | 复杂度 +1 |
+
+### 4 个候选方案（user 拍）
+
+| 方案 | 信号 | 处置 | 位置 | trade-off |
+|---|---|---|---|---|
+| **方案 1（推荐）** | A | W2 | 两层 | 子进程 30s 阈值 + 父进程 60s 兜底；PWA banner 让玩家点重启。最稳，误报低，玩家可控 |
+| 方案 2 | A | W3 | 子进程 | 子进程 30s 检测到 hang 自动 kill；最简但有误报伤风险 |
+| 方案 3 | A | W4 | 两层 | 完全自动 kill + 重启对局；false positive 会破坏正在进行的对局 |
+| 方案 4 | 自定 | 自定 | 自定 | 用户其它想法 |
+
+**建议默认参数**（方案 1）：子进程 watchdog 30s，父进程 60s，PWA banner with [重启 SC2] button。
+
+### 还要拍的子问题（方案 1 选定后）
+
+- 重启 SC2 后是否自动恢复 standing orders / production overrides（保留 Director state）？还是清空？
+- "卡死" 阈值 30s 是否合适？（参考：SC2 长 LLM call 可能 2-3s 阻塞，单帧不该超 1s 太多）
+- PWA banner 设计：position / 文案 / 是否 modal block 其它操作
+
+---
 - **下一步**：
   1. **真实长 SC2 对局验证**：现在 e2e smoke fast mode bot 在 30s 内被 AI 打死，
      timer-based directive 没机会 mark completed。要在真实 SC2 客户端 + 玩家
