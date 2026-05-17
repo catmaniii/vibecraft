@@ -145,6 +145,28 @@ export interface TacticalObjectiveView {
   issued_at: number
 }
 
+/**
+ * P0f Task 10/14: 统一命令卡片 view（4 层 directive 透传）。
+ * 后端 build_snapshot._build_command_cards 构造。
+ * 前端 CommandCardStack (Task 15) 消费。
+ */
+export interface CommandCardView {
+  /** 直接来自 directive.id (L2/L3/L4) 或 L1 的 "l1_{stage}" 占位 */
+  id: string
+  layer: 'L1' | 'L2' | 'L3' | 'L4'
+  /** directive type enum value, e.g. "strategy_set" / "tactical_objective" / "unit_claim" / "production_override" / "structure_override" */
+  type: string
+  /** 中文短摘要，e.g. "midgame: iac_2base" / "attack enemy_natural" / "Probe patrol" / "Sentry ×2" / "补 8 Gateway" */
+  display: string
+  /** 游戏内秒（issued_at 或 set_at） */
+  issued_at: number
+  status: 'pending' | 'active' | 'on_hold' | 'done'
+  /** 状态原因（仅 on_hold/done 有意义，e.g. "资源不足 (120/400 矿)" / "被新指令覆盖"） */
+  status_reason: string
+  /** MVP 全部 true。未来某些 directive 可能不可 revoke */
+  revokable: boolean
+}
+
 export interface SnapshotFrame {
   type: 'snapshot'
   ts: number
@@ -167,6 +189,8 @@ export interface SnapshotFrame {
   tactics?: TacticsView
   // 时机已过被拦的硬转 directive(玩家未 confirm/cancel 前一直 carry)
   pending_force_strategy?: PendingForceStrategyView
+  // P0f Task 14：4 层 directive 统一命令卡片列表（Task 15 CommandCardStack 消费）
+  command_cards: CommandCardView[]
 }
 
 // P1：event 帧（Bot → 手机）—— 设计文档 §9.4 taxonomy
