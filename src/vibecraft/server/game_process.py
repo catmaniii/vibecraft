@@ -139,6 +139,10 @@ def _child_entry(
     """
     # 子进程需要重新配置日志（spawn 后父进程 logging state 不继承）
     logging.basicConfig(level=log_level)
+    # vibecraft 自己的模块用 INFO(生产可观察 directive 流转 / production_override
+    # TRAIN / standing order release 等),其他模块(sharpy/sc2/anthropic 等)仍走
+    # log_level(WARNING),避免噪音。
+    logging.getLogger("vibecraft").setLevel(logging.INFO)
     child_log = logging.getLogger(__name__)
 
     # window_height = 0 → 自动取 workarea 高度(屏幕减任务栏);window_y = 0 贴顶

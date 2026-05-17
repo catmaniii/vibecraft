@@ -116,7 +116,7 @@ units:
     aliases: [使徒, Adept]
   HighTemplar:
     default_display: "HT"
-    aliases: [HT, 圣堂, 高阶圣堂, HighTemplar, Templar]
+    aliases: [HT, 电兵, 圣堂, 高阶圣堂, HighTemplar, Templar]
   DarkTemplar:
     default_display: "DT"
     aliases: [DT, 隐刀, 黑暗圣堂, DarkTemplar]
@@ -131,31 +131,31 @@ units:
     aliases: [OB, 叮当, Observer, 观察者]
   WarpPrism:
     default_display: "棱镜"
-    aliases: [棱镜, 速棱镜, 运输机, WarpPrism, 折跃棱镜]
+    aliases: [棱镜, 运输机, WarpPrism, 折跃棱镜]
   Colossus:
     default_display: "巨像"
     aliases: [巨像, Colossus]
   Disruptor:
     default_display: "干扰者"
-    aliases: [干扰者, Disruptor, 分裂球]
+    aliases: [干扰者, Disruptor, 干扰球]
   Phoenix:
     default_display: "凤凰"
     aliases: [凤凰, Phoenix]
   VoidRay:
     default_display: "虚空"
-    aliases: [虚空, 虚空辐射, 辉光舰, 虚空辉光舰, VoidRay]
+    aliases: [虚空, 辉光舰, 虚空辉光舰, VoidRay]
   Oracle:
     default_display: "先知"
     aliases: [先知, Oracle]
   Tempest:
     default_display: "风暴战舰"
-    aliases: [风暴战舰, Tempest, 风暴舰]
+    aliases: [风暴, 风暴战舰, Tempest, 风暴舰]
   Carrier:
     default_display: "航母"
     aliases: [航母, Carrier]
   Mothership:
     default_display: "母舰"
-    aliases: [母舰, Mothership]
+    aliases: [母舰, 妈妈船, Mothership]
 
 upgrades:
   WarpGateResearch:
@@ -171,23 +171,23 @@ upgrades:
     default_display: "攻速"
     aliases: [攻速, Glaive, 使徒攻速]
   PsiStorm:
-    default_display: "风暴"
-    aliases: [风暴, Storm, 灵能风暴, 风暴科技]
+    default_display: "灵能风暴"
+    aliases: [电, 闪电, Storm, 灵能风暴, 风暴科技]
   GravitonCatapult:
     default_display: "弹射"
     aliases: [弹射, GravitonCatapult, 航母弹射]
   ProtossGroundWeapons:
     default_display: "攻击升级"
-    aliases: [陆军攻击, 攻击, 陆攻, ProtossGroundWeapons]
+    aliases: [地面攻击, 地面攻, 陆军攻击, 攻, 攻击, 陆攻, ProtossGroundWeapons]
   ProtossGroundArmor:
     default_display: "护甲升级"
-    aliases: [陆军护甲, 护甲, 陆甲, ProtossGroundArmor]
+    aliases: [地面护甲, 地面防御, 地面防, 陆军护甲, 防, 护甲, 陆甲, ProtossGroundArmor]
   ProtossAirWeapons:
     default_display: "空军攻击"
-    aliases: [空军攻击, 空攻, ProtossAirWeapons]
+    aliases: [空军攻击, 空军攻, ProtossAirWeapons]
   ProtossAirArmor:
     default_display: "空军护甲"
-    aliases: [空军护甲, 空甲, ProtossAirArmor]
+    aliases: [空军护甲, 空军防御, 空军防, ProtossAirArmor]
   ProtossShields:
     default_display: "护盾升级"
-    aliases: [护盾, 护盾升级, ProtossShields]
+    aliases: [神族护盾, 护盾, 护盾升级, ProtossShields]
