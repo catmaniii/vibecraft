@@ -786,6 +786,10 @@ def make_protoss_bot_class(
             self.facade = _SharpyFacade(self)
             self.director = director_factory(self.facade)
 
+            # P3.2: 把 event_bus 注入 director，启动 task_monitor
+            if self.director is not None and hasattr(self, "event_bus"):
+                self.director.setup_task_monitor(self.event_bus)
+
             # minimap builder（on_start 后 game_info / playable_area 才可访问）
             if minimap_callback is not None:
                 from vibecraft.bot.minimap import MinimapBuilder

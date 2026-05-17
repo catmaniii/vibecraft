@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from vibecraft.bot.event_bus import EventBus
 from vibecraft.bot.facade import Sc2Facade, UnitRole
 from vibecraft.directives.board import (
     BoardEvent,
@@ -56,6 +57,7 @@ from vibecraft.logging_.session import GameSession
 from vibecraft.logging_.types import Event, EventKind
 
 if TYPE_CHECKING:
+    from vibecraft.bot.task_monitor import TaskMonitor
     from vibecraft.strategy.library import StrategyLibrary
 
 
@@ -115,6 +117,7 @@ class Director:
         board: DirectiveBoard | None = None,
         config: DirectorConfig | None = None,
         library: StrategyLibrary | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self.facade = facade
         self.parser = parser
@@ -124,6 +127,14 @@ class Director:
         self.library = library
         self._recent_commands: list[_RecentCommand] = []
         self._committed_count = 0
+        # P3.2: task_monitor（需要 event_bus；不传则为 None，所有调用有 None-guard）
+        self.task_monitor: TaskMonitor | None
+        if event_bus is not None:
+            from vibecraft.bot.task_monitor import TaskMonitor
+
+            self.task_monitor = TaskMonitor(board=self.board, event_bus=event_bus)
+        else:
+            self.task_monitor = None
         # 跟踪 in-flight directive（submit 后 → committed/revoked 前）。
         # Board 的 strategy_set / unit_release 不会进 overlays，需要这层映射才能在
         # COMMITTED 事件里把 directive 取出来 dispatch。
@@ -149,6 +160,12 @@ class Director:
     # ------------------------------------------------------------------
     # snapshot / event 回调注入（P0 / P1）
     # ------------------------------------------------------------------
+
+    def setup_task_monitor(self, event_bus: EventBus) -> None:
+        """事后注入 event_bus + 创建 task_monitor（bot on_start 调用，director_factory 不持有 event_bus 时用）。"""
+        from vibecraft.bot.task_monitor import TaskMonitor
+
+        self.task_monitor = TaskMonitor(board=self.board, event_bus=event_bus)
 
     def set_snapshot_callback(self, cb: Callable[[dict[str, Any]], None]) -> None:
         """注入 snapshot 推送回调（game_process 在构造 bot 后调用）。"""
@@ -472,6 +489,23 @@ class Director:
         if accepted:
             self._submit_directives(ambiguous.result.directives, now)
 
+    def _maybe_attach_task_monitor(self, submitted: Directive) -> None:
+        """P3.2: done_when 非空时把 directive 注册到 task_monitor。"""
+        if self.task_monitor is None:
+            return
+        dw = submitted.payload.done_when
+        if dw is None:
+            return
+        from pydantic import BaseModel
+
+        done_when_dict: dict[str, Any] = dw.model_dump() if isinstance(dw, BaseModel) else {}
+        self.task_monitor.attach_directive(
+            directive_id=submitted.id,
+            done_when=done_when_dict,
+            issued_at=submitted.issued_at,
+            timeout_s=submitted.payload.timeout_s,
+        )
+
     def _submit_directives(self, directives: list[Directive], now: float) -> None:
         from vibecraft.directives.types import IssuedBy
 
@@ -493,6 +527,8 @@ class Director:
                     continue
                 submitted = self.board.submit(d_with_ts, now=now)
                 self._in_flight[submitted.id] = submitted
+                # P3.2: 注册到 task_monitor
+                self._maybe_attach_task_monitor(submitted)
             else:
                 submitted = self.board.submit(d_with_ts, now=now)
                 # P1.2: persistent=True 的 unit_claim 进 standing_orders，不进 _in_flight
@@ -510,6 +546,8 @@ class Director:
                     self.production_overrides.append(submitted)
                 else:
                     self._in_flight[submitted.id] = submitted
+                # P3.2: 注册到 task_monitor（有 done_when 时才有意义，但 attach 本身 None-safe）
+                self._maybe_attach_task_monitor(submitted)
 
     # ------------------------------------------------------------------
     # 剧本时机偏差检测(自动从 yaml phase + steps 推断)
@@ -697,6 +735,20 @@ class Director:
             self._dispatch_event(ev)
             # 变化推：strategy 变化时立即推 snapshot（P0-2）
             if ev.kind in (BoardEventKind.STRATEGY_CHANGED, BoardEventKind.PHASE_TRANSITIONED):
+                need_snapshot = True
+
+        # P3.2: task_monitor 检查 done
+        if self.task_monitor is not None:
+            game_state = getattr(self, "_bot", None)
+            completed_ids = self.task_monitor.tick(now, game_state=game_state)
+            for did in completed_ids:
+                self.board.complete(did, now)
+                self.task_monitor.detach(did)
+                # 从各列表清理
+                self._in_flight.pop(did, None)
+                self.production_overrides = [
+                    d for d in self.production_overrides if d.id != did
+                ]
                 need_snapshot = True
 
         # 不再自动 submit transition directive;只更新 self._pending_recommendation,

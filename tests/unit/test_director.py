@@ -532,3 +532,177 @@ class TestRevokeDirectiveUnified:
         result = director.revoke_directive(d.id, now=15.0)
         assert result is True
         assert not any(s.id == d.id for s in director.production_overrides)
+
+
+# =========================================================================
+# P3.2: TaskMonitor wiring
+# =========================================================================
+
+
+def _make_director_with_task_monitor(session: GameSession) -> Director:
+    """构造带 task_monitor 的 Director（传入 EventBus）。"""
+    from vibecraft.bot.event_bus import EventBus
+    from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+    facade = FakeFacade()
+    provider = MockLLMProvider(
+        scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+    )
+    library_inst = StrategyLibrary.from_directories(
+        strategies_dir=PROJECT_ROOT / "strategies",
+        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+    )
+    parser = IntentParser(provider, library_inst, session=session)
+    event_bus = EventBus()
+    return Director(facade=facade, parser=parser, session=session, event_bus=event_bus)
+
+
+def _make_tactical_objective_directive(done_when_dict: dict | None = None) -> Directive:
+    """构造一个 TACTICAL_OBJECTIVE Directive，可选带 done_when。"""
+    from vibecraft.directives.models import TacticalObjectivePayload, TimeElapsedSince
+
+    if done_when_dict is not None:
+        dw = TimeElapsedSince(kind="time_elapsed_since", seconds=float(done_when_dict.get("seconds", 30)))
+    else:
+        dw = None
+
+    payload = TacticalObjectivePayload(verb="attack", done_when=dw, timeout_s=None)
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestTaskMonitorWire:
+    """P3.2: task_monitor wiring 单测。"""
+
+    def test_no_event_bus_task_monitor_is_none(self, session: GameSession) -> None:
+        """不传 event_bus → task_monitor 为 None，Director 不崩。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        d = Director(facade=facade, parser=parser, session=session)
+        assert d.task_monitor is None
+        # on_tick 不崩
+        d.on_tick(now=10.0)
+
+    def test_attach_called_when_done_when_set(self, session: GameSession) -> None:
+        """_submit_directives 对有 done_when 的 directive 调 task_monitor.attach_directive。"""
+        director = _make_director_with_task_monitor(session)
+        assert director.task_monitor is not None
+
+        # mock task_monitor.attach_directive
+        original_attach = director.task_monitor.attach_directive
+        attach_calls: list[dict] = []
+
+        def _recording_attach(**kwargs: object) -> None:  # type: ignore[override]
+            attach_calls.append(dict(kwargs))
+            original_attach(**kwargs)  # type: ignore[arg-type]
+
+        director.task_monitor.attach_directive = _recording_attach  # type: ignore[method-assign]
+
+        d = _make_tactical_objective_directive(
+            done_when_dict={"kind": "time_elapsed_since", "seconds": 90}
+        )
+        director._submit_directives([d], now=10.0)
+
+        assert len(attach_calls) == 1
+        assert attach_calls[0]["directive_id"] == d.id
+
+    def test_no_attach_when_done_when_none(self, session: GameSession) -> None:
+        """done_when=None 时不调 attach_directive。"""
+        director = _make_director_with_task_monitor(session)
+        assert director.task_monitor is not None
+
+        attach_calls: list[object] = []
+        original_attach = director.task_monitor.attach_directive
+
+        def _spy(**kwargs: object) -> None:  # type: ignore[override]
+            attach_calls.append(kwargs)
+            original_attach(**kwargs)  # type: ignore[arg-type]
+
+        director.task_monitor.attach_directive = _spy  # type: ignore[method-assign]
+
+        d = _make_tactical_objective_directive(done_when_dict=None)
+        director._submit_directives([d], now=10.0)
+
+        assert len(attach_calls) == 0
+
+    def test_tick_completed_id_triggers_complete_and_detach(self, session: GameSession) -> None:
+        """task_monitor.tick 返回的 id 触发 board.complete + detach + 从 _in_flight 移除。"""
+        from unittest.mock import patch
+
+        director = _make_director_with_task_monitor(session)
+        assert director.task_monitor is not None
+
+        # 先 submit 一个有 done_when 的 directive
+        d = _make_tactical_objective_directive(
+            done_when_dict={"kind": "time_elapsed_since", "seconds": 30}
+        )
+        director._submit_directives([d], now=10.0)
+        # 确认进了 _in_flight（还在 board.pending 里，key=d.id）
+        assert d.id in director._in_flight
+
+        # mock task_monitor.tick 返回这个 id（模拟 checker 判定已完成）
+        completed_ids = [d.id]
+        with patch.object(director.task_monitor, "tick", return_value=completed_ids) as mock_tick, \
+             patch.object(director.task_monitor, "detach") as mock_detach:
+            director.on_tick(now=40.0)
+            mock_tick.assert_called_once()
+            mock_detach.assert_called_once_with(d.id)
+
+        # directive 应该从 _in_flight 移除
+        assert d.id not in director._in_flight
+
+    def test_tick_completed_production_override_removed(self, session: GameSession) -> None:
+        """task_monitor 完成的 id 也从 production_overrides 移除。"""
+        from unittest.mock import patch
+
+        director = _make_director_with_task_monitor(session)
+        assert director.task_monitor is not None
+
+        # 构造带 done_when 的 production_override
+        from vibecraft.directives.models import ProductionOverridePayload, TimeElapsedSince
+
+        payload = ProductionOverridePayload(
+            unit_type="Sentry",
+            count=2,
+            done_when=TimeElapsedSince(kind="time_elapsed_since", seconds=30),
+        )
+        d = Directive(payload=payload, issued_at=10.0)
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.production_overrides)
+
+        completed_ids = [d.id]
+        with patch.object(director.task_monitor, "tick", return_value=completed_ids), \
+             patch.object(director.task_monitor, "detach"):
+            director.on_tick(now=40.0)
+
+        assert not any(s.id == d.id for s in director.production_overrides)
+
+    def test_setup_task_monitor_works(self, session: GameSession) -> None:
+        """setup_task_monitor 事后注入 event_bus，task_monitor 从 None 变为有效实例。"""
+        from vibecraft.bot.event_bus import EventBus
+        from vibecraft.bot.task_monitor import TaskMonitor
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        d = Director(facade=facade, parser=parser, session=session)
+        assert d.task_monitor is None
+
+        bus = EventBus()
+        d.setup_task_monitor(bus)
+        assert isinstance(d.task_monitor, TaskMonitor)

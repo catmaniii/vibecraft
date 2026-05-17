@@ -172,6 +172,29 @@ class DirectiveBoard:
                 return True
         return False
 
+    def complete(self, directive_id: str, now: float) -> bool:
+        """task_monitor 判定 done 后调，把 directive 从 overlays 移除 + fire RELEASED event。
+
+        directive 可能在 overlays（已 committed），也可能在 pending（还没到 effective_at）。
+        两处都尝试移除；只要找到一处则返回 True，并 emit RELEASED 事件。
+        """
+        found = False
+        # 从 overlays 移除
+        before = len(self.overlays)
+        self.overlays = [d for d in self.overlays if d.id != directive_id]
+        if len(self.overlays) < before:
+            found = True
+        # 从 pending 移除（以防在 complete 时还没到 effective_at）
+        before_p = len(self.pending)
+        self.pending = [d for d in self.pending if d.id != directive_id]
+        if len(self.pending) < before_p:
+            found = True
+        # 释放关联 unit_claims
+        self._release_claims_for(directive_id)
+        if found:
+            self._emit(BoardEventKind.RELEASED, now, directive_id, reason="task_monitor_done")
+        return found
+
     # ----- tick：推进生命周期 ------------------------------------------
 
     def tick(self, now: float) -> list[BoardEvent]:
