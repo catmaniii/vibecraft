@@ -457,12 +457,12 @@ def _check_target_destroyed(
 
     target_kind: "natural" | "third" | "main" | "building_at" | "unit_type"
 
-    P3 实现:
-    - natural/third/main → named_spot 白名单检查，坐标 P5 精化
-      (P3 阶段：spot 解析成 _NAMED_SPOT_PLACEHOLDER，
-       poll game_state.enemy_structures.closer_than 暂不可行，返回 False + warn)
+    P5 实现:
+    - natural/third/main → 转换为 enemy_natural/enemy_third/enemy_main，
+      用 game_state.named_spots.resolve(spot_name, game_state) 解析坐标，
+      poll game_state.enemy_structures.closer_than(8, pos) 检查是否清空
     - unit_type → len(game_state.enemy_units.of_type(target_param)) == 0
-    - building_at → P5 实现，P3 返回 False + warn
+    - building_at → P5 范围外，返回 False + warn
     """
     if game_state is None:
         return False
@@ -480,16 +480,25 @@ def _check_target_destroyed(
             return False
 
     if target_kind in ("natural", "third", "main"):
-        # P3: named_spot 白名单已支持，但坐标 poll 留 P5
-        # 返回 False，不 warn（行为已经在 _resolve_named_spot 里记录）
-        logger.debug(
-            "target_destroyed target_kind=%s: 坐标 poll 留 P5，P3 返回 False", target_kind
-        )
-        return False
+        # P5: 转换为敌方 spot，用 NamedSpotRegistry 解析坐标
+        spot_name = f"enemy_{target_kind}"
+        pos = _resolve_named_spot(spot_name, game_state)
+        if pos is None:
+            logger.debug(
+                "target_destroyed target_kind=%s: spot=%s 解析返回 None，返回 False",
+                target_kind,
+                spot_name,
+            )
+            return False
+        try:
+            remaining = len(game_state.enemy_structures.closer_than(8, pos))
+            return remaining == 0
+        except Exception:
+            return False
 
     # building_at 及其它
     logger.warning(
-        "target_destroyed target_kind=%s 暂不支持（P5 实现），返回 False", target_kind
+        "target_destroyed target_kind=%s 暂不支持（P5 范围外），返回 False", target_kind
     )
     return False
 

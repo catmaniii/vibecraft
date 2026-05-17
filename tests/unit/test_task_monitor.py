@@ -982,3 +982,379 @@ class TestAllOf:
         gs = _make_game_state(game_time=25.0)
         completed = monitor.tick(now=25.0, game_state=gs)
         assert "d1" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P5.G: 6 个 checker 真实 mock bot 路径
+# ---------------------------------------------------------------------------
+
+
+def _make_bot_with_registry(named_spots_resolve_return: object = None) -> MagicMock:
+    """构造带 NamedSpotRegistry 的 mock bot，供 target_destroyed 路径用。"""
+    from vibecraft.bot.named_spot import NamedSpotRegistry
+
+    registry = NamedSpotRegistry()
+    bot = MagicMock()
+    bot.named_spots = registry
+    return bot, registry
+
+
+class TestExpansionCountMockBot:
+    """expansion_count checker 用 mock bot.townhalls.amount。"""
+
+    def _make_bot(self, amount: int) -> MagicMock:
+        bot = MagicMock()
+        bot.townhalls.amount = amount
+        # 让 len() 也能用
+        bot.townhalls.__len__ = MagicMock(return_value=amount)
+        return bot
+
+    def test_triggers_when_townhalls_amount_meets_condition(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": ">=", "value": 3}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = self._make_bot(3)
+        completed = monitor.tick(now=1.0, game_state=bot)
+        assert "d1" in completed
+
+    def test_not_triggered_when_townhalls_below_value(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": ">=", "value": 3}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = self._make_bot(1)
+        completed = monitor.tick(now=1.0, game_state=bot)
+        assert "d1" not in completed
+
+    def test_exact_boundary_with_eq_op(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": "==", "value": 2}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = self._make_bot(2)
+        completed = monitor.tick(now=1.0, game_state=bot)
+        assert "d1" in completed
+
+        bot3 = self._make_bot(3)
+        monitor.attach_directive("d2", done_when, issued_at=0.0, timeout_s=None)
+        completed2 = monitor.tick(now=2.0, game_state=bot3)
+        assert "d2" not in completed2
+
+
+class TestTechDoneMockBot:
+    """tech_done checker 用 mock bot + EventBus UPGRADE_COMPLETE。"""
+
+    def test_triggers_after_upgrade_complete_event(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "Blink"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 发 UPGRADE_COMPLETE 事件
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=10.0,
+                payload={"upgrade_id": "Blink"},
+            )
+        )
+
+        bot = MagicMock()
+        bot.game_time = 15.0
+        completed = monitor.tick(now=15.0, game_state=bot)
+        assert "d1" in completed
+
+    def test_not_triggered_before_event(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "Blink"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = MagicMock()
+        completed = monitor.tick(now=5.0, game_state=bot)
+        assert "d1" not in completed
+
+    def test_wrong_upgrade_id_does_not_trigger(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "Blink"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "ChronoBoostEnergyCost"},
+            )
+        )
+        bot = MagicMock()
+        completed = monitor.tick(now=10.0, game_state=bot)
+        assert "d1" not in completed
+
+
+class TestTargetDestroyedP5:
+    """target_destroyed P5 路径: natural/third/main 用 NamedSpotRegistry + enemy_structures。"""
+
+    def _make_bot_with_registry(self, spot_pos: object) -> tuple[MagicMock, object]:
+        """返回 (bot, registry)，registry.resolve("enemy_natural", bot) 返回 spot_pos。"""
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = NamedSpotRegistry()
+        bot = MagicMock()
+        bot.named_spots = registry
+        return bot, registry
+
+    def test_natural_target_destroyed_when_no_enemy_structures(self) -> None:
+        """enemy_natural resolve 到 Point2(50,50)，enemy_structures.closer_than 返回空 → True。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = NamedSpotRegistry()
+        fake_point = MagicMock()
+        fake_point.x = 50.0
+        fake_point.y = 50.0
+
+        bot = MagicMock()
+        bot.named_spots = registry
+        # closer_than 返回空集合 (amount 0, len 0)
+        bot.enemy_structures.closer_than.return_value.__len__ = MagicMock(return_value=0)
+
+        with patch.object(registry, "resolve", return_value=fake_point):
+            bus = EventBus()
+            monitor = TaskMonitor(board=None, event_bus=bus)
+            done_when = {"kind": "target_destroyed", "target_kind": "natural"}
+            monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+            completed = monitor.tick(now=1.0, game_state=bot)
+            assert "d1" in completed
+            bot.enemy_structures.closer_than.assert_called_once_with(8, fake_point)
+
+    def test_natural_not_destroyed_when_enemy_structures_remain(self) -> None:
+        """enemy_structures.closer_than 返回非空 → False (敌方建筑还在)。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = NamedSpotRegistry()
+        fake_point = MagicMock()
+
+        bot = MagicMock()
+        bot.named_spots = registry
+        bot.enemy_structures.closer_than.return_value.__len__ = MagicMock(return_value=3)
+
+        with patch.object(registry, "resolve", return_value=fake_point):
+            bus = EventBus()
+            monitor = TaskMonitor(board=None, event_bus=bus)
+            done_when = {"kind": "target_destroyed", "target_kind": "natural"}
+            monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+            completed = monitor.tick(now=1.0, game_state=bot)
+            assert "d1" not in completed
+
+    def test_resolve_none_returns_false(self) -> None:
+        """registry.resolve 返回 None (spot 不可解析) → False。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = NamedSpotRegistry()
+        bot = MagicMock()
+        bot.named_spots = registry
+
+        with patch.object(registry, "resolve", return_value=None):
+            bus = EventBus()
+            monitor = TaskMonitor(board=None, event_bus=bus)
+            done_when = {"kind": "target_destroyed", "target_kind": "third"}
+            monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+            completed = monitor.tick(now=1.0, game_state=bot)
+            assert "d1" not in completed
+
+    def test_target_kind_main_uses_enemy_main_spot(self) -> None:
+        """target_kind='main' → resolve 传 'enemy_main' 而非 'main'。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = NamedSpotRegistry()
+        fake_point = MagicMock()
+        bot = MagicMock()
+        bot.named_spots = registry
+        bot.enemy_structures.closer_than.return_value.__len__ = MagicMock(return_value=0)
+
+        with patch.object(registry, "resolve", return_value=fake_point) as mock_resolve:
+            bus = EventBus()
+            monitor = TaskMonitor(board=None, event_bus=bus)
+            done_when = {"kind": "target_destroyed", "target_kind": "main"}
+            monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+            monitor.tick(now=1.0, game_state=bot)
+            # 必须用 "enemy_main" 而不是 "main"
+            mock_resolve.assert_called_once_with("enemy_main", bot)
+
+    def test_unit_type_target_with_mock_bot(self) -> None:
+        """unit_type target_kind 路径：enemy_units.of_type 返回空 → True。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Stalker"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = MagicMock()
+        bot.enemy_units.of_type.return_value.__len__ = MagicMock(return_value=0)
+        completed = monitor.tick(now=1.0, game_state=bot)
+        assert "d1" in completed
+
+        # 还有 stalker 时
+        monitor.attach_directive("d2", done_when, issued_at=0.0, timeout_s=None)
+        bot2 = MagicMock()
+        bot2.enemy_units.of_type.return_value.__len__ = MagicMock(return_value=4)
+        completed2 = monitor.tick(now=2.0, game_state=bot2)
+        assert "d2" not in completed2
+
+
+class TestOwnArmySizeRatioMockBot:
+    """own_army_size_ratio checker 用 mock bot.supply_army。"""
+
+    def test_triggers_when_army_ratio_below_threshold(self) -> None:
+        """初始 supply=20, 2nd tick supply=10 → ratio=0.5 <= 0.6 → done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.6}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot1 = MagicMock()
+        bot1.supply_army = 20
+        monitor.tick(now=1.0, game_state=bot1)  # snapshot = 20
+
+        bot2 = MagicMock()
+        bot2.supply_army = 10  # ratio = 10/20 = 0.5 <= 0.6
+        completed = monitor.tick(now=2.0, game_state=bot2)
+        assert "d1" in completed
+
+    def test_not_triggered_when_army_ratio_above_threshold(self) -> None:
+        """初始 supply=20, supply=18 → ratio=0.9 > 0.6 → not done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.6}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot1 = MagicMock()
+        bot1.supply_army = 20
+        monitor.tick(now=1.0, game_state=bot1)
+
+        bot2 = MagicMock()
+        bot2.supply_army = 18  # ratio = 0.9 > 0.6
+        completed = monitor.tick(now=2.0, game_state=bot2)
+        assert "d1" not in completed
+
+    def test_ratio_computed_from_first_tick_snapshot(self) -> None:
+        """snapshot 建立于首次 tick，后续对比 current/initial。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.5}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bot = MagicMock()
+        bot.supply_army = 40
+        monitor.tick(now=1.0, game_state=bot)
+        assert monitor._initial_army_supply.get("d1") == 40.0
+
+        # supply=20 → ratio=0.5 <= 0.5 → done
+        bot2 = MagicMock()
+        bot2.supply_army = 20
+        completed = monitor.tick(now=2.0, game_state=bot2)
+        assert "d1" in completed
+
+
+class TestEnemyKilledInAreaMockBot:
+    """enemy_killed_in_area checker 用 UNIT_DESTROYED event + area/unit_type filter。"""
+
+    def test_triggers_when_kill_count_meets_value(self) -> None:
+        """3 个 Probe UNIT_DESTROYED 事件 area=enemy_main → done (value=3)。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "enemy_main",
+            "unit_type": "Probe",
+            "op": ">=",
+            "value": 3,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        for _ in range(3):
+            bus.publish(
+                Event(
+                    kind=EventKind.UNIT_DESTROYED,
+                    ts=5.0,
+                    payload={"area": "enemy_main"},
+                    owner="enemy",
+                    unit_type="Probe",
+                )
+            )
+
+        bot = MagicMock()
+        completed = monitor.tick(now=10.0, game_state=bot)
+        assert "d1" in completed
+
+    def test_not_triggered_when_kill_count_below_value(self) -> None:
+        """只有 2 个击杀事件 → not done (value=3)。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "enemy_main",
+            "unit_type": "Probe",
+            "op": ">=",
+            "value": 3,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        for _ in range(2):
+            bus.publish(
+                Event(
+                    kind=EventKind.UNIT_DESTROYED,
+                    ts=5.0,
+                    payload={"area": "enemy_main"},
+                    owner="enemy",
+                    unit_type="Probe",
+                )
+            )
+
+        bot = MagicMock()
+        completed = monitor.tick(now=10.0, game_state=bot)
+        assert "d1" not in completed
+
+    def test_area_mismatch_does_not_count(self) -> None:
+        """3 个击杀事件 area 不匹配 → counter 不累加 → not done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "enemy_main",
+            "unit_type": "Probe",
+            "op": ">=",
+            "value": 3,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        for _ in range(3):
+            bus.publish(
+                Event(
+                    kind=EventKind.UNIT_DESTROYED,
+                    ts=5.0,
+                    payload={"area": "enemy_natural"},  # 不匹配
+                    owner="enemy",
+                    unit_type="Probe",
+                )
+            )
+
+        bot = MagicMock()
+        completed = monitor.tick(now=10.0, game_state=bot)
+        assert "d1" not in completed
+        assert monitor._enemy_killed_counts.get("d1", 0) == 0
