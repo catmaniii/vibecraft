@@ -72,6 +72,7 @@ def _make_facade_for_test() -> tuple[Any, Any]:
     bot.knowledge.vibecraft = SimpleNamespace(
         attack_target_override=None,
         combat_intent_override=None,
+        stance_override=None,
     )
     # 2. 构造 _SharpyFacade：on_start 里 `self.facade = _SharpyFacade(self)`
     #    _SharpyFacade 类型在工厂闭包里；利用 bot_class.__init_subclass__ 找不到，
@@ -124,18 +125,30 @@ def test_set_combat_intent_override_writes_knowledge():
     assert vibe_ns.combat_intent_override is None
 
 
-def test_set_engagement_stance_delegates_to_combat_intent():
-    """stance → combat_intent_override：defend/hold/retreat 同名，free → None。"""
+def test_set_engagement_stance_writes_stance_override():
+    """stance → stance_override（独立字段）；不再污染 combat_intent_override。"""
     facade, vibe_ns = _make_facade_for_test()
 
     facade.set_engagement_stance("defend")
-    assert vibe_ns.combat_intent_override == "defend"
+    assert vibe_ns.stance_override == "defend"
+    assert vibe_ns.combat_intent_override is None  # tactical_objective 字段未动
 
     facade.set_engagement_stance("hold")
-    assert vibe_ns.combat_intent_override == "hold"
+    assert vibe_ns.stance_override == "hold"
 
     facade.set_engagement_stance("retreat")
-    assert vibe_ns.combat_intent_override == "retreat"
+    assert vibe_ns.stance_override == "retreat"
 
     facade.set_engagement_stance("free")
-    assert vibe_ns.combat_intent_override is None
+    assert vibe_ns.stance_override is None
+
+
+def test_engagement_stance_does_not_clobber_tactical_intent():
+    """engagement_constraint(free) 不应清掉 tactical_objective 设的 attack intent。"""
+    facade, vibe_ns = _make_facade_for_test()
+
+    facade.set_combat_intent_override("attack")
+    facade.set_engagement_stance("free")
+
+    assert vibe_ns.combat_intent_override == "attack"  # 未被清掉
+    assert vibe_ns.stance_override is None

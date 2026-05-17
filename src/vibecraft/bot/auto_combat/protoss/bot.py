@@ -383,13 +383,16 @@ def make_protoss_bot_class(
             pass
 
         def set_engagement_stance(self, stance: str) -> None:
-            """stance → combat_intent_override；free 清覆盖，其它转发同名 intent。"""
+            """stance → knowledge.vibecraft.stance_override（独立于 tactical_objective 的 combat_intent_override）。
+
+            engagement_constraint 只写 stance_override，不动 combat_intent_override，
+            防止 stance=free 把 tactical_objective(attack) 的 intent 清掉。
+            """
             if stance == "free":
-                self.set_combat_intent_override(None)
+                self.bot.knowledge.vibecraft.stance_override = None
             elif stance in ("defend", "hold", "retreat"):
-                self.set_combat_intent_override(stance)
+                self.bot.knowledge.vibecraft.stance_override = stance
             else:
-                # 未知 stance 不静默，写 log
                 logger.warning("set_engagement_stance: unknown stance %r, no-op", stance)
 
         def set_attack_target_override(
@@ -827,7 +830,8 @@ def make_protoss_bot_class(
 
             self.knowledge.vibecraft = _SNS(
                 attack_target_override=None,
-                combat_intent_override=None,
+                combat_intent_override=None,  # 由 tactical_objective 写入
+                stance_override=None,  # 由 engagement_constraint 写入，独立于上方
             )
 
             self.facade = _SharpyFacade(self)

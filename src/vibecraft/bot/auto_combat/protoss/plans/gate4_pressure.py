@@ -129,9 +129,11 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 # 4 BG 全部就绪 + 折跃完成 + 4 个 Stalker → 第一波立即压制(火力侦察)
                 # VibeCraftZoneAttack(4):4 个就够了,等更多会错过 timing;
                 # 出门后会顺便侦察敌方走向科技/造兵情况;
-                # VibeCraftZoneAttack 优先读 knowledge.vibecraft 的 attack/intent override
+                # VibeCraftZoneAttack 优先读 knowledge.vibecraft 的 attack/intent override;
+                # 玩家强制发 tactical_objective(attack) 时绕过 _ready_to_pressure 时机检查
                 Step(
-                    self._ready_to_pressure,
+                    lambda ai: self._ready_to_pressure(ai)
+                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
                     VibeCraftZoneAttack(4),
                 ),
                 PlanFinishEnemy(),
