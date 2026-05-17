@@ -19,6 +19,54 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+M2 收尾补丁 + M3 准备。
+
+### 新增 (Added)
+
+- **`HangWatchdog`** (`vibecraft.bot.watchdog`)：子进程内 daemon thread,
+  bot.time 30s 不前进 → 自动 kill SC2 + 子进程 `os._exit(87)`。
+  on_start 自动启,on_end 关停。`VIBECRAFT_DISABLE_HANG_WATCHDOG=1` 禁用。
+  4 个单测覆盖 advance / stall / stop idempotent / get_bot_time exception
+- **`scripts/e2e_4_directive_types.py`**：4 类指令自动化端到端驱动,
+  挨个跑 L1 strategy_set / L2 tactical_objective / L3 unit_claim (standing) /
+  L4 production_override,每个 case 独立 SC2 子进程 + fast mode + VeryEasy。
+  verify 同时看 snapshot 字段 + events 流(directive.committed 兜底,
+  避免 task_monitor 立即 done 错过 snapshot 窗口)。4 case 实测全 PASS
+
+### 修正 (Fixed)
+
+- **`task_monitor` `time_elapsed_since` `.game_time` 属性错**：sharpy bot 暴露
+  `self.time`（python-sc2 BotAI 标准），不是 `self.game_time`。原 silent fail
+  让 timer-based directive 永远不触发 completed。getattr fallback 修
+- **`Director.on_tick` 缺 RELEASED dispatch**：`board.complete` 把 RELEASED
+  event push 进 `board._events`,但本 tick `board.tick()` 已返回（只含本 tick
+  produced）→ events.jsonl 看不到 `directive.released`。改为 Director.on_tick
+  直接 `_dispatch_event(BoardEvent(RELEASED,...))` 让事件立即落盘 + 推 ws
+
+### 删除 (Removed)
+
+- **`DirectiveType.VIEW_MOVE/VIEW_FOLLOW/VIEW_ZOOM` + `ViewMovePayload` 等 +
+  `is_view_directive` + Director `_dispatch_view`**：PWA 已有小地图拖拽控视野
+  （走 ws.py `view_move` 帧 → bot.facade.move_camera,不经 directive 系统）,
+  LLM 文字解析视野指令的路径不再有用。**保留** WS frame `view_move`(PWA
+  → ws → bot)路径不动 —— UI 拖小地图功能完整
+
+### 验证
+
+```bash
+# 4 类指令自动 e2e（fast mode + VeryEasy + watchdog 兜底）
+.venv/Scripts/python.exe scripts/e2e_4_directive_types.py --seconds 75
+# → 4/4 PASS
+#   L1 strategy_set    切叉球一波      → snapshot stage=midgame id=iac_2base
+#   L2 tactical_objective  进攻对方自然 → events directive.committed+released
+#   L3 unit_claim      探机巡逻自然别动 → snapshot standing_orders 非空
+#   L4 production_override  下个 BG 出俩哨兵 → events directive.committed+released
+
+# Watchdog 单测
+.venv/Scripts/python.exe -m pytest tests/unit/test_watchdog.py
+# → 4 passed
+```
+
 M3：完整驾驶舱（剩余 PWA UI 精修）+ L4 production override sharpy 真出兵 wire +
 phase stepper 精确进度。
 

@@ -200,37 +200,6 @@ class TestProductionDispatch:
 
 
 # =========================================================================
-# View directive 立即生效（不进 Board）
-# =========================================================================
-
-
-class TestViewDirectiveImmediate:
-    @pytest.mark.asyncio
-    async def test_view_move_skips_board_delay(
-        self, library: StrategyLibrary, session: GameSession
-    ) -> None:
-        facade = FakeFacade()
-        director = _make_director(
-            library,
-            session,
-            facade,
-            {
-                "interpretation_zh": "看 11 点",
-                "confidence": 0.95,
-                "directives": [
-                    {
-                        "type": "view_move",
-                        "payload": {"target_point": [55.0, 120.0]},
-                    }
-                ],
-            },
-        )
-        await director.on_player_command("看 11 点", now=10.0)
-        # 没 tick，相机已动
-        assert facade.camera_moves == [(55.0, 120.0)]
-
-
-# =========================================================================
 # ParseError 不动 bot 状态 (§7.6)
 # =========================================================================
 

@@ -8,7 +8,8 @@
 玩家话语：
 1. parse → IntentParseResult / Ambiguous / Error
 2. 成功的话，每个 directive 赋当前 issued_at 后 board.submit
-3. VIEW directive 不进 board，直接调 facade
+3. 视角控制不走 directive 系统 —— PWA 拖小地图直接经 WS frame view_move 调
+   bot.facade.move_camera（见 server/ws.py + bot/auto_combat/protoss/bot.py）
 """
 
 from __future__ import annotations
@@ -36,14 +37,10 @@ from vibecraft.directives.models import (
     TechOverridePayload,
     UnitClaimPayload,
     UnitReleasePayload,
-    ViewFollowPayload,
-    ViewMovePayload,
-    ViewZoomPayload,
 )
 from vibecraft.directives.types import (
     DirectiveType,
     StageKind,
-    is_view_directive,
 )
 from vibecraft.llm.parser import IntentParser
 from vibecraft.llm.prompt import ParseContext
@@ -587,9 +584,7 @@ class Director:
 
         for d in directives:
             d_with_ts = d.model_copy(update={"issued_at": now})
-            if is_view_directive(d_with_ts.type):
-                self._dispatch_view(d_with_ts, now)
-            elif d_with_ts.type == DirectiveType.STRATEGY_CANCEL:
+            if d_with_ts.type == DirectiveType.STRATEGY_CANCEL:
                 self._dispatch_cancel(d_with_ts, now)
             elif (
                 d_with_ts.type == DirectiveType.STRATEGY_SET
@@ -1219,22 +1214,6 @@ class Director:
         target_role = UnitRole.IDLE if payload.return_to_role == "IDLE" else UnitRole.ARMY
         for tag in tags:
             self.facade.set_unit_role(tag, target_role)
-
-    def _dispatch_view(self, d: Directive, now: float) -> None:
-        if isinstance(d.payload, ViewMovePayload):
-            self.facade.move_camera(d.payload.target_point)
-        elif isinstance(d.payload, ViewFollowPayload):
-            self.facade.follow_unit(d.payload.unit_tag)
-        elif isinstance(d.payload, ViewZoomPayload):
-            self.facade.set_camera_zoom(d.payload.level)
-        self.session.log_event(
-            Event(
-                ts=now,
-                kind=EventKind.CAMERA_MOVED,
-                payload={"directive_type": d.type.value},
-                priority="low",
-            )
-        )
 
     # ------------------------------------------------------------------
     # ParseContext 构造（从 facade.get_state + board 当前快照）

@@ -36,7 +36,6 @@ from vibecraft.directives.types import (
     DirectiveType,
     IssuedBy,
     StageKind,
-    is_view_directive,
     issued_by_priority,
 )
 
@@ -151,11 +150,7 @@ class DirectiveBoard:
         """玩家话语解析后落 Board。
 
         - 设置 effective_at = max(now, issued_at + delay)
-        - VIEW_* 不进 Board（保留接口未来若需 hook 可改）
         """
-        if is_view_directive(directive.type):
-            raise DirectiveBoardError(f"VIEW directive 不应进入 Board：{directive.type.value}")
-
         effective = max(now, directive.issued_at + self.commit_delay_s)
         # Pydantic v2 model_copy 保留其他字段
         d = directive.model_copy(update={"effective_at": effective})

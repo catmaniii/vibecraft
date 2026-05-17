@@ -394,8 +394,8 @@ def build_tool_schema() -> dict[str, Any]:
                                     "strategy_cancel / "
                                     "production_override / tech_override / "
                                     "expansion_override / engagement_constraint / "
-                                    "unit_claim / scout / move / build_at / unit_release / "
-                                    "view_move / view_follow / view_zoom"
+                                    "tactical_objective / "
+                                    "unit_claim / scout / move / build_at / unit_release"
                                 ),
                             },
                             "payload": {

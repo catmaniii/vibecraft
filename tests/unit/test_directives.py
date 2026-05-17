@@ -8,7 +8,6 @@
 - strategy_set：阶段单向、issued_by 仲裁、supersede 事件
 - unit_claim：互斥、supersede、release
 - overlay 过期：DURATION / PERSISTENT
-- VIEW directive 拒绝进 Board
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ from vibecraft.directives import (
     UnitClaimPayload,
     UnitReleasePayload,
     Verb,
-    ViewMovePayload,
 )
 from vibecraft.directives.board import DirectiveBoardError
 from vibecraft.directives.scope import TargetKind
@@ -93,14 +91,6 @@ class TestPayloads:
         assert restored.type == DirectiveType.PRODUCTION_OVERRIDE
         assert isinstance(restored.payload, ProductionOverridePayload)
         assert restored.payload.unit_type == "Immortal"
-
-    def test_view_directive_recognized(self) -> None:
-        d = Directive(
-            payload=ViewMovePayload(target_point=(50.0, 80.0)),
-            issued_at=10.0,
-        )
-        assert d.is_view() is True
-
 
 # =========================================================================
 # DirectiveBoard
@@ -190,12 +180,6 @@ class TestSubmitAndCommit:
     def test_revoke_unknown_returns_false(self) -> None:
         board = DirectiveBoard()
         assert board.revoke("d_nonexistent", now=1.0) is False
-
-    def test_view_directive_rejected(self) -> None:
-        board = DirectiveBoard()
-        d = Directive(payload=ViewMovePayload(target_point=(50, 80)), issued_at=1.0)
-        with pytest.raises(DirectiveBoardError, match="VIEW"):
-            board.submit(d, now=1.0)
 
 
 class TestStageMonotonicity:

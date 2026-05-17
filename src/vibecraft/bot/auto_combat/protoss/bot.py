@@ -20,6 +20,7 @@ from typing import Any
 
 from vibecraft.bot.event_bus import Event, EventBus, EventKind
 from vibecraft.bot.named_spot import NamedSpotRegistry
+from vibecraft.bot.watchdog import HangWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -496,6 +497,7 @@ def make_protoss_bot_class(
         _minimap_tick_count: int = 0
         _minimap_builder: Any = None
         _decision_watcher: Any = None
+        _hang_watchdog: HangWatchdog | None = None
         # 当前剧本名：IfElse 路由树每 step 检查此值；set_build 写入后下个 step 立即生效。
         # 默认 "1g_robo_immortal"（opening fallback），on_start 会根据 strategy_library 重设。
         active_recipe: str = "1g_robo_immortal"
@@ -535,6 +537,7 @@ def make_protoss_bot_class(
             self._minimap_tick_count = 0
             self._minimap_builder = None
             self._decision_watcher = None
+            self._hang_watchdog = None
             self.active_recipe = "1g_robo_immortal"
             self._llm_controlled_tags = set()
             self._tactics_last_s = 0.0
@@ -871,6 +874,22 @@ def make_protoss_bot_class(
                 status_callback("in_game", "running", "")
                 status_callback("playing", "running", "")
 
+            # 启 hang watchdog（VIBECRAFT_DISABLE_HANG_WATCHDOG=1 关掉，e.g. 调试时）
+            import os as _os
+
+            if not _os.environ.get("VIBECRAFT_DISABLE_HANG_WATCHDOG"):
+                def _on_hang() -> None:
+                    if status_callback is not None:
+                        status_callback(
+                            "crashed", "error", "hang_watchdog: bot.time stuck"
+                        )
+
+                self._hang_watchdog = HangWatchdog(
+                    get_bot_time=lambda: float(self.time),
+                    on_hang=_on_hang,
+                )
+                self._hang_watchdog.start()
+
         async def on_step(self, iteration: int) -> None:
             """多路复用 step:view channel(高频)+ bot channel(低频,remap iteration)。
 
@@ -1070,6 +1089,9 @@ def make_protoss_bot_class(
                     )
 
         async def on_end(self, game_result: Any) -> None:
+            if self._hang_watchdog is not None:
+                self._hang_watchdog.stop()
+                self._hang_watchdog = None
             if self._cmd_tasks:
                 await asyncio.gather(*self._cmd_tasks, return_exceptions=True)
                 self._cmd_tasks.clear()

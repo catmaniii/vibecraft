@@ -236,21 +236,6 @@ class UnitReleasePayload(_PayloadBase):
     return_to_role: Literal["IDLE", "ARMY"] = "IDLE"
 
 
-class ViewMovePayload(_PayloadBase):
-    type: Literal[DirectiveType.VIEW_MOVE] = DirectiveType.VIEW_MOVE
-    target_point: tuple[float, float]
-
-
-class ViewFollowPayload(_PayloadBase):
-    type: Literal[DirectiveType.VIEW_FOLLOW] = DirectiveType.VIEW_FOLLOW
-    unit_tag: int
-
-
-class ViewZoomPayload(_PayloadBase):
-    type: Literal[DirectiveType.VIEW_ZOOM] = DirectiveType.VIEW_ZOOM
-    level: float = Field(ge=0.1, le=2.0)
-
-
 class TacticalObjectivePayload(_PayloadBase):
     """L2 战术指令：跨单位的中粒度战术目标（设计文档 §8.1 L2）。"""
 
@@ -274,10 +259,7 @@ Payload = Annotated[
     | ScoutPayload
     | MovePayload
     | BuildAtPayload
-    | UnitReleasePayload
-    | ViewMovePayload
-    | ViewFollowPayload
-    | ViewZoomPayload,
+    | UnitReleasePayload,
     Discriminator("type"),
 ]
 
@@ -324,8 +306,3 @@ class Directive(BaseModel):
     def type(self) -> DirectiveType:
         """便捷访问 payload.type。"""
         return self.payload.type
-
-    def is_view(self) -> bool:
-        from vibecraft.directives.types import is_view_directive
-
-        return is_view_directive(self.type)

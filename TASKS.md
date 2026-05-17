@@ -7,15 +7,13 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `4b104dd` + P6 收尾 commit 后，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17 晚，HEAD = e2e 收尾 commit，tag `v0.1.0a4`）
 
-- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1+P2+P3+P5+P4+P6 全部完成**（4 决策
-  + 8 sub-task per P + ADR Implementation Notes 全段）：L1/L3/L4/L2 完整 directive
-  链路 + task_monitor + 8-kind done_when dispatcher + LLM prompt 教 done_when +
-  4 PWA cards + NamedSpotRegistry + sharpy 让位机制 + 6 game-state checker 真路径 +
-  JsonlSink line-buffered (jsonl 不再空) + ADR 0010 完整 corner case 记录。
-- **M2 可以打 `v0.1.0a4` tag** —— 待用户决定 + 实际真实 SC2 长游戏 verify (`directive_completed`
-  在 timer 到之前 bot 没死)。
+- **里程碑**：M2 出口已 tag `v0.1.0a4` + push。**M2 收尾补丁 + 4 类指令 e2e 验证完成**：
+  - SC2 卡死 watchdog（方案 1 简化 W3：子进程内 30s stall → 自动 kill SC2 + 退码 87）
+  - 删除 view directive 类型（PWA 小地图已有，LLM 文字控视野路径不再需要）
+  - 4 类指令端到端测试驱动 `scripts/e2e_4_directive_types.py` 4/4 PASS（L1/L2/L3/L4）
+  - 两个 P6 后 critical fix 已 commit + push：task_monitor `.time` 兜底 + RELEASED dispatch
 - **本次 session 关键节点**：
   - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
@@ -35,72 +33,54 @@
   - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
   - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync。**`v0.1.0a4` 已 tag + push**（M2 完成）
-- **阻塞 / 等待**：**🚧 待用户拍 SC2 卡死检测设计**（见下「待拍决策」段）
 
 ---
 
-## 🚧 待拍决策：SC2 卡死自动检测设计
+## ✅ SC2 卡死检测：方案 1 W3 简化版已实施（2026-05-17）
 
-**触发场景**（2026-05-17 用户实际遇到）：跑 e2e smoke 时 SC2 卡死 —— **UI 还能选单位但单位都不响应**。说明 SC2 客户端活着，但 bot ↔ SC2 protobuf 通信循环卡死。可能原因：
-- bot.on_step 内部 deadlock / 无限循环（sharpy / vibecraft / LLM call 阻塞 main step）
-- single step CPU 重活 > SC2 timeout
-- sharpy 内部异常被 try/except 吞 → loop 看似活着实则空跑
+**user 设过 goal「直到 4 类指令全过」**，自动化路线选择更简化的 W3（不要 W2 PWA
+banner，因为人不在）：
 
-### 设计维度（3 个独立轴）
+- **信号**：A（bot.time wall-clock 30s 不前进）
+- **处置**：W3（子进程内 watchdog 自动 kill SC2_x64.exe + 子进程 `os._exit(87)`）
+- **位置**：子进程内 daemon thread（`vibecraft.bot.watchdog.HangWatchdog`）
+- **wire**：`_VibeCraftProtossBot.on_start` 启 watchdog，`on_end` 关停。
+  `VIBECRAFT_DISABLE_HANG_WATCHDOG=1` 临时关掉（调试用）
+- **测试**：4 个单测覆盖 advance / stall / stop idempotent / get_bot_time exception；
+  e2e 跑 4 个 case watchdog 没误报 trigger（bot 都正常打完赢了）
 
-**维度 1 — 检测信号**：
-| 信号 | 实现难度 | 误报率 |
-|---|---|---|
-| **A. bot.time 不前进** （wall-clock N 秒内 bot.time 不变 = 卡）| 简单 | 极低（最 reliable）|
-| B. on_step 单次时延 > 阈值 | 中等 | 中（重活帧会误报）|
-| C. snapshot 帧 ts 不更新（父进程视角）| 简单 | 跟 A 等效但延迟更大 |
-| D. SC2_x64.exe CPU 使用率 < 阈值 | 复杂 | 高（高速 step 也低 CPU）|
-
-**维度 2 — 处置**：
-| 处置 | 说明 |
-|---|---|
-| W1 仅 log warning | 写 jsonl + console，玩家自己决定 |
-| **W2 推 PWA 告警 + 提供「重启 SC2」按钮** | 玩家手机看到 "bot 卡死，要重启吗"，点按钮 → 父进程 kill SC2 |
-| W3 自动 kill SC2 + 通知玩家 | 检测到立刻 kill，不问玩家 |
-| W4 自动 kill + 自动重启 SC2 进新对局 | 最自动化，但 false positive 风险大 |
-
-**维度 3 — 实现位置**：
-| 位置 | 优点 | 缺点 |
-|---|---|---|
-| 子进程内 watchdog thread | 直接访问 bot.time，秒级反应 | 子进程自己卡 watchdog 也卡 |
-| 父进程（service）query 子进程 | 子进程卡也能检测 | IPC 延迟 |
-| **两层都做**：子进程自检 + 父进程兜底 | 互为保险 | 复杂度 +1 |
-
-### 4 个候选方案（user 拍）
-
-| 方案 | 信号 | 处置 | 位置 | trade-off |
-|---|---|---|---|---|
-| **方案 1（推荐）** | A | W2 | 两层 | 子进程 30s 阈值 + 父进程 60s 兜底；PWA banner 让玩家点重启。最稳，误报低，玩家可控 |
-| 方案 2 | A | W3 | 子进程 | 子进程 30s 检测到 hang 自动 kill；最简但有误报伤风险 |
-| 方案 3 | A | W4 | 两层 | 完全自动 kill + 重启对局；false positive 会破坏正在进行的对局 |
-| 方案 4 | 自定 | 自定 | 自定 | 用户其它想法 |
-
-**建议默认参数**（方案 1）：子进程 watchdog 30s，父进程 60s，PWA banner with [重启 SC2] button。
-
-### 还要拍的子问题（方案 1 选定后）
-
-- 重启 SC2 后是否自动恢复 standing orders / production overrides（保留 Director state）？还是清空？
-- "卡死" 阈值 30s 是否合适？（参考：SC2 长 LLM call 可能 2-3s 阻塞，单帧不该超 1s 太多）
-- PWA banner 设计：position / 文案 / 是否 modal block 其它操作
+W2 PWA banner / 父进程兜底层 / 重启 SC2 状态恢复 → 留 M3+（人在驾驶舱时才有用）。
+预设的子问题（重启后恢复 standing orders / 阈值 / banner 设计）也都留 M3。
 
 ---
+
+## ✅ 4 类指令 e2e 4/4 PASS（2026-05-17 晚）
+
+`scripts/e2e_4_directive_types.py` — 每 case 独立 SC2 子进程 + fast mode +
+VeryEasy 对手 + watchdog 兜底，全过：
+
+| Case | inject | 验证 |
+|---|---|---|
+| L1 strategy_set | `切叉球一波` | snapshot stage=midgame id=iac_2base |
+| L2 tactical_objective | `进攻对方自然` | events directive.committed + released |
+| L3 unit_claim (standing) | `探机巡逻自然别动` | snapshot standing_orders 非空（Probe patrol natural） |
+| L4 production_override | `下个 BG 出俩哨兵` | events directive.committed + released |
+
+verify 设计兼容 task_monitor 立即 done 的 case（L2/L4 directive 进 board 后立即
+被判 done，snapshot 窗口错过 —— events 兜底）。
+
+---
+
 - **下一步**：
-  1. **真实长 SC2 对局验证**：现在 e2e smoke fast mode bot 在 30s 内被 AI 打死，
-     timer-based directive 没机会 mark completed。要在真实 SC2 客户端 + 玩家
-     surviving 长一些的对局验 `directive_completed` event fire
-  2. **打 `v0.1.0a4` tag**：跑通真实 verify 后 + 更新 CHANGELOG + tag + push
-  3. **M3 开始**：完整驾驶舱（剩余 PWA UI 精修）+ L4 production override sharpy
+  1. **M3 开始**：完整驾驶舱（剩余 PWA UI 精修）+ L4 production override sharpy
      真出兵 wire（task_monitor 检测 done 后让 sharpy plan 知道）+ phase stepper
      精确进度
-  4. **backlog**：3 个 flaky cross-test pollution（`test_loads_real_strategies` /
+  2. **backlog**：3 个 flaky cross-test pollution（`test_loads_real_strategies` /
      `test_transitions_of` /
      `test_not_triggered_when_visible_but_insufficient_duration`）排查；用 pytest-forked
      或 grep module-level mutable state
+  3. **M3 时考虑 W2 父进程兜底层 + PWA banner**：W3 已够自动化测试用，但玩家在
+     驾驶舱时该走 W2 让玩家自己决定 + 重启后恢复 standing orders
 - **P1/P2/P3 deferred items（P5 已全部完成 ✅）**：
   - ✅ sharpy 真让位 standing order 单位 → P5.E
   - ✅ Director bot backref 让 6 game-state checker 真工作 → P5.C

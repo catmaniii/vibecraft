@@ -34,9 +34,6 @@ from vibecraft.directives.models import (
     UnitClaimPayload,
     UnitCountBuiltSince,
     UnitReleasePayload,
-    ViewFollowPayload,
-    ViewMovePayload,
-    ViewZoomPayload,
     VisionAcquired,
 )
 from vibecraft.directives.scope import (
@@ -89,8 +86,5 @@ __all__ = [
     "UnitCountBuiltSince",
     "UnitReleasePayload",
     "Verb",
-    "ViewFollowPayload",
-    "ViewMovePayload",
-    "ViewZoomPayload",
     "VisionAcquired",
 ]

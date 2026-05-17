@@ -38,10 +38,8 @@ class DirectiveType(str, Enum):
     # 释放
     UNIT_RELEASE = "unit_release"
 
-    # 视野（不限频）
-    VIEW_MOVE = "view_move"
-    VIEW_FOLLOW = "view_follow"
-    VIEW_ZOOM = "view_zoom"
+    # 注：视野控制 directive 已删除（2026-05-17）。视角切换由 PWA 小地图拖拽产生的
+    # WS frame `view_move` 直送 bot.facade.move_camera，不走 directive 系统。
 
 
 class IssuedBy(str, Enum):
@@ -79,21 +77,3 @@ ISSUED_BY_PRIORITY: dict[IssuedBy, int] = {
 def issued_by_priority(src: IssuedBy) -> int:
     """返回 IssuedBy 数字优先级（仅用于冲突仲裁，不参与 directive.priority 字段）。"""
     return ISSUED_BY_PRIORITY[src]
-
-
-# ---------------------------------------------------------------------------
-# 视野类 directive 不限频，identify 一下
-# ---------------------------------------------------------------------------
-
-VIEW_DIRECTIVE_TYPES: frozenset[DirectiveType] = frozenset(
-    {
-        DirectiveType.VIEW_MOVE,
-        DirectiveType.VIEW_FOLLOW,
-        DirectiveType.VIEW_ZOOM,
-    }
-)
-
-
-def is_view_directive(t: DirectiveType) -> bool:
-    """视野类 directive 不进 Board（独立流），见设计文档 §2.1。"""
-    return t in VIEW_DIRECTIVE_TYPES
