@@ -193,7 +193,10 @@ class TestProductionDispatch:
         )
         await director.on_player_command("出俩哨兵", now=10.0)
         director.on_tick(now=12.0)
-        assert facade.production_overrides == [("Sentry", 2, None)]
+        # P2: PRODUCTION_OVERRIDE 进 Director.production_overrides list,不再走
+        # facade dispatch (P3 task_monitor 才接 sharpy 实际生产 wire)。
+        assert len(director.production_overrides) == 1
+        assert facade.production_overrides == []
 
 
 # =========================================================================
@@ -452,3 +455,80 @@ class TestStandingOrderRouting:
         result = director.revoke_standing_order(d.id, now=15.0)
         assert result is True
         assert not any(s.id == d.id for s in director.standing_orders)
+
+
+# =========================================================================
+# P2: Production Override 路由（PRODUCTION_OVERRIDE/TECH_OVERRIDE/EXPANSION_OVERRIDE
+#     → production_overrides 列表，不进 _in_flight）
+# =========================================================================
+
+
+def _make_production_override_directive() -> Directive:
+    """构造一个 PRODUCTION_OVERRIDE Directive（出 2 哨兵）。"""
+    from vibecraft.directives.models import ProductionOverridePayload
+
+    payload = ProductionOverridePayload(unit_type="Sentry", count=2)
+    return Directive(payload=payload, issued_at=10.0)
+
+
+def _make_tech_override_directive() -> Directive:
+    """构造一个 TECH_OVERRIDE Directive（研 Blink）。"""
+    from vibecraft.directives.models import TechOverridePayload
+
+    payload = TechOverridePayload(upgrade_id="Blink")
+    return Directive(payload=payload, issued_at=10.0)
+
+
+def _make_expansion_override_directive() -> Directive:
+    """构造一个 EXPANSION_OVERRIDE Directive（开 3 矿）。"""
+    from vibecraft.directives.models import ExpansionOverridePayload
+
+    payload = ExpansionOverridePayload(target_count=3)
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestProductionOverrideRouting:
+    """P2 Director 把 PRODUCTION/TECH/EXPANSION override 路由到 production_overrides。"""
+
+    def test_production_override_goes_to_production_overrides(self, director: Director) -> None:
+        d = _make_production_override_directive()
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.production_overrides)
+        assert d.id not in director._in_flight
+
+    def test_tech_override_goes_to_production_overrides(self, director: Director) -> None:
+        d = _make_tech_override_directive()
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.production_overrides)
+        assert d.id not in director._in_flight
+
+    def test_expansion_override_goes_to_production_overrides(self, director: Director) -> None:
+        d = _make_expansion_override_directive()
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.production_overrides)
+        assert d.id not in director._in_flight
+
+
+# =========================================================================
+# P2: revoke_directive unified（撤 standing + production override）
+# =========================================================================
+
+
+class TestRevokeDirectiveUnified:
+    """P2 revoke_directive(id, now) 统一撤销 standing_orders 和 production_overrides。"""
+
+    def test_revoke_directive_removes_standing_order(self, director: Director) -> None:
+        d = _make_unit_claim_directive(persistent=True)
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.standing_orders)
+        result = director.revoke_directive(d.id, now=15.0)
+        assert result is True
+        assert not any(s.id == d.id for s in director.standing_orders)
+
+    def test_revoke_directive_removes_production_override(self, director: Director) -> None:
+        d = _make_production_override_directive()
+        director._submit_directives([d], now=10.0)
+        assert any(s.id == d.id for s in director.production_overrides)
+        result = director.revoke_directive(d.id, now=15.0)
+        assert result is True
+        assert not any(s.id == d.id for s in director.production_overrides)

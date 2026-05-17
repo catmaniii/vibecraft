@@ -130,6 +130,8 @@ class Director:
         self._in_flight: dict[str, Directive] = {}
         # P1.2 L3 standing orders（persistent=True 的 unit_claim 不走 _in_flight）
         self.standing_orders: list[Directive] = []
+        # P2 L4 production overrides（PRODUCTION/TECH/EXPANSION_OVERRIDE 不走 _in_flight）
+        self.production_overrides: list[Directive] = []
         # snapshot / event 推送回调（P0 / P1）
         self._snapshot_callback: Callable[[dict[str, Any]], None] | None = None
         self._event_callback: Callable[[dict[str, Any]], None] | None = None
@@ -288,6 +290,10 @@ class Director:
             ],
             # P1.3 L3 standing orders 透传
             "standing_orders": [self._standing_order_view(s) for s in self.standing_orders],
+            # P2 L4 production overrides 透传
+            "production_overrides": [
+                self._production_override_view(s) for s in self.production_overrides
+            ],
         }
         # bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
         if self._pending_recommendation is not None:
@@ -370,6 +376,61 @@ class Director:
         target_display = target.named_spot or target.unit_type or "?"
         return f"{unit_type} {verb} {target_display}"
 
+    # ------------------------------------------------------------------
+    # P2 production_overrides snapshot helpers
+    # ------------------------------------------------------------------
+
+    # 神族单位 canonical→中文 display 表（从 aliases/protoss.yaml units 节提取）
+    _UNIT_ZH: dict[str, str] = {
+        "Probe": "探机",
+        "Zealot": "叉子",
+        "Stalker": "追猎",
+        "Sentry": "哨兵",
+        "Adept": "使徒",
+        "HighTemplar": "HT",
+        "DarkTemplar": "DT",
+        "Archon": "白球",
+        "Immortal": "不朽",
+        "Observer": "OB",
+        "WarpPrism": "棱镜",
+        "Colossus": "巨像",
+        "Disruptor": "干扰者",
+        "Phoenix": "凤凰",
+        "VoidRay": "虚空",
+        "Oracle": "先知",
+        "Tempest": "风暴战舰",
+        "Carrier": "航母",
+        "Mothership": "母舰",
+    }
+
+    def _production_override_view(self, d: "Directive") -> dict[str, Any]:
+        """把一条 production override Directive 转成 snapshot 里的 view dict（P2）。
+
+        字段：id / display / issued_at。
+        """
+        payload = d.payload
+        display = self._format_production_override_display(payload)
+        return {
+            "id": d.id,
+            "display": display,
+            "issued_at": d.issued_at,
+        }
+
+    def _format_production_override_display(self, payload: Any) -> str:
+        """中文 display 格式（P2）：
+        - PRODUCTION_OVERRIDE → '出 N <unit_zh>'（alias 翻译，无 alias 用英文）
+        - TECH_OVERRIDE       → '研 <upgrade>'
+        - EXPANSION_OVERRIDE  → '开 N 矿'
+        """
+        if isinstance(payload, ProductionOverridePayload):
+            unit_zh = self._UNIT_ZH.get(payload.unit_type, payload.unit_type)
+            return f"出 {payload.count} {unit_zh}"
+        if isinstance(payload, TechOverridePayload):
+            return f"研 {payload.upgrade_id}"
+        if isinstance(payload, ExpansionOverridePayload):
+            return f"开 {payload.target_count} 矿"
+        return "未知 override"
+
     def _push_event(self, event_dict: dict[str, Any]) -> None:
         """推 event 帧（若 callback 已注入）。"""
         if self._event_callback is not None:
@@ -440,6 +501,13 @@ class Director:
                     and submitted.payload.persistent
                 ):
                     self.standing_orders.append(submitted)
+                # P2: L4 production/tech/expansion override 进 production_overrides
+                elif submitted.type in (
+                    DirectiveType.PRODUCTION_OVERRIDE,
+                    DirectiveType.TECH_OVERRIDE,
+                    DirectiveType.EXPANSION_OVERRIDE,
+                ):
+                    self.production_overrides.append(submitted)
                 else:
                     self._in_flight[submitted.id] = submitted
 
@@ -535,7 +603,7 @@ class Director:
         """玩家通过 revoke_directive 上行帧撤销 standing order（P1.2）。
 
         从 standing_orders 列表移除，通知 board（用于 sharpy 让位 release tag—P5 接），
-        并推一次 snapshot。
+        并推一次 snapshot。向后兼容保留；P1.4+ 的新代码改用 revoke_directive。
         """
         before = len(self.standing_orders)
         self.standing_orders = [s for s in self.standing_orders if s.id != directive_id]
@@ -546,6 +614,29 @@ class Director:
             self._push_snapshot(now)
             return True
         return False
+
+    def revoke_production_override(self, directive_id: str, now: float) -> bool:
+        """从 production_overrides 列表移除指定 directive（P2）。
+
+        通知 board + 推 snapshot，语义镜像 revoke_standing_order。
+        """
+        before = len(self.production_overrides)
+        self.production_overrides = [s for s in self.production_overrides if s.id != directive_id]
+        if len(self.production_overrides) < before:
+            self.board.revoke(directive_id, now)
+            self._push_snapshot(now)
+            return True
+        return False
+
+    def revoke_directive(self, directive_id: str, now: float) -> bool:
+        """统一撤销接口（P2）：先尝试 standing_orders，再尝试 production_overrides。
+
+        ws.py 和 bot._tick_view_channel 的 revoke_directive 分支改调此方法，
+        不再直接调用 revoke_standing_order。
+        """
+        if self.revoke_standing_order(directive_id, now):
+            return True
+        return self.revoke_production_override(directive_id, now)
 
     def _dispatch_cancel(self, directive: Directive, now: float) -> None:
         """处理 STRATEGY_CANCEL:清掉 board 对应 slot + 切 sustain plan。

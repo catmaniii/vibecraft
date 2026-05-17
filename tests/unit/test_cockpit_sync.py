@@ -808,3 +808,83 @@ class TestSnapshotStandingOrders:
         assert "patrol" in view["display"]
         assert "natural" in view["display"]
         assert view["issued_at"] == 10.0
+
+
+# ---------------------------------------------------------------------------
+# P2: Snapshot production_overrides 字段
+# ---------------------------------------------------------------------------
+
+
+def _make_production_override_for_snap() -> Directive:
+    """构造一个 PRODUCTION_OVERRIDE Directive（出 2 哨兵）。"""
+    from vibecraft.directives.models import ProductionOverridePayload
+
+    payload = ProductionOverridePayload(unit_type="Sentry", count=2)
+    return Directive(payload=payload, issued_at=20.0)
+
+
+def _make_tech_override_for_snap() -> Directive:
+    """构造一个 TECH_OVERRIDE Directive（研 Blink）。"""
+    from vibecraft.directives.models import TechOverridePayload
+
+    payload = TechOverridePayload(upgrade_id="Blink")
+    return Directive(payload=payload, issued_at=20.0)
+
+
+def _make_expansion_override_for_snap() -> Directive:
+    """构造一个 EXPANSION_OVERRIDE Directive（开 3 矿）。"""
+    from vibecraft.directives.models import ExpansionOverridePayload
+
+    payload = ExpansionOverridePayload(target_count=3)
+    return Directive(payload=payload, issued_at=20.0)
+
+
+class TestSnapshotProductionOverrides:
+    """P2 build_snapshot 加 production_overrides 字段。"""
+
+    def test_snapshot_includes_production_overrides_field(self) -> None:
+        """build_snapshot 返回 dict 包含 production_overrides 且是 list。"""
+        d = _make_director()
+        snap = d.build_snapshot(now=10.0)
+        assert "production_overrides" in snap
+        assert isinstance(snap["production_overrides"], list)
+
+    def test_snapshot_production_overrides_view_fields(self) -> None:
+        """submit PRODUCTION_OVERRIDE 后，snapshot 含 production_overrides 条目，
+        含 id / display / issued_at 三个核心字段。
+        """
+        d = _make_director()
+        directive = _make_production_override_for_snap()
+        d._submit_directives([directive], now=20.0)
+        snap = d.build_snapshot(now=21.0)
+        assert len(snap["production_overrides"]) == 1
+        view = snap["production_overrides"][0]
+        assert view["id"] == directive.id
+        assert view["issued_at"] == 20.0
+        # display 含 "出 2"（包含数量）和兵种（哨兵 alias 或 Sentry 英文）
+        assert view["display"]
+        assert "出 2" in view["display"]
+
+    def test_snapshot_production_override_display_formats(self) -> None:
+        """三种 directive type 的 display 格式正确：
+        PRODUCTION_OVERRIDE → '出 N <unit>',
+        TECH_OVERRIDE → '研 <upgrade>',
+        EXPANSION_OVERRIDE → '开 N 矿'。
+        """
+        d = _make_director()
+        prod_d = _make_production_override_for_snap()
+        tech_d = _make_tech_override_for_snap()
+        exp_d = _make_expansion_override_for_snap()
+        d._submit_directives([prod_d, tech_d, exp_d], now=20.0)
+        snap = d.build_snapshot(now=21.0)
+
+        by_id = {v["id"]: v for v in snap["production_overrides"]}
+        # PRODUCTION_OVERRIDE: "出 2 哨兵"（alias）或 "出 2 Sentry"（fallback）
+        prod_view = by_id[prod_d.id]
+        assert "出 2" in prod_view["display"]
+        # TECH_OVERRIDE: "研 闪烁" 或 "研 Blink"
+        tech_view = by_id[tech_d.id]
+        assert "研 " in tech_view["display"]
+        # EXPANSION_OVERRIDE: "开 3 矿"
+        exp_view = by_id[exp_d.id]
+        assert "开 3 矿" in exp_view["display"]

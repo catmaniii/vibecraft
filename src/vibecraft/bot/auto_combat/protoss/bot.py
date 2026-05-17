@@ -912,10 +912,10 @@ def make_protoss_bot_class(
                             if self.director is not None:
                                 self.director.cancel_force_strategy()
                         elif msg_type == "revoke_directive":
-                            # P1.4: 玩家撤销 standing order
+                            # P2: 玩家撤销 standing order 或 production override（统一入口）
                             directive_id = msg.get("directive_id")
                             if directive_id and self.director is not None:
-                                self.director.revoke_standing_order(directive_id, now_s)
+                                self.director.revoke_directive(directive_id, now_s)
                         elif msg_type == "leave":
                             logger.info("bot 收到 leave 信号，等待 on_end")
                 except queue_module.Empty:

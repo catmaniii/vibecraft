@@ -244,9 +244,9 @@ class WsConnection:
         self._log.info("ws_force_strategy_sent", frame_type=frame_type)
 
     async def _handle_revoke_directive(self, frame: dict[str, Any]) -> None:
-        """玩家在 PWA 点 [× 撤销] standing order → 转发到子进程（P1.4）。
+        """玩家在 PWA 点 [× 撤销] standing/production override → 转发到子进程（P1.4/P2）。
 
-        bot._tick_view_channel 消费后调 director.revoke_standing_order(id, now)。
+        bot._tick_view_channel 消费后调 director.revoke_directive(id, now)（统一入口）。
         缺少 directive_id 时 warning 拒绝，不转发。
         """
         directive_id = frame.get("directive_id")
