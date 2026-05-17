@@ -109,7 +109,7 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                         self._can_train_stalker,
                         ProtossUnit(UnitTypeId.STALKER, 100),
                     ),
-                    # 前线支援:3 BG 已开始造之后,派 1 农民到前线安全位置修 PY+BG
+                    # 前线支援:3 BG 已开始造之后,派 1 农民到前线安全位置修 BE+BG
                     # 时机考虑:补 3 BG 这一步先(massing),农民再出去(forward),
                     # 让 forward 跟折跃完成 timing 对齐,折跃一好前线 BG 也接近完成
                     Step(

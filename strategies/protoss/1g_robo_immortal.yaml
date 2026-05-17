@@ -27,7 +27,7 @@ matchup: [PvT, PvZ, PvP]
 phases:
   - id: opening
     display: "单 BG 开局"
-    subtitle: "14 PROBE → PY → 16 PROBE → 气矿 → BG"
+    subtitle: "14 PROBE → BE → 16 PROBE → 气矿 → BG"
     start_at_supply: 13
   - id: tech
     display: "上 BC + 双矿"
@@ -50,13 +50,13 @@ phases:
 
 # 仅用于 PWA 显示与 LLM 上下文,真实 build 由 Robo1GateImmortal.create_plan 控制
 steps:
-  - "14 build PY"
+  - "14 build BE"
   - "16 build VC"
   - "16 build BG"
   - "20 build NX"
   - "20 build BC"
   - "21 build VC"
-  - "22 build PY"
+  - "22 build BE"
   - "23 research 折跃 @chrono"
   - "26 build VT"
   - "28 build VR"

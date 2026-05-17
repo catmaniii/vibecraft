@@ -17,11 +17,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-# 结构 / 升级 id name → 中文短称(覆盖最常见的;未知的回落用英文 id)
+# 结构 / 升级 id name → 中文短称(SC2 hotkey 缩写;未知的回落用英文 id)
+# 神族建筑全用 B/V 系列 hotkey（不要写 PY/NX 等历史误称）
 _STRUCT_LABELS = {
-    "NEXUS": "NX",
-    "PYLON": "PY",
-    "ASSIMILATOR": "VC",
+    "NEXUS": "BN",
+    "PYLON": "BE",
+    "ASSIMILATOR": "BA",  # 注：VC 是 sc2 旧梗（VC=Vespene Collector），玩家圈不那么说；hotkey 是 BA
     "GATEWAY": "BG",
     "WARPGATE": "BG(折跃)",
     "FORGE": "BF",

@@ -280,7 +280,7 @@ class StructureItem(BaseModel):
     """单个建筑需求：structure_type + target_count + 可选 location_hint。
 
     structure_override.items 元素。location_hint 在 item 级（不同建筑可以放
-    不同位置 —— "二矿放 2 PY 1 BF" 中 PY 和 BF 可以同 hint）。
+    不同位置 —— "二矿放 2 BE 1 BF" 中 BE 和 BF 可以同 hint）。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -291,7 +291,7 @@ class StructureItem(BaseModel):
 
 
 class StructureOverridePayload(_PayloadBase):
-    """L4 建筑数量目标。**一条 directive 可含多建筑**（一句话"二矿放 2 PY 1 BF"
+    """L4 建筑数量目标。**一条 directive 可含多建筑**（一句话"二矿放 2 BE 1 BF"
     = 一条 directive 两个 item，作为单卡跟踪、全部完成才消失）。
 
     一次性：达成 target_count 就 done，被打掉不自动补

@@ -1,9 +1,24 @@
 kind: midgame_stance
 id: iac_2base
-display_name_zh: "叉球一波 (双矿 IAC)"
-summary_zh: "双矿冲锋叉+不朽+白球(IAC)一波 timing,6:15 出门 all-in。核心 chargelot 主力 + 2 不朽针对装甲 + 2-4 白球溅伤,7 BG 暴兵"
+display_name_zh: "叉球一波"
+summary_zh: "双矿冲锋叉+不朽+白球一波 timing,6:15 出门 all-in。核心 chargelot 主力 + 2 不朽针对装甲 + 2-4 白球溅伤,7 BG 暴兵"
 sharpy_dummy_class: "dummies.protoss.macro_stalkers:MacroStalkers"
-aliases: ["叉球一波", "叉球", "叉光", "IAC", "IAC一波", "重装地面", "叉光不朽推", "叉球不朽推", "不朽光灵冲锋叉", "IAC双矿", "Immortal Archon Chargelot", "I AC", "白球冲锋叉一波"]
+aliases:
+  - "叉球一波"
+  - "叉球"
+  - "叉光"
+  - "叉光不朽推"
+  - "叉球不朽推"
+  - "白球冲锋叉一波"
+  - "不朽光灵冲锋叉"
+  - "重装地面"
+  - "双矿叉球"
+  - "双矿一波"
+  - "IAC"             # 老外文术语别名，仍接受识别但不作为 display
+  - "IAC一波"
+  - "IAC双矿"
+  - "Immortal Archon Chargelot"
+  - "I AC"
 
 enter_when:
   - "self.tech.warpgate.done"

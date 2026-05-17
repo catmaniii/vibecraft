@@ -1,15 +1,15 @@
-"""4 BG 早压前线支援:派 1 农民兼做"探路+保命+躲起来修 PY+BG"。
+"""4 BG 早压前线支援:派 1 农民兼做"探路+保命+躲起来修 BE+BG"。
 
 为什么不分两个农民(scout / proxy builder)?
   - 多派农民经济损失大
-  - 同一农民先探一眼敌情,再回到中场视野盲区修 PY + BG
+  - 同一农民先探一眼敌情,再回到中场视野盲区修 BE + BG
   - 4bg 时通用 ScoutWorker 让位(active_recipe=="4bg" 检查),避免双农民出门
 
 设计:
   - proxy 点 = map_center 朝敌方 12 距离(中场,接近视野盲区,不深入)
   - HP+shield < 50% → retreat 到 proxy_location 附近躲(不回家,继续待命修建筑)
   - HP > 90% → 恢复工作
-  - 完成 1 PY + 1 BG → 释放农民回家
+  - 完成 1 BE + 1 BG → 释放农民回家
 
 不指望"完美保命":sharpy/python-sc2 没有微操精修,农民被多敌人围会死。死了就死了,
 4bg 还有家里 4 BG 主力。"必要时牺牲"语义保留。
@@ -17,7 +17,7 @@
 实现:每帧 dispatcher
   - HP 状态 → retreating flag
   - retreating 时:hold at proxy_location 附近
-  - 正常时:没 PY 造 PY → 没 BG 造 BG → 都有则完成
+  - 正常时:没 BE 造 BE → 没 BG 造 BG → 都有则完成
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
-    """4bg 探路+前线支援(1 PY + 1 BG),保命优先。"""
+    """4bg 探路+前线支援(1 BE + 1 BG),保命优先。"""
 
     RETREAT_RATIO: float = 0.5
     REENGAGE_RATIO: float = 0.9
@@ -84,15 +84,15 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         try:
             from sharpy.managers.core.roles import UnitTask
 
-            # 已造好检测(在 proxy 周围 14 格内有 PY+BG)
-            py_at_proxy = self.ai.structures(UnitTypeId.PYLON).closer_than(14, self.proxy_location)
+            # 已造好检测(在 proxy 周围 14 格内有 BE+BG)
+            py_at_proxy = self.ai.structures(UnitTypeId.BELON).closer_than(14, self.proxy_location)
             bg_at_proxy = self.ai.structures.of_type(
                 {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
             ).closer_than(14, self.proxy_location)
             if py_at_proxy.exists and bg_at_proxy.exists:
                 self._release_worker()
                 self._completed = True
-                logger.info("ForwardSupport completed: 1 PY + 1 BG forward")
+                logger.info("ForwardSupport completed: 1 BE + 1 BG forward")
                 return True
 
             # 选 / 锁定 proxy 农民
@@ -125,19 +125,19 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                     worker.move(self.hide_location)
                 return False
 
-            # 正常推进:没 PY → 造 PY
+            # 正常推进:没 BE → 造 BE
             if not py_at_proxy.exists:
-                if self.ai.can_afford(UnitTypeId.PYLON) and not self._py_ordered:
-                    ok = worker.build(UnitTypeId.PYLON, self.proxy_location)
+                if self.ai.can_afford(UnitTypeId.BELON) and not self._py_ordered:
+                    ok = worker.build(UnitTypeId.BELON, self.proxy_location)
                     if ok:
                         self._py_ordered = True
-                        logger.info("ForwardSupport ordered PYLON at %s", self.proxy_location)
+                        logger.info("ForwardSupport ordered BELON at %s", self.proxy_location)
                     return False
                 if worker.is_idle:
                     worker.move(self.proxy_location)
                 return False
 
-            # 有 PY,没 BG → 在 PY 附近 psi matrix 内造 BG
+            # 有 BE,没 BG → 在 BE 附近 psi matrix 内造 BG
             if py_at_proxy.exists and not bg_at_proxy.exists:
                 if self.ai.can_afford(UnitTypeId.GATEWAY) and not self._bg_ordered:
                     py = py_at_proxy.first

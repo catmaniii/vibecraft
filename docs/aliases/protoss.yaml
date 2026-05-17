@@ -43,7 +43,7 @@ buildings:
     hotkey: "B+N"
   Pylon:
     default_display: "BE"
-    aliases: [BE, PY, 水晶, Pylon]
+    aliases: [BE, 水晶, 水晶塔, 房子, Pylon]
     hotkey: "B+E"
   Assimilator:
     default_display: "BA"

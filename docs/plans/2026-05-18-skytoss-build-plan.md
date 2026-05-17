@@ -37,7 +37,7 @@ sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.gate4_pressure:Gate
                                               我们自己写的 plan class
 
 phases: [opening, tech, massing, forward, pressuring]  # ← UI 阶段进度
-steps: ["9 build PY", "13 build BG", ...]              # ← build 步骤
+steps: ["9 build BE", "13 build BG", ...]              # ← build 步骤
 scout_at: "13 send_probe enemy_natural"
 abort_signals: [...]
 default_transitions: [...]
@@ -46,7 +46,7 @@ default_transitions: [...]
 ### 真实运行差异
 
 - **4bg**：玩家切到 4bg → `Gate4Pressure.create_plan()` 接管，严格按
-  `gate4_pressure.py` 里写的 BuildOrder 跑（PY/BG/BC/折跃/3 BG/出门）
+  `gate4_pressure.py` 里写的 BuildOrder 跑（BE/BG/BC/折跃/3 BG/出门）
 - **skytoss**：玩家切到 skytoss → sharpy `MacroVoidray` 类接管，行为是
   "无脑暴虚空"，**不造航母、不造母舰、不出 HT/Archon、不出 Templar Archives**
 
@@ -99,7 +99,7 @@ phases:
 | **carrier_massing** | VX 完成 + 第一个 Carrier 出 | 持续 train Carrier，HT 攒能量，按需出 Archon |
 | **late_composition** | Carrier ≥ 8 | 加 Tempest 反 Lategame Air，造 Mothership，对方有 Viking/Corruptor 时切 Storm + Feedback |
 
-### 不写"5 supply build PY"这种严格 step
+### 不写"5 supply build BE"这种严格 step
 
 后期玩家手里已经有完整经济 + 高科技，build order 不像开局那么 strict。剧本本质
 是"按优先级生产 + 满足 target_composition"，不是"第 N supply 干什么"。

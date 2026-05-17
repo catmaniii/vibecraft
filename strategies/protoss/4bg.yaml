@@ -1,7 +1,7 @@
 kind: opening_build
 id: 4bg
 display_name_zh: "4 门 BG 早压"
-summary_zh: "经典 4 BG 折跃压制(无闪烁):单 BG → BC → 升折跃,补 3 BG,折跃完成 + 探机前线修 PY+BG → 出门压制 + 火力侦察"
+summary_zh: "经典 4 BG 折跃压制(无闪烁):单 BG → BC → 升折跃,补 3 BG,折跃完成 + 探机前线修 BE+BG → 出门压制 + 火力侦察"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.gate4_pressure:Gate4Pressure"
 aliases:
   - "4BG"
@@ -34,8 +34,8 @@ phases:
     subtitle: "折跃过半 + 矿 ≥ 450 → 一次性下 3 BG"
     start_at_supply: 24
   - id: forward
-    display: "探机前线修 PY+BG"
-    subtitle: "3 BG 开始造 → 派 1 农民到前线安全位置修 PY+BG,方便折跃刷兵"
+    display: "探机前线修 BE+BG"
+    subtitle: "3 BG 开始造 → 派 1 农民到前线安全位置修 BE+BG,方便折跃刷兵"
     start_at_supply: 28
   - id: pressuring
     display: "首波出门压制"
@@ -45,18 +45,18 @@ phases:
 
 # 仅用于 PWA 显示与 LLM 上下文,真实 build 由 Gate4Pressure.create_plan 控制
 steps:
-  - "9 build PY"
+  - "9 build BE"
   - "13 build BG"
   - "15 build VC"
   - "16 build BC"
-  - "17 build PY"
+  - "17 build BE"
   - "19 train 追猎"
   - "20 build VC"
   - "21 research 折跃 @chrono"
   - "24 build BG"
   - "24 build BG"
   - "24 build BG"
-  - "25 build PY"
+  - "25 build BE"
   - "26 train 追猎"
   - "30 train 追猎"
   - "34 train 追猎"

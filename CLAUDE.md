@@ -25,8 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **VX** = Fleet Beacon / VX
   - **VA** = Templar Archives / VA
   - **VB** = Dark Shrine / VB
-  - **NX** = Nexus / 基地
-  - **PY** = Pylon
+  - **BN** = Nexus / 基地（B 菜单 N 键）
+  - **BE** = Pylon / 水晶 / 水晶塔（B 菜单 E 键；**不要**写 PY，玩家不那么说）
 - 单位用中文（叉子 / 不朽 / 追猎 / 闪追 / 凤凰 / 航母 / DT / HT / 母舰 / 高坦 / 暗使 / 探机）。
 - 战术黑话保留：4BG / IAC / Skytoss / 12D / 两矿凤凰 / 闪追 timing 等。
 

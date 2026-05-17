@@ -26,7 +26,7 @@
      - Observer 2 个（反隐 + 侦察）
   5. 战斗触发：8+ Carrier → VibeCraftZoneAttack 推；之前留家防守
 
-不写早期 supply 节点 build（13 PY / 16 BG 等）—— 假设转入时基础经济已就位。
+不写早期 supply 节点 build（14 BE / 16 BG 等）—— 假设转入时基础经济已就位。
 若转入时缺早期建筑（如 CYBERNETICSCORE 都没），各 Step 的 require 会卡住等先决。
 """
 

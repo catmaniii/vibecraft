@@ -16,7 +16,7 @@ VibeCraft LLM 解析的中央别名表。
 ```yaml
 canonical_id:                   # 内部统一 id（与 SC2 unit type name 对齐,代码引用,不能改）
   default_display: "BE"         # PWA / snapshot / 日志字段默认显示
-  aliases: [BE, PY, 水晶, Pylon]  # 玩家所有可能说法（含 hotkey 串 / 中文 / 英文）
+  aliases: [BE, 水晶, 水晶塔, Pylon]  # 玩家所有可能说法（含 hotkey 串 / 中文 / 英文）
   hotkey: "B+E"                  # 仅信息,不参与匹配。游戏内键位
 ```
 
@@ -95,5 +95,6 @@ docs/aliases/protoss.yaml
 
 - 2026-05-17：初版,从 `aliases/protoss.yaml` 移过来 + hotkey 修正
   (V 系列原写 B+ 全改 V+) + display 用真 hotkey 串(BE/BA/BY/BB/VR/VB/VS/VC/VT/VD/VF)
-  + 旧自创简称(PY/VC/BG/BF/BC/VR/VD 等)作 alias 保留兼容。
+  + 旧自创简称(VC/BG/BF/BC/VR/VD 等)作 alias 保留兼容。
+- 2026-05-18：去掉 PY 作为 Pylon 别名（玩家不那么说，统一 BE）。
 - 虫族 / 人族占位 yaml 新建,M5+ 启用。

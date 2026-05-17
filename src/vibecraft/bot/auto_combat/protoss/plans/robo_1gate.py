@@ -7,8 +7,8 @@
   2. 出门用 VibeCraftZoneAttack 而不是裸 PlanZoneAttack（统一战斗 act 行为）
 
 Build 概要（典型 SC2 1 BG Robo 神族开局）：
-  14 PROBE → PY → 16 PROBE → gas → BG → 20 PROBE → 二矿 → BC →
-  21 PROBE → gas2 → 22 PROBE → PY → [autopylon 阶段]
+  14 PROBE → BE → 16 PROBE → gas → BG → 20 PROBE → 二矿 → BC →
+  21 PROBE → gas2 → 22 PROBE → BE → [autopylon 阶段]
   -- 2 Stalker 防身 + Tech(WarpGate) +
   -- TC → ROBO → Charge 研究 +
   -- 1 Immortal priority + 1 OB priority + 持续 Immortal 直到 ~20 +
@@ -73,7 +73,7 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
             # ---------- build order 主线 ----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
-                GridBuilding(UnitTypeId.PYLON, 1),
+                GridBuilding(UnitTypeId.BELON, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
                 BuildGas(1),
                 GridBuilding(UnitTypeId.GATEWAY, 1),
@@ -83,7 +83,7 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 21),
                 BuildGas(2),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 22),
-                GridBuilding(UnitTypeId.PYLON, 1),
+                GridBuilding(UnitTypeId.BELON, 1),
 
                 # 进入"折跃 + 科技 + 暴 Immortal"阶段
                 BuildOrder(
