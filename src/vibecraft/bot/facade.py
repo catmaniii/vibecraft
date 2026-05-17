@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 class UnitRole(str, Enum):
@@ -118,6 +118,20 @@ class Sc2Facade(Protocol):
 
     def set_engagement_stance(self, stance: str) -> None: ...
 
+    def set_attack_target_override(
+        self, point: tuple[float, float] | None
+    ) -> None:
+        """L2 全军 attack target 覆盖（None = 清覆盖，恢复 sharpy 默认决策）。"""
+        ...
+
+    def set_combat_intent_override(
+        self,
+        intent: Literal["attack", "defend", "hold", "retreat", "vision"] | None,
+    ) -> None:
+        """L2 全军交战意图覆盖（None = 清覆盖）。
+        set_engagement_stance 的同源接口；stance 内部转发到此。"""
+        ...
+
     # ---- 写：视野（不进 Board）---------------------------------------
 
     def move_camera(self, point: tuple[float, float]) -> None: ...
@@ -169,6 +183,8 @@ class FakeFacade:
         self.build_location_overrides: list[tuple[str, tuple[float, float]]] = []
         self.unit_actions: list[dict[str, object]] = []
         self.selector_lookups: list[dict[str, object]] = []
+        self.attack_target_overrides: list[tuple[float, float] | None] = []
+        self.combat_intent_overrides: list[str | None] = []
         self.calls: list[FacadeCall] = []
         # selector 解析 stub：按 unit_type 给定 tag 列表
         self.selector_stub: dict[str, list[int]] = {}
@@ -231,6 +247,16 @@ class FakeFacade:
     def set_engagement_stance(self, stance: str) -> None:
         self.engagement_stances.append(stance)
         self._record("set_engagement_stance", stance)
+
+    def set_attack_target_override(
+        self, point: tuple[float, float] | None
+    ) -> None:
+        self.attack_target_overrides.append(point)
+        self._record("set_attack_target_override", point)
+
+    def set_combat_intent_override(self, intent: str | None) -> None:
+        self.combat_intent_overrides.append(intent)
+        self._record("set_combat_intent_override", intent)
 
     def move_camera(self, point: tuple[float, float]) -> None:
         self.camera_moves.append(point)
