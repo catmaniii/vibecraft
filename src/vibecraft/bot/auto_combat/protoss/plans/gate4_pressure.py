@@ -18,9 +18,9 @@ build order(supply / 动作):
   23  Gateway #3
   24  Gateway #4 + Pylon
   持续:Stalker × N(所有 BG)
-  WarpGate 完成 → 一次折跃 4 Stalker → PlanZoneAttack 出门
+  WarpGate 完成 → 一次折跃 4 Stalker → VibeCraftZoneAttack 出门
 
-不写战斗逻辑:PlanZoneAttack / PlanZoneDefense / DistributeWorkers
+不写战斗逻辑:VibeCraftZoneAttack / PlanZoneDefense / DistributeWorkers
 全是 sharpy 自带 Manager,我们只是组装 BuildOrder 触发它们。
 """
 
@@ -45,7 +45,6 @@ from sharpy.plans.require import TechReady, UnitExists, UnitReady
 from sharpy.plans.tactics import (
     DistributeWorkers,
     PlanFinishEnemy,
-    PlanZoneAttack,
     PlanZoneDefense,
     PlanZoneGather,
     SpeedMining,
@@ -54,6 +53,7 @@ from sharpy.plans.tactics import (
 from vibecraft.bot.auto_combat.protoss.plans.forward_proxy import (
     ForwardSupportPylonGateway,
 )
+from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCraftZoneAttack
 
 
 class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,KnowledgeBot=Any
@@ -127,11 +127,12 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
                 PlanZoneGather(),
                 # 4 BG 全部就绪 + 折跃完成 + 4 个 Stalker → 第一波立即压制(火力侦察)
-                # PlanZoneAttack(4):4 个就够了,等更多会错过 timing;
-                # 出门后会顺便侦察敌方走向科技/造兵情况
+                # VibeCraftZoneAttack(4):4 个就够了,等更多会错过 timing;
+                # 出门后会顺便侦察敌方走向科技/造兵情况;
+                # VibeCraftZoneAttack 优先读 knowledge.vibecraft 的 attack/intent override
                 Step(
                     self._ready_to_pressure,
-                    PlanZoneAttack(4),
+                    VibeCraftZoneAttack(4),
                 ),
                 PlanFinishEnemy(),
             ),
