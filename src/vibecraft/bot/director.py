@@ -38,6 +38,7 @@ from vibecraft.directives.models import (
     ScoutPayload,
     StrategyCancelPayload,
     StrategySetPayload,
+    StructureOverridePayload,
     TechOverridePayload,
     UnitClaimPayload,
     UnitReleasePayload,
@@ -639,11 +640,12 @@ class Director:
                     self.standing_orders.append(submitted)
                     # P5.E: 立即 resolve selector + 让 sharpy 让位（set_unit_role）
                     self._assign_standing_order_units(submitted)
-                # P2: L4 production/tech/expansion override 进 production_overrides
+                # P2: L4 production/tech/expansion/structure override 进 production_overrides
                 elif submitted.type in (
                     DirectiveType.PRODUCTION_OVERRIDE,
                     DirectiveType.TECH_OVERRIDE,
                     DirectiveType.EXPANSION_OVERRIDE,
+                    DirectiveType.STRUCTURE_OVERRIDE,
                 ):
                     self.production_overrides.append(submitted)
                     # M3: L4 wire — emit "已加入生产队列" event 给 PWA(玩家反馈)
@@ -929,6 +931,7 @@ class Director:
         from vibecraft.directives.models import (
             ExpansionOverridePayload,
             ProductionOverridePayload,
+            StructureOverridePayload,
             TechOverridePayload,
         )
 
@@ -943,6 +946,8 @@ class Director:
                 self._exec_tech_override(d, payload)
             elif isinstance(payload, ExpansionOverridePayload):
                 await self._exec_expansion_override(d, payload)
+            elif isinstance(payload, StructureOverridePayload):
+                await self._exec_structure_override(d, payload)
 
     def _check_prereq_ready(self, item_canonical_name: str) -> tuple[bool, str]:
         """检查 unit/upgrade 的 prereq structure 是否 ready。
@@ -1117,6 +1122,81 @@ class Director:
             logger.debug("expansion_override fail: %s", exc)
             self._set_override_status(d, "on_hold", "expand 失败")
 
+    async def _exec_structure_override(self, d: Directive, payload: Any) -> None:
+        """L4 建筑目标: bot.build(structure_id, near=location)。
+
+        prereq check → current count check → bot.build → status 透传。
+        done 判定由 task_monitor 的 structure_count checker 接管（Task 6 already done）。
+        """
+        from sc2.ids.unit_typeid import UnitTypeId
+
+        type_name = payload.structure_type.upper()
+        try:
+            type_id = UnitTypeId[type_name]
+        except (ImportError, KeyError):
+            logger.warning("structure_override 未知 structure %r", payload.structure_type)
+            self._set_override_status(d, "on_hold", f"未知建筑 {payload.structure_type}")
+            return
+        try:
+            current = (
+                self._bot.structures(type_id).amount
+                + int(self._bot.already_pending(type_id))
+            )
+        except Exception:
+            current = 0
+        if current >= payload.target_count:
+            self._set_override_status(
+                d, "active", f"{current}/{payload.target_count} 已达成"
+            )
+            return
+        # prereq check — _REQUIRED_STRUCTURE key 是 canonical UPPER name
+        ready, missing = self._check_prereq_ready(type_name)
+        if not ready:
+            self._set_override_status(d, "on_hold", f"需要 {missing}")
+            return
+        pos = self._resolve_location_hint(payload.location_hint, type_id)
+        try:
+            await self._bot.build(type_id, near=pos)
+            logger.info(
+                "structure_override BUILD %s near=%s (current=%d, target=%d, id=%s)",
+                type_id, pos, current, payload.target_count, d.id[:8],
+            )
+            self._set_override_status(
+                d, "active",
+                f"造 {payload.structure_type} ({current + 1}/{payload.target_count})",
+            )
+        except Exception as exc:
+            logger.debug("structure_override build fail: %s", exc)
+            self._set_override_status(d, "on_hold", f"build 失败: {exc}")
+
+    def _resolve_location_hint(self, hint: str | None, type_id: Any) -> Any:
+        """hint(main/natural/ramp/front) → Point2 via sharpy expansion_zones。
+
+        None → None（让 bot 自选 placement）。
+        任何 lookup 失败都 fallback None 而不是抛异常（bot.build(near=None) 会自选）。
+        """
+        if hint is None:
+            return None
+        try:
+            zones = self._bot.knowledge.expansion_zones
+        except Exception:
+            return None
+        if hint == "main":
+            return zones[0].center_location if zones else None
+        if hint == "natural":
+            return zones[1].center_location if len(zones) > 1 else (zones[0].center_location if zones else None)
+        if hint == "ramp":
+            try:
+                return self._bot.main_base_ramp.top_center
+            except Exception:
+                return None
+        if hint == "front":
+            try:
+                return self._bot.knowledge.enemy_main_base_ramp.top_center
+            except Exception:
+                return None
+        return None  # 未知 hint → None
+
     @staticmethod
     def _resolve_unit_type_id(name: str) -> Any:
         """字符串 'Sentry' → UnitTypeId.SENTRY。失败返回 None。"""
@@ -1132,6 +1212,15 @@ class Director:
     # None 表示无 prereq(如 Zealot / Archon 合成)。
     # 不在表里的 unit(如 Probe)默认无 prereq。
     _REQUIRED_STRUCTURE: ClassVar[dict[str, str | None]] = {
+        # ---- Structures (prereq for build) ----
+        "GATEWAY": "NEXUS",
+        "FORGE": "NEXUS",
+        "PHOTONCANNON": "FORGE",
+        "CYBERNETICSCORE": "GATEWAY",
+        "ROBOTICSFACILITY": "CYBERNETICSCORE",
+        "STARGATE": "CYBERNETICSCORE",
+        "TWILIGHTCOUNCIL": "CYBERNETICSCORE",
+        "ROBOTICSBAY": "ROBOTICSFACILITY",
         # ---- Units ----
         "ZEALOT": None,
         "SENTRY": "CYBERNETICSCORE",
@@ -1625,6 +1714,12 @@ class Director:
                         verb="scout",
                         target=payload.target.model_dump(mode="json"),
                     )
+            return
+
+        if t == DirectiveType.STRUCTURE_OVERRIDE:
+            assert isinstance(payload, StructureOverridePayload)
+            # production_overrides list 的路由已在 _submit_directives 做；
+            # _apply_to_facade 不需额外 facade 调用（UI 透传走 snapshot 路径）。
             return
 
     def _apply_unit_claim(self, d: Directive, payload: UnitClaimPayload, now: float) -> None:
