@@ -646,7 +646,8 @@ class TestLLMConfig:
         """从项目 config/llm.yaml 加载，字段全正确（当前配置为 DeepSeek V4）。"""
         cfg = LLMConfig.from_yaml(PROJECT_ROOT / "config" / "llm.yaml")
         assert cfg.provider == "deepseek"
-        assert cfg.model == "deepseek-v4-flash"
+        # config/llm.yaml model 字段可在 flash/pro 间切换(eval 对比用)
+        assert cfg.model in {"deepseek-v4-flash", "deepseek-v4-pro"}
         assert cfg.base_url == "https://api.deepseek.com/anthropic"
         assert cfg.api_key_env == "DEEPSEEK_API_KEY"
         assert cfg.timeout_s == 3.0

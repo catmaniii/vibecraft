@@ -152,6 +152,7 @@ markers = [
     "integration: 集成测试 (mock python-sc2, 不需要真实 SC2 实例)",
     "e2e: 端到端测试 (需要真实 SC2 客户端, default 跳过)",
     "slow: 慢速测试",
+    "llm_eval: 纯 LLM 解析正确率测试 (真调 LLM API, default 跳过, 用 -m llm_eval 才跑)",
 ]
 filterwarnings = [
     "error",
