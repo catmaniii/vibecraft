@@ -840,3 +840,52 @@ class TestAnthropicProviderConstructor:
             pytest.raises(LLMError, match="anthropic SDK"),
         ):
             AnthropicProvider(api_key="x")
+
+
+# ======================================================================
+# M2 P4：4 层分类规则 + 边界 case few-shot 验证
+# ======================================================================
+
+
+class TestPromptLayerClassification:
+    """验证 prompt 包含 M2 P4 新增的 4 层分类规则段和边界 case 例子。
+
+    这些测试不调用真实 LLM，只检查 prompt 文本内容。
+    """
+
+    def test_system_prompt_contains_layer_classification_header(self) -> None:
+        """build_system_prompt 包含 4 层分类金字塔标题关键字。"""
+        from vibecraft.llm.prompt import build_system_prompt
+        from vibecraft.strategy.aliases import AliasTable
+
+        aliases = AliasTable.from_dict({})
+        prompt = build_system_prompt(aliases)
+        assert "4 层分类" in prompt
+        assert "优先级金字塔" in prompt
+
+    def test_system_prompt_contains_all_four_layers(self) -> None:
+        """build_system_prompt 包含 L1/L2/L3/L4 所有 4 层标记。"""
+        from vibecraft.llm.prompt import build_system_prompt
+        from vibecraft.strategy.aliases import AliasTable
+
+        aliases = AliasTable.from_dict({})
+        prompt = build_system_prompt(aliases)
+        for layer in ("L1", "L2", "L3", "L4"):
+            assert layer in prompt, f"prompt 缺少层标记: {layer}"
+
+    def test_few_shot_contains_boundary_cases(self) -> None:
+        """build_few_shot 包含边界 case 例子的关键标记（例 16-20）。"""
+        from vibecraft.llm.prompt import build_few_shot
+
+        few_shot = build_few_shot()
+        assert "边界 case" in few_shot
+        # 例 16 (复合 L1+L3)
+        assert "例 16" in few_shot
+        assert "strategy_set" in few_shot
+        assert "unit_claim" in few_shot
+        # 例 19 (含糊)
+        assert "例 19" in few_shot
+        assert "confidence" in few_shot
+        # 例 20 (unit_count_hint)
+        assert "例 20" in few_shot
+        assert "unit_count_hint" in few_shot

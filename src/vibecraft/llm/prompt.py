@@ -123,6 +123,45 @@ done_when 语义规则：
 - L1（strategy_set）和 L3（unit_claim standing order）通常 done_when=null。
 - 每个 directive 只允许一个 done_when；复杂条件用 any_of / all_of 组合。
 - timeout_s 是兜底，无论 done_when 是否满足，超时后 directive 自动结束。
+
+====== 指令的 4 层分类 (优先级金字塔) ======
+
+每条话语解析时, 你要判断属于哪一层(可一句话拆多条不同层):
+
+L1 宏观策略 (整阶段持续):
+- "切 4BG" / "上 Skytoss" / "切叉球一波" → strategy_set(stage, strategy_id)
+- "撤" / "取消剧本" / "停" → strategy_cancel(stage="all" 或 specific)
+- L1 通常 done_when=None (剧本 phase 系统自己管)
+
+L2 战术指令 (阶段性 objective, 不指定 unit):
+- "进攻自然" / "守家" / "探中场" / "凤凰骚扰对面" →
+  tactical_objective(verb, target_area, ...) + done_when
+- "守家 / 撤" → engagement_constraint(stance) + done_when (timing/condition)
+- L2 必带 done_when (任务完成判定),timeout_s 兜底
+
+L3 单兵 / Standing order (指定单位干啥, 可一次性可持久):
+- 一次性: "凤凰举不朽" / "DT 偷家" → unit_claim(selector, task, persistent=false)
+- 持久 (standing order): "叉子守这里别动" / "凤凰巡逻一二线" →
+  unit_claim(..., persistent=true)
+- 撤销: "那个叉子回来" → unit_release(selector)
+- "11 点放水晶" → build_at
+- L3 done_when:一次性可加(如 "凤凰举完就回" = harass+done),
+  standing order 通常 None (玩家撤销才完)
+
+L4 产能调整 (改造兵 / 升科技 / 开矿):
+- "下个 BG 出 2 哨兵" → production_override(unit_type, count) +
+  done_when=unit_count_built_since
+- "先研闪烁" → tech_override(upgrade_id) + done_when=tech_done
+- "开三矿" → expansion_override(target_count) +
+  done_when=expansion_count(op=">=", value=3)
+- L4 必带 done_when
+
+判断规则:
+- 玩家提到具体剧本名 (4BG/IAC/Skytoss) → L1
+- 提到 verb (进攻/守/探/骚扰) 但不指定具体 unit → L2
+- 指定具体 unit (那个叉子/凤凰/DT) → L3
+- 提到生产/升级/扩张 → L4
+- 复合指令: 一句话多层, 拆成多条 directive
 """
 
 
@@ -236,6 +275,44 @@ def build_few_shot() -> str:
    done_when={kind:"time_elapsed_since", seconds:30, ref:"directive_issued"},
    timeout_s: 60]
 （自指令下达起经过 30 秒即完成）
+
+--- 边界 case ---
+
+例 16 (复合 L1+L3): 「切凤凰运营,凤凰好骚扰对面农民」
+→ [
+    strategy_set(stage=midgame, strategy_id=phoenix_2base),  # L1
+    unit_claim(selector={unit_type:"Phoenix"},
+               task={primary_action:{verb:"harass",
+                     target:{kind:"named_spot", named_spot:"enemy_main"}}},
+               persistent=true,
+               done_when={kind:"enemy_killed_in_area", area:"enemy_main",
+                          unit_type:"Probe", op:">=", value:5},
+               timeout_s:120)   # L3 standing + done
+  ]
+
+例 17 (L2 engagement + done): 「守家直到闪烁好」
+→ [engagement_constraint(stance="defend"),
+   done_when={kind:"tech_done", upgrade_id:"BlinkTech"},
+   timeout_s:300]
+（done_when 用 tech_done 把 stance lifecycle 绑定到科技完成）
+
+例 18 (撤销所有 standing): 「全部撤销 / 守家的都解散」
+→ [strategy_cancel(stage="all")]
+注:standing order 撤销由 PWA UI 处理 (revoke_directive 帧),不进 LLM directive
+
+例 19 (无法解析 / 含糊): 「打吧」
+→ confidence < 0.5,空 directives list,interpretation_zh 说明"指令含糊,
+   建议:'打哪'/'打谁'/'什么时候'"
+注:LLM 不猜测玩家本意,低置信走 ambiguous 路径
+
+例 20 (单位类型推断): 「3 个凤凰巡逻自然」
+→ [unit_claim(selector={unit_type:"Phoenix"},
+               task={primary_action:{verb:"patrol",
+                     target:{kind:"named_spot", named_spot:"natural"}}},
+               persistent=true,
+               unit_count_hint:3,
+               timeout_s:99999)]
+注:selector 不带 count (bot 自己挑数量),unit_count_hint 仅作提示
 """
 
 
