@@ -110,6 +110,16 @@ _LAUNCH_TIMEOUT: float = 120.0
 # watchdog 间隔（秒）：父进程轮询子进程存活的频率。
 _WATCHDOG_INTERVAL: float = 1.0
 
+# 父进程兜底 watchdog 阈值（秒）：子进程仍 alive 但 wall-clock N 秒无任何上行
+# 消息 → 判定子进程卡死（子进程内 watchdog 自己挂了 / hang_watchdog 没生效 /
+# multiprocessing queue 卡死等），强制 terminate。
+#
+# 阈值选 120s 而非 30s/60s：sharpy bot 正常每秒推 snapshot/event 多条，
+# 30s 无消息 = 子进程 hang_watchdog 已触发的窗口，120s = 给子进程一切自救
+# 路径都失败后的硬兜底。launching 阶段 SC2 启动可能 ~60s 无消息（_put 只在
+# 初始发 launching + 进 in_game 后才频繁），所以阈值要宽。
+_PARENT_WATCHDOG_STALE_S: float = 120.0
+
 
 def _child_entry(
     config: GameConfig,
@@ -508,6 +518,11 @@ class GameProcess:
         - echo 类：含 kind="echo"，_dispatch_upstream 转 command_echo 帧
 
         asyncio 侧用 run_in_executor 桥接阻塞 Queue.get()，不阻塞 event loop。
+
+        父进程兜底 watchdog（与子进程内 HangWatchdog 互补）：上行 queue
+        `_PARENT_WATCHDOG_STALE_S` 秒无任何消息 + 子进程仍 alive → 子进程
+        卡死（hang_watchdog 也挂了 / queue 死锁），强制 terminate + emit
+        crashed。子进程层 30s 是第一道防线，父进程 120s 是兜底。
         """
         proc = self._proc
         q = self._up_q
@@ -515,6 +530,7 @@ class GameProcess:
             return
 
         loop = asyncio.get_running_loop()
+        last_msg_wall = time.monotonic()
 
         def _blocking_get() -> dict[str, Any] | None:
             """在 executor 线程里阻塞等队列消息（最多 1s timeout 轮一次）。"""
@@ -527,6 +543,7 @@ class GameProcess:
             # 非阻塞：先把队列里积压的消息全部处理
             try:
                 raw = q.get_nowait()
+                last_msg_wall = time.monotonic()
                 # 只有 game_status 类消息才更新内部状态
                 if "sc2" in raw or "bot" in raw:
                     self._apply_raw(raw)
@@ -549,9 +566,29 @@ class GameProcess:
                     }
                 break
 
+            # 父进程兜底 watchdog：长时间无消息 + 子进程仍 alive → 强制 kill
+            stale = time.monotonic() - last_msg_wall
+            if stale > _PARENT_WATCHDOG_STALE_S and self._sc2_state not in ("ended", "crashed"):
+                self._log.error(
+                    "parent_watchdog_timeout",
+                    stale_s=round(stale, 1),
+                    threshold_s=_PARENT_WATCHDOG_STALE_S,
+                    pid=proc.pid,
+                )
+                self._sc2_state = "crashed"
+                self._bot_state = "error"
+                yield {
+                    "sc2": "crashed",
+                    "bot": "error",
+                    "detail": f"parent_watchdog: 子进程 {stale:.0f}s 无上行消息，强制 kill",
+                }
+                self._terminate_and_join()
+                break
+
             # 阻塞等（在 executor 线程，不卡 event loop）
             result: dict[str, Any] | None = await loop.run_in_executor(None, _blocking_get)
             if result is not None:
+                last_msg_wall = time.monotonic()
                 if "sc2" in result or "bot" in result:
                     self._apply_raw(result)
                 yield result

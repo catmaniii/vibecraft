@@ -298,6 +298,73 @@ class TestGameProcessStatusEvents:
 
 
 # ---------------------------------------------------------------------------
+# 父进程兜底 watchdog
+# ---------------------------------------------------------------------------
+
+
+class TestParentWatchdog:
+    """父进程层兜底：子进程仍 alive 但长时间无上行消息 → terminate + emit crashed。
+
+    子进程内 HangWatchdog 是第一道防线（30s），父进程是兜底（默认 120s）。
+    测试把阈值 monkeypatch 到 0.5s 加速。
+    """
+
+    async def test_kills_silent_subprocess(self, monkeypatch: Any) -> None:
+        import asyncio
+
+        import vibecraft.server.game_process as gp_mod
+
+        monkeypatch.setattr(gp_mod, "_PARENT_WATCHDOG_STALE_S", 0.5)
+
+        gp = GameProcess()
+        gp._up_q = _make_up_q()  # 永远空
+        gp._sc2_state = "playing"  # 已 playing,模拟 bot 卡死场景
+        fake_proc = _make_fake_proc(alive=True, exitcode=None)
+        gp._proc = fake_proc
+
+        collected: list[dict[str, Any]] = []
+
+        async def collect() -> None:
+            async for raw in gp.raw_events():
+                collected.append(raw)
+
+        await asyncio.wait_for(collect(), timeout=5.0)
+
+        crashed = next((m for m in collected if m.get("sc2") == "crashed"), None)
+        assert crashed is not None, f"应收到 crashed 消息,实际：{collected}"
+        assert "parent_watchdog" in crashed.get("detail", ""), crashed
+        fake_proc.terminate.assert_called()
+
+    async def test_not_triggered_when_messages_flowing(self, monkeypatch: Any) -> None:
+        """子进程持续推消息时 watchdog 不触发。"""
+        import asyncio
+
+        import vibecraft.server.game_process as gp_mod
+
+        monkeypatch.setattr(gp_mod, "_PARENT_WATCHDOG_STALE_S", 0.5)
+
+        gp = GameProcess()
+        msgs = [{"kind": "snapshot", "frame": {"ts": i * 0.1}} for i in range(20)]
+        gp._up_q = _make_up_q(*msgs)
+        # 模拟正常退出:消息消费完后 proc 死,exitcode=0
+        fake_proc = _make_fake_proc(alive=False, exitcode=0)
+        gp._proc = fake_proc
+
+        collected: list[dict[str, Any]] = []
+
+        async def collect() -> None:
+            async for raw in gp.raw_events():
+                collected.append(raw)
+
+        await asyncio.wait_for(collect(), timeout=5.0)
+
+        # 应只收到推入的 snapshot,没有 watchdog 触发的 crashed
+        crashed = [m for m in collected if m.get("sc2") == "crashed"]
+        assert crashed == [], f"watchdog 误触发：{crashed}"
+        assert len(collected) >= 20
+
+
+# ---------------------------------------------------------------------------
 # GameProcess.send_command()
 # ---------------------------------------------------------------------------
 

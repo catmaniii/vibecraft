@@ -1,25 +1,20 @@
-"""4 类指令 e2e 测试驱动。
+"""directive 全覆盖 e2e 测试驱动。
 
-挨个跑 L1 / L2 / L3 / L4 用例，每个用例独立拉起 SC2 子进程：
-
-| case | 注入文本             | 验证字段                          |
-|------|----------------------|-----------------------------------|
-| L1   | 切 4BG               | snapshot.strategy.* 出现新 id     |
-| L2   | 进攻自然             | snapshot.active_tactics 非空      |
-| L3   | 探机巡逻自然别动     | snapshot.standing_orders 非空     |
-| L4   | 下个 BG 出俩哨兵     | snapshot.production_overrides 非空|
+每个 directive 类型 + 常见 verb / stance + 代表性 done_when kind 各一个 case，
+挨个独立拉起 SC2 子进程，详 `docs/e2e-directive-tests.md`。
 
 `HangWatchdog`（bot.watchdog）在子进程内监 bot.time，30s 不前进自动 kill SC2 +
-子进程退出码 87，父进程读到 sc2=crashed 这个 case 直接判 FAIL。
+子进程退出码 87。`GameProcess` 父进程层兜底 watchdog 120s 无消息也 kill。
+driver 读到 sc2=crashed 把该 case 判 FAIL，继续下一个。
 
-每个 case：fast mode + VeryEasy 对手 + 90s wall timeout。inject 后等 30s 让
-snapshot 包含撤回字段。
+每个 case：fast mode + 可配置对手难度（默认 CheatMoney）+ 90s wall timeout。
 
 用法::
 
     uv run --no-sync python scripts/e2e_4_directive_types.py
     uv run --no-sync python scripts/e2e_4_directive_types.py --only L4
     uv run --no-sync python scripts/e2e_4_directive_types.py --seconds 120
+    uv run --no-sync python scripts/e2e_4_directive_types.py --difficulty VeryEasy
 """
 
 from __future__ import annotations
@@ -48,29 +43,91 @@ class Case:
 
 
 CASES: list[Case] = [
-    # L1：用 midgame 切换避开 _check_strategy_obsolete 的 opening 检测
-    # （opening 切换在 fast mode 下,inject 时游戏内时间已数分钟,会被拦成 pending_force）
+    # ---- L1 宏观策略 ----
     Case(
-        name="L1 strategy_set",
-        inject="切叉球一波",
+        name="L1a strategy_set",
+        inject="切叉球一波",  # midgame 不被 _check_strategy_obsolete 拦
         inject_after=3,
         verify_field="strategy_changed",
     ),
     Case(
-        name="L2 tactical_objective",
+        name="L1b strategy_cancel",
+        inject="取消所有剧本",
+        inject_after=3,
+        verify_field="strategy_cleared",
+    ),
+    # ---- L2 战术目标 (tactical_objective + engagement_constraint) ----
+    Case(
+        name="L2a tactical_attack",
         inject="进攻对方自然",
         inject_after=3,
         verify_field="active_tactics",
     ),
     Case(
-        name="L3 unit_claim (standing)",
+        name="L2b tactical_scout (vision_acquired)",
+        inject="看一眼对方主基地",
+        inject_after=3,
+        verify_field="active_tactics",
+    ),
+    Case(
+        name="L2c tactical_harass (enemy_killed_in_area)",
+        inject="凤凰打死对方 5 个农民就回",
+        inject_after=3,
+        verify_field="active_tactics",
+    ),
+    Case(
+        name="L2d engagement_defend",
+        inject="守家别出门",
+        inject_after=3,
+        verify_field="any_directive_committed",
+    ),
+    Case(
+        name="L2e engagement_retreat (time_elapsed_since)",
+        inject="30 秒后撤",
+        inject_after=3,
+        verify_field="any_directive_committed",
+    ),
+    # ---- L3 单位 / 常驻 / 建造 ----
+    Case(
+        name="L3a unit_claim persistent (standing)",
         inject="探机巡逻自然别动",
         inject_after=3,
         verify_field="standing_orders",
     ),
     Case(
-        name="L4 production_override",
+        name="L3b unit_claim ephemeral",
+        inject="那个探机去看一下气矿",
+        inject_after=3,
+        verify_field="any_directive_committed",
+    ),
+    Case(
+        name="L3c scout",
+        inject="派探机看一眼 11 点",
+        inject_after=3,
+        verify_field="any_directive_committed",
+    ),
+    Case(
+        name="L3d build_at",
+        inject="11 点放个水晶",
+        inject_after=3,
+        verify_field="any_directive_committed",
+    ),
+    # ---- L4 产能调整 ----
+    Case(
+        name="L4a production_override (unit_count_built_since)",
         inject="下个 BG 出俩哨兵",
+        inject_after=3,
+        verify_field="production_overrides",
+    ),
+    Case(
+        name="L4b tech_override (tech_done)",
+        inject="先研闪烁",
+        inject_after=3,
+        verify_field="production_overrides",
+    ),
+    Case(
+        name="L4c expansion_override (expansion_count)",
+        inject="马上去开三矿",
         inject_after=3,
         verify_field="production_overrides",
     ),
@@ -141,15 +198,62 @@ def _verify_field_non_empty(
     )
 
 
+def _verify_strategy_cleared(
+    snapshots: list[dict[str, Any]],
+    events: list[tuple[float, str, dict[str, Any]]],
+    initial_opening: str,
+) -> tuple[bool, str]:
+    """L1b strategy_cancel: 验证 opening 从 initial → None。
+
+    cancel 不走 board.submit, 没 BoardEvent → 不发 directive.committed。靠
+    snapshot 看 slot 从 initial 变 None。`_dispatch_cancel` 内部主动
+    `self._push_snapshot(now)`,理论上必有一个 snapshot 反映清空状态。
+    """
+    saw_initial = False
+    for snap in snapshots:
+        strat = snap.get("strategy") or {}
+        opening = strat.get("opening")
+        if opening and opening.get("id") == initial_opening:
+            saw_initial = True
+            continue
+        if saw_initial and opening is None:
+            return True, f"opening cleared after initial {initial_opening!r}"
+    return False, (
+        f"opening 始终在(saw_initial={saw_initial}),没 cancel 成 None"
+        f"（看了 {len(snapshots)} 个 snapshot）"
+    )
+
+
+def _verify_any_directive_committed(
+    snapshots: list[dict[str, Any]],
+    events: list[tuple[float, str, dict[str, Any]]],
+) -> tuple[bool, str]:
+    """通用 verify: events 有 directive.committed 就算 PASS。
+
+    适用于 directive 进 board 但 snapshot 字段窗口短或没暴露的 case
+    (engagement_constraint / scout / build_at / move 等 in_flight 不暴露 snapshot 字段)。
+    """
+    committed = [(ts, p) for ts, k, p in events if k == "directive.committed"]
+    if committed:
+        first_ts, first_p = committed[0]
+        did = first_p.get("directive_id", "?")
+        return True, f"directive.committed at +{first_ts:.1f}s id={did[:8]}"
+    return False, f"events 无 directive.committed（{len(events)} 个 event）"
+
+
 async def run_one_case(
     case: Case,
     log: logging.Logger,
     map_name: str,
     seconds: int,
     initial_opening: str,
+    difficulty: str,
 ) -> CaseResult:
     log.info("=" * 70)
-    log.info("CASE %s: inject=%r expect=%s", case.name, case.inject, case.verify_field)
+    log.info(
+        "CASE %s: inject=%r expect=%s difficulty=%s",
+        case.name, case.inject, case.verify_field, difficulty,
+    )
     log.info("=" * 70)
 
     os.environ["VIBECRAFT_FORCE_INITIAL_OPENING"] = initial_opening
@@ -157,7 +261,7 @@ async def run_one_case(
     cfg = GameConfig(
         map_name=map_name,
         opponent_race="Random",
-        opponent_difficulty="VeryEasy",
+        opponent_difficulty=difficulty,
         realtime=False,  # fast mode
     )
     gp = GameProcess()
@@ -229,6 +333,10 @@ async def run_one_case(
     # verify
     if case.verify_field == "strategy_changed":
         ok, reason = _verify_strategy_changed(snapshots, events, initial_opening)
+    elif case.verify_field == "strategy_cleared":
+        ok, reason = _verify_strategy_cleared(snapshots, events, initial_opening)
+    elif case.verify_field == "any_directive_committed":
+        ok, reason = _verify_any_directive_committed(snapshots, events)
     else:
         ok, reason = _verify_field_non_empty(snapshots, events, case.verify_field)
 
@@ -255,6 +363,12 @@ async def main() -> int:
     p.add_argument("--seconds", type=int, default=90, help="每个 case 最大 wall-clock 秒")
     p.add_argument("--initial-opening", default="1g_robo_immortal")
     p.add_argument("--only", default=None, help="仅跑 case name 包含此子串的（如 L4）")
+    p.add_argument(
+        "--difficulty",
+        default="CheatMoney",
+        help="sc2.data.Difficulty enum 名(VeryEasy/Easy/Medium/MediumHard/Hard/"
+        "Harder/VeryHard/CheatVision/CheatMoney/CheatInsane)。默认 CheatMoney",
+    )
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -274,7 +388,9 @@ async def main() -> int:
 
     results: list[CaseResult] = []
     for case in cases:
-        res = await run_one_case(case, log, args.map, args.seconds, args.initial_opening)
+        res = await run_one_case(
+            case, log, args.map, args.seconds, args.initial_opening, args.difficulty
+        )
         results.append(res)
         # case 之间留 5s 给 SC2 进程清理 + watchdog 收尾
         log.info("等 5s 进入下一个 case")
