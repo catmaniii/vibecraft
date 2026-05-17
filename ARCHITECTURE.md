@@ -130,15 +130,21 @@ vendor 段：sharpy-sc2 MIT，vendor 路径 `vendor/sharpy/`（不在 PyPI），
 
 ## 测试组织
 
+全套 727 个单测，0 skipped，`tests/unit/` 下跑（无需 SC2）。
+
+- `tests/conftest.py`：session-scope `_block_sc2_child_entry`，防止任何测试意外
+  spawn 真实 SC2 子进程。所有注入 `WsConnection` / `GameProcess` 的测试必须传 mock。
 - `tests/unit/test_smoke.py`：装得上 + 能 import。
 - `tests/unit/test_directives.py`：Board 状态机、三槽切换、commit delay、
   overlay 优先级、unit_claim 互斥。
 - `tests/unit/test_director.py`：Director ↔ Board ↔ FakeFacade 端到端
-  （仍是 mock；FakeFacade 全程记录调用做断言）。
+  （FakeFacade 全程记录调用做断言）。
 - `tests/unit/test_llm_parser.py`：IntentParser 用 stub provider 跑各类
   outcome（success / ambiguous / error / 超时 / schema 失败）。
 - `tests/unit/test_{dsl, strategy, logging}.py`：纯模块单测。
-- `tests/integration/`、`tests/e2e/`：default 跳过（pytest mark），分别要
-  python-sc2 mock 和真实 SC2 客户端。M0b 暂时没用上。
-- `scripts/smoke_test.py`：M0c 端到端，单独脚本（不是 pytest），详见
-  `docs/m0-smoke-runbook.md`。
+- `tests/unit/test_cockpit_sync.py`：WS ↔ GameProcess 状态推送 + status_events
+  过滤 + sharpy_adapter bot 生命周期。
+- `tests/unit/test_m1_6_end_to_end.py`：make_protoss_bot_class 工厂、
+  bot 生命周期、watchdog、SC2 facade 分派的 mock-bot 端到端。
+- `tests/integration/`、`tests/e2e/`：default 跳过（pytest mark），需真实 SC2 客户端。
+- `scripts/smoke_test.py`：端到端冒烟，单独脚本，详见 `docs/m0-smoke-runbook.md`。

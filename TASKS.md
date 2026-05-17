@@ -7,22 +7,22 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD = e83b0bf，分支 `m4-l2-l4-executor`，PR #1 open）
+## 当前状态（最近更新：2026-05-17，HEAD = 469e126，分支 `m4-l2-l4-executor`，PR #1 open）
 
-- **里程碑**：M2 已 `v0.1.0a4`。**本次 session（M4）：L2 战术执行器 + L4 done_when 扩词表 + 统一命令卡片 全部完成，726 unit test PASS，PR #1 已开**
+- **里程碑**：M2 已 `v0.1.0a4`。**本次 session（M4）：L2 战术执行器 + L4 done_when 扩词表 + 统一命令卡片 全部完成，727 unit test PASS（0 skipped），PR #1 已开**
 - **M4 新功能（branch `m4-l2-l4-executor`，PR #1）**：
   - P0a: facade 新增 2 override 方法 + VibeCraftZoneAttack fork，A 类 L2 attack/defend/retreat 真正影响 bot sharpy plan
   - P0b: TacticalSquad + execute_tactics_step，B 类 L2 harass/scout unit 抢占
   - P0c-P0g: L1 cancel 统一 board.submit、7 新 done_when kind、STRUCTURE_OVERRIDE directive type、command_cards 统一快照、revoke 扩 L2/L1
   - P0h: CommandCard/Stack PWA 组件 + CockpitView 切统一卡片
   - P0i-P0k: LLM prompt A/B 类规则 + llm_eval + e2e O 系列
-  - Bug fix: revoke event `type:"event"` 补全（PWA 静默丢弃修）、test isolation sc2.* 污染修
-- **最近 commit（分支 HEAD = e83b0bf）**：
+  - Bug fix: revoke_strategy 补 session.log_event 落盘（Bug C）、test_server_ws 注入 mock GameProcess 防 SC2 spawn、6 个 S2 历史遗留 skip 测试清理
+- **最近 commit（分支 HEAD = 469e126）**：
+  - `469e126` fix: 单测注入 mock GameProcess，彻底消除 SC2 黑窗口
+  - `7d846b4` fix: Bug A+B（上一 session 完成）
   - `e83b0bf` fix: ruff lint 清零
   - `cdd595f` docs(adr): ADR 0011
   - `ebc1b1b` fix: revoke event type + cm None cache + UP037 + test isolation
-  - `a135dc2` feat(web): CockpitView 切 CommandCardStack
-  - `be1b3a5` test(e2e): verify_log_patterns + O 系列 case
 - **GitHub PR**：https://github.com/catmaniii/vibecraft/pull/1（待 merge → main）
 - **下一步**：
   1. PR merge → main，打 `v0.1.0a5` tag

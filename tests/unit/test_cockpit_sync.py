@@ -643,63 +643,6 @@ def _inject_fake_ares_minimal() -> type:
     return FakeKnowledgeBot
 
 
-class TestAutopilotEventCallback:
-    """P1-2：build_completed false→true 时推一次 decision.autopilot_phase event。
-
-    S2 后：_VibeCraftProtossBot 继承 Aristaeus MyBot，_register_auto_pilot 已移除。
-    auto-pilot event 逻辑需要在 Aristaeus 框架内重新设计；当前测试 skip 保留历史。
-    """
-
-    def _make_instance(self, event_cb: Any) -> Any:
-        FakeKnowledgeBot = _inject_fake_ares_minimal()
-        from vibecraft.bot.sharpy_adapter import make_bot_class
-
-        BotClass = make_bot_class(
-            director_factory=lambda facade: MagicMock(),
-            event_callback=event_cb,
-        )
-        instance = object.__new__(BotClass)
-        FakeKnowledgeBot.__init__(instance)  # type: ignore[arg-type]
-        instance.register_behavior = MagicMock()
-        return instance
-
-    @pytest.mark.skip(reason="S2 后 _register_auto_pilot 已移至 Aristaeus；需重设计")
-    def test_event_pushed_on_first_build_completed(self) -> None:
-        """build_completed 首次变 True 时推 decision.autopilot_phase。"""
-        events: list[dict] = []
-        instance = self._make_instance(events.append)
-
-        instance.build_order_runner.build_completed = False
-        instance._register_auto_pilot()
-        assert events == []
-
-        instance.build_order_runner.build_completed = True
-        instance._register_auto_pilot()
-        assert len(events) == 1
-        assert events[0]["kind"] == "decision.autopilot_phase"
-        assert events[0]["type"] == "event"
-
-    @pytest.mark.skip(reason="S2 后 _register_auto_pilot 已移至 Aristaeus；需重设计")
-    def test_event_pushed_only_once(self) -> None:
-        """build_completed 保持 True 时，后续 tick 不重复推。"""
-        events: list[dict] = []
-        instance = self._make_instance(events.append)
-
-        instance.build_order_runner.build_completed = True
-        instance._register_auto_pilot()  # 第一次：推
-        instance._register_auto_pilot()  # 后续：不重复
-        instance._register_auto_pilot()
-
-        assert len(events) == 1
-
-    @pytest.mark.skip(reason="S2 后 _register_auto_pilot 已移至 Aristaeus；需重设计")
-    def test_no_event_callback_is_fine(self) -> None:
-        """event_callback=None 时不抛异常。"""
-        instance = self._make_instance(None)
-        instance.build_order_runner.build_completed = True
-        instance._register_auto_pilot()  # 不应抛
-
-
 # ---------------------------------------------------------------------------
 # status_events 过滤 snapshot/event
 # ---------------------------------------------------------------------------
