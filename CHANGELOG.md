@@ -19,7 +19,105 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
-M2：按 `docs/plans/2026-05-16-four-layer-commands-design.md` 的 P1-P6 分期实施四层指令架构（L1 宏观 / L2 战术 / L3 standing / L4 产能）。需先拍 §8 的 4 个待决策点。
+M3：完整驾驶舱（剩余 PWA UI 精修）+ L4 production override sharpy 真出兵 wire +
+phase stepper 精确进度。
+
+---
+
+## [0.1.0a4] - 2026-05-17
+
+**M2 完成。** four-layer 指令架构（L1 宏观 / L2 战术 / L3 standing / L4 产能）
+全套链路实施完成。done_when 8-kind discriminated union + task_monitor 完成判定 +
+LLM prompt 教 4 层分类 + 4 个 PWA cards + EventBus + NamedSpotRegistry + sharpy
+让位机制 全部 work。**`v0.1.0a4`** = M2 出口（设计文档 §13 / ADR 0010 phasing 表）。
+
+本次发布单 session 一气呵成（2026-05-17，~5h wall-clock），主 agent (Opus) +
+14 个 Sonnet subagent (worktree isolation) 协作模式 verified scalable。
+
+### 新增 (Added)
+
+- **L2 `TacticalObjective` directive type**（11 verb：attack/defend/scout/expand/
+  harass/drop/vision/raze/retreat/regroup/split）
+- **DoneWhen discriminated union（10-kind）**：`unit_count_built_since` /
+  `tech_done` / `expansion_count` / `target_destroyed` / `own_army_size_ratio` /
+  `vision_acquired` / `enemy_killed_in_area` / `time_elapsed_since` + 复合
+  `any_of` / `all_of`
+- **`task_monitor` 完整实现**：每 sharpy step 检查 in-flight directive 完成判定 +
+  EventBus-driven (UNIT_CREATED/UPGRADE_COMPLETE) 高效累计 counter + game-state
+  polling (vision/army_ratio/target_destroyed/expansion_count/time_elapsed)
+- **`EventBus`**：vibecraft 自建独立 pub/sub 层，11 个 python-sc2 lifecycle hook
+  publish 到统一 bus，task_monitor / DecisionWatcher 等 subscriber 用 filter 订阅
+- **`NamedSpotRegistry`**：15 个已知 spot（natural/third/main/enemy_* + *_ramp +
+  *_gas 变种）+ `resolve(name, bot)` 走 sharpy zone_manager + `closest_named_spot`
+  反向查找（publisher area inference 用）
+- **sharpy 让位机制**：persistent unit_claim (standing order) 在 Director 端
+  resolve selector → set_unit_role(LLM_CONTROLLED) → revoke 时 release_unit_role
+  归还。`board.revoke()` 扩支持 committed overlay
+- **Director `production_overrides` / `standing_orders` lists**：按 directive type
+  + persistent 字段路由
+- **3 个新 PWA cards**：`StandingOrdersCard.vue` / `ProductionOverridesCard.vue` /
+  `TacticsCard.vue`，每张含撤销按钮（emit revoke → ws revoke_directive 帧）
+- **snapshot 4 新字段**：`standing_orders` / `production_overrides` /
+  `active_tactics` / 各 directive 的 `done_when`
+- **`revoke_directive` 上行帧** + ws/bot wire（玩家撤销路径完整）
+- **LLM prompt 教 done_when**：System 段 加 11 verb + 10 kind 白名单 + 4 层分类
+  规则 + 11 个 few-shot 例子（覆盖 done_when 典型 pattern + 边界 case：复合 L1+L3
+  / L2 engagement+done / 撤销 / 含糊 / unit_count_hint）
+- **IntentParser validate retry**：done_when 字段 ValidationError 时回灌 LLM
+  重写 1 次；2 次仍失败降级 EPHEMERAL + echo 告诉玩家
+- **directives.jsonl 生命周期落盘**：submitted / committed / released / rejected /
+  revoked，加 JsonlSink `buffering=1` line-buffered 修子进程空 bug
+- **ADR 0010 完整记录**：4 决策 + 30+ corner case Implementation Notes
+
+### 修正 (Fixed)
+
+- **M4 e2e schema gap**（v0.1.0a3 验证发现）：`UnitClaimPayload` 加 `persistent: bool`，
+  `Target.kind` 接受 `building_tag` / `named_spot`，`Selector` `extra="forbid"`
+  禁 `count` 字段。LLM prompt 同步用合法字段
+- **vision_acquired 22x bug**：原用 step count 累加（sharpy step ≈ 0.045s），
+  改用 wall-clock ts diff（`_vision_first_visible_ts[id]`）
+- **enemy_killed_in_area filter 缺 payload.area**：`_publish_unit_destroyed`
+  加 area inference（closest_named_spot max_distance=15）
+- **target_destroyed natural/third/main P3 hardcoded 返回 False**：P5 改成走
+  NamedSpotRegistry resolve `enemy_natural` 等 + enemy_structures.closer_than
+- **CockpitView 资源条占位删除**（SC2 游戏内置 HUD 已有）
+- **JsonlSink `buffering=1` line-buffered**：修子进程 spawn 时 jsonl 一直 0 字节
+  bug（block buffered + kill 前没 flush）
+- **顺手修 baseline RUF012**：`_UNIT_ZH` + `_TACTICAL_VERB_ZH` 改 ClassVar
+
+### 已知未做 / known issues
+
+- **3 个 cross-test pollution flaky tests**：`test_loads_real_strategies` /
+  `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`
+  单跑永远 PASS，full suite 偶发 fail。不阻塞产线。**未来用** pytest-forked
+  或 grep module-level mutable state
+- **真实长 SC2 对局 `directive_completed` event verify**：fast mode bot 在 30s
+  内被 VeryHard AI 打死，timer-based directive 没机会触发。需要真实 SC2 +
+  surviving 几分钟的对局验
+- **L4 production override sharpy 真出兵 → M3 范围**：P3 task_monitor 检测
+  L4 done_when，sharpy 端不主动响应 production_override。需要 wire
+  `bot.facade.set_production_target`
+
+### 验证
+
+```bash
+# 全单测
+.venv/Scripts/python.exe -m pytest        # 597 passed, 6 skipped
+cd web && npm test                         # 50 passed
+cd web && npm run typecheck                # clean
+
+# e2e schema gap fix（P1.6 verify）
+uv run --no-sync python scripts/headless_smoke.py --fast \
+  --initial-opening 1g_robo_immortal --inject "那个农民守气矿别动" \
+  --inject-after 5 --seconds 60
+# → ECHO 不再 [解析失败]，LLM 输出 persistent=true + named_spot
+
+# e2e jsonl content（P6 sink fix verify）
+uv run --no-sync python scripts/headless_smoke.py --fast \
+  --initial-opening 1g_robo_immortal --inject "30秒后撤" \
+  --inject-after 5 --seconds 60
+# → directives.jsonl 真有 submitted + committed 记录
+```
 
 ---
 
