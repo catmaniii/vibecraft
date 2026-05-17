@@ -54,7 +54,7 @@ from vibecraft.llm.schema import (
     ParseOutcome,
 )
 from vibecraft.logging_.session import GameSession
-from vibecraft.logging_.types import Event, EventKind
+from vibecraft.logging_.types import Event, EventKind, LogStream
 
 if TYPE_CHECKING:
     from vibecraft.bot.task_monitor import TaskMonitor
@@ -602,11 +602,17 @@ class Director:
                     self._push_snapshot(now)
                     continue
                 submitted = self.board.submit(d_with_ts, now=now)
+                self._log_directive(
+                    "submitted", submitted, now, effective_at=submitted.effective_at
+                )
                 self._in_flight[submitted.id] = submitted
                 # P3.2: 注册到 task_monitor
                 self._maybe_attach_task_monitor(submitted)
             else:
                 submitted = self.board.submit(d_with_ts, now=now)
+                self._log_directive(
+                    "submitted", submitted, now, effective_at=submitted.effective_at
+                )
                 # P1.2: persistent=True 的 unit_claim 进 standing_orders，不进 _in_flight
                 if (
                     isinstance(submitted.payload, UnitClaimPayload)
@@ -626,6 +632,24 @@ class Director:
                     self._in_flight[submitted.id] = submitted
                 # P3.2: 注册到 task_monitor（有 done_when 时才有意义，但 attach 本身 None-safe）
                 self._maybe_attach_task_monitor(submitted)
+
+    def _log_directive(self, event: str, d: Directive, now: float, **extra: object) -> None:
+        """向 directives.jsonl 写一行 directive 生命周期记录。
+
+        event: "submitted" / "committed" / "released" / "revoked" 等
+        d: 对应的 Directive 对象
+        extra: 附加字段（effective_at / reason 等）
+        """
+        record: dict[str, object] = {
+            "ts": round(now, 3),
+            "event": event,
+            "directive_id": d.id,
+            "type": d.type.value,
+            "issued_by": d.issued_by.value,
+            "issued_at": d.issued_at,
+            **extra,
+        }
+        self.session.log(LogStream.DIRECTIVES, record)
 
     def _assign_standing_order_units(self, submitted: Directive) -> None:
         """P5.E: standing order submit 时解析 selector → tags + 通知 sharpy 让位。
@@ -980,7 +1004,7 @@ class Director:
         self._pending_recommendation = None
 
     def _dispatch_event(self, ev: BoardEvent) -> None:
-        # log 每个事件
+        # log 每个事件到 events.jsonl
         kind_map = {
             BoardEventKind.STRATEGY_CHANGED: EventKind.STRATEGY_SET,
             BoardEventKind.PHASE_TRANSITIONED: EventKind.STRATEGY_PHASE_CHANGE,
@@ -998,6 +1022,24 @@ class Director:
                     caused_by=ev.reason,
                 )
             )
+
+        # 同步写 directives.jsonl —— directive 生命周期全量（submitted 在 _submit_directives 写）
+        _directive_lifecycle_kinds = (
+            BoardEventKind.COMMITTED,
+            BoardEventKind.RELEASED,
+            BoardEventKind.REJECTED,
+            BoardEventKind.REVOKED,
+        )
+        if ev.kind in _directive_lifecycle_kinds and ev.directive_id is not None:
+            record: dict[str, object] = {
+                "ts": round(ev.ts, 3),
+                "event": ev.kind.value.split(".")[-1],  # "committed" / "released" / etc.
+                "directive_id": ev.directive_id,
+                **ev.payload,
+            }
+            if ev.reason is not None:
+                record["reason"] = ev.reason
+            self.session.log(LogStream.DIRECTIVES, record)
 
         # P1-1：A 组埋点 —— BoardEvent → event 帧 dict → _event_callback
         self._maybe_push_event_frame(ev)

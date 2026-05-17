@@ -388,6 +388,100 @@ class TestLoggingIntegration:
         assert "directive.committed" in kinds
         assert "strategy.set" in kinds
 
+    @pytest.mark.asyncio
+    async def test_directives_stream_has_submitted(
+        self, library: StrategyLibrary, session: GameSession
+    ) -> None:
+        """_submit_directives 应向 directives.jsonl 写 submitted 记录。"""
+        from vibecraft.logging_ import LogStream
+
+        facade = FakeFacade()
+        director = _make_director(
+            library,
+            session,
+            facade,
+            {
+                "interpretation_zh": "切 IAC",
+                "confidence": 0.9,
+                "directives": [
+                    {
+                        "type": "strategy_set",
+                        "payload": {"stage": "midgame", "strategy_id": "iac_2base"},
+                    }
+                ],
+            },
+        )
+        await director.on_player_command("切 IAC", now=10.0)
+        records = session.get_null_records(LogStream.DIRECTIVES)
+        events = [r["event"] for r in records]
+        assert "submitted" in events
+
+    @pytest.mark.asyncio
+    async def test_directives_stream_has_committed(
+        self, library: StrategyLibrary, session: GameSession
+    ) -> None:
+        """tick 到 effective_at 后 directives.jsonl 应有 committed 记录。"""
+        from vibecraft.logging_ import LogStream
+
+        facade = FakeFacade()
+        director = _make_director(
+            library,
+            session,
+            facade,
+            {
+                "interpretation_zh": "切 IAC",
+                "confidence": 0.9,
+                "directives": [
+                    {
+                        "type": "strategy_set",
+                        "payload": {"stage": "midgame", "strategy_id": "iac_2base"},
+                    }
+                ],
+            },
+        )
+        await director.on_player_command("切 IAC", now=10.0)
+        director.on_tick(now=12.0)
+        records = session.get_null_records(LogStream.DIRECTIVES)
+        events = [r["event"] for r in records]
+        assert "submitted" in events
+        assert "committed" in events
+
+    def test_directives_stream_submitted_on_direct_submit(self, session: GameSession) -> None:
+        """Director(session=mock_session) 构造 OK；_submit_directives 时 session.log 被 called。"""
+        from unittest.mock import MagicMock
+
+        from vibecraft.directives.models import ProductionOverridePayload
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        mock_session = MagicMock()
+        director = Director(facade=facade, parser=parser, session=mock_session)
+
+        # 直接 submit 一个 directive
+        from vibecraft.directives.models import Directive
+
+        payload = ProductionOverridePayload(unit_type="Stalker", count=3)
+        d = Directive(payload=payload, issued_at=10.0)
+        director._submit_directives([d], now=10.0)
+
+        # session.log 应该被调用（写 directives.jsonl）
+        mock_session.log.assert_called()
+        # 验证第一个 call 是 DIRECTIVES stream，event=submitted
+        from vibecraft.logging_ import LogStream
+
+        call_args = mock_session.log.call_args_list[0]
+        assert call_args[0][0] == LogStream.DIRECTIVES
+        record = call_args[0][1]
+        assert record["event"] == "submitted"
+
 
 # =========================================================================
 # P1.2 Standing Order 路由（persistent=True → standing_orders；False → _in_flight）
