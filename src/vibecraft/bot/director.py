@@ -348,8 +348,18 @@ class Director:
             "recent_commands": [
                 {"text": c.text, "ts": round(c.ts, 3)} for c in self._recent_commands
             ],
-            # P1.3 L3 standing orders 透传
-            "standing_orders": [self._standing_order_view(s) for s in self.standing_orders],
+            # P1.3 L3 standing orders 透传；同时包含 in-flight 的 SCOUT / 非持久 UNIT_CLAIM
+            "standing_orders": [
+                self._standing_order_view(s)
+                for s in (
+                    list(self.standing_orders)
+                    + [
+                        d
+                        for d in self._in_flight.values()
+                        if d.type in {DirectiveType.SCOUT, DirectiveType.UNIT_CLAIM}
+                    ]
+                )
+            ],
             # P2 L4 production overrides 透传
             "production_overrides": [
                 self._production_override_view(s) for s in self.production_overrides
@@ -532,10 +542,12 @@ class Director:
             self._snapshot_callback(self.build_snapshot(now))
 
     def _standing_order_view(self, d: Directive) -> dict[str, Any]:
-        """把一条 standing order Directive 转成 snapshot 里的 view dict（P1.3）。
+        """把一条 standing order / scout Directive 转成 snapshot 里的 view dict（P1.3）。
 
         字段：id / display / issued_at / selector / task_summary。
         """
+        from vibecraft.directives.models import ScoutPayload
+
         payload = d.payload
         display = self._format_standing_order_display(payload)
         view: dict[str, Any] = {
@@ -546,6 +558,9 @@ class Director:
         if isinstance(payload, UnitClaimPayload):
             view["selector"] = payload.selector.model_dump(mode="json", exclude_none=True)
             view["task_summary"] = payload.task.primary_action.verb.value
+        elif isinstance(payload, ScoutPayload):
+            view["selector"] = payload.selector.model_dump(mode="json", exclude_none=True) if payload.selector else {}
+            view["task_summary"] = "scout"
         else:
             view["selector"] = {}
             view["task_summary"] = ""
@@ -554,9 +569,15 @@ class Director:
     def _format_standing_order_display(self, payload: Any) -> str:
         """中文人话格式：'{unit_type} {verb} {target_display}'（P1.3）。
 
-        例：'Phoenix patrol natural' / 'Probe hold_position enemy_main_gas'。
+        例：'Phoenix patrol natural' / 'Probe 侦查 enemy_main'。
         target_display 优先 named_spot，次 unit_type，fallback '?'。
         """
+        from vibecraft.directives.models import ScoutPayload
+
+        if isinstance(payload, ScoutPayload):
+            unit_type = (payload.selector.unit_type if payload.selector else None) or "单位"
+            target_display = payload.target.named_spot or payload.target.unit_type or "?"
+            return f"{unit_type} 侦查 {target_display}"
         if not isinstance(payload, UnitClaimPayload):
             return "未知 standing"
         unit_type = payload.selector.unit_type or "单位"
@@ -743,6 +764,15 @@ class Director:
     def _maybe_attach_task_monitor(self, submitted: Directive) -> None:
         """P3.2: done_when 非空时把 directive 注册到 task_monitor。"""
         if self.task_monitor is None:
+            return
+        # L4 production-type directives are standing orders — persist until player
+        # manually cancels (×). Ignore any done_when/timeout_s the LLM generates.
+        if submitted.type in {
+            DirectiveType.PRODUCTION_OVERRIDE,
+            DirectiveType.TECH_OVERRIDE,
+            DirectiveType.EXPANSION_OVERRIDE,
+            DirectiveType.STRUCTURE_OVERRIDE,
+        }:
             return
         dw = submitted.payload.done_when
         if dw is None:
@@ -1067,11 +1097,36 @@ class Director:
         if self.board.slots.get(target_stage) is None:
             return False
 
+        slot = self.board.slots[target_stage]
+        strategy_id = slot.strategy_id if slot is not None else None
         self.board.slots[target_stage] = None
 
         with contextlib.suppress(Exception):
             self.facade.set_build("sustain")
 
+        self.session.log_event(
+            Event(
+                ts=now,
+                kind=EventKind.DIRECTIVE_RELEASED,
+                payload={
+                    "directive_id": directive_id,
+                    "stage": target_stage.value,
+                    "strategy_id": strategy_id,
+                    "reason": "player_revoke",
+                },
+                priority="medium",
+                caused_by="player_x",
+            )
+        )
+        self.session.log(
+            LogStream.DIRECTIVES,
+            {
+                "ts": round(now, 3),
+                "event": "released",
+                "directive_id": directive_id,
+                "reason": "player_revoke",
+            },
+        )
         self._push_event(
             {
                 "type": "event",

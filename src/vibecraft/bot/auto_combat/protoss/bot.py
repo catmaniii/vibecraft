@@ -364,6 +364,34 @@ def make_protoss_bot_class(
             except Exception as exc:
                 logger.warning("set_unit_role failed tag=%d role=%s err=%s", unit_tag, role, exc)
 
+        def _resolve_target_point(self, target: dict[str, object] | None) -> Any:
+            """target dict → Point2；解析失败返回 None。"""
+            if target is None:
+                return None
+            kind = target.get("kind")
+            if kind == "named_spot":
+                name = target.get("named_spot")
+                if name:
+                    registry = getattr(self.bot, "named_spots", None)
+                    if registry is not None:
+                        return registry.resolve(str(name), self.bot)
+            elif kind == "point":
+                pt = target.get("point")
+                if pt:
+                    from sc2.position import Point2
+
+                    return Point2(pt)
+            elif kind == "unit_tag":
+                tag = target.get("unit_tag")
+                if tag:
+                    u = self.bot.units.by_tag(int(tag))
+                    if u:
+                        return u.position
+                    u2 = self.bot.enemy_units.by_tag(int(tag))
+                    if u2:
+                        return u2.position
+            return None
+
         def execute_unit_action(
             self,
             unit_tag: int,
@@ -371,8 +399,32 @@ def make_protoss_bot_class(
             target: dict[str, object] | None = None,
             ability_id: str | None = None,
         ) -> None:
-            # M1 noop。LLMControlBehavior 真实实现留 M4。
-            pass
+            target_point = self._resolve_target_point(target)
+            if target_point is None:
+                logger.warning("execute_unit_action: unresolvable target %r (verb=%s)", target, verb)
+                return
+
+            if unit_tag == 0:
+                # 自选：侦查优先选空闲探机，其次任意空闲单位
+                unit = None
+                for u in self.bot.units:
+                    if u.is_idle:
+                        if str(u.type_id.name).casefold() == "probe":
+                            unit = u
+                            break
+                        if unit is None:
+                            unit = u
+            else:
+                unit = self.bot.units.by_tag(unit_tag)
+
+            if unit is None:
+                logger.warning("execute_unit_action: no unit tag=%d", unit_tag)
+                return
+
+            if verb in ("attack_move", "attack"):
+                unit.attack(target_point)
+            else:
+                unit.move(target_point)
 
         def set_build_location_override(
             self,
