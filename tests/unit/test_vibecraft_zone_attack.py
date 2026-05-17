@@ -2,87 +2,22 @@
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType, SimpleNamespace
+import importlib
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 # ---------------------------------------------------------------------------
-# fake sharpy / sc2 注入 —— 与 test_protoss_facade_overrides.py 同模式
+# fixture：从 conftest 的 fake_sharpy_zone_attack_env 派发（autouse）
 # ---------------------------------------------------------------------------
 
 
-def _inject_fake_sharpy() -> None:
-    """注入最小 fake sharpy / sc2，让 vibecraft_zone_attack 顶层 import 通过。"""
-
-    # --- sc2.position ---
-    for mod_name in ["sc2", "sc2.position"]:
-        if mod_name not in sys.modules:
-            sys.modules[mod_name] = ModuleType(mod_name)
-
-    class FakePoint2(tuple):
-        """最小 Point2 stub：继承 tuple，支持 x/y 属性访问。"""
-
-        def __new__(cls, pt: Any) -> FakePoint2:
-            return super().__new__(cls, pt)
-
-        @property
-        def x(self) -> float:
-            return self[0]
-
-        @property
-        def y(self) -> float:
-            return self[1]
-
-    sys.modules["sc2.position"].Point2 = FakePoint2  # type: ignore[attr-defined]
-
-    # --- sharpy ---
-    class FakeActBase:
-        """ActBase 极简 stub。"""
-
-        pass
-
-    class FakePlanZoneAttack(FakeActBase):
-        """PlanZoneAttack 极简 stub，只暴露被 VibeCraftZoneAttack 覆盖的两个方法。"""
-
-        def _get_target(self) -> Any:
-            return None
-
-        def _should_attack(self, power: Any) -> bool:
-            return False
-
-    for mod_name in [
-        "sharpy",
-        "sharpy.plans",
-        "sharpy.plans.acts",
-        "sharpy.plans.tactics",
-        "sharpy.plans.tactics.zone_attack",
-    ]:
-        if mod_name not in sys.modules:
-            sys.modules[mod_name] = ModuleType(mod_name)
-
-    sys.modules["sharpy.plans.acts"].ActBase = FakeActBase  # type: ignore[attr-defined]
-    sys.modules["sharpy.plans.tactics"].PlanZoneAttack = FakePlanZoneAttack  # type: ignore[attr-defined]
-    sys.modules["sharpy.plans.tactics.zone_attack"].PlanZoneAttack = FakePlanZoneAttack  # type: ignore[attr-defined]
-
-
-_PREFIXES = ("sharpy", "sc2", "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack")
-
-
-def _clean_mods() -> None:
-    for key in list(sys.modules):
-        if any(key == p or key.startswith(p + ".") for p in _PREFIXES):
-            del sys.modules[key]
-
-
 @pytest.fixture(autouse=True)
-def _fake_env():
-    _clean_mods()
-    _inject_fake_sharpy()
-    yield
-    _clean_mods()
+def _fake_env(fake_sharpy_zone_attack_env: Any) -> Any:
+    """autouse wrapper：让本文件所有 test 自动走 fake_sharpy_zone_attack_env。"""
+    return fake_sharpy_zone_attack_env
 
 
 # ---------------------------------------------------------------------------
@@ -92,8 +27,6 @@ def _fake_env():
 
 def _import_plan():
     """每次从干净的 sys.modules 状态 import VibeCraftZoneAttack。"""
-    import importlib
-
     mod = importlib.import_module(
         "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack"
     )
