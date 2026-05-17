@@ -48,12 +48,21 @@ async def test_parse_accuracy(
 
     pytest 报错 = trial 失败;汇总在 terminal_summary 输出 per-case 通过率。
     """
+    from tests.llm_eval.conftest import serialize_outcome
+
     t0 = time.monotonic()
     outcome = await llm_parser.parse(spec.inject, mock_parse_context)
     latency_ms = (time.monotonic() - t0) * 1000
 
     score = score_outcome(outcome, spec)
-    eval_stats.record(spec.name, score.passed, score.reason, latency_ms)
+    eval_stats.record(
+        case_name=spec.name,
+        inject=spec.inject,
+        passed=score.passed,
+        reason=score.reason,
+        latency_ms=latency_ms,
+        outcome_dump=serialize_outcome(outcome),
+    )
 
     # 失败不抛(让 terminal_summary 看完整 picture);用 warn + xfail-ish 方式记
     # 实际上 pytest fail 行为更直白,FAIL test count 直接体现 accuracy

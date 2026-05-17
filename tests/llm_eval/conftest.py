@@ -59,9 +59,10 @@ def llm_parser(strategy_library: StrategyLibrary) -> IntentParser:
     if override_model:
         llm_config.model = override_model
     provider = llm_config.build_provider()
-    # 环境变量 VIBECRAFT_MAX_RETRIES 控制 schema validation retry 次数
-    # (eval 对比 retry=0 vs retry=3 的 accuracy 提升)
-    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "0"))
+    # 环境变量 VIBECRAFT_MAX_RETRIES 控制 schema validation retry 次数。
+    # default=1:eval 实测 retry=1 兜底剩余偶发 schema 错(prompt 增强后),
+    # worst-case 耗时仅 ~4.8s 而非 3 次 retry 的 9.6s。
+    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "1"))
     return IntentParser(
         provider=provider,
         library=strategy_library,
@@ -98,16 +99,70 @@ class _EvalStats:
         self.per_case: dict[str, list[bool]] = {}
         self.per_case_reason: dict[str, list[str]] = {}
         self.latencies_ms: list[float] = []
+        # 详细 dump:每 trial 的完整 outcome dict(给 report generator 用)
+        self.trials: list[dict[str, Any]] = []
 
-    def record(self, case_name: str, passed: bool, reason: str, latency_ms: float) -> None:
+    def record(
+        self,
+        case_name: str,
+        inject: str,
+        passed: bool,
+        reason: str,
+        latency_ms: float,
+        outcome_dump: dict[str, Any] | None = None,
+    ) -> None:
         self.per_case.setdefault(case_name, []).append(passed)
         self.per_case_reason.setdefault(case_name, []).append(reason)
         self.latencies_ms.append(latency_ms)
+        self.trials.append({
+            "case_name": case_name,
+            "inject": inject,
+            "passed": passed,
+            "reason": reason,
+            "latency_ms": round(latency_ms, 1),
+            "outcome": outcome_dump,
+        })
 
 
 @pytest.fixture(scope="session")
 def eval_stats() -> _EvalStats:
     return _EvalStats()
+
+
+def serialize_outcome(outcome: Any) -> dict[str, Any]:
+    """把 ParseOutcome 序列化成 JSON-safe dict(LLM raw 输出 + parsed directive)。"""
+    from vibecraft.llm.schema import (
+        AmbiguousParse,
+        IntentParseResult,
+        ParseError,
+    )
+
+    if isinstance(outcome, ParseError):
+        return {
+            "kind": "ParseError",
+            "error_kind": outcome.kind.value,
+            "message": outcome.message,
+            "candidates": list(outcome.candidates),
+        }
+    if isinstance(outcome, AmbiguousParse):
+        return {
+            "kind": "AmbiguousParse",
+            "interpretation_zh": outcome.result.interpretation_zh,
+            "confidence": outcome.result.confidence,
+            "interpretations": list(outcome.interpretations),
+            "directives_count": len(outcome.result.directives),
+        }
+    if isinstance(outcome, IntentParseResult):
+        return {
+            "kind": "IntentParseResult",
+            "interpretation_zh": outcome.interpretation_zh,
+            "confidence": outcome.confidence,
+            "notes": outcome.notes,
+            "directives": [
+                d.model_dump(mode="json", exclude_none=True) for d in outcome.directives
+            ],
+        }
+    return {"kind": "Unknown", "repr": str(outcome)[:200]}
 
 
 def pytest_terminal_summary(
@@ -138,9 +193,31 @@ def pytest_terminal_summary(
     overall_pct = 100 * total_pass / total_runs if total_runs else 0
     tr.write_line("")
     tr.write_line(f"  TOTAL: {total_pass}/{total_runs} ({overall_pct:.1f}%)")
+    avg_ms = 0.0
     if stats.latencies_ms:
         avg_ms = sum(stats.latencies_ms) / len(stats.latencies_ms)
         tr.write_line(f"  平均 LLM 耗时: {avg_ms:.0f}ms")
+
+    # dump 完整 trial 数据到 JSON 供报告 generator 用
+    import json
+    from pathlib import Path
+
+    model = os.environ.get("VIBECRAFT_LLM_MODEL", "default")
+    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "1"))
+    out_dir = Path("logs/llm_eval")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{model}_retry{max_retries}.json"
+    payload = {
+        "model": model,
+        "max_retries": max_retries,
+        "total_pass": total_pass,
+        "total_runs": total_runs,
+        "accuracy": overall_pct,
+        "avg_latency_ms": round(avg_ms, 1),
+        "trials": stats.trials,
+    }
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tr.write_line(f"  详细 trial dump: {out_path}")
 
 
 @pytest.fixture(autouse=True)

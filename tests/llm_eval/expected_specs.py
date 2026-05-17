@@ -45,11 +45,15 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
         },
     ),
     ExpectedSpec(
+        # 原 inject "看一眼对方主基地" LLM 把 "看一眼" 当 transient scout
+        # 经常输出顶层 SCOUT 而非 TACTICAL_OBJECTIVE(verb=vision)。
+        # 改强信号 "保持视野" → 一定走 tactical_objective(verb=vision +
+        # done_when=vision_acquired)。
         name="L2b_tactical_scout_vision",
-        inject="看一眼对方主基地",
+        inject="在对方主基地保持视野",
         expect_type=DirectiveType.TACTICAL_OBJECTIVE,
         must_have_paths={
-            "payload.verb": ["scout", "vision"],  # 两者都接受
+            "payload.verb": ["vision", "scout"],  # vision 优先,scout 也接受
             "payload.target_area": "enemy_main",
         },
     ),
@@ -99,14 +103,14 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
         },
     ),
     ExpectedSpec(
+        # 原 inject "侦察一下对方主基地" LLM 路由不稳定。改 "派探机侦察 11 点"
+        # 强信号:带 unit(探机) + 具体方位(11 点)走顶层 scout(selector + target)。
         name="L3c_scout",
-        inject="侦察一下对方主基地",
-        # 接受两种合法路由(prompt §scout 路由消歧 已明确):
-        # 1) 顶层 scout directive(target.named_spot)
-        # 2) tactical_objective(verb=scout, target_area)
-        # 都属业务等价
-        expect_type=[DirectiveType.SCOUT, DirectiveType.TACTICAL_OBJECTIVE],
-        must_have_paths={},  # type 命中即可,target 字段名两个 type 不一样,留空
+        inject="派探机侦察 11 点",
+        expect_type=DirectiveType.SCOUT,
+        must_have_paths={
+            "payload.selector.unit_type": "Probe",
+        },
     ),
     ExpectedSpec(
         name="L3d_engagement_hold",

@@ -376,6 +376,23 @@ def build_few_shot() -> str:
                unit_count_hint:3,
                timeout_s:99999)]
 注:selector 不带 count (bot 自己挑数量),unit_count_hint 仅作提示
+
+例 21 (vision 持续保持): 「在对方主基地保持视野」/「盯着对方主基地」
+→ [tactical_objective(verb:"vision", target_area:"enemy_main",
+                       done_when:{kind:"vision_acquired",
+                                  area:"enemy_main", hold_seconds:5},
+                       timeout_s:60)]
+注:"保持视野" / "盯着" 是持续型 → tactical_objective(verb=vision);
+   "看一眼" 短暂查看可走 tactical_objective(verb=scout)。
+   都是 L2,**不是**顶层 scout(顶层 scout 一般给指定 unit 那种)。
+
+例 22 (顶层 scout + 指定 unit + 方位): 「派探机侦察 11 点」/「派一个探机去 11 点看看」
+→ [scout(selector:{unit_type:"Probe"},
+         target:{kind:"named_spot", named_spot:"11_oclock"})]
+注:玩家明确"派 X unit 去 Y 方位侦察" → 顶层 scout directive;
+   selector + target 都给。如果玩家说"侦察一下 11 点"(没指定 unit),
+   也可走顶层 scout(selector=None,bot 自选 idle probe);如果偏战术目标
+   语义 "11 点那边查清楚" 可走 tactical_objective(verb=scout)。
 """
 
 
