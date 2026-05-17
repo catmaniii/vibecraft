@@ -243,3 +243,30 @@ P1 实施时定义 standing 守建筑的 schema 形态（**倾向**：用 `targe
   worktree 切换 / uv cache 状态有关。**workaround**：直接调
   `.venv/Scripts/python.exe -m pytest` / `-m mypy` 绕开 uv shim。CI 不受影响
   （fresh venv 没这问题）。
+
+### P2 实施（2026-05-17）
+
+- **L4 payload 类已存在**：`ProductionOverridePayload` / `TechOverridePayload` /
+  `ExpansionOverridePayload` 在 P0/M0b 阶段就加好了（含 `unit_type` / `count` /
+  `upgrade_id` / `target_count` 等字段），P2 只是把它们 wire 到 `Director.production_overrides`
+  list + snapshot + UI。**没新建 payload 类**。
+- **`TestProductionDispatch::test_production_override` 旧测试需更新**：原 test
+  期望 `facade.production_overrides` 被 dispatch 调用，但 P2 改了路由（L4 directive
+  进 `production_overrides` list 不进 `_in_flight`），dispatch 移到 **P3 task_monitor**。
+  test 改成验 `len(director.production_overrides) == 1 and facade.production_overrides == []`。
+- **`revoke_directive` unified**：P1.4 引入 `revoke_directive` 上行帧时只调
+  `Director.revoke_standing_order`，P2 加 `Director.revoke_directive(id, now)`
+  统一方法（try standing → 再 try production），`ws.py` 和 `bot.py` 都改调
+  unified method。前端不动（共用 P1.5 的 `revokeDirective(id)`）。
+- **L4 directive display 格式**：`production_override → "出 N <unit_type 中文>"`
+  / `tech_override → "研 <upgrade_id>"` / `expansion_override → "开 N 矿"`。
+  alias table 把 `Sentry → 哨兵` 等翻译，未注册的回退英文。
+- **subagent API 500 error**：P2.a parallel dispatch 跑到 ~95% commit 前断了
+  （server 500，commit 没发出但 working tree 改动都在）。主 agent 手动 inspect
+  worktree diff + 修一个 stale test + commit 完成。新协作模式 lesson：
+  subagent 失败时 worktree 内 partial work 可恢复，**主 agent 直接 inspect +
+  commit** 比 retry subagent 快。
+- **CockpitView 没有 M3Placeholder 剩了**：P1.5 把 "Standing Orders" 占位换成
+  StandingOrdersCard，资源条占位之前删了，剩下唯一一个 M3 import 已 orphan。
+  P2.b 在 StandingOrdersCard 下方加 ProductionOverridesCard section（不替换占位）。
+  未来 P3 可能加 TacticsCard 也是同样模式 —— 直接加 section 不依赖 M3。

@@ -7,17 +7,21 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `6665886`，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17，HEAD `8d00070` + P2.d/e 待 commit，tag `v0.1.0a3`）
 
-- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1（L3 Standing Orders + EventBus）完成**，
-  e2e smoke verify schema gap 已修 + LLM 正确生成 `persistent=true`。P2-P6 待开始。
+- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 完成**（L3 Standing Orders
+  + L4 Production Overrides 都 state/snapshot/UI/撤销 ✅）。e2e smoke verify L3 + L4
+  schema 都通。P3-P6 待开始。
 - **本次 session 关键节点**：
   - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
-  - four-layer 指令架构 plan + ADR 0010（P0 skeleton + P1 corner case）+ 4 决策拍板
-  - **M2 P1 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 协作模式跑通；
-    EventBus + 11 hook wire + standing_orders state/snapshot/UI/撤销 + M4 schema gap 修
-- **最近 commit（M2 P1 系列，按时间倒序）**：
+  - four-layer 指令架构 plan + ADR 0010（skeleton + P1/P2 corner case）+ 4 决策拍板
+  - **M2 P1 + P2 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 模式
+    跑通；EventBus + 11 hook wire + L3 standing_orders + L4 production_overrides
+    全套（state/snapshot/UI/撤销）+ M4 schema gap 修
+- **最近 commit（M2 P2 系列，按时间倒序）**：
+  - `8d00070` M2 P2 前端：ProductionOverridesCard + types + useWs + CockpitView (P2.b)
+  - `20982a5` feat(director): L4 production_overrides + 路由 + revoke unified (P2.a)
   - `6665886` P1 收尾：ADR Implementation Notes + TASKS.md 标 P1 done
   - `d3e1a96` feat(pwa): StandingOrdersCard + 撤销 (P1.5)
   - `571a157` feat(ws): revoke_directive 上行帧 + e2e wire (P1.4)
@@ -27,19 +31,19 @@
   - `0c98110` fix(directives): 修 M4 schema gap + persistent (P1.1)
   - `83fddad` feat(eventbus): EventBus core skeleton (P1.0a)
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
-- **阻塞 / 等待**：无，M2 P2 可开工
+- **阻塞 / 等待**：无，M2 P3 可开工
 - **下一步**（按 ADR 0010 / plan §7 次序）：
-  1. **M2 P2**：L4 production overrides 实施（state + snapshot + UI，~1d）
-  2. **M2 P3**：L2 tactics + `TACTICAL_OBJECTIVE` + task_monitor + 8 个 condition kind
-     dispatcher + LLM done_when prompt（~3d）
-  3. **M2 P5**：sharpy plan 让位机制泛化（reserved_tags + directive completed →
+  1. **M2 P3**：L2 tactics + `TACTICAL_OBJECTIVE` + **task_monitor 完整实现** +
+     8 个 condition kind dispatcher + LLM done_when prompt（~3d，最大块）
+  2. **M2 P5**：sharpy plan 让位机制泛化（reserved_tags + directive completed →
      release `LLM_CONTROLLED` tags + `named_spot` registry）（~1d）
-  4. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
-  5. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
-- **P1 已知 deferred 到 P5（详 ADR 0010 Implementation Notes）**：
-  - sharpy 真让位 standing order 单位（P1 只进列表 + UI，不真 hold）
-  - `board.revoke()` 对已 committed standing order 返回 False（行为 OK 但不完整）
-  - `named_spot` registry（"enemy_main_gas" 等 spot name 到坐标的映射）
+  3. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
+  4. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
+- **P1/P2 已知 deferred 到 P3/P5（详 ADR 0010 Implementation Notes）**：
+  - sharpy 真让位 standing order 单位（P1 只进列表 + UI，不真 hold）—— **P5**
+  - L4 production override 实际 dispatch 到 sharpy（P2 只 list + UI）—— **P3 task_monitor**
+  - `board.revoke()` 对已 committed standing order 返回 False（行为 OK 但不完整）—— **P5**
+  - `named_spot` registry（"enemy_main_gas" 等 spot name 到坐标的映射）—— **P5**
 - **本次 session 协作模式**（已 verified）：parallel subagent + 主 agent review
   - 主 session (Opus, 我) = orchestrator + reviewer + debugger
   - subagent (Sonnet, fresh context, worktree isolation) = implementer + tester
@@ -146,9 +150,20 @@
   - 重跑 inject「那个农民守气矿别动」case，验 schema 不再 fail + 进 standing list
 - [x] **P1.7** 更新 ADR 0010 Implementation Notes corner case（~10min）
 
-#### P2 L4 Production Overrides  ⏸️ blocked by P1（~1d）
+#### P2 L4 Production Overrides  ✅ done（2026-05-17，~0.5d 实际，2 subagent parallel）
 
-state + snapshot + UI
+3 个 sub-task：
+- [x] **P2.a** 后端：`Director.production_overrides` list + L4 directive 路由 +
+  `revoke_directive` unified method + snapshot + display formatter + 8 个新单测
+- [x] **P2.b** 前端：`ProductionOverrideView` type + `ProductionOverridesCard.vue` +
+  `CockpitView` 加 section + `useWs` 透传 + 3 个 vitest + PWA build
+- [x] **P2.c** e2e smoke verify：inject "下个BG出2哨兵" → LLM 解析 OK + 2 个
+  `directive.committed` event 触发（schema 路径通）
+
+实施过程发现 1 个 stale test (`TestProductionDispatch::test_production_override`，
+原期望 facade dispatch，P2 改路由后改成验 list 进 + facade 空)。
+
+**dispatch 到 sharpy 实际生产 wire 留 P3 task_monitor**。
 
 #### P3 L2 Tactics（`TACTICAL_OBJECTIVE` + `ObjectiveExecutor` 框架）  ⏸️（~3d）
 
