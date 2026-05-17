@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from types import ModuleType, SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,7 +25,7 @@ def _inject_fake_sharpy() -> None:
     class FakePoint2(tuple):
         """最小 Point2 stub：继承 tuple，支持 x/y 属性访问。"""
 
-        def __new__(cls, pt: Any) -> "FakePoint2":
+        def __new__(cls, pt: Any) -> FakePoint2:
             return super().__new__(cls, pt)
 
         @property
@@ -49,7 +50,7 @@ def _inject_fake_sharpy() -> None:
         def _get_target(self) -> Any:
             return None
 
-        def _should_attack(self, *args: Any, **kwargs: Any) -> Any:
+        def _should_attack(self, power: Any) -> bool:
             return False
 
     for mod_name in [
@@ -144,13 +145,13 @@ def test_get_target_falls_back_to_parent_when_no_override(monkeypatch):
 
 def test_should_attack_intent_attack_returns_true():
     plan = _make_plan(override_intent="attack")
-    assert plan._should_attack() is True
+    assert plan._should_attack(MagicMock()) is True
 
 
 @pytest.mark.parametrize("intent", ["defend", "hold", "retreat", "vision"])
 def test_should_attack_defensive_intents_return_false(intent):
     plan = _make_plan(override_intent=intent)
-    assert plan._should_attack() is False
+    assert plan._should_attack(MagicMock()) is False
 
 
 def test_should_attack_no_intent_falls_back(monkeypatch):
@@ -158,6 +159,6 @@ def test_should_attack_no_intent_falls_back(monkeypatch):
     monkeypatch.setattr(
         "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack."
         "PlanZoneAttack._should_attack",
-        lambda self: "DEFAULT",
+        lambda self, power: "DEFAULT",
     )
-    assert plan._should_attack() == "DEFAULT"
+    assert plan._should_attack(MagicMock()) == "DEFAULT"
