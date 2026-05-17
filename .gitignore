@@ -63,6 +63,9 @@ logs/
 .env.local
 secrets/
 config/secrets.*.yaml
+# LLM provider 配置可能含 API key（即使现在 api_key_env 走 env var，未来可能误塞 key）
+# → 走 config/llm.yaml.example 模板，复制后改成 config/llm.yaml 本地用
+config/llm.yaml
 
 # Claude Code worktrees（subagent 隔离副本，临时目录，不进版本控制）
 .claude/worktrees/

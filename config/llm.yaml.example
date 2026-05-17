@@ -1,0 +1,49 @@
+# LLM provider 配置模板（设计文档 §7.4 / ADR 0005）
+#
+# 用法：
+#   1. cp config/llm.yaml.example config/llm.yaml
+#   2. 按需改 provider / model / base_url
+#   3. **API key 一律放环境变量**（api_key_env 字段指明变量名），绝不写明文进 yaml
+#      - DeepSeek：export DEEPSEEK_API_KEY=sk-...
+#      - 官方 Claude：export ANTHROPIC_API_KEY=sk-ant-...
+#
+# config/llm.yaml 已 .gitignore，本文件（.example）是仓库内唯一可 commit 的模板。
+#
+# ============================================================
+# Provider 切换示例
+# ============================================================
+#
+# DeepSeek V4（默认；走 Anthropic 兼容端点）：见下方默认配置
+#
+# 官方 Claude（更稳定，更贵；测试期或不放心 DeepSeek 时切回）：
+#   provider: anthropic
+#   model: claude-sonnet-4-6     # 或 claude-opus-4-7
+#   base_url: null               # 或删掉该行
+#   api_key_env: ANTHROPIC_API_KEY
+#   use_prompt_cache: true       # Anthropic 端点支持，可省 token
+#   disable_thinking: false      # Claude 不需要禁
+#
+# 本地 vLLM / Ollama（自托管，未来支持）：
+#   provider: openai
+#   model: <你跑的模型>
+#   base_url: http://localhost:8000/v1
+#   api_key_env: LOCAL_LLM_API_KEY   # 本地无需 key 时随便设一个变量
+
+# ============================================================
+# 默认配置：DeepSeek V4 Flash（成本低、schema 准确率与 Pro 持平）
+# ============================================================
+
+provider: deepseek
+model: deepseek-v4-flash        # 备选：deepseek-v4-pro（edge case schema 出错时切回）
+base_url: https://api.deepseek.com/anthropic   # DeepSeek 的 Anthropic 兼容端点
+api_key_env: DEEPSEEK_API_KEY   # 实际 key 走环境变量，不写明文
+fallback_provider: null         # M0 不接 fallback；M1+ 可设
+fallback_model: null
+timeout_s: 3.0
+max_retries: 1
+confidence_threshold: 0.6
+max_directives_per_call: 10
+use_prompt_cache: false   # DeepSeek 兼容端点对 cache_control 是 Ignored（传了不报错也不生效）
+disable_thinking: true    # DeepSeek v4 在 Anthropic 端点默认走思考模式（= reasoner），
+                          # 思考模式不兼容 tool_choice 强制；IntentParser 是结构化输出
+                          # 任务不需要推理，显式禁用（见 ADR 0005）

@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -112,7 +111,7 @@ def _format_outcome(o: dict[str, Any] | None) -> str:
                         v = {ik: iv for ik, iv in v.items() if ik != "type"}
                     keyfields[k] = v
             summaries.append(f"{t}({_short_fields(keyfields)})")
-        return f"✓ IntentParseResult: " + " | ".join(summaries)
+        return "✓ IntentParseResult: " + " | ".join(summaries)
     return f"? {kind}: {str(o)[:150]}"
 
 
@@ -191,7 +190,7 @@ def render_report(runs: list[RunData]) -> str:
                 break
         lines.append(f"### {case_name}\n")
         lines.append(f"**Inject**：`{first_inject}`\n")
-        lines.append(f"**Expected**：")
+        lines.append("**Expected**：")
         lines.append(f"- type: `{spec.get('expect_type','?')}`")
         if spec.get("must_have"):
             mh = ", ".join(f"`{k}`={v!r}" for k, v in spec["must_have"].items())
