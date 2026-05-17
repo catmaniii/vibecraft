@@ -20,6 +20,7 @@ from vibecraft.directives.models import (
     EngagementConstraintPayload,
     ProductionOverridePayload,
     StrategySetPayload,
+    TacticalObjectivePayload,
 )
 from vibecraft.directives.types import DirectiveType, StageKind
 from vibecraft.llm import (
@@ -444,3 +445,229 @@ class TestParserLogging:
         seq = session.log_llm_call({})  # 加一条
         assert seq >= 2
         session.close()
+
+
+# =========================================================================
+# P3.4: done_when validate retry
+# =========================================================================
+
+# 合法的 tactical_objective（带合法 done_when）
+_VALID_TACTICAL_OBJECTIVE_RAW = {
+    "interpretation_zh": "进攻对方自然",
+    "confidence": 0.9,
+    "directives": [
+        {
+            "type": "tactical_objective",
+            "payload": {
+                "verb": "attack",
+                "target_area": "enemy_natural",
+                "done_when": {
+                    "kind": "any_of",
+                    "conditions": [
+                        {"kind": "target_destroyed", "target_kind": "natural"},
+                        {"kind": "own_army_size_ratio", "op": "<=", "value": 0.3},
+                    ],
+                },
+                "timeout_s": 120,
+            },
+        }
+    ],
+}
+
+# 第 1 次 LLM 返回 invalid done_when（kind 拼错）
+_INVALID_DONE_WHEN_RAW = {
+    "interpretation_zh": "进攻对方自然",
+    "confidence": 0.9,
+    "directives": [
+        {
+            "type": "tactical_objective",
+            "payload": {
+                "verb": "attack",
+                "target_area": "enemy_natural",
+                "done_when": {
+                    "kind": "invalid_kind_xyz",  # 非法 kind → discriminator 失败
+                    "some_field": 1,
+                },
+                "timeout_s": 120,
+            },
+        }
+    ],
+}
+
+
+class TestDoneWhenValidate:
+    """P3.4: done_when validate retry 路径测试。"""
+
+    @pytest.mark.asyncio
+    async def test_retry_success_on_first_invalid_done_when(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """第 1 次 LLM 返回 invalid done_when → retry 第 2 次正确 → directive OK。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(_INVALID_DONE_WHEN_RAW),   # 第 1 次：invalid
+                _provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW),  # 第 2 次：合法
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("进攻对方自然", default_ctx)
+
+        assert isinstance(outcome, IntentParseResult), f"expected IntentParseResult, got {outcome}"
+        assert len(outcome.directives) == 1
+        d = outcome.directives[0]
+        assert d.type.value == "tactical_objective"
+        assert isinstance(d.payload, TacticalObjectivePayload)
+        assert d.payload.verb == "attack"
+        assert d.payload.done_when is not None
+        # provider 应被调用了 2 次（1 次 + 1 次 retry）
+        assert len(provider.calls) == 2
+        # retry prompt 的 few_shot 应包含 "[Retry]"
+        assert "[Retry]" in provider.calls[1]["few_shot"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_strip_done_when_on_double_invalid(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """第 1 次和第 2 次 LLM 均返回 invalid done_when → fallback strip + echo 含"降级"。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(_INVALID_DONE_WHEN_RAW),  # 第 1 次：invalid
+                _provider_response_for(_INVALID_DONE_WHEN_RAW),  # 第 2 次仍 invalid
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("进攻对方自然", default_ctx)
+
+        assert isinstance(outcome, IntentParseResult), f"expected IntentParseResult, got {outcome}"
+        assert len(outcome.directives) == 1
+        d = outcome.directives[0]
+        assert isinstance(d.payload, TacticalObjectivePayload)
+        # done_when 应被 strip 掉（降级后为 None）
+        assert d.payload.done_when is None
+        # notes 应含"降级"
+        assert outcome.notes is not None
+        assert "降级" in outcome.notes
+        # provider 应被调用了 2 次
+        assert len(provider.calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_non_done_when_error_not_retried(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """非 done_when 字段缺失（如 unit_type）→ 不 retry，直接返回 ParseError。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "...",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "production_override",
+                                "payload": {"foo": "bar"},  # 缺 unit_type，非 done_when 问题
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("...", default_ctx)
+        # 不应该 retry，直接返回 DIRECTIVE_INVALID
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.DIRECTIVE_INVALID
+        # provider 只调用 1 次（不 retry）
+        assert len(provider.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_valid_done_when_passes_through(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """合法 done_when → 直接通过，不触发 retry。"""
+        provider = MockLLMProvider(
+            scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("进攻对方自然", default_ctx)
+
+        assert isinstance(outcome, IntentParseResult)
+        d = outcome.directives[0]
+        assert isinstance(d.payload, TacticalObjectivePayload)
+        assert d.payload.done_when is not None
+        # provider 只调用 1 次（无 retry）
+        assert len(provider.calls) == 1
+
+
+# =========================================================================
+# P3.4: TacticalObjective prompt content
+# =========================================================================
+
+
+class TestTacticalObjectivePrompt:
+    """验证 prompt 包含 verb 白名单 / done_when kind 白名单 / few-shot 例子。"""
+
+    def test_system_prompt_contains_11_verbs(self, library: StrategyLibrary) -> None:
+        sp = build_system_prompt(library.aliases)
+        verbs = [
+            "attack", "defend", "scout", "expand", "harass",
+            "drop", "vision", "raze", "retreat", "regroup", "split",
+        ]
+        for verb in verbs:
+            assert verb in sp, f"verb '{verb}' not found in system prompt"
+
+    def test_system_prompt_contains_done_when_kinds(self, library: StrategyLibrary) -> None:
+        sp = build_system_prompt(library.aliases)
+        kinds = [
+            "unit_count_built_since",
+            "tech_done",
+            "expansion_count",
+            "target_destroyed",
+            "own_army_size_ratio",
+            "vision_acquired",
+            "enemy_killed_in_area",
+            "time_elapsed_since",
+        ]
+        for kind in kinds:
+            assert kind in sp, f"done_when kind '{kind}' not found in system prompt"
+
+    def test_system_prompt_explains_done_when_semantics(self, library: StrategyLibrary) -> None:
+        sp = build_system_prompt(library.aliases)
+        assert "done_when" in sp
+        assert "timeout_s" in sp
+        assert "L2" in sp or "tactical_objective" in sp  # 语义说明
+
+    def test_few_shot_contains_done_when_examples(self) -> None:
+        fs = build_few_shot()
+        # 覆盖 done_when 典型 pattern
+        assert "done_when" in fs
+        assert "vision_acquired" in fs
+        assert "enemy_killed_in_area" in fs
+        assert "time_elapsed_since" in fs
+        assert "tech_done" in fs
+        assert "unit_count_built_since" in fs
+        assert "target_destroyed" in fs
+
+    def test_few_shot_done_when_examples_cover_all_6_patterns(self) -> None:
+        fs = build_few_shot()
+        # 6 个典型例子
+        assert "进攻对方自然" in fs
+        assert "凤凰打死对方 5 个农民就回" in fs
+        assert "30 秒后撤" in fs
+
+    @pytest.mark.asyncio
+    async def test_tactical_objective_directive_parsed_correctly(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """mock LLM 返回合法 TacticalObjective → directive 进结果。"""
+        provider = MockLLMProvider(
+            scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)]
+        )
+        parser = IntentParser(provider, library)
+        outcome = await parser.parse("打对方自然", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        assert len(outcome.directives) == 1
+        d = outcome.directives[0]
+        assert d.type.value == "tactical_objective"
+        assert isinstance(d.payload, TacticalObjectivePayload)
+        assert d.payload.verb == "attack"
+        assert d.payload.target_area == "enemy_natural"

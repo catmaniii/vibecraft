@@ -91,6 +91,38 @@ verb 消歧规则：
 - 玩家说 "出 / train / 训练" + 单位名 → unit 表
 - 玩家说 "研 / 研究 / 升 / research" + 升级名 → upgrade 表
 - "VR" 仅指机械工厂（建筑 RoboticsFacility）；虚空辉光舰不叫 VR
+
+TacticalObjective verb 白名单（11 个，仅此 11 个）：
+- attack    进攻敌方目标区域
+- defend    守卫己方区域
+- scout     侦察目标区域
+- expand    开矿 / 扩张
+- harass    骚扰敌方（凤凰提农民、追猎压矿等）
+- drop      载入空投目标
+- vision    在指定区域获得视野并保持
+- raze      彻底摧毁目标建筑群
+- retreat   撤退回安全位置
+- regroup   在指定点集结部队
+- split     分兵多路
+
+done_when 完成条件 kind 白名单（8 种基础 + 2 种复合）：
+- unit_count_built_since  自指令下达以来产出某兵种数量达到阈值
+- tech_done               升级 / 科技研究完成
+- expansion_count         己方分基数量满足条件
+- target_destroyed        目标建筑 / 单位被摧毁
+- own_army_size_ratio     己方军队规模比例满足条件（相对满编）
+- vision_acquired         在指定区域保持视野 N 秒
+- enemy_killed_in_area    在指定区域击杀敌方单位数量满足条件
+- time_elapsed_since      自某时间点起经过 N 秒（ref: directive_issued / game_start）
+- any_of                  [复合] 任意子条件满足即完成
+- all_of                  [复合] 所有子条件都满足才完成
+
+done_when 语义规则：
+- L2（tactical_objective）和 L4（production_override / tech_override 等精粒度）指令
+  必须带 done_when 字段（结构化完成条件）+ timeout_s 兜底（单位：秒）。
+- L1（strategy_set）和 L3（unit_claim standing order）通常 done_when=null。
+- 每个 directive 只允许一个 done_when；复杂条件用 any_of / all_of 组合。
+- timeout_s 是兜底，无论 done_when 是否满足，超时后 directive 自动结束。
 """
 
 
@@ -161,6 +193,49 @@ def build_few_shot() -> str:
 → strategy_cancel: stage=all
 （玩家想清掉 bot 当前的宏观策略,bot 切到 sustain 模式：只 macro/守家,不主动出门。
   若玩家明确指定 stage：「取消开局剧本」→ stage=opening；「取消中期」→ stage=midgame）
+
+--- done_when 典型 pattern ---
+
+例 10：「进攻对方自然」
+→ [tactical_objective: verb="attack", target_area="enemy_natural",
+   done_when={kind:"any_of", conditions:[
+     {kind:"target_destroyed", target_kind:"natural"},
+     {kind:"own_army_size_ratio", op:"<=", value:0.3}
+   ]},
+   timeout_s: 120]
+（任意子条件：自然基被摧毁，或己方军队损耗超 70%，完成）
+
+例 11：「下个 BG 出 2 哨兵」
+→ [production_override: unit_type="Sentry", count=2,
+   done_when={kind:"unit_count_built_since", unit_type:"Sentry", op:">=", value:2},
+   timeout_s: 60]
+（自指令下达起，产出 2 个哨兵即完成）
+
+例 12：「先研闪烁」
+→ [tech_override: upgrade_id="Blink",
+   done_when={kind:"tech_done", upgrade_id:"BlinkTech"},
+   timeout_s: 90]
+（闪烁研究完成即完成）
+
+例 13：「看一眼对方主基地」
+→ [tactical_objective: verb="scout", target_area="enemy_main",
+   done_when={kind:"vision_acquired", area:"enemy_main", hold_seconds:5},
+   timeout_s: 30]
+（在对方主基地保持视野 5 秒即完成）
+
+例 14：「凤凰打死对方 5 个农民就回」
+→ [tactical_objective: verb="harass", target_area="enemy_main",
+   unit_type_hint:["Phoenix"],
+   done_when={kind:"enemy_killed_in_area",
+              area:"enemy_main", unit_type:"Probe", op:">=", value:5},
+   timeout_s: 90]
+（在主基地区域击杀 5 个探机即完成）
+
+例 15：「30 秒后撤」
+→ [engagement_constraint: stance="retreat",
+   done_when={kind:"time_elapsed_since", seconds:30, ref:"directive_issued"},
+   timeout_s: 60]
+（自指令下达起经过 30 秒即完成）
 """
 
 
