@@ -365,14 +365,22 @@ def _check_time_elapsed_since(
         if issued_at is None:
             return False
         try:
-            game_time = float(game_state.game_time)
+            # sharpy bot 真实 attr 是 .time (python-sc2 BotAI 标准),
+            # mock 测试常用 .game_time -- 兜底两个
+            game_time = float(getattr(game_state, "game_time", None)
+                              if getattr(game_state, "game_time", None) is not None
+                              else game_state.time)
         except Exception:
             return False
         return (game_time - issued_at) >= seconds
 
     if ref == "game_start":
         try:
-            game_time = float(game_state.game_time)
+            # sharpy bot 真实 attr 是 .time (python-sc2 BotAI 标准),
+            # mock 测试常用 .game_time -- 兜底两个
+            game_time = float(getattr(game_state, "game_time", None)
+                              if getattr(game_state, "game_time", None) is not None
+                              else game_state.time)
         except Exception:
             return False
         return game_time >= seconds

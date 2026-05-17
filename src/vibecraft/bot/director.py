@@ -864,6 +864,9 @@ class Director:
     # ------------------------------------------------------------------
 
     def on_tick(self, now: float) -> list[BoardEvent]:
+        # 顶部 import 避免局部 scope 撞掉 module-level reference
+        from vibecraft.directives.board import BoardEvent, BoardEventKind
+
         events = self.board.tick(now)
         need_snapshot = False
         for ev in events:
@@ -877,7 +880,17 @@ class Director:
             game_state = getattr(self, "_bot", None)
             completed_ids = self.task_monitor.tick(now, game_state=game_state)
             for did in completed_ids:
-                self.board.complete(did, now)
+                if self.board.complete(did, now):
+                    # board.complete fires RELEASED into board._events,
+                    # 但 board.tick() return 已经过去(只含本 tick produced),
+                    # board._events 累积要等下次 tick 才被 drain。
+                    # 直接 dispatch RELEASED 让 events/directives.jsonl 立即落盘。
+                    self._dispatch_event(BoardEvent(
+                        kind=BoardEventKind.RELEASED,
+                        ts=now,
+                        directive_id=did,
+                        reason="task_monitor_done",
+                    ))
                 self.task_monitor.detach(did)
                 # 从各列表清理
                 self._in_flight.pop(did, None)
