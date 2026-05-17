@@ -7,32 +7,28 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17 晚，HEAD = e2e 收尾 commit，tag `v0.1.0a4`）
+## 当前状态（最近更新：2026-05-17，HEAD = e83b0bf，分支 `m4-l2-l4-executor`，PR #1 open）
 
-- **里程碑**：M2 出口已 tag `v0.1.0a4` + push。**M2 收尾补丁 + 4 类指令 e2e 验证完成**：
-  - SC2 卡死 watchdog（方案 1 简化 W3：子进程内 30s stall → 自动 kill SC2 + 退码 87）
-  - 删除 view directive 类型（PWA 小地图已有，LLM 文字控视野路径不再需要）
-  - 4 类指令端到端测试驱动 `scripts/e2e_4_directive_types.py` 4/4 PASS（L1/L2/L3/L4）
-  - 两个 P6 后 critical fix 已 commit + push：task_monitor `.time` 兜底 + RELEASED dispatch
-- **本次 session 关键节点**：
-  - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
-  - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
-  - four-layer 指令架构 plan + ADR 0010（skeleton + P1/P2/P3 corner case）+ 4 决策拍板
-  - **M2 P1+P2+P3 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 模式
-    跑通；EventBus + 11 hook wire + L3/L4/L2 全套（state/snapshot/UI/撤销）+
-    task_monitor + done_when 8-kind dispatcher + LLM prompt 教 done_when + 3 个
-    新 PWA card
-- **最近 commit（M2 P5 系列，按时间倒序）**：
-  - `d1f795d` P5.G: target_destroyed 真路径 + 6 checker mock-bot 单测
-  - `308513d` P5.E: standing order unit assign + sharpy 让位 + board.revoke committed
-  - `855bc24` P5.D: publisher area inference (UNIT_DESTROYED + area)
-  - `1b203e8` P5.C: Director bot backref + named_spots field
-  - `8d2d87b` P5.B: vision_acquired 改 ts diff 而非 step count
-  - `f32039e` P5.A: NamedSpotRegistry 新建（15 spot + closest 反查）
-  - `7c6a8de` P3 收尾 + `936dcc2 ... 50aac9b`（P3 系列 7 commit）
-  - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
-  - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
-- **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync。**`v0.1.0a4` 已 tag + push**（M2 完成）
+- **里程碑**：M2 已 `v0.1.0a4`。**本次 session（M4）：L2 战术执行器 + L4 done_when 扩词表 + 统一命令卡片 全部完成，726 unit test PASS，PR #1 已开**
+- **M4 新功能（branch `m4-l2-l4-executor`，PR #1）**：
+  - P0a: facade 新增 2 override 方法 + VibeCraftZoneAttack fork，A 类 L2 attack/defend/retreat 真正影响 bot sharpy plan
+  - P0b: TacticalSquad + execute_tactics_step，B 类 L2 harass/scout unit 抢占
+  - P0c-P0g: L1 cancel 统一 board.submit、7 新 done_when kind、STRUCTURE_OVERRIDE directive type、command_cards 统一快照、revoke 扩 L2/L1
+  - P0h: CommandCard/Stack PWA 组件 + CockpitView 切统一卡片
+  - P0i-P0k: LLM prompt A/B 类规则 + llm_eval + e2e O 系列
+  - Bug fix: revoke event `type:"event"` 补全（PWA 静默丢弃修）、test isolation sc2.* 污染修
+- **最近 commit（分支 HEAD = e83b0bf）**：
+  - `e83b0bf` fix: ruff lint 清零
+  - `cdd595f` docs(adr): ADR 0011
+  - `ebc1b1b` fix: revoke event type + cm None cache + UP037 + test isolation
+  - `a135dc2` feat(web): CockpitView 切 CommandCardStack
+  - `be1b3a5` test(e2e): verify_log_patterns + O 系列 case
+- **GitHub PR**：https://github.com/catmaniii/vibecraft/pull/1（待 merge → main）
+- **下一步**：
+  1. PR merge → main，打 `v0.1.0a5` tag
+  2. **M3 开始**：完整驾驶舱精修 + L4 production override sharpy 真出兵 wire + phase stepper
+  3. **backlog**：3 个 flaky cross-test（`test_loads_real_strategies` / `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`），pytest-forked 排查
+  4. **e2e O 系列 case**（需 SC2 客户端）：O1-O4 case 需跑 `scripts/e2e_4_directive_types.py` 验证 L2/L4 新路径真工作
 
 ---
 
