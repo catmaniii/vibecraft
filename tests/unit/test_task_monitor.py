@@ -354,3 +354,484 @@ class TestTimeout:
 
         assert "d1" in completed
         assert "d2" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P3.3: pydantic attach_directive (retrofit)
+# ---------------------------------------------------------------------------
+
+
+class TestPydanticAttach:
+    def test_attach_accepts_pydantic_model(self) -> None:
+        """attach_directive 传 pydantic obj 自动 model_dump，行为等同 dict。"""
+        from vibecraft.directives.models import TimeElapsedSince
+
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        dw = TimeElapsedSince(kind="time_elapsed_since", seconds=30, ref="directive_issued")
+        monitor.attach_directive("d1", dw, issued_at=10.0, timeout_s=None)
+
+        # 内部应存为 dict
+        assert isinstance(monitor._done_when["d1"], dict)
+        assert monitor._done_when["d1"]["kind"] == "time_elapsed_since"
+        assert monitor._done_when["d1"]["seconds"] == 30
+
+    def test_attach_pydantic_unit_count_subscribes_event(self) -> None:
+        """pydantic UnitCountBuiltSince → 依然订阅 UNIT_CREATED。"""
+        from vibecraft.directives.models import UnitCountBuiltSince
+
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        dw = UnitCountBuiltSince(kind="unit_count_built_since", unit_type="Zealot", op=">=", value=1)
+        monitor.attach_directive("d1", dw, issued_at=0.0, timeout_s=None)
+
+        assert len(monitor._sub_ids["d1"]) == 1
+        bus.publish(
+            Event(kind=EventKind.UNIT_CREATED, ts=1.0, payload={}, owner="own", unit_type="Zealot")
+        )
+        assert monitor._unit_built_counts["d1"] == 1
+
+
+# ---------------------------------------------------------------------------
+# P3.3: expansion_count checker
+# ---------------------------------------------------------------------------
+
+
+class TestExpansionCount:
+    def _gs(self, townhall_count: int) -> MagicMock:
+        gs = MagicMock()
+        gs.townhalls.__len__ = MagicMock(return_value=townhall_count)
+        return gs
+
+    def test_triggers_when_expansion_count_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": ">=", "value": 3}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = self._gs(3)
+        completed = monitor.tick(now=1.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_not_triggered_when_count_below(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": ">=", "value": 3}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = self._gs(2)
+        completed = monitor.tick(now=1.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_none_game_state_returns_false(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "expansion_count", "op": ">=", "value": 1}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        completed = monitor.tick(now=1.0, game_state=None)
+        assert "d1" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P3.3: tech_done checker
+# ---------------------------------------------------------------------------
+
+
+class TestTechDone:
+    def test_triggers_when_upgrade_complete_event_fires(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "ProtossGroundWeaponsLevel1"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 发 UPGRADE_COMPLETE 事件，payload.upgrade_id 匹配
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "ProtossGroundWeaponsLevel1"},
+            )
+        )
+
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_not_triggered_before_upgrade_complete(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "ProtossGroundWeaponsLevel1"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 没有发任何事件
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_wrong_upgrade_id_does_not_trigger(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "ProtossGroundWeaponsLevel1"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 发的是 Level2，不匹配
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "ProtossGroundWeaponsLevel2"},
+            )
+        )
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_detach_clears_tech_done_flag(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "Blink"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+        monitor.detach("d1")
+        assert "d1" not in monitor._tech_done_flags
+
+
+# ---------------------------------------------------------------------------
+# P3.3: target_destroyed checker
+# ---------------------------------------------------------------------------
+
+
+class TestTargetDestroyed:
+    def test_unit_type_target_destroyed_when_no_enemy_units(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.enemy_units.of_type.return_value.__len__ = MagicMock(return_value=0)
+        completed = monitor.tick(now=5.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_unit_type_not_destroyed_when_enemy_units_remain(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.enemy_units.of_type.return_value.__len__ = MagicMock(return_value=5)
+        completed = monitor.tick(now=5.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_natural_target_kind_returns_false_in_p3(self) -> None:
+        """P3 阶段 natural/third/main 坐标 poll 未实现，返回 False。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "target_destroyed", "target_kind": "natural"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_none_game_state_returns_false(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        completed = monitor.tick(now=5.0, game_state=None)
+        assert "d1" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P3.3: own_army_size_ratio checker
+# ---------------------------------------------------------------------------
+
+
+class TestOwnArmySizeRatio:
+    def test_triggers_when_ratio_below_threshold(self) -> None:
+        """初始 supply=20, 当前 supply=8 → ratio=0.4 <= 0.5 → done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.5}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 首次 tick: 建立 snapshot = 20
+        gs_initial = MagicMock()
+        gs_initial.supply_army = 20
+        monitor.tick(now=1.0, game_state=gs_initial)
+
+        # 第二 tick: supply 降至 8
+        gs_low = MagicMock()
+        gs_low.supply_army = 8
+        completed = monitor.tick(now=2.0, game_state=gs_low)
+        assert "d1" in completed
+
+    def test_not_triggered_when_ratio_above_threshold(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.3}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.supply_army = 20
+        monitor.tick(now=1.0, game_state=gs)  # snapshot = 20
+
+        gs2 = MagicMock()
+        gs2.supply_army = 15  # ratio = 0.75 > 0.3
+        completed = monitor.tick(now=2.0, game_state=gs2)
+        assert "d1" not in completed
+
+    def test_none_game_state_returns_false(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "own_army_size_ratio", "op": "<=", "value": 0.5}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        completed = monitor.tick(now=1.0, game_state=None)
+        assert "d1" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P3.3: vision_acquired checker
+# ---------------------------------------------------------------------------
+
+
+class TestVisionAcquired:
+    def test_triggers_after_hold_seconds_visible(self) -> None:
+        """每 tick 可见累计，达到 hold_seconds 后 done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 3.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.is_visible.return_value = True  # 每次都可见
+
+        # 3 次 tick 后 hold_counter=3 >= hold_seconds=3 → done
+        for i in range(3):
+            result = monitor.tick(now=float(i), game_state=gs)
+        assert "d1" in result  # type: ignore[possibly-undefined]
+
+    def test_not_triggered_before_hold_seconds(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.is_visible.return_value = True
+
+        # 只跑 2 tick (counter=2 < 5)
+        for i in range(2):
+            result = monitor.tick(now=float(i), game_state=gs)
+        assert "d1" not in result  # type: ignore[possibly-undefined]
+
+    def test_unsupported_area_name_returns_false(self) -> None:
+        """area 不在白名单 → named_spot 解析返回 None → 不累计 → not done。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "unknown_spot", "hold_seconds": 1.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = MagicMock()
+        gs.is_visible.return_value = True
+
+        # 多次 tick 也不 done（area 解析失败）
+        for i in range(5):
+            result = monitor.tick(now=float(i), game_state=gs)
+        assert "d1" not in result  # type: ignore[possibly-undefined]
+
+    def test_none_game_state_returns_false(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 1.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        completed = monitor.tick(now=1.0, game_state=None)
+        assert "d1" not in completed
+
+
+# ---------------------------------------------------------------------------
+# P3.3: enemy_killed_in_area checker
+# ---------------------------------------------------------------------------
+
+
+class TestEnemyKilledInArea:
+    def test_triggers_when_kill_count_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "natural",
+            "unit_type": "Roach",
+            "op": ">=",
+            "value": 3,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 发 3 个 UNIT_DESTROYED (enemy, Roach, area=natural)
+        for _ in range(3):
+            bus.publish(
+                Event(
+                    kind=EventKind.UNIT_DESTROYED,
+                    ts=5.0,
+                    payload={"area": "natural"},
+                    owner="enemy",
+                    unit_type="Roach",
+                )
+            )
+
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_not_triggered_when_kill_count_below(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "natural",
+            "unit_type": "Roach",
+            "op": ">=",
+            "value": 5,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        for _ in range(2):
+            bus.publish(
+                Event(
+                    kind=EventKind.UNIT_DESTROYED,
+                    ts=5.0,
+                    payload={"area": "natural"},
+                    owner="enemy",
+                    unit_type="Roach",
+                )
+            )
+
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" not in completed
+
+    def test_own_unit_destroyed_does_not_increment(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "natural",
+            "unit_type": "Roach",
+            "op": ">=",
+            "value": 1,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # owner="own" → filter 拦掉
+        bus.publish(
+            Event(
+                kind=EventKind.UNIT_DESTROYED,
+                ts=5.0,
+                payload={"area": "natural"},
+                owner="own",
+                unit_type="Roach",
+            )
+        )
+        assert monitor._enemy_killed_counts.get("d1", 0) == 0
+
+    def test_wrong_area_does_not_increment(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "enemy_killed_in_area",
+            "area": "natural",
+            "unit_type": "Roach",
+            "op": ">=",
+            "value": 1,
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # area="third" != "natural" → 不计
+        bus.publish(
+            Event(
+                kind=EventKind.UNIT_DESTROYED,
+                ts=5.0,
+                payload={"area": "third"},
+                owner="enemy",
+                unit_type="Roach",
+            )
+        )
+        assert monitor._enemy_killed_counts.get("d1", 0) == 0
+
+
+# ---------------------------------------------------------------------------
+# P3.3: any_of / all_of 复合 checker
+# ---------------------------------------------------------------------------
+
+
+class TestAnyOf:
+    def test_any_of_triggers_when_one_condition_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "any_of",
+            "conditions": [
+                {"kind": "time_elapsed_since", "seconds": 999, "ref": "game_start"},
+                {"kind": "time_elapsed_since", "seconds": 10, "ref": "game_start"},
+            ],
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = _make_game_state(game_time=15.0)
+        completed = monitor.tick(now=15.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_any_of_not_triggered_when_no_condition_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "any_of",
+            "conditions": [
+                {"kind": "time_elapsed_since", "seconds": 999, "ref": "game_start"},
+                {"kind": "time_elapsed_since", "seconds": 100, "ref": "game_start"},
+            ],
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = _make_game_state(game_time=15.0)
+        completed = monitor.tick(now=15.0, game_state=gs)
+        assert "d1" not in completed
+
+
+class TestAllOf:
+    def test_all_of_triggers_when_all_conditions_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "all_of",
+            "conditions": [
+                {"kind": "time_elapsed_since", "seconds": 10, "ref": "game_start"},
+                {"kind": "time_elapsed_since", "seconds": 20, "ref": "game_start"},
+            ],
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = _make_game_state(game_time=25.0)
+        completed = monitor.tick(now=25.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_all_of_not_triggered_when_one_condition_not_met(self) -> None:
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {
+            "kind": "all_of",
+            "conditions": [
+                {"kind": "time_elapsed_since", "seconds": 10, "ref": "game_start"},
+                {"kind": "time_elapsed_since", "seconds": 999, "ref": "game_start"},  # 未满足
+            ],
+        }
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        gs = _make_game_state(game_time=25.0)
+        completed = monitor.tick(now=25.0, game_state=gs)
+        assert "d1" not in completed
