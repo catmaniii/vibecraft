@@ -300,14 +300,14 @@ class TestTimeout:
     def test_timeout_triggers_regardless_of_done_when(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        # done_when 条件很难满足 (需要 9999 个单位)
+        # M3 fix: timeout 用 wall(monotonic),注入可控 fake
+        wall = [0.0]
+        monitor._monotonic = lambda: wall[0]
         done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 9999}
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=60)
-
-        # elapsed = 70 > timeout_s=60
+        wall[0] = 70.0  # wall +70 > timeout 60
         gs = _make_game_state(game_time=70.0)
         completed = monitor.tick(now=70.0, game_state=gs)
-
         assert "d1" in completed
 
     def test_timeout_not_triggered_before_deadline(self):
@@ -336,22 +336,24 @@ class TestTimeout:
     def test_timeout_triggers_exactly_at_deadline(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
+        wall = [0.0]
+        monitor._monotonic = lambda: wall[0]
         monitor.attach_directive("d1", None, issued_at=0.0, timeout_s=90)
-
+        wall[0] = 90.0
         gs = _make_game_state(game_time=90.0)
         completed = monitor.tick(now=90.0, game_state=gs)
-
         assert "d1" in completed
 
     def test_multiple_directives_only_expired_returned(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
+        wall = [0.0]
+        monitor._monotonic = lambda: wall[0]
         monitor.attach_directive("d1", None, issued_at=0.0, timeout_s=60)
         monitor.attach_directive("d2", None, issued_at=0.0, timeout_s=120)
-
+        wall[0] = 70.0  # d1 过(60), d2 未过(120)
         gs = _make_game_state(game_time=70.0)
         completed = monitor.tick(now=70.0, game_state=gs)
-
         assert "d1" in completed
         assert "d2" not in completed
 

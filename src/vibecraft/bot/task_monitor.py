@@ -138,14 +138,24 @@ class TaskMonitor:
     """
 
     def __init__(self, board: Any, event_bus: EventBus) -> None:
+        import time as _time
+
         self.board = board
         self.event_bus = event_bus
+        # M3 fix:wall-time monotonic fn(注入式,单测可替换)。timeout 用
+        # wall time 不用 game time —— fast mode game time 跑得快会误触发。
+        self._monotonic: Any = _time.monotonic
         # directive_id → list of sub_id, detach 时统一 unsubscribe
         self._sub_ids: dict[str, list[int]] = {}
         # directive_id → accumulated unit_built count (event-driven, O(1) 增量)
         self._unit_built_counts: dict[str, int] = {}
         # directive_id → issued_at (for time_elapsed_since ref=directive_issued)
         self._issued_at: dict[str, float] = {}
+        # M3 fix:directive attach 时的 wall-clock(monotonic 秒)。timeout 兜底
+        # 用 wall time 不用 game time —— fast mode 下 game time 跑得快,
+        # game-time-based timeout 在 wall ~2-3s 误触发,把 directive 干掉
+        # 让 bot.train 没机会真造完单位(L4 真出兵 verify 暴露)。
+        self._issued_wall: dict[str, float] = {}
         # directive_id → done_when dict
         self._done_when: dict[str, dict[str, Any]] = {}
         # directive_id → timeout_s (None = no timeout)
@@ -175,6 +185,7 @@ class TaskMonitor:
             done_when = done_when.model_dump()
 
         self._issued_at[directive_id] = issued_at
+        self._issued_wall[directive_id] = self._monotonic()
         self._timeout_s[directive_id] = timeout_s
         self._sub_ids.setdefault(directive_id, [])
 
@@ -271,6 +282,7 @@ class TaskMonitor:
             self.event_bus.unsubscribe(sub_id)
         self._unit_built_counts.pop(directive_id, None)
         self._issued_at.pop(directive_id, None)
+        self._issued_wall.pop(directive_id, None)
         self._done_when.pop(directive_id, None)
         self._timeout_s.pop(directive_id, None)
         self._tech_done_flags.pop(directive_id, None)
@@ -291,16 +303,22 @@ class TaskMonitor:
             timeout_s = self._timeout_s.get(directive_id)
             done_when = self._done_when.get(directive_id, {})
 
-            # timeout 兜底 (优先于 done_when 检查)
-            if timeout_s is not None and (now - issued_at) >= timeout_s:
-                logger.debug(
-                    "task_monitor timeout directive_id=%s elapsed=%.1f timeout=%d",
-                    directive_id,
-                    now - issued_at,
-                    timeout_s,
-                )
-                completed.append(directive_id)
-                continue
+            # timeout 兜底 (优先于 done_when 检查)。用 wall time 不用 game time:
+            # fast mode game time 跑得快,game-time-based timeout 在 wall ~2-3s
+            # 误触发(L4 真出兵 verify 暴露)。done_when 字段(如 time_elapsed_since
+            # 仍用 game time,因为玩家说"30 秒后撤"通常指游戏内时间)。
+            issued_wall = self._issued_wall.get(directive_id)
+            if timeout_s is not None and issued_wall is not None:
+                elapsed_wall = self._monotonic() - issued_wall
+                if elapsed_wall >= timeout_s:
+                    logger.debug(
+                        "task_monitor timeout directive_id=%s elapsed_wall=%.1f timeout=%d",
+                        directive_id,
+                        elapsed_wall,
+                        timeout_s,
+                    )
+                    completed.append(directive_id)
+                    continue
 
             # own_army_size_ratio: 首次 tick 时 snapshot 初始 supply
             if (
