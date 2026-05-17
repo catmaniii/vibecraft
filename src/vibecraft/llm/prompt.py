@@ -204,10 +204,16 @@ done_when 语义规则：
 
 ====== L2 tactical_objective done_when 分流规则（A 类 / B 类） ======
 
-- A 系列 verb (attack / defend / retreat / hold / vision):
+- A 系列 verb (attack / defend / retreat / vision):
   done_when **必须 None**。这些是"全军方向"覆盖，玩家通过 PWA 点 X 解除。
   设 done_when 会被 task_monitor 立即判 done → bot 立刻回到 sharpy 默认决策，
   跟玩家原意冲突。
+  注意：`hold`（原地不动）是 engagement_constraint.stance 的值，**不是** tactical_objective 的 verb。
+
+- engagement_constraint 政策:
+  - 默认 done_when=None（同 A 类，玩家通过 PWA 点 X 解除）
+  - 玩家明确说"直到 X"/"N 秒后"才给 done_when
+    （例：retreat + time_elapsed_since / defend + tech_done）
 
 - B 系列 verb (harass / scout):
   done_when **必须给**（打死 N 农民就回 → enemy_killed_in_area；
@@ -445,9 +451,10 @@ def build_few_shot() -> str:
 → [tactical_objective: verb="attack", target_area="enemy_natural",
    done_when=None,
    timeout_s=None]
-注:A 类 verb (attack / defend / retreat / hold / vision) done_when 必须 None。
+注:A 类 verb (attack / defend / retreat / vision) done_when 必须 None。
    task_monitor 设了 done_when 会立即判 done → bot 马上退回 sharpy 默认决策，
    跟玩家原意冲突。玩家通过 PWA 点 X 解除，不靠 done_when 自动结束。
+   "全员别动"用 engagement_constraint(stance=hold)，不是 tactical_objective。
 
 例 26 (B 类 harass + done_when + unit_count_hint 必填): 「派 5 个凤凰去骚扰对方主基地」
 → [tactical_objective: verb="harass", target_area="enemy_main",
