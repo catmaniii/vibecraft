@@ -1000,6 +1000,13 @@ def make_protoss_bot_class(
             await super().on_step(self._sharpy_iteration)
             self._sharpy_iteration += 1
             self._refresh_llm_controlled_roles()
+            # M3 L4 wire:vibecraft 端补刀 train production_override 单位
+            # (增量语义,每 tick 最多 1 个,失败下 tick 再试)。
+            if self.director is not None:
+                try:
+                    self.director.execute_production_overrides_step(now_s)
+                except Exception as exc:
+                    logger.debug("execute_production_overrides_step fail: %s", exc)
 
         async def on_unit_created(self, unit: Any) -> None:
             """单位创建事件。P1.0b: publish UNIT_CREATED event 到 EventBus。"""

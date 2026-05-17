@@ -631,6 +631,8 @@ class Director:
                     DirectiveType.EXPANSION_OVERRIDE,
                 ):
                     self.production_overrides.append(submitted)
+                    # M3: L4 wire — emit "已加入生产队列" event 给 PWA(玩家反馈)
+                    self._emit_production_queued_event(submitted, now)
                 else:
                     self._in_flight[submitted.id] = submitted
                 # P3.2: 注册到 task_monitor（有 done_when 时才有意义，但 attach 本身 None-safe）
@@ -856,6 +858,97 @@ class Director:
         )
         # 主动推 snapshot
         self._push_snapshot(now)
+
+    # ------------------------------------------------------------------
+    # M3 L4 sharpy 真出兵 wire (production_override → bot.train)
+    # ------------------------------------------------------------------
+
+    def _emit_production_queued_event(self, directive: Directive, now: float) -> None:
+        """L4 directive 入 production_overrides 时 emit 一条 PWA event 告诉玩家已收到。
+
+        语义:"将加入生产队列",1.5s commit 后实际开始 train。
+        """
+        from vibecraft.directives.models import (
+            ExpansionOverridePayload,
+            ProductionOverridePayload,
+            TechOverridePayload,
+        )
+
+        p = directive.payload
+        if isinstance(p, ProductionOverridePayload):
+            display = f"{p.unit_type} × {p.count} 已加入生产队列"
+        elif isinstance(p, TechOverridePayload):
+            display = f"升级 {p.upgrade_id} 已加入生产队列"
+        elif isinstance(p, ExpansionOverridePayload):
+            display = f"开矿 → {p.target_count} 矿 已加入生产队列"
+        else:
+            display = f"{directive.type.value} 已加入生产队列"
+        event_dict = {
+            "type": "event",
+            "kind": "directive.queued",
+            "ts": round(now, 3),
+            "payload": {"directive_id": directive.id, "display": display},
+        }
+        self._push_event(event_dict)
+
+    def execute_production_overrides_step(self, now: float) -> None:
+        """每 sharpy bot step 调用。增量语义: count 是"额外多出"的数。
+
+        策略:每 tick 最多 train 1 个,避免一波打光资源(下 tick 再来)。
+        实际 train 走 python-sc2 `bot.train(UnitTypeId)` —— 它内部检
+        affordability + 找 idle building,失败时静默(下 tick 再试)。
+
+        done 判定由 task_monitor 检 done_when=unit_count_built_since:
+        EventBus.UNIT_CREATED → task_monitor counter +1 → counter >= count
+        → board.complete → production_overrides 自动 pop。
+        """
+        from vibecraft.directives.models import ProductionOverridePayload
+
+        if not self.production_overrides or self._bot is None:
+            return
+        # 只 train production_override(L4 unit 出兵);tech_override / expansion_override
+        # 留给 sharpy plan 自己处理(科技 / 开矿走 plan 路径)
+        for d in self.production_overrides:
+            payload = d.payload
+            if not isinstance(payload, ProductionOverridePayload):
+                continue
+            unit_id = self._resolve_unit_type_id(payload.unit_type)
+            if unit_id is None:
+                continue
+            already = self._production_override_built_count(d)
+            remaining = payload.count - already
+            if remaining <= 0:
+                continue
+            # python-sc2 bot.train: sync 方法, 内部 can_afford + find idle building,
+            # 失败时返回 0;不抛异常
+            try:
+                self._bot.train(unit_id, amount=1)
+            except Exception as exc:  # 保险兜底
+                logger.debug("production_override train fail: %s", exc)
+
+    @staticmethod
+    def _resolve_unit_type_id(name: str) -> Any:
+        """字符串 'Sentry' → UnitTypeId.SENTRY。失败返回 None。"""
+        try:
+            from sc2.ids.unit_typeid import UnitTypeId
+
+            return UnitTypeId[name.upper()]
+        except (ImportError, KeyError):
+            return None
+
+    def _production_override_built_count(self, directive: Directive) -> int:
+        """查 task_monitor 累计的 unit_count_built_since counter。
+
+        task_monitor._unit_built_counts[directive_id] 由 EventBus UNIT_CREATED
+        handler 维护。L4 production_override 通常带 done_when=unit_count_built_since,
+        counter 自然累加。没 done_when 时 fallback 返回 0(每 tick 都试 train)。
+        """
+        if self.task_monitor is None:
+            return 0
+        try:
+            return int(self.task_monitor._unit_built_counts.get(directive.id, 0))
+        except Exception:
+            return 0
 
     def _remember_command(
         self, text: str, now: float, outcome: ParseOutcome | None = None
