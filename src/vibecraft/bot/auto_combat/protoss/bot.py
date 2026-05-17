@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from vibecraft.bot.event_bus import Event, EventBus, EventKind
+from vibecraft.bot.named_spot import NamedSpotRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -529,6 +530,8 @@ def make_protoss_bot_class(
             # 从这里取 owner/type。sharpy knowledge.unit_cache 是权威源，这是补充 lookup。）
             self._enemy_units_dict: dict[int, Any] = {}
             self._own_units_dict: dict[int, Any] = {}
+            # P5.C: named_spot registry — task_monitor vision checker 通过 bot.named_spots.resolve() 解析
+            self.named_spots = NamedSpotRegistry()
 
         def _update_tactics_throttled(self, now: float) -> None:
             """每 ~1s 算一次 stance,写到 director._tactics。
@@ -785,6 +788,10 @@ def make_protoss_bot_class(
 
             self.facade = _SharpyFacade(self)
             self.director = director_factory(self.facade)
+
+            # P5.C: bot backref — director 通过 _bot 把 self 传给 task_monitor.tick
+            if self.director is not None:
+                self.director._bot = self
 
             # P3.2: 把 event_bus 注入 director，启动 task_monitor
             if self.director is not None and hasattr(self, "event_bus"):

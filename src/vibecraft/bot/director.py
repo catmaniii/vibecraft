@@ -118,6 +118,7 @@ class Director:
         config: DirectorConfig | None = None,
         library: StrategyLibrary | None = None,
         event_bus: EventBus | None = None,
+        bot: Any | None = None,
     ) -> None:
         self.facade = facade
         self.parser = parser
@@ -127,6 +128,8 @@ class Director:
         self.library = library
         self._recent_commands: list[_RecentCommand] = []
         self._committed_count = 0
+        # P5.C: bot backref（sharpy KnowledgeBot 实例；向后兼容：不传则 None）
+        self._bot = bot
         # P3.2: task_monitor（需要 event_bus；不传则为 None，所有调用有 None-guard）
         self.task_monitor: TaskMonitor | None
         if event_bus is not None:

@@ -862,6 +862,94 @@ class TestAnyOf:
         assert "d1" not in completed
 
 
+# ---------------------------------------------------------------------------
+# P5.C: vision_acquired 用 bot.named_spots registry 路径
+# ---------------------------------------------------------------------------
+
+
+class TestVisionAcquiredWithRegistry:
+    def test_registry_path_used_when_named_spots_present(self) -> None:
+        """game_state.named_spots 是 NamedSpotRegistry 实例时，走 registry.resolve 路径。
+
+        用 patch 替换 NamedSpotRegistry.resolve 方法，返回一个 sentinel 点；
+        is_visible 返回 True → first_ts 设置 → elapsed 满足 → done。
+        """
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # 构造一个对象，named_spots 是真正的 NamedSpotRegistry（以通过 isinstance 检查）
+        registry = NamedSpotRegistry()
+        fake_point = MagicMock()
+
+        mock_bot = MagicMock(spec=["named_spots", "is_visible"])
+        mock_bot.named_spots = registry
+        mock_bot.is_visible.return_value = True
+
+        with patch.object(registry, "resolve", return_value=fake_point) as mock_resolve:
+            # tick 1: now=100 → first_ts=100, elapsed=0 → not done
+            result = monitor.tick(now=100.0, game_state=mock_bot)
+            assert "d1" not in result
+            # resolve 应被调用，传 area name 和 game_state
+            mock_resolve.assert_called_with("natural", mock_bot)
+
+            # tick 2: now=105 → elapsed=5 >= hold_seconds=5 → done
+            result = monitor.tick(now=105.0, game_state=mock_bot)
+            assert "d1" in result
+
+    def test_registry_returns_none_causes_false(self) -> None:
+        """registry.resolve 返回 None (spot 不可解析) → checker 返回 False。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "enemy_third", "hold_seconds": 1.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        registry = NamedSpotRegistry()
+        mock_bot = MagicMock(spec=["named_spots", "is_visible"])
+        mock_bot.named_spots = registry
+        mock_bot.is_visible.return_value = True
+
+        with patch.object(registry, "resolve", return_value=None):
+            result = monitor.tick(now=100.0, game_state=mock_bot)
+            assert "d1" not in result
+            # 因为 point=None，is_visible 不该被调用（resolve 失败短路）
+            mock_bot.is_visible.assert_not_called()
+
+    def test_fallback_when_no_named_spots_attr(self) -> None:
+        """game_state 无真实 named_spots 时 fallback 到 P3 白名单逻辑，向后兼容。
+
+        用 spec 限定 MagicMock 属性，确保 named_spots 不存在（getattr 返回 None）。
+        """
+        from unittest.mock import MagicMock
+
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "vision_acquired", "area": "natural", "hold_seconds": 5.0}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # spec 限定不含 named_spots → getattr(..., "named_spots", None) 返回 None
+        gs = MagicMock(spec=["game_time", "is_visible"])
+        gs.is_visible.return_value = True
+
+        # P3 fallback: natural 在白名单 → 返回 placeholder → is_visible 被调用
+        # tick 1: now=100 → first_ts 设 100
+        result = monitor.tick(now=100.0, game_state=gs)
+        assert "d1" not in result
+
+        # tick 2: now=105 → elapsed=5 >= 5 → done（P3 placeholder 让 is_visible 被调）
+        result = monitor.tick(now=105.0, game_state=gs)
+        assert "d1" in result
+
+
 class TestAllOf:
     def test_all_of_triggers_when_all_conditions_met(self) -> None:
         bus = EventBus()

@@ -706,3 +706,72 @@ class TestTaskMonitorWire:
         bus = EventBus()
         d.setup_task_monitor(bus)
         assert isinstance(d.task_monitor, TaskMonitor)
+
+
+# ---------------------------------------------------------------------------
+# P5.C: Director bot backref
+# ---------------------------------------------------------------------------
+
+
+class TestDirectorBotBackref:
+    def test_director_accepts_bot_kwarg(self, session: GameSession) -> None:
+        """Director(bot=mock_bot) 构造 OK，_bot 保存 bot 引用。"""
+        from unittest.mock import MagicMock
+
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        mock_bot = MagicMock()
+        d = Director(facade=facade, parser=parser, session=session, bot=mock_bot)
+        assert d._bot is mock_bot
+
+    def test_director_bot_none_by_default(self, session: GameSession) -> None:
+        """不传 bot 时 _bot 为 None（向后兼容）。"""
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        d = Director(facade=facade, parser=parser, session=session)
+        assert d._bot is None
+
+    def test_on_tick_passes_bot_to_task_monitor(self, session: GameSession) -> None:
+        """on_tick 时把 _bot 传给 task_monitor.tick 作为 game_state。"""
+        from unittest.mock import MagicMock, patch
+
+        from vibecraft.bot.event_bus import EventBus
+        from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
+
+        facade = FakeFacade()
+        provider = MockLLMProvider(
+            scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
+        )
+        library_inst = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        )
+        parser = IntentParser(provider, library_inst, session=session)
+        mock_bot = MagicMock()
+        d = Director(facade=facade, parser=parser, session=session, bot=mock_bot)
+
+        # 注入 task_monitor
+        bus = EventBus()
+        d.setup_task_monitor(bus)
+
+        with patch.object(d.task_monitor, "tick", return_value=[]) as mock_tick:
+            d.on_tick(now=10.0)
+            mock_tick.assert_called_once_with(10.0, game_state=mock_bot)

@@ -45,18 +45,29 @@ def register(kind: str) -> Callable[[Callable[..., bool]], Callable[..., bool]]:
 
 
 # ---------------------------------------------------------------------------
-# named_spot whitelist (P5 扩展, P3 只支持 natural/third/main)
+# named_spot whitelist (P3 fallback; P5 改走 NamedSpotRegistry)
 # ---------------------------------------------------------------------------
 
 _NAMED_SPOT_WHITELIST = {"natural", "third", "main"}
 
 
 def _resolve_named_spot(name: str, game_state: Any) -> Any | None:
-    """把 named_spot 解析成位置对象。P3 只支持 natural/third/main, 其它 fallback None。
+    """把 named_spot 解析成位置对象。
 
-    game_state 需要有 enemy_start_locations / expansions_sorted (sharpy) 等。
-    实际坐标解析留到 P5 再精化；P3 placeholder 只检查白名单。
+    P5.C: 优先用 game_state.named_spots.resolve(name, game_state)（bot 含 NamedSpotRegistry）。
+    只在 named_spots 是 NamedSpotRegistry 实例时走新路径，避免 MagicMock 自动创建属性
+    干扰单测 fallback 逻辑。
+    若 game_state 无真实 named_spots 则 fallback 到 P3 白名单占位逻辑，
+    保证现有 P3.3 测试不受影响。
     """
+    if game_state is not None:
+        from vibecraft.bot.named_spot import NamedSpotRegistry
+
+        registry = getattr(game_state, "named_spots", None)
+        if isinstance(registry, NamedSpotRegistry):
+            return registry.resolve(name, game_state)
+
+    # P3 fallback: 只支持 natural/third/main，其它返回 None
     if name not in _NAMED_SPOT_WHITELIST:
         logger.warning("named_spot '%s' 不在 P3 白名单 [natural, third, main]，checker 返回 False", name)
         return None
@@ -65,7 +76,7 @@ def _resolve_named_spot(name: str, game_state: Any) -> Any | None:
 
 
 class _NAMED_SPOT_PLACEHOLDER:
-    """P3 阶段 named_spot 的占位对象。P5 替换为真实坐标。"""
+    """P3 阶段 named_spot 的占位对象（fallback 路径用，P5 registry 路径不经此）。"""
 
     def __init__(self, name: str) -> None:
         self.name = name
