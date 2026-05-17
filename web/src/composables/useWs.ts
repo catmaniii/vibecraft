@@ -20,6 +20,7 @@ import type {
   StandingOrderView,
   ProductionOverrideView,
   TacticalObjectiveView,
+  CommandCardView,
   RevokeDirectiveFrame,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
@@ -68,6 +69,9 @@ export function useWs() {
 
   // P3.5：active tactical objectives（snapshot 透传）
   const activeTactics = ref<TacticalObjectiveView[]>([])
+
+  // P0f Task 16：统一命令卡片列表（snapshot 透传）
+  const commandCards = ref<CommandCardView[]>([])
 
   // command_echo（最新一条）
   const lastEcho = ref<CommandEchoFrame | null>(null)
@@ -124,6 +128,7 @@ export function useWs() {
             standingOrders.value = f.standing_orders ?? []
             productionOverrides.value = f.production_overrides ?? []
             activeTactics.value = f.active_tactics ?? []
+            commandCards.value = f.command_cards ?? []
             break
           }
           case 'event': {
@@ -242,6 +247,7 @@ export function useWs() {
     standingOrders: readonly(standingOrders),
     productionOverrides: readonly(productionOverrides),
     activeTactics: readonly(activeTactics),
+    commandCards: readonly(commandCards),
     send,
     sendViewMove,
     confirmRecommendation,

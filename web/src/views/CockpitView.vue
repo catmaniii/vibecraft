@@ -16,9 +16,7 @@ import M3Placeholder from '@/components/M3Placeholder.vue'
 import RecommendationCard from '@/components/RecommendationCard.vue'
 import BotDecisionCard from '@/components/BotDecisionCard.vue'
 import PendingForceCard from '@/components/PendingForceCard.vue'
-import StandingOrdersCard from '@/components/StandingOrdersCard.vue'
-import ProductionOverridesCard from '@/components/ProductionOverridesCard.vue'
-import TacticsCard from '@/components/TacticsCard.vue'
+import CommandCardStack from '@/components/CommandCardStack.vue'
 import type {
   SnapshotFrame,
   EventFrame,
@@ -28,9 +26,7 @@ import type {
   RecommendationView,
   TacticsView,
   PendingForceStrategyView,
-  StandingOrderView,
-  ProductionOverrideView,
-  TacticalObjectiveView,
+  CommandCardView,
 } from '@/types'
 
 const props = defineProps<{
@@ -43,9 +39,7 @@ const props = defineProps<{
   recommendation: RecommendationView | null
   tactics: TacticsView | null
   pendingForceStrategy: PendingForceStrategyView | null
-  standingOrders: readonly StandingOrderView[]
-  productionOverrides: readonly ProductionOverrideView[]
-  activeTactics: readonly TacticalObjectiveView[]
+  commandCards: readonly CommandCardView[]
 }>()
 
 const currentStage = computed<'opening' | 'midgame' | 'lategame'>(
@@ -69,9 +63,7 @@ const emit = defineEmits<{
   dismissRecommendation: []
   confirmForceStrategy: []
   cancelForceStrategy: []
-  revokeStanding: [id: string]
-  revokeProduction: [id: string]
-  revokeTactics: [id: string]
+  revokeCard: [id: string]
 }>()
 
 // 触摸板 emit absolute 已是绝对坐标(基于按下时的基准 + dx/dy),直接转 viewMove
@@ -146,19 +138,9 @@ function fmtTs(ts: number): string {
         <!-- bot 当前决策(独立大卡片) -->
         <BotDecisionCard :tactics="props.tactics" />
 
-        <StandingOrdersCard
-          :orders="props.standingOrders"
-          @revoke-order="(id) => emit('revokeStanding', id)"
-        />
-
-        <TacticsCard
-          :tactics="props.activeTactics"
-          @revoke="(id) => emit('revokeTactics', id)"
-        />
-
-        <ProductionOverridesCard
-          :orders="props.productionOverrides"
-          @revoke="(id) => emit('revokeProduction', id)"
+        <CommandCardStack
+          :cards="props.commandCards"
+          @revoke="(id) => emit('revokeCard', id)"
         />
 
         <div class="rounded-xl bg-surface-2 border border-border p-4">
