@@ -36,7 +36,6 @@ from vibecraft.directives import (
     UnitReleasePayload,
     Verb,
 )
-from vibecraft.directives.board import DirectiveBoardError
 from vibecraft.directives.scope import TargetKind
 
 # =========================================================================
@@ -52,8 +51,13 @@ class TestPayloads:
         assert d["type"] == "strategy_set"
 
     def test_production_override(self) -> None:
-        p = ProductionOverridePayload(unit_type="Phoenix", count=4, priority=70)
-        assert p.unit_type == "Phoenix"
+        from vibecraft.directives.models import ProductionItem
+
+        p = ProductionOverridePayload(
+            items=[ProductionItem(unit_type="Phoenix", count=4)], priority=70
+        )
+        assert p.items[0].unit_type == "Phoenix"
+        assert p.items[0].count == 4
         assert p.priority == 70
 
     def test_unit_claim_with_task(self) -> None:
@@ -80,8 +84,12 @@ class TestPayloads:
         assert d.issued_by == IssuedBy.VOICE
 
     def test_directive_round_trip(self) -> None:
+        from vibecraft.directives.models import ProductionItem
+
         d = Directive(
-            payload=ProductionOverridePayload(unit_type="Immortal", count=2),
+            payload=ProductionOverridePayload(
+                items=[ProductionItem(unit_type="Immortal", count=2)]
+            ),
             issued_at=100.0,
             source_text="下个 Robo 出俩不朽",
         )
@@ -90,7 +98,8 @@ class TestPayloads:
         assert restored.id == d.id
         assert restored.type == DirectiveType.PRODUCTION_OVERRIDE
         assert isinstance(restored.payload, ProductionOverridePayload)
-        assert restored.payload.unit_type == "Immortal"
+        assert restored.payload.items[0].unit_type == "Immortal"
+        assert restored.payload.items[0].count == 2
 
 # =========================================================================
 # DirectiveBoard

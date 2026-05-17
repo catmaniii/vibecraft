@@ -13,9 +13,8 @@
 
 from __future__ import annotations
 
-from vibecraft.directives.types import DirectiveType
-
 from tests.llm_eval.score import ExpectedSpec
+from vibecraft.directives.types import DirectiveType
 
 LLM_EVAL_CASES: list[ExpectedSpec] = [
     # ---- L1 宏观策略 ----
@@ -125,8 +124,8 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
         inject="下个 BG 出俩哨兵",
         expect_type=DirectiveType.PRODUCTION_OVERRIDE,
         must_have_paths={
-            "payload.unit_type": "Sentry",
-            "payload.count": 2,
+            "payload.items.0.unit_type": "Sentry",
+            "payload.items.0.count": 2,
         },
     ),
     ExpectedSpec(
@@ -152,8 +151,8 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
         inject="家里补到 8 BG",
         expect_type=DirectiveType.STRUCTURE_OVERRIDE,
         must_have_paths={
-            "payload.structure_type": ["Gateway", "GATEWAY", "gateway"],
-            "payload.target_count": 8,
+            "payload.items.0.structure_type": ["Gateway", "GATEWAY", "gateway"],
+            "payload.items.0.target_count": 8,
         },
     ),
     # O2: structure_override ramp cannon — location_hint 断言
@@ -163,12 +162,12 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
         inject="ramp 放 1 cannon",
         expect_type=DirectiveType.STRUCTURE_OVERRIDE,
         must_have_paths={
-            "payload.structure_type": [
+            "payload.items.0.structure_type": [
                 "PhotonCannon",
                 "PHOTONCANNON",
                 "photon_cannon",
             ],
-            "payload.target_count": 1,
+            "payload.items.0.target_count": 1,
         },
     ),
     # L2 进攻自然: A 类规则 done_when 必须是 None

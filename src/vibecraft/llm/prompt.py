@@ -246,13 +246,19 @@ L3 单兵 / Standing order (指定单位干啥, 可一次性可持久):
   standing order 通常 None (玩家撤销才完)
 
 L4 产能调整 (改造兵 / 升科技 / 开矿 / 补建筑):
-- "下个 BG 出 2 哨兵" → production_override(unit_type, count) +
+- "下个 BG 出 2 哨兵" → production_override(items=[{{unit_type, count}}]) +
   done_when=unit_count_built_since
+- 多兵种一句话 → **同一条 directive** 多个 item，done_when 用 all_of 包多个
+  unit_count_built_since（**不要**拆成多条 directive；同次语音的任务作为一张
+  卡片整体跟踪、整体完成才消失）
 - "先研闪烁" → tech_override(upgrade_id) + done_when=tech_done
 - "开三矿" → expansion_override(target_count) +
   done_when=expansion_count(op=">=", value=3)
-- "家里补 8 BG / ramp 放 1 cannon" → structure_override(structure_type, target_count, location_hint?) +
+- "家里补 8 BG" → structure_override(items=[{{structure_type, target_count, location_hint?}}]) +
   done_when=structure_count
+- 多建筑一句话 → **同一条 directive** 多个 item，done_when 用 all_of 包多个
+  structure_count（**不要**拆成多条 directive；同次语音的任务作为一张卡片
+  整体跟踪、整体完成才消失。原则同 production_override 多兵种）
 - L4 必带 done_when
 
 判断规则:
@@ -303,7 +309,7 @@ def build_few_shot() -> str:
 → strategy_set: stage=midgame, strategy_id=iac_2base  (示意：若 catalog 里有 phoenix 版本则替换)
 
 例 2：「下个 BG 出俩哨兵」
-→ production_override: unit_type=Sentry, count=2
+→ production_override: items=[{unit_type:Sentry, count:2}]
 
 例 3：「先研闪烁」
 → tech_override: upgrade_id=Blink, priority=80
@@ -344,10 +350,22 @@ def build_few_shot() -> str:
 （任意子条件：自然基被摧毁，或己方军队损耗超 70%，完成）
 
 例 11：「下个 BG 出 2 哨兵」
-→ [production_override: unit_type="Sentry", count=2,
+→ [production_override: items=[{unit_type:"Sentry", count:2}],
    done_when={kind:"unit_count_built_since", unit_type:"Sentry", op:">=", value:2},
    timeout_s: 60]
 （自指令下达起，产出 2 个哨兵即完成）
+
+例 11b（一句话多兵种 → **同一条 directive** 多 item + all_of done_when）：
+「出 2 个叉子加 3 个追猎」
+→ [production_override:
+     items=[{unit_type:"Zealot", count:2}, {unit_type:"Stalker", count:3}],
+     done_when={kind:"all_of", conditions:[
+       {kind:"unit_count_built_since", unit_type:"Zealot",  op:">=", value:2},
+       {kind:"unit_count_built_since", unit_type:"Stalker", op:">=", value:3}
+     ]},
+     timeout_s: 60]
+（同次语音的多兵种任务整体跟踪、全部出齐才消失，作为一张 PWA 卡片。
+  **绝不**拆成两条 directive。玩家下一次新的语音才开新卡片。）
 
 例 12：「先研闪烁」
 → [tech_override: upgrade_id="Blink",
@@ -433,19 +451,26 @@ def build_few_shot() -> str:
 --- structure_override + A/B done_when 规则例示 ---
 
 例 23 (L4 补建筑 / structure_override): 「家里补到 8 BG」
-→ [structure_override: structure_type="Gateway", target_count=8, location_hint="main",
+→ [structure_override:
+     items=[{structure_type:"Gateway", target_count:8, location_hint:"main"}],
    done_when={kind:"structure_count", structure_type:"Gateway", op:">=", value:8},
    timeout_s: 180]
 注:structure_count 检查当前存量（含 pending），达到目标即 done。
 
-例 24 (L4 多建筑 / ramp 防御): 「ramp 放 2 cannon 1 BF」
-→ [structure_override: structure_type="PhotonCannon", target_count=2, location_hint="ramp",
-     done_when={kind:"structure_count", structure_type:"PhotonCannon", op:">=", value:2},
-     timeout_s: 120,
-   structure_override: structure_type="Forge", target_count=1, location_hint="ramp",
-     done_when={kind:"structure_count", structure_type:"Forge", op:">=", value:1},
-     timeout_s: 120]
-注:一句话含多建筑 → 拆成多条 structure_override directive。
+例 24 (L4 多建筑 / **同一条 directive** 多 item + all_of done_when):
+「ramp 放 2 cannon 1 BF」
+→ [structure_override:
+     items=[
+       {structure_type:"PhotonCannon", target_count:2, location_hint:"ramp"},
+       {structure_type:"Forge",        target_count:1, location_hint:"ramp"}
+     ],
+   done_when={kind:"all_of", conditions:[
+     {kind:"structure_count", structure_type:"PhotonCannon", op:">=", value:2},
+     {kind:"structure_count", structure_type:"Forge",        op:">=", value:1}
+   ]},
+   timeout_s: 180]
+（同次语音的多建筑任务整体跟踪、全部造完才消失，作为一张 PWA 卡片。
+  **绝不**拆成两条 directive。玩家下一次新的语音才开新卡片。）
 
 例 25 (A 类 done_when=None / 进攻): 「进攻对方自然」（A 类关键示范）
 → [tactical_objective: verb="attack", target_area="enemy_natural",

@@ -572,7 +572,8 @@ class Director:
             target = int(dw.get("value", 0))
             ut = dw.get("unit_type", "")
             ut_zh = self._UNIT_ZH.get(ut, ut)
-            current = int(tm._unit_built_counts.get(directive_id, 0))
+            counter_key = ut or "*"
+            current = int(tm._unit_built_counts.get(directive_id, {}).get(counter_key, 0))
             return {
                 "text": f"造 {target} 个 {ut_zh}",
                 "met": current >= target,
@@ -601,6 +602,10 @@ class Director:
             return {"text": f"歼敌 {dw.get('value', 0)} 于 {dw.get('area', '')}", "met": False}
         if kind == "expansion_count":
             return {"text": f"分矿数 {dw.get('op', '>=')}{dw.get('value', 0)}", "met": False}
+        if kind == "structure_count":
+            st = dw.get("structure_type", "")
+            value = int(dw.get("value", 0))
+            return {"text": f"造 {value} 个 {st}", "met": False}
         return {"text": kind or "?", "met": False}
 
     def _push_snapshot(self, now: float) -> None:
@@ -773,15 +778,21 @@ class Director:
         - STRUCTURE_OVERRIDE  → '造 N <structure_type>[ @ <location_hint>]'
         """
         if isinstance(payload, ProductionOverridePayload):
-            unit_zh = self._UNIT_ZH.get(payload.unit_type, payload.unit_type)
-            return f"出 {payload.count} {unit_zh}"
+            parts = [
+                f"{self._UNIT_ZH.get(item.unit_type, item.unit_type)}×{item.count}"
+                for item in payload.items
+            ]
+            return "出 " + " / ".join(parts)
         if isinstance(payload, TechOverridePayload):
             return f"研 {payload.upgrade_id}"
         if isinstance(payload, ExpansionOverridePayload):
             return f"开 {payload.target_count} 矿"
         if isinstance(payload, StructureOverridePayload):
-            loc = f" @ {payload.location_hint}" if payload.location_hint else ""
-            return f"造 {payload.target_count} {payload.structure_type}{loc}"
+            parts: list[str] = []
+            for it in payload.items:
+                loc = f" @ {it.location_hint}" if it.location_hint else ""
+                parts.append(f"{it.structure_type}×{it.target_count}{loc}")
+            return "造 " + " / ".join(parts)
         return "未知 override"
 
     def _push_event(self, event_dict: dict[str, Any]) -> None:
@@ -1278,7 +1289,8 @@ class Director:
 
         p = directive.payload
         if isinstance(p, ProductionOverridePayload):
-            display = f"{p.unit_type} × {p.count} 已加入生产队列"
+            items_text = " / ".join(f"{it.unit_type} × {it.count}" for it in p.items)
+            display = f"{items_text} 已加入生产队列"
         elif isinstance(p, TechOverridePayload):
             display = f"升级 {p.upgrade_id} 已加入生产队列"
         elif isinstance(p, ExpansionOverridePayload):
@@ -1377,42 +1389,56 @@ class Director:
         })
 
     def _exec_production_override(self, d: Directive, payload: Any) -> None:
-        """L4 unit 出兵: bot.train(unit_id)。带 prereq check + status tracking。"""
-        unit_id = self._resolve_unit_type_id(payload.unit_type)
-        if unit_id is None:
-            logger.warning("resolve unit_type_id fail: %r", payload.unit_type)
-            return
-        # prereq check(canonical UPPER name)
-        ready, missing = self._check_prereq_ready(payload.unit_type.upper())
-        if not ready:
-            self._set_override_status(d, "on_hold", f"需要 {missing}")
-            return
-        # 已造数 + 已下单数(in-flight): 用 bot.already_pending 防 spam
-        try:
-            in_flight = float(self._bot.already_pending(unit_id))
-        except Exception:
-            in_flight = 0.0
-        already_done = self._production_override_built_count(d)
-        remaining = payload.count - already_done - int(in_flight)
-        if remaining <= 0:
-            # 已下满 = active(等 task_monitor 判 done 后 board.complete 自动 pop)
-            self._set_override_status(d, "active", "已下单等完成")
-            return
-        try:
-            n_trained = self._bot.train(
-                unit_id, amount=remaining, train_only_idle_buildings=False
-            )
-            if n_trained > 0:
-                logger.info(
-                    "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
-                    unit_id, n_trained, payload.count, already_done, in_flight, d.id[:8],
+        """L4 unit 出兵: 遍历 items 逐个 bot.train(unit_id)。带 prereq check + status tracking。
+
+        多兵种语义：整条 directive 完成 = 所有 item 都下满。某 item 卡 on_hold
+        (缺 prereq / 缺资源)只标整条 on_hold + 该 item 描述，不阻塞其它 item 继续 train。
+        """
+        on_hold_reasons: list[str] = []
+        any_active = False
+        all_satisfied = True
+        for item in payload.items:
+            unit_id = self._resolve_unit_type_id(item.unit_type)
+            if unit_id is None:
+                logger.warning("resolve unit_type_id fail: %r", item.unit_type)
+                on_hold_reasons.append(f"{item.unit_type}: 未知 unit_type")
+                all_satisfied = False
+                continue
+            ready, missing = self._check_prereq_ready(item.unit_type.upper())
+            if not ready:
+                on_hold_reasons.append(f"{item.unit_type}: 需要 {missing}")
+                all_satisfied = False
+                continue
+            try:
+                in_flight = float(self._bot.already_pending(unit_id))
+            except Exception:
+                in_flight = 0.0
+            already_done = self._production_override_built_count(d, item.unit_type)
+            remaining = item.count - already_done - int(in_flight)
+            if remaining <= 0:
+                continue  # 该 item 已下满，跳到下一个
+            all_satisfied = False
+            try:
+                n_trained = self._bot.train(
+                    unit_id, amount=remaining, train_only_idle_buildings=False
                 )
-                self._set_override_status(d, "active", "")
-            else:
-                # train 失败可能是资源不够或 building 都 busy
-                self._set_override_status(d, "on_hold", "资源/building 不足")
-        except Exception as exc:
-            logger.debug("production_override train fail: %s", exc)
+                if n_trained > 0:
+                    logger.info(
+                        "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
+                        unit_id, n_trained, item.count, already_done, in_flight, d.id[:8],
+                    )
+                    any_active = True
+                else:
+                    on_hold_reasons.append(f"{item.unit_type}: 资源/building 不足")
+            except Exception as exc:
+                logger.debug("production_override train fail: %s", exc)
+
+        if all_satisfied:
+            self._set_override_status(d, "active", "已下单等完成")
+        elif any_active:
+            self._set_override_status(d, "active", "; ".join(on_hold_reasons))
+        else:
+            self._set_override_status(d, "on_hold", "; ".join(on_hold_reasons))
 
     def _exec_tech_override(self, d: Directive, payload: Any) -> None:
         """L4 科技: bot.research(upgrade_id)。带 prereq check + status tracking。"""
@@ -1500,51 +1526,57 @@ class Director:
             self._set_override_status(d, "on_hold", "expand 失败")
 
     async def _exec_structure_override(self, d: Directive, payload: Any) -> None:
-        """L4 建筑目标: bot.build(structure_id, near=location)。
+        """L4 建筑目标：遍历 items 逐个 bot.build(structure_id, near=location)。
 
-        prereq check → current count check → bot.build → status 透传。
-        done 判定由 task_monitor 的 structure_count checker 接管（Task 6 already done）。
+        多建筑语义：整条 directive 完成 = 所有 item 都达 target_count。
+        某 item 卡 on_hold 不阻塞其它 item 继续 build。
         """
         from sc2.ids.unit_typeid import UnitTypeId
 
-        type_name = payload.structure_type.upper()
-        try:
-            type_id = UnitTypeId[type_name]
-        except (ImportError, KeyError):
-            logger.warning("structure_override 未知 structure %r", payload.structure_type)
-            self._set_override_status(d, "on_hold", f"未知建筑 {payload.structure_type}")
-            return
-        try:
-            current = (
-                self._bot.structures(type_id).amount
-                + int(self._bot.already_pending(type_id))
-            )
-        except Exception:
-            current = 0
-        if current >= payload.target_count:
-            self._set_override_status(
-                d, "active", f"{current}/{payload.target_count} 已达成"
-            )
-            return
-        # prereq check — _REQUIRED_STRUCTURE key 是 canonical UPPER name
-        ready, missing = self._check_prereq_ready(type_name)
-        if not ready:
-            self._set_override_status(d, "on_hold", f"需要 {missing}")
-            return
-        pos = self._resolve_location_hint(payload.location_hint, type_id)
-        try:
-            await self._bot.build(type_id, near=pos)
-            logger.info(
-                "structure_override BUILD %s near=%s (current=%d, target=%d, id=%s)",
-                type_id, pos, current, payload.target_count, d.id[:8],
-            )
-            self._set_override_status(
-                d, "active",
-                f"造 {payload.structure_type} ({current + 1}/{payload.target_count})",
-            )
-        except Exception as exc:
-            logger.debug("structure_override build fail: %s", exc)
-            self._set_override_status(d, "on_hold", f"build 失败: {exc}")
+        on_hold_reasons: list[str] = []
+        any_active = False
+        all_satisfied = True
+        for it in payload.items:
+            type_name = it.structure_type.upper()
+            try:
+                type_id = UnitTypeId[type_name]
+            except (ImportError, KeyError):
+                logger.warning("structure_override 未知 structure %r", it.structure_type)
+                on_hold_reasons.append(f"{it.structure_type}: 未知建筑")
+                all_satisfied = False
+                continue
+            try:
+                current = (
+                    self._bot.structures(type_id).amount
+                    + int(self._bot.already_pending(type_id))
+                )
+            except Exception:
+                current = 0
+            if current >= it.target_count:
+                continue  # 该 item 已达成
+            all_satisfied = False
+            ready, missing = self._check_prereq_ready(type_name)
+            if not ready:
+                on_hold_reasons.append(f"{it.structure_type}: 需要 {missing}")
+                continue
+            pos = self._resolve_location_hint(it.location_hint, type_id)
+            try:
+                await self._bot.build(type_id, near=pos)
+                logger.info(
+                    "structure_override BUILD %s near=%s (current=%d, target=%d, id=%s)",
+                    type_id, pos, current, it.target_count, d.id[:8],
+                )
+                any_active = True
+            except Exception as exc:
+                logger.debug("structure_override build fail: %s", exc)
+                on_hold_reasons.append(f"{it.structure_type}: build 失败")
+
+        if all_satisfied:
+            self._set_override_status(d, "active", "已达成")
+        elif any_active:
+            self._set_override_status(d, "active", "; ".join(on_hold_reasons))
+        else:
+            self._set_override_status(d, "on_hold", "; ".join(on_hold_reasons))
 
     def _resolve_location_hint(self, hint: str | None, type_id: Any) -> Any:
         """hint(main/natural/ramp/front) → Point2 via sharpy expansion_zones。
@@ -1671,17 +1703,18 @@ class Director:
         except KeyError:
             return None
 
-    def _production_override_built_count(self, directive: Directive) -> int:
-        """查 task_monitor 累计的 unit_count_built_since counter。
+    def _production_override_built_count(self, directive: Directive, unit_type: str) -> int:
+        """查 task_monitor 累计的 unit_count_built_since per-type counter。
 
-        task_monitor._unit_built_counts[directive_id] 由 EventBus UNIT_CREATED
-        handler 维护。L4 production_override 通常带 done_when=unit_count_built_since,
-        counter 自然累加。没 done_when 时 fallback 返回 0(每 tick 都试 train)。
+        task_monitor._unit_built_counts[did][unit_type] 由 EventBus UNIT_CREATED
+        handler 维护（per-unit_type 计数；多兵种 directive 各 item 独立）。
+        没 done_when 时 fallback 返回 0(每 tick 都试 train)。
         """
         if self.task_monitor is None:
             return 0
         try:
-            return int(self.task_monitor._unit_built_counts.get(directive.id, 0))
+            counts_by_type = self.task_monitor._unit_built_counts.get(directive.id, {})
+            return int(counts_by_type.get(unit_type, 0))
         except Exception:
             return 0
 
@@ -1722,7 +1755,7 @@ class Director:
         if isinstance(p, StrategySetPayload):
             parts.append(f"stage={p.stage} id={p.strategy_id}")
         elif isinstance(p, ProductionOverridePayload):
-            parts.append(f"{p.unit_type}×{p.count}")
+            parts.append(",".join(f"{it.unit_type}×{it.count}" for it in p.items))
         elif isinstance(p, TechOverridePayload):
             parts.append(f"upgrade={p.upgrade_id}")
         elif isinstance(p, ExpansionOverridePayload):
@@ -2018,11 +2051,13 @@ class Director:
 
         if t == DirectiveType.PRODUCTION_OVERRIDE:
             assert isinstance(payload, ProductionOverridePayload)
-            self.facade.set_production_override(
-                unit_type=payload.unit_type,
-                count=payload.count,
-                building_tag=payload.building_tag,
-            )
+            # 多兵种：每个 item 单独调一次 facade.set_production_override
+            for item in payload.items:
+                self.facade.set_production_override(
+                    unit_type=item.unit_type,
+                    count=item.count,
+                    building_tag=payload.building_tag,
+                )
             return
 
         if t == DirectiveType.TECH_OVERRIDE:

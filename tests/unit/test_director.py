@@ -185,7 +185,9 @@ class TestProductionDispatch:
                 "directives": [
                     {
                         "type": "production_override",
-                        "payload": {"unit_type": "Sentry", "count": 2},
+                        "payload": {
+                            "items": [{"unit_type": "Sentry", "count": 2}]
+                        },
                         "priority": 70,
                     }
                 ],
@@ -435,9 +437,9 @@ class TestLoggingIntegration:
         director = Director(facade=facade, parser=parser, session=mock_session)
 
         # 直接 submit 一个 directive
-        from vibecraft.directives.models import Directive
+        from vibecraft.directives.models import Directive, ProductionItem
 
-        payload = ProductionOverridePayload(unit_type="Stalker", count=3)
+        payload = ProductionOverridePayload(items=[ProductionItem(unit_type="Stalker", count=3)])
         d = Directive(payload=payload, issued_at=10.0)
         director._submit_directives([d], now=10.0)
 
@@ -528,9 +530,9 @@ class TestStandingOrderRouting:
 
 def _make_production_override_directive() -> Directive:
     """构造一个 PRODUCTION_OVERRIDE Directive（出 2 哨兵）。"""
-    from vibecraft.directives.models import ProductionOverridePayload
+    from vibecraft.directives.models import ProductionItem, ProductionOverridePayload
 
-    payload = ProductionOverridePayload(unit_type="Sentry", count=2)
+    payload = ProductionOverridePayload(items=[ProductionItem(unit_type="Sentry", count=2)])
     return Directive(payload=payload, issued_at=10.0)
 
 
@@ -730,11 +732,14 @@ class TestTaskMonitorWire:
         assert director.task_monitor is not None
 
         # 构造带 done_when 的 production_override
-        from vibecraft.directives.models import ProductionOverridePayload, TimeElapsedSince
+        from vibecraft.directives.models import (
+            ProductionItem,
+            ProductionOverridePayload,
+            TimeElapsedSince,
+        )
 
         payload = ProductionOverridePayload(
-            unit_type="Sentry",
-            count=2,
+            items=[ProductionItem(unit_type="Sentry", count=2)],
             done_when=TimeElapsedSince(kind="time_elapsed_since", seconds=30),
         )
         d = Directive(payload=payload, issued_at=10.0)
@@ -1051,7 +1056,6 @@ class TestStrategyCancelViaBoard:
 
     def test_strategy_cancel_clears_board_slot(self, director: Director) -> None:
         """commit 后 board.slots 对应 stage 被清 None。"""
-        from vibecraft.directives.models import StrategySetPayload
         from vibecraft.directives.types import StageKind
 
         # 先手动在 board.slots 设置一个 opening slot（bypass delay）

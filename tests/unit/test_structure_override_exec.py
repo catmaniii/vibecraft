@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from vibecraft.bot import BotState, Director, FakeFacade
+from vibecraft.bot import Director, FakeFacade
 from vibecraft.directives.models import Directive
 from vibecraft.llm import IntentParser, MockLLMProvider, ProviderResponse
 from vibecraft.logging_ import GameSession, GameSessionConfig
@@ -64,12 +64,16 @@ def _make_structure_override(
     location_hint: str | None = None,
 ) -> Directive:
     """构造 STRUCTURE_OVERRIDE Directive。"""
-    from vibecraft.directives.models import StructureOverridePayload
+    from vibecraft.directives.models import StructureItem, StructureOverridePayload
 
     payload = StructureOverridePayload(
-        structure_type=structure_type,
-        target_count=target_count,
-        location_hint=location_hint,
+        items=[
+            StructureItem(
+                structure_type=structure_type,
+                target_count=target_count,
+                location_hint=location_hint,
+            )
+        ],
     )
     return Directive(payload=payload, issued_at=10.0)
 

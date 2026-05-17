@@ -205,7 +205,9 @@ class TestIntentParserHappyPath:
                         "directives": [
                             {
                                 "type": "production_override",
-                                "payload": {"unit_type": "Sentry", "count": 2},
+                                "payload": {
+                                    "items": [{"unit_type": "Sentry", "count": 2}]
+                                },
                                 "priority": 70,
                             }
                         ],
@@ -219,8 +221,8 @@ class TestIntentParserHappyPath:
         d = outcome.directives[0]
         assert d.priority == 70
         assert isinstance(d.payload, ProductionOverridePayload)
-        assert d.payload.unit_type == "Sentry"
-        assert d.payload.count == 2
+        assert d.payload.items[0].unit_type == "Sentry"
+        assert d.payload.items[0].count == 2
 
     @pytest.mark.asyncio
     async def test_payload_extra_fields_filtered(
@@ -400,7 +402,9 @@ class TestAmbiguous:
                         "directives": [
                             {
                                 "type": "production_override",
-                                "payload": {"unit_type": "Stalker", "count": 1},
+                                "payload": {
+                                    "items": [{"unit_type": "Stalker", "count": 1}]
+                                },
                             }
                         ],
                     }

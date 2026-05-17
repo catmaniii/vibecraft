@@ -80,9 +80,9 @@ def _make_unit_claim_directive(persistent: bool = True) -> Directive:
 
 
 def _make_production_override_directive() -> Directive:
-    from vibecraft.directives.models import ProductionOverridePayload
+    from vibecraft.directives.models import ProductionItem, ProductionOverridePayload
 
-    payload = ProductionOverridePayload(unit_type="Stalker", count=4)
+    payload = ProductionOverridePayload(items=[ProductionItem(unit_type="Stalker", count=4)])
     return Directive(payload=payload, issued_at=15.0)
 
 
@@ -307,12 +307,10 @@ class TestL4ProductionOverrideCommandCard:
         """STRUCTURE_OVERRIDE card display 不应是'未知 override'。
         display 应包含 structure_type（如 Gateway）。
         """
-        from vibecraft.directives.models import StructureOverridePayload
+        from vibecraft.directives.models import StructureItem, StructureOverridePayload
 
         payload = StructureOverridePayload(
-            structure_type="Gateway",
-            target_count=8,
-            location_hint=None,
+            items=[StructureItem(structure_type="Gateway", target_count=8, location_hint=None)],
         )
         d = Directive(payload=payload, issued_at=15.0)
         director._submit_directives([d], now=15.0)
@@ -329,12 +327,10 @@ class TestL4ProductionOverrideCommandCard:
 
     def test_l4_structure_override_with_location_hint(self, director: Director) -> None:
         """structure_override 带 location_hint 时 display 包含 location_hint。"""
-        from vibecraft.directives.models import StructureOverridePayload
+        from vibecraft.directives.models import StructureItem, StructureOverridePayload
 
         payload = StructureOverridePayload(
-            structure_type="PhotonCannon",
-            target_count=1,
-            location_hint="ramp",
+            items=[StructureItem(structure_type="PhotonCannon", target_count=1, location_hint="ramp")],
         )
         d = Directive(payload=payload, issued_at=15.0)
         director._submit_directives([d], now=15.0)

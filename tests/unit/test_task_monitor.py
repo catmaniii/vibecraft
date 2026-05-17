@@ -183,13 +183,13 @@ class TestUnitCountBuiltCounter:
         done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 3}
         monitor.attach_directive("d1", done_when, issued_at=5.0, timeout_s=None)
 
-        assert monitor._unit_built_counts["d1"] == 0
+        assert monitor._unit_built_counts["d1"]["Sentry"] == 0
 
         bus.publish(_make_unit_created_event(unit_type="Sentry", ts=10.0))
-        assert monitor._unit_built_counts["d1"] == 1
+        assert monitor._unit_built_counts["d1"]["Sentry"] == 1
 
         bus.publish(_make_unit_created_event(unit_type="Sentry", ts=11.0))
-        assert monitor._unit_built_counts["d1"] == 2
+        assert monitor._unit_built_counts["d1"]["Sentry"] == 2
 
     def test_different_unit_type_does_not_increment(self):
         bus = EventBus()
@@ -199,7 +199,7 @@ class TestUnitCountBuiltCounter:
 
         # Stalker != Sentry → 不应累加
         bus.publish(_make_unit_created_event(unit_type="Stalker", ts=5.0))
-        assert monitor._unit_built_counts["d1"] == 0
+        assert monitor._unit_built_counts["d1"]["Sentry"] == 0
 
     def test_enemy_unit_created_does_not_increment(self):
         bus = EventBus()
@@ -216,7 +216,7 @@ class TestUnitCountBuiltCounter:
             unit_type="Zealot",
         )
         bus.publish(enemy_event)
-        assert monitor._unit_built_counts["d1"] == 0
+        assert monitor._unit_built_counts["d1"]["Zealot"] == 0
 
     def test_unit_created_before_issued_at_does_not_increment(self):
         """ts < issued_at 的事件不应计入 (filter 按 ts 过滤)。"""
@@ -234,7 +234,7 @@ class TestUnitCountBuiltCounter:
             unit_type="Probe",
         )
         bus.publish(old_event)
-        assert monitor._unit_built_counts["d1"] == 0
+        assert monitor._unit_built_counts["d1"]["Probe"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +391,7 @@ class TestPydanticAttach:
         bus.publish(
             Event(kind=EventKind.UNIT_CREATED, ts=1.0, payload={}, owner="own", unit_type="Zealot")
         )
-        assert monitor._unit_built_counts["d1"] == 1
+        assert monitor._unit_built_counts["d1"]["Zealot"] == 1
 
 
 # ---------------------------------------------------------------------------

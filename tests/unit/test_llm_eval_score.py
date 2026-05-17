@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+from tests.llm_eval.score import ExpectedSpec, _get_path, _matches, score_outcome
 from vibecraft.directives.models import (
     Directive,
+    ProductionItem,
     ProductionOverridePayload,
     StrategySetPayload,
     UnitClaimPayload,
@@ -20,9 +22,6 @@ from vibecraft.llm.schema import (
     ParseError,
     ParseErrorKind,
 )
-
-from tests.llm_eval.score import ExpectedSpec, _get_path, _matches, score_outcome
-
 
 # =========================================================================
 # _get_path / _matches 基础
@@ -147,7 +146,7 @@ def test_score_wrong_type_fails() -> None:
         confidence=0.9,
         directives=[
             Directive(
-                payload=ProductionOverridePayload(unit_type="Sentry", count=2),
+                payload=ProductionOverridePayload(items=[ProductionItem(unit_type="Sentry", count=2)]),
                 issued_at=1.0,
             )
         ],

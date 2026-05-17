@@ -55,10 +55,11 @@ class Score:
 
 
 def _get_path(obj: Any, path: str) -> Any:
-    """按点号路径深入 nested dict/object。
+    """按点号路径深入 nested dict/object/list。
 
     例:`_get_path(d, "payload.selector.unit_type")` 等价 d.payload.selector.unit_type。
-    属性 / dict key / pydantic field 都支持。dict 优先,然后 attribute。
+    数字段当 list/tuple 索引：`payload.items.0.unit_type` → d.payload.items[0].unit_type
+    属性 / dict key / pydantic field / sequence index 都支持。
     """
     cur = obj
     for part in path.split("."):
@@ -66,6 +67,9 @@ def _get_path(obj: Any, path: str) -> Any:
             return None
         if isinstance(cur, dict):
             cur = cur.get(part)
+        elif isinstance(cur, (list, tuple)) and part.isdigit():
+            idx = int(part)
+            cur = cur[idx] if 0 <= idx < len(cur) else None
         else:
             cur = getattr(cur, part, None)
     return cur

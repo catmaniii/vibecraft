@@ -147,8 +147,10 @@ class TaskMonitor:
         self._monotonic: Any = _time.monotonic
         # directive_id → list of sub_id, detach 时统一 unsubscribe
         self._sub_ids: dict[str, list[int]] = {}
-        # directive_id → accumulated unit_built count (event-driven, O(1) 增量)
-        self._unit_built_counts: dict[str, int] = {}
+        # directive_id → unit_type → accumulated unit_built count（per-type 计数，
+        # 让 all_of([unit_count_built_since(Zealot,2), unit_count_built_since(Stalker,3)])
+        # 两条子条件各自独立计数。unit_type=None 时用 "*" 当 key 表示"任意单位"。
+        self._unit_built_counts: dict[str, dict[str, int]] = {}
         # directive_id → issued_at (for time_elapsed_since ref=directive_issued)
         self._issued_at: dict[str, float] = {}
         # M3 fix:directive attach 时的 wall-clock(monotonic 秒)。timeout 兜底
@@ -188,21 +190,48 @@ class TaskMonitor:
         self._issued_wall[directive_id] = self._monotonic()
         self._timeout_s[directive_id] = timeout_s
         self._sub_ids.setdefault(directive_id, [])
+        self._unit_built_counts.setdefault(directive_id, {})
 
         if done_when is None:
             self._done_when[directive_id] = {}
             return
 
         self._done_when[directive_id] = done_when
-        kind = done_when.get("kind")
+        self._attach_subscriptions(directive_id, done_when, issued_at)
 
-        # unit_count_built_since: 订阅 UNIT_CREATED, 按 unit_type filter 后累加 counter
+    def _attach_subscriptions(
+        self, directive_id: str, done_when: dict[str, Any], issued_at: float
+    ) -> None:
+        """递归遍历 done_when，给每个 leaf checker 装 event 订阅。
+
+        all_of / any_of 的多个 unit_count_built_since 子条件各自独立计数
+        （per-unit_type）；其余 event-driven checker（tech_done / enemy_killed_in_area）
+        在嵌套 all_of 多实例时仍共享单 flag/counter（罕见，先不优化）。
+        """
+        kind = done_when.get("kind")
+        if kind in ("all_of", "any_of"):
+            for sub in done_when.get("conditions", []):
+                if isinstance(sub, dict):
+                    sub_dict = sub
+                elif hasattr(sub, "model_dump"):
+                    sub_dict = sub.model_dump()
+                else:
+                    continue
+                self._attach_subscriptions(directive_id, sub_dict, issued_at)
+            return
+
+        # unit_count_built_since: 订阅 UNIT_CREATED, 按 unit_type filter 后累加 per-type counter
         if kind == "unit_count_built_since":
             ut = done_when.get("unit_type")
-            self._unit_built_counts[directive_id] = 0
+            counter_key = ut or "*"
+            self._unit_built_counts[directive_id].setdefault(counter_key, 0)
 
-            def _handler(event: Event, _did: str = directive_id) -> None:
-                self._unit_built_counts[_did] = self._unit_built_counts.get(_did, 0) + 1
+            def _handler(
+                event: Event, _did: str = directive_id, _key: str = counter_key
+            ) -> None:
+                self._unit_built_counts[_did][_key] = (
+                    self._unit_built_counts[_did].get(_key, 0) + 1
+                )
 
             filter_fn: Callable[[Event], bool] | None
             if ut is not None:
@@ -425,10 +454,13 @@ def _check_unit_count_built_since(
     """done_when: {kind, unit_type, op, value}
 
     op: ">=" | ">" | "==" | "<=" | "<"
-    monitor._unit_built_counts[directive_id] 由 EventBus UNIT_CREATED handler 维护。
-    这里只比较 counter vs value。
+    monitor._unit_built_counts[did][unit_type] 由 EventBus UNIT_CREATED handler 维护
+    (per-unit_type 计数，让 all_of 多个 unit_count_built_since 各自独立计数)。
+    unit_type=None 时用 "*" key 表示"任意单位"。
     """
-    count = monitor._unit_built_counts.get(directive_id, 0)
+    counts_by_type = monitor._unit_built_counts.get(directive_id, {})
+    counter_key = done_when.get("unit_type") or "*"
+    count = counts_by_type.get(counter_key, 0)
     value = int(done_when.get("value", 0))
     op = done_when.get("op", ">=")
     return _compare(count, op, value)

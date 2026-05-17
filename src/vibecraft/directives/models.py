@@ -229,16 +229,25 @@ class StrategyCancelPayload(_PayloadBase):
     stage: Literal["opening", "midgame", "lategame", "all"] = "all"
 
 
+class ProductionItem(BaseModel):
+    """单个出兵需求：unit_type + count。production_override.items 元素。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    unit_type: str
+    count: int = 1
+
+
 class ProductionOverridePayload(_PayloadBase):
     """中粒度：override 当前剧本的生产计划。
 
-    `unit_type` 指出生哪个兵种，`count` 数量，可选 `building_tag` 指定建筑。
-    若设 `building_tag`，相当于 §8.1 D 的"这 Robo 改造 X"。
+    `items` 是出兵需求列表，**一条 directive 可含多兵种**（一句话「出 2 个叉子加
+    3 个追猎」=>一条 directive 两个 item）。可选 `building_tag` 指定建筑，
+    相当于 §8.1 D 的"这 Robo 改造 X"。
     """
 
     type: Literal[DirectiveType.PRODUCTION_OVERRIDE] = DirectiveType.PRODUCTION_OVERRIDE
-    unit_type: str
-    count: int = 1
+    items: list[ProductionItem] = Field(min_length=1)
     building_tag: int | None = None
     building_selector: Selector | None = None
     priority: int = 50
@@ -259,18 +268,31 @@ class ExpansionOverridePayload(_PayloadBase):
     priority: int = 50
 
 
-class StructureOverridePayload(_PayloadBase):
-    """L4 建筑数量目标（"补到 8 BG / ramp 1 cannon / 二矿放 2 PY 1 BF"）。
+class StructureItem(BaseModel):
+    """单个建筑需求：structure_type + target_count + 可选 location_hint。
 
-    一次性：达成 target_count 就 done，被打掉不自动补
-    （MVP 决策，参见 design doc §2 边界 case）。
-    location_hint: main / natural / ramp / front / None（None = bot 自选 placement）
+    structure_override.items 元素。location_hint 在 item 级（不同建筑可以放
+    不同位置 —— "二矿放 2 PY 1 BF" 中 PY 和 BF 可以同 hint）。
     """
 
-    type: Literal[DirectiveType.STRUCTURE_OVERRIDE] = DirectiveType.STRUCTURE_OVERRIDE
+    model_config = ConfigDict(extra="forbid")
+
     structure_type: str
     target_count: int = Field(ge=1)
     location_hint: str | None = None
+
+
+class StructureOverridePayload(_PayloadBase):
+    """L4 建筑数量目标。**一条 directive 可含多建筑**（一句话"二矿放 2 PY 1 BF"
+    = 一条 directive 两个 item，作为单卡跟踪、全部完成才消失）。
+
+    一次性：达成 target_count 就 done，被打掉不自动补
+    （MVP 决策，参见 design doc §2 边界 case）。
+    location_hint 在 item 级：main / natural / ramp / front / None（None = bot 自选）。
+    """
+
+    type: Literal[DirectiveType.STRUCTURE_OVERRIDE] = DirectiveType.STRUCTURE_OVERRIDE
+    items: list[StructureItem] = Field(min_length=1)
     priority: int = 50
 
 
