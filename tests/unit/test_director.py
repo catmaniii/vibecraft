@@ -36,7 +36,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def library() -> StrategyLibrary:
     return StrategyLibrary.from_directories(
         strategies_dir=PROJECT_ROOT / "strategies",
-        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
     )
 
 
@@ -428,7 +428,7 @@ class TestLoggingIntegration:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         mock_session = MagicMock()
@@ -489,7 +489,7 @@ def director(session: GameSession) -> Director:
     )
     library_inst = StrategyLibrary.from_directories(
         strategies_dir=PROJECT_ROOT / "strategies",
-        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
     )
     parser = IntentParser(provider, library_inst, session=session)
     return Director(facade=facade, parser=parser, session=session)
@@ -613,7 +613,7 @@ def _make_director_with_task_monitor(session: GameSession) -> Director:
     )
     library_inst = StrategyLibrary.from_directories(
         strategies_dir=PROJECT_ROOT / "strategies",
-        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
     )
     parser = IntentParser(provider, library_inst, session=session)
     event_bus = EventBus()
@@ -646,7 +646,7 @@ class TestTaskMonitorWire:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         d = Director(facade=facade, parser=parser, session=session)
@@ -760,7 +760,7 @@ class TestTaskMonitorWire:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         d = Director(facade=facade, parser=parser, session=session)
@@ -789,7 +789,7 @@ class TestDirectorBotBackref:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         mock_bot = MagicMock()
@@ -806,7 +806,7 @@ class TestDirectorBotBackref:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         d = Director(facade=facade, parser=parser, session=session)
@@ -825,7 +825,7 @@ class TestDirectorBotBackref:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         mock_bot = MagicMock()
@@ -878,7 +878,7 @@ class TestStandingOrderUnitAssign:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         director = Director(facade=facade, parser=parser, session=session)
@@ -906,7 +906,7 @@ class TestStandingOrderUnitAssign:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         director = Director(facade=facade, parser=parser, session=session)
@@ -928,7 +928,7 @@ class TestStandingOrderUnitAssign:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         director = Director(facade=facade, parser=parser, session=session)
@@ -962,7 +962,7 @@ class TestStandingOrderUnitAssign:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         director = Director(facade=facade, parser=parser, session=session)
@@ -990,7 +990,7 @@ class TestStandingOrderUnitAssign:
         )
         library_inst = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         parser = IntentParser(provider, library_inst, session=session)
         director = Director(facade=facade, parser=parser, session=session)

@@ -405,7 +405,7 @@ class Director:
     # P2 production_overrides snapshot helpers
     # ------------------------------------------------------------------
 
-    # 神族单位 canonical→中文 display 表（从 aliases/protoss.yaml units 节提取）
+    # 神族单位 canonical→中文 display 表（从 docs/aliases/protoss.yaml units 节提取）
     _UNIT_ZH: ClassVar[dict[str, str]] = {
         "Probe": "探机",
         "Zealot": "叉子",

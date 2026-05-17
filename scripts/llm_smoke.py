@@ -38,7 +38,7 @@ async def main() -> int:
 
     provider = cfg.build_provider()
     library = StrategyLibrary.from_directories(
-        _ROOT / "strategies", _ROOT / "aliases" / "protoss.yaml"
+        _ROOT / "strategies", _ROOT / "docs" / "aliases" / "protoss.yaml"
     )
     print(f"剧本库 id: {sorted(library.all_ids())}")
 

@@ -343,7 +343,7 @@ weak_against: [mass_viking, mass_corruptor, ghost_emp]
 
 ### 4.4 别名表
 
-中央配置：`aliases/protoss.yaml`
+中央配置：`docs/aliases/protoss.yaml`
 
 ```yaml
 buildings:

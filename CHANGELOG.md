@@ -312,7 +312,7 @@ Director → board commit (1.5s grace) → STRATEGY_CHANGED → snapshot push` �
   - `Director`：串起 Parser + Board + Facade，每 tick 调度 committed directive 到
     facade；玩家话语入口 `on_player_command` / `confirm_ambiguous`
   - `ares_adapter.make_bot_class()`：工厂返回继承 AresBot 的 bot 类，运行时 lazy import ares
-- **配置**：`config/llm.yaml`、`config/bot_difficulty.yaml`、`aliases/protoss.yaml`
+- **配置**：`config/llm.yaml`、`config/bot_difficulty.yaml`、`docs/aliases/protoss.yaml`
 - **M0c smoke 脚本**：`scripts/smoke_test.py`，在真实 SC2 环境验证"不动的叉子"，
   输出 `smoke_report.json`（verdict pass/fail + anomaly 分类）
 - **文档**：

@@ -152,7 +152,7 @@ class TestAliasTable:
     def test_ambiguous_alias_without_verb_raises(self) -> None:
         """同形别名（building+unit 共用）在 verb=ANY 时抛歧义错误。
 
-        真实 aliases/protoss.yaml 当前无同形别名（VR 仅建筑），这里构造一个
+        真实 docs/aliases/protoss.yaml 当前无同形别名（VR 仅建筑），这里构造一个
         同形场景覆盖 resolve 的歧义分支。
         """
         table = AliasTable.from_dict(
@@ -210,7 +210,7 @@ class TestStrategyLibrary:
     def test_loads_real_strategies(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         assert "1g_robo_immortal" in lib.all_ids(StrategyKind.OPENING)
         assert "iac_2base" in lib.all_ids(StrategyKind.MIDGAME)
@@ -219,7 +219,7 @@ class TestStrategyLibrary:
     def test_loaded_opening_has_correct_shape(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         ob = lib.get_opening("1g_robo_immortal")
         assert isinstance(ob, OpeningBuild)
@@ -233,7 +233,7 @@ class TestStrategyLibrary:
     def test_loaded_midgame(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         mg = lib.get_midgame("iac_2base")
         assert isinstance(mg, MidgameStance)
@@ -244,7 +244,7 @@ class TestStrategyLibrary:
     def test_loaded_lategame(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         lg = lib.get_lategame("skytoss")
         assert isinstance(lg, LategameDoctrine)
@@ -253,7 +253,7 @@ class TestStrategyLibrary:
     def test_get_unknown_raises(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         with pytest.raises(StrategyNotFoundError):
             lib.get("nope")
@@ -261,7 +261,7 @@ class TestStrategyLibrary:
     def test_transitions_of(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         midgames = lib.transitions_of("1g_robo_immortal")
         assert "iac_2base" in midgames
@@ -284,7 +284,7 @@ class TestStrategyLibrary:
     def test_aliases_loaded_from_real_yaml(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
         # VR 在真实别名表里仅指建筑（虚空辉光舰不叫 VR）
         canonical, _ = lib.aliases.resolve("VR", verb=VerbHint.BUILD)
@@ -297,15 +297,23 @@ class TestStrategyLibrary:
     def test_hotkey_aliases(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
-            aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
+        # hotkey 串 = Liquipedia Standard 布局真实 hotkey (Probe build menu
+        # 分两层:B basic + V advanced)。2026-05-17 把原项目自创简称(VD=RoboticsBay
+        # / VA=TemplarArchives / VX=FleetBeacon 等)改成真 hotkey。
         for hotkey, expected in [
-            ("BG", "Gateway"),
-            ("BF", "Forge"),
-            ("VS", "Stargate"),
-            ("VD", "RoboticsBay"),
-            ("VX", "FleetBeacon"),
-            ("VA", "TemplarArchives"),
+            ("BG", "Gateway"),           # B+G
+            ("BF", "Forge"),             # B+F
+            ("BA", "Assimilator"),       # B+A (原 VC)
+            ("BB", "ShieldBattery"),     # B+B (原 B+H)
+            ("VS", "Stargate"),          # V+S
+            ("VR", "RoboticsFacility"),  # V+R (原 B+R)
+            ("VB", "RoboticsBay"),       # V+B (原 VD)
+            ("VC", "TwilightCouncil"),   # V+C (原 VT)
+            ("VT", "TemplarArchives"),   # V+T (原 VA)
+            ("VD", "DarkShrine"),        # V+D (原 VB)
+            ("VF", "FleetBeacon"),       # V+F (原 VX)
         ]:
             canonical, group = lib.aliases.resolve(hotkey, verb=VerbHint.BUILD)
             assert canonical == expected, f"hotkey {hotkey!r} 应解析为 {expected!r}"

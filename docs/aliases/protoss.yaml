@@ -1,0 +1,193 @@
+# 神族中央别名表（设计文档 §4.4）
+#
+# 三组：buildings / units / upgrades。每条 entry：
+#   canonical:                  # 内部统一 id（与 SC2 单位 type name 对齐）
+#     default_display: ""       # PWA / 日志 / snapshot 字段默认显示
+#     aliases: [...]            # 接受的玩家用法（hotkey 串 / 中文 / 英文短称）
+#     hotkey: "B+E"             # 仅信息,玩家说"BE"时 alias 匹配,不参与游戏内按键
+#
+# verb 消歧用来区分"造建筑 / 出单位 / 研升级"（玩家说的动词决定查哪组）。
+#
+# ============================================================
+# 编辑指南（user 后续手动维护）
+# ============================================================
+# - 加新别名 → 找到 canonical 在 aliases 列表加一条
+# - 加新单位 / 建筑 / 升级 → 抄相邻 entry 改字段
+# - **canonical id 不能改**(代码 + strategies/*.yaml 引用)
+# - 改完保存,下次 service 重启自动重读;eval/单测立即生效
+# - 同名 alias 不要跨 canonical 重复(LLM 会被歧义)
+#
+# ============================================================
+# 建筑 hotkey 实际查询自 Liquipedia (Standard 布局)
+# ============================================================
+# Probe build menu 分两层:B (basic) + V (advanced)
+#   B 系:Nexus(BN) / Pylon(BE) / Assimilator(BA) / Gateway(BG) / Forge(BF) /
+#        Cybernetics(BY) / PhotonCannon(BC) / ShieldBattery(BB)
+#   V 系:RoboticsFacility(VR) / RoboticsBay(VB) / Stargate(VS) /
+#        TwilightCouncil(VC) / TemplarArchives(VT) / DarkShrine(VD) /
+#        FleetBeacon(VF)
+#
+# ⚠️ 历史变更(2026-05-17):
+# 原 default_display 用「V + 建筑首字母」自创简称(VC=气矿, VD=RoboticsBay,
+# VB=DarkShrine, VT=TwilightCouncil, VA=TemplarArchives, VX=FleetBeacon)
+# 跟真 hotkey 串冲突。改成真 hotkey 串后:
+#   - VC 现指 Twilight Council(真 hotkey),不再指气矿
+#   - VD 现指 DarkShrine(真 hotkey),不再指 RoboticsBay
+#   - VB 现指 RoboticsBay(真 hotkey),不再指 DarkShrine
+# 旧"VC=气矿"这种玩家习惯被移除,要么用真 hotkey BA,要么直接说"气矿"。
+
+buildings:
+  Nexus:
+    default_display: "BN"
+    aliases: [BN, NX, 基地, 主基地, Nexus]
+    hotkey: "B+N"
+  Pylon:
+    default_display: "BE"
+    aliases: [BE, PY, 水晶, Pylon]
+    hotkey: "B+E"
+  Assimilator:
+    default_display: "BA"
+    aliases: [BA, 气矿, 气, 瓦斯, Gas, Assimilator]
+    hotkey: "B+A"
+  Gateway:
+    default_display: "BG"
+    aliases: [BG, 兵营, 折跃门, Gateway, WarpGate, 折跃营]
+    hotkey: "B+G"
+  Forge:
+    default_display: "BF"
+    aliases: [BF, 锻炉, 攻防塔, 升级塔, Forge]
+    hotkey: "B+F"
+  CyberneticsCore:
+    default_display: "BY"
+    aliases: [BY, BC, 模拟芯, 模拟, CyberneticsCore]
+    hotkey: "B+Y"
+  PhotonCannon:
+    default_display: "BC"
+    aliases: [BC, 炮台, 炮, 光子炮, Cannon, PhotonCannon]
+    hotkey: "B+C"
+  ShieldBattery:
+    default_display: "BB"
+    aliases: [BB, 电池, 护盾电池, ShieldBattery]
+    hotkey: "B+B"
+  RoboticsFacility:
+    default_display: "VR"
+    aliases: [VR, Robo, 机械工厂, 球塔下, RoboticsFacility]
+    hotkey: "V+R"
+  RoboticsBay:
+    default_display: "VB"
+    aliases: [VB, 球塔, 巨像塔, Bay, RoboticsBay]
+    hotkey: "V+B"
+  Stargate:
+    default_display: "VS"
+    aliases: [VS, 星门, Stargate]
+    hotkey: "V+S"
+  TwilightCouncil:
+    default_display: "VC"
+    aliases: [VC, 议会, 黄昏, TwilightCouncil]
+    hotkey: "V+C"
+  TemplarArchives:
+    default_display: "VT"
+    aliases: [VT, 圣堂塔, 高塔, 圣堂档案, TemplarArchives]
+    hotkey: "V+T"
+  DarkShrine:
+    default_display: "VD"
+    aliases: [VD, 隐刀塔, 黑塔, 暗使神殿, DarkShrine]
+    hotkey: "V+D"
+  FleetBeacon:
+    default_display: "VF"
+    aliases: [VF, 航母塔, 信标, 舰队信标, FleetBeacon]
+    hotkey: "V+F"
+
+units:
+  Probe:
+    default_display: "探机"
+    aliases: [探机, 农民, 工人, Probe]
+  Zealot:
+    default_display: "叉子"
+    aliases: [叉, 叉子, 狂热者, Zealot]
+  Stalker:
+    default_display: "追猎"
+    aliases: [追猎, 追猎者, Stalker]
+  Sentry:
+    default_display: "哨兵"
+    aliases: [哨兵, Sentry, FF 兵]
+  Adept:
+    default_display: "使徒"
+    aliases: [使徒, Adept]
+  HighTemplar:
+    default_display: "HT"
+    aliases: [HT, 圣堂, 高阶圣堂, HighTemplar, Templar]
+  DarkTemplar:
+    default_display: "DT"
+    aliases: [DT, 隐刀, 黑暗圣堂, DarkTemplar]
+  Archon:
+    default_display: "白球"
+    aliases: [白球, 执政官, Archon]
+  Immortal:
+    default_display: "不朽"
+    aliases: [不朽, Immortal, 不朽者]
+  Observer:
+    default_display: "OB"
+    aliases: [OB, 叮当, Observer, 观察者]
+  WarpPrism:
+    default_display: "棱镜"
+    aliases: [棱镜, 速棱镜, 运输机, WarpPrism, 折跃棱镜]
+  Colossus:
+    default_display: "巨像"
+    aliases: [巨像, Colossus]
+  Disruptor:
+    default_display: "干扰者"
+    aliases: [干扰者, Disruptor, 分裂球]
+  Phoenix:
+    default_display: "凤凰"
+    aliases: [凤凰, Phoenix]
+  VoidRay:
+    default_display: "虚空"
+    aliases: [虚空, 虚空辐射, 辉光舰, 虚空辉光舰, VoidRay]
+  Oracle:
+    default_display: "先知"
+    aliases: [先知, Oracle]
+  Tempest:
+    default_display: "风暴战舰"
+    aliases: [风暴战舰, Tempest, 风暴舰]
+  Carrier:
+    default_display: "航母"
+    aliases: [航母, Carrier]
+  Mothership:
+    default_display: "母舰"
+    aliases: [母舰, Mothership]
+
+upgrades:
+  WarpGateResearch:
+    default_display: "折跃"
+    aliases: [折跃, WarpGate, 折跃门研究]
+  Blink:
+    default_display: "闪烁"
+    aliases: [闪烁, Blink, 闪追, 追猎闪烁]
+  Charge:
+    default_display: "冲锋"
+    aliases: [冲锋, Charge, 叉冲, 狂热者冲锋, 叉子冲锋]
+  ResonatingGlaives:
+    default_display: "攻速"
+    aliases: [攻速, Glaive, 使徒攻速]
+  PsiStorm:
+    default_display: "风暴"
+    aliases: [风暴, Storm, 灵能风暴, 风暴科技]
+  GravitonCatapult:
+    default_display: "弹射"
+    aliases: [弹射, GravitonCatapult, 航母弹射]
+  ProtossGroundWeapons:
+    default_display: "攻击升级"
+    aliases: [陆军攻击, 攻击, 陆攻, ProtossGroundWeapons]
+  ProtossGroundArmor:
+    default_display: "护甲升级"
+    aliases: [陆军护甲, 护甲, 陆甲, ProtossGroundArmor]
+  ProtossAirWeapons:
+    default_display: "空军攻击"
+    aliases: [空军攻击, 空攻, ProtossAirWeapons]
+  ProtossAirArmor:
+    default_display: "空军护甲"
+    aliases: [空军护甲, 空甲, ProtossAirArmor]
+  ProtossShields:
+    default_display: "护盾升级"
+    aliases: [护盾, 护盾升级, ProtossShields]

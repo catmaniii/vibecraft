@@ -63,12 +63,12 @@ tests/
   integration/          # 集成测试 (mock python-sc2)
   e2e/                  # 端到端 (需 SC2 客户端, default 跳过)
 strategies/protoss/     # 剧本 YAML
-aliases/                # 别名表 YAML
 config/                 # llm.yaml / bot_difficulty.yaml
 scripts/                # 一次性脚本（smoke / 工具）
 docs/
   plans/                # 设计文档
   adr/                  # Architecture Decision Records
+  aliases/              # 别名表 YAML（protoss / terran 占位 / zerg 占位）
 ```
 
 ## 许可

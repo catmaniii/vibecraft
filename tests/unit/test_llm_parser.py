@@ -47,7 +47,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def library() -> StrategyLibrary:
     return StrategyLibrary.from_directories(
         strategies_dir=PROJECT_ROOT / "strategies",
-        aliases_path=PROJECT_ROOT / "aliases" / "protoss.yaml",
+        aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
     )
 
 

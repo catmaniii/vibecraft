@@ -41,7 +41,7 @@ def strategy_library() -> StrategyLibrary:
     """加载真实 strategies/ + aliases/ —— LLM 解析需要 catalog。"""
     project_root = Path(__file__).parent.parent.parent
     strategies_dir = project_root / "strategies"
-    aliases_path = project_root / "aliases" / "protoss.yaml"
+    aliases_path = project_root / "docs" / "aliases" / "protoss.yaml"
     return StrategyLibrary.from_directories(strategies_dir, aliases_path)
 
 

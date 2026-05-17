@@ -1,7 +1,7 @@
 """中央别名表 + verb 消歧。
 
 设计文档 §4.4：
-- aliases/protoss.yaml 列 building / unit / upgrade 各自的中文 + hotkey 别名
+- docs/aliases/protoss.yaml 列 building / unit / upgrade 各自的中文 + hotkey 别名
 - verb 上下文决定查哪一组：build→建筑、train→单位、research→升级，
   同时起类型校验作用（"造叉子" 这种 verb 与组不匹配会抛错）
 - 若同一字面别名在多组同形，verb 用来消歧；verb=ANY 且同形则抛歧义错误
