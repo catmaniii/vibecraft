@@ -7,29 +7,31 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `8d00070` + P2.d/e 待 commit，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17，HEAD `936dcc2` + P3.7/.8 待 commit，tag `v0.1.0a3`）
 
-- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 完成**（L3 Standing Orders
-  + L4 Production Overrides 都 state/snapshot/UI/撤销 ✅）。e2e smoke verify L3 + L4
-  schema 都通。P3-P6 待开始。
+- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 + P3 完成**（L1/L3/L4 + L2
+  TacticalObjective + task_monitor + done_when 8-kind dispatcher + LLM prompt
+  教 done_when + 4 个 PWA cards (Standing/Production/Tactics) 全套 ✅）。
+  剩 P5（sharpy 让位机制 + named_spot registry）/ P4（LLM prompt 重写）/
+  P6（收尾 + 真实 SC2 全链路 verify）。
 - **本次 session 关键节点**：
   - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
-  - four-layer 指令架构 plan + ADR 0010（skeleton + P1/P2 corner case）+ 4 决策拍板
-  - **M2 P1 + P2 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 模式
-    跑通；EventBus + 11 hook wire + L3 standing_orders + L4 production_overrides
-    全套（state/snapshot/UI/撤销）+ M4 schema gap 修
-- **最近 commit（M2 P2 系列，按时间倒序）**：
-  - `8d00070` M2 P2 前端：ProductionOverridesCard + types + useWs + CockpitView (P2.b)
-  - `20982a5` feat(director): L4 production_overrides + 路由 + revoke unified (P2.a)
-  - `6665886` P1 收尾：ADR Implementation Notes + TASKS.md 标 P1 done
-  - `d3e1a96` feat(pwa): StandingOrdersCard + 撤销 (P1.5)
-  - `571a157` feat(ws): revoke_directive 上行帧 + e2e wire (P1.4)
-  - `952d905` feat(snapshot): standing_orders 字段透传 (P1.3)
-  - `fa24be6` feat(director): standing_orders + persistent 路由 (P1.2)
-  - `3e4a5ec` feat(eventbus): wire 11 lifecycle hooks → EventBus (P1.0b)
-  - `0c98110` fix(directives): 修 M4 schema gap + persistent (P1.1)
-  - `83fddad` feat(eventbus): EventBus core skeleton (P1.0a)
+  - four-layer 指令架构 plan + ADR 0010（skeleton + P1/P2/P3 corner case）+ 4 决策拍板
+  - **M2 P1+P2+P3 完成**：parallel subagent (Sonnet) + 主 agent (Opus) review 模式
+    跑通；EventBus + 11 hook wire + L3/L4/L2 全套（state/snapshot/UI/撤销）+
+    task_monitor + done_when 8-kind dispatcher + LLM prompt 教 done_when + 3 个
+    新 PWA card
+- **最近 commit（M2 P3 系列，按时间倒序）**：
+  - `936dcc2` P3.6: PWA TacticsCard.vue + CockpitView 加 section
+  - `914cdc2` P3.5: snapshot 加 active_tactics + 前端 type
+  - `3deddf0` P3.4: prompt verb/done_when whitelist + few-shot + validate retry
+  - `b2f6021` P3.3: task_monitor 6 checker + any_of/all_of + pydantic
+  - `bf94a16` P3.2: wire task_monitor to Director + board.complete + L2 routing
+  - `477489f` P3 schema: TACTICAL_OBJECTIVE + DoneWhen 8-kind discriminated union
+  - `50aac9b` P3: TaskMonitor skeleton + 2 reference checkers
+  - `bfcc3c2` P2 收尾 + `8d00070` P2.b 前端 + `20982a5` P2.a 后端
+  - `6665886` P1 收尾 + `d3e1a96` ... `83fddad`（P1 系列 8 个 commit）
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
 - **阻塞 / 等待**：无，M2 P3 可开工
 - **下一步**（按 ADR 0010 / plan §7 次序）：
@@ -39,11 +41,16 @@
      release `LLM_CONTROLLED` tags + `named_spot` registry）（~1d）
   3. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
   4. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
-- **P1/P2 已知 deferred 到 P3/P5（详 ADR 0010 Implementation Notes）**：
+- **P1/P2/P3 已知 deferred 到 P5/P6（详 ADR 0010 Implementation Notes）**：
   - sharpy 真让位 standing order 单位（P1 只进列表 + UI，不真 hold）—— **P5**
-  - L4 production override 实际 dispatch 到 sharpy（P2 只 list + UI）—— **P3 task_monitor**
+  - L4 production override 真 dispatch 到 sharpy（P3 task_monitor mark completed
+    但不真触发 sharpy 出兵）—— **P5/P6**
+  - Director 加 bot backref 让 6 个 game-state checker 真工作（P3 game_state=None） —— **P5**
+  - `named_spot` registry 完整（P3 只支持 natural/third/main 白名单）—— **P5**
+  - vision_acquired 用 ts diff 不用 step count（bug：counter 累加快 22x）—— **P5**
+  - enemy_killed_in_area: publisher 加 area inference（P1.0b 没填 payload.area）—— **P5**
+  - headless_smoke 子进程 GameSession sinks（events.jsonl 空，无法 verify task_monitor 真触发）—— **P6**
   - `board.revoke()` 对已 committed standing order 返回 False（行为 OK 但不完整）—— **P5**
-  - `named_spot` registry（"enemy_main_gas" 等 spot name 到坐标的映射）—— **P5**
 - **本次 session 协作模式**（已 verified）：parallel subagent + 主 agent review
   - 主 session (Opus, 我) = orchestrator + reviewer + debugger
   - subagent (Sonnet, fresh context, worktree isolation) = implementer + tester
@@ -165,10 +172,33 @@
 
 **dispatch 到 sharpy 实际生产 wire 留 P3 task_monitor**。
 
-#### P3 L2 Tactics（`TACTICAL_OBJECTIVE` + `ObjectiveExecutor` 框架）  ⏸️（~3d）
+#### P3 L2 Tactics + task_monitor + done_when  ✅ done（2026-05-17，~1.5h wall-clock，3 波 parallel）
 
-11 verb enum：`attack`/`defend`/`scout`/`expand`/`harass`/`drop`/`vision`/`raze`/
-`retreat`/`regroup`/`split`
+8 个 sub-task：
+- [x] **P3.0** TaskMonitor skeleton + 2 reference checker (time_elapsed_since /
+  unit_count_built_since via EventBus) + 22 个单测
+- [x] **P3.1** TACTICAL_OBJECTIVE directive type + DoneWhen 10-kind discriminated
+  union (8 kind + any_of/all_of) + _PayloadBase 加 done_when/timeout_s + 30 个单测
+- [x] **P3.2** wire task_monitor 进 Director.on_tick + board.complete 方法 +
+  bot.py 构造时传 event_bus + L2 路由进 _in_flight（fallback） + 5 个单测
+- [x] **P3.3** 6 个 game-state checker（expansion_count / tech_done /
+  target_destroyed / own_army_size_ratio / vision_acquired / enemy_killed_in_area）+
+  any_of/all_of 复合 + retrofit attach_directive 接受 pydantic + 28 个单测
+- [x] **P3.4** LLM prompt 加 11 verb + 8 kind 白名单 + 6 个 done_when few-shot +
+  IntentParser validate retry (只对 done_when error) + fallback strip done_when +
+  10 个单测
+- [x] **P3.5** snapshot 加 active_tactics 字段 + _tactical_view formatter +
+  web/types.ts TacticalObjectiveView + 5 个单测 + 顺手修 _UNIT_ZH/_TACTICAL_VERB_ZH
+  baseline RUF012
+- [x] **P3.6** PWA TacticsCard.vue + CockpitView section + 3 个 vitest + PWA build
+- [x] **P3.7** e2e smoke verify：inject "30秒后撤" → LLM 完美生成
+  `done_when={kind:"time_elapsed_since", seconds:30, ref:"directive_issued"}`
+  + directive.committed event 触发。`directive_completed` event 实际触发要 P6
+  全链路 verify（含 events.jsonl sinks 修复）。
+
+P3 总计 527 后端 + 50 前端 passed（+109 since P2 done）。
+
+#### ~~P3 L2 Tactics~~ ✅ done（见上一段）
 
 #### P5 sharpy plan 让位机制扩展  ⏸️ blocked by P1+P3（~1d）
 

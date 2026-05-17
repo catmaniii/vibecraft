@@ -270,3 +270,41 @@ P1 实施时定义 standing 守建筑的 schema 形态（**倾向**：用 `targe
   StandingOrdersCard，资源条占位之前删了，剩下唯一一个 M3 import 已 orphan。
   P2.b 在 StandingOrdersCard 下方加 ProductionOverridesCard section（不替换占位）。
   未来 P3 可能加 TacticsCard 也是同样模式 —— 直接加 section 不依赖 M3。
+
+### P3 实施（2026-05-17）
+
+- **task_monitor 默认 game_state=None**：Director 没 `_bot` backref，`on_tick` 调
+  `task_monitor.tick(now, game_state=None)`。time_elapsed_since(ref=directive_issued)
+  不依赖 game_state 能 work，但 6 个 game-state-dependent checker 都 short-circuit
+  返回 False。**P5 阶段**给 Director 加 bot backref，让所有 kind 在真实 SC2 跑通。
+- **named_spot 在 P3 只支持白名单 {natural, third, main}**：target_destroyed /
+  vision_acquired 等 area-based checker 用 `_resolve_named_spot`，白名单外返回
+  None + log warning。**P5 阶段**做完整 named_spot registry（含 enemy_main_gas /
+  third_gas / *_ramp 等）。
+- **own_army_size_ratio initial snapshot 在 tick 首次拍**：attach_directive 时
+  game_state 可能 None（Director 没 bot backref），所以 initial supply 不在 attach
+  拍。改成 tick() 首次执行该 directive 时拍。**副作用**：如果 attach 到 first tick
+  之间发生 army 损失（不太可能，gap < 1 tick），ratio 计算从损失后开始。
+- **enemy_killed_in_area filter 假设 publisher 在 payload 加 area 字段**：
+  task_monitor `EnemyKilledInArea` checker 的 EventBus filter 用 `event.payload["area"]`
+  匹配。当前 `_publish_unit_destroyed` (P1.0b) 没填 `area` 字段（payload 只有
+  unit_tag/unit_obj）。**P5/P6 时给 publisher 加 area inference**（position →
+  named_spot 反查），或者 checker 改用 `event.position` + 自己算 area。
+- **vision_acquired 每 tick 累计 1.0s**：注释里写 "1 step ≈ 1s"，实际 sharpy
+  realtime step ≈ 0.045s。**bug**：counter 累加快 22x。**P5 修**：用 ts diff 而
+  不是 step count。
+- **LLM prompt validate retry 只对 done_when error**：P3.4 subagent 设计决定：
+  非 done_when ValidationError（如 unit_type 缺）不 retry（保留现有
+  test_invalid_directive_payload 行为）。理由：done_when 是 LLM 新学的字段、
+  容易错；其它字段是历史稳定 schema，retry 只是浪费 token。
+- **fallback strip done_when**：如果 retry 后仍 invalid，把 directive 的 done_when
+  设 None（降级为 EPHEMERAL）+ result.notes 加 "[完成条件无效已降级为 EPHEMERAL]"。
+  EPHEMERAL directive 走旧路径（一次执行后失效）。
+- **顺手修 baseline RUF012**：`_UNIT_ZH` + 新加的 `_TACTICAL_VERB_ZH` 都改 ClassVar
+  注解，clean baseline lint。
+- **e2e P3.7 部分 verify**：headless_smoke inject "30 秒后撤" → LLM 生成
+  `done_when={kind:"time_elapsed_since", seconds:30, ref:"directive_issued"}`
+  完美正确 + directive.committed event 触发。**没看到 directive_completed
+  event**（events.jsonl 空，headless_smoke 子进程 GameSession 没 wire sinks，
+  pre-existing issue）。task_monitor.tick 触发 board.complete 实际效果要 P6
+  全链路 verify（含 sinks fix + 真实 SC2 30s 等待）。
