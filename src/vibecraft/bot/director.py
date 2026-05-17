@@ -153,6 +153,12 @@ class Director:
         self._standing_order_tags: dict[str, set[int]] = {}
         # P2 L4 production overrides（PRODUCTION/TECH/EXPANSION_OVERRIDE 不走 _in_flight）
         self.production_overrides: list[Directive] = []
+        # M3 L4 status tracking: directive_id → {"status": "pending"|"active"|"on_hold",
+        # "reason": str}。pending = 刚 commit;active = bot.train/research/expand 已生效;
+        # on_hold = prereq 缺失或 affordability 不够,等条件满足再 active。
+        # snapshot.production_overrides[*].status 透传给 PWA;状态变化时 emit
+        # directive.status_changed event。
+        self._override_status: dict[str, dict[str, str]] = {}
         # snapshot / event 推送回调（P0 / P1）
         self._snapshot_callback: Callable[[dict[str, Any]], None] | None = None
         self._event_callback: Callable[[dict[str, Any]], None] | None = None
@@ -504,15 +510,22 @@ class Director:
     def _production_override_view(self, d: Directive) -> dict[str, Any]:
         """把一条 production override Directive 转成 snapshot 里的 view dict（P2）。
 
-        字段：id / display / issued_at。
+        字段：id / display / issued_at / status / status_reason(M3 加)。
+        status 取值: pending / active / on_hold。PWA 卡片按此染色。
         """
         payload = d.payload
         display = self._format_production_override_display(payload)
-        return {
+        status_info = self._override_status.get(d.id, {})
+        view: dict[str, Any] = {
             "id": d.id,
             "display": display,
             "issued_at": d.issued_at,
+            "status": status_info.get("status", "pending"),
         }
+        reason = status_info.get("reason", "")
+        if reason:
+            view["status_reason"] = reason
+        return view
 
     def _format_production_override_display(self, payload: Any) -> str:
         """中文 display 格式（P2）：
@@ -805,6 +818,7 @@ class Director:
         self.production_overrides = [s for s in self.production_overrides if s.id != directive_id]
         if len(self.production_overrides) < before:
             self.board.revoke(directive_id, now)
+            self._override_status.pop(directive_id, None)
             self._push_snapshot(now)
             return True
         return False
@@ -924,14 +938,64 @@ class Director:
             elif isinstance(payload, ExpansionOverridePayload):
                 await self._exec_expansion_override(d, payload)
 
+    def _check_prereq_ready(self, item_canonical_name: str) -> tuple[bool, str]:
+        """检查 unit/upgrade 的 prereq structure 是否 ready。
+
+        返回 (ready: bool, missing_name: str)。ready=True 时 missing_name=''。
+        item_canonical_name 是 _REQUIRED_STRUCTURE 表的 key(已 UPPER)。
+        """
+        required = self._REQUIRED_STRUCTURE.get(item_canonical_name)
+        if required is None:
+            return (True, "")  # 表里 None 或不在表 = 无 prereq
+        if self._bot is None:
+            return (False, required)
+        try:
+            from sc2.ids.unit_typeid import UnitTypeId
+
+            structure_id = UnitTypeId[required]
+            ready_count = len(self._bot.structures(structure_id).ready)
+            if ready_count > 0:
+                return (True, "")
+            # 检查 pending(在建)
+            pending = float(self._bot.already_pending(structure_id))
+            if pending > 0:
+                return (False, f"{required}(建造中)")
+            return (False, required)
+        except (ImportError, KeyError, Exception):
+            return (False, required)
+
+    def _set_override_status(
+        self, d: Directive, status: str, reason: str = ""
+    ) -> None:
+        """更新 directive 的 status,变化时 emit event 给 PWA。"""
+        cur = self._override_status.get(d.id, {})
+        if cur.get("status") == status and cur.get("reason", "") == reason:
+            return  # 没变化
+        self._override_status[d.id] = {"status": status, "reason": reason}
+        # emit event 让 PWA 卡片 update color
+        self._push_event({
+            "type": "event",
+            "kind": "directive.status_changed",
+            "ts": 0,  # PWA 自己用接收时间
+            "payload": {
+                "directive_id": d.id,
+                "status": status,
+                "reason": reason,
+            },
+        })
+
     def _exec_production_override(self, d: Directive, payload: Any) -> None:
-        """L4 unit 出兵: bot.train(unit_id)。"""
+        """L4 unit 出兵: bot.train(unit_id)。带 prereq check + status tracking。"""
         unit_id = self._resolve_unit_type_id(payload.unit_type)
         if unit_id is None:
             logger.warning("resolve unit_type_id fail: %r", payload.unit_type)
             return
-        # 已造数 + 已下单数(in-flight): 用 bot.already_pending 防 spam。
-        # bot.already_pending(unit_id) 返回当前队列里的同类 unit 数量(float)。
+        # prereq check(canonical UPPER name)
+        ready, missing = self._check_prereq_ready(payload.unit_type.upper())
+        if not ready:
+            self._set_override_status(d, "on_hold", f"需要 {missing}")
+            return
+        # 已造数 + 已下单数(in-flight): 用 bot.already_pending 防 spam
         try:
             in_flight = float(self._bot.already_pending(unit_id))
         except Exception:
@@ -939,6 +1003,8 @@ class Director:
         already_done = self._production_override_built_count(d)
         remaining = payload.count - already_done - int(in_flight)
         if remaining <= 0:
+            # 已下满 = active(等 task_monitor 判 done 后 board.complete 自动 pop)
+            self._set_override_status(d, "active", "已下单等完成")
             return
         try:
             n_trained = self._bot.train(
@@ -949,14 +1015,23 @@ class Director:
                     "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
                     unit_id, n_trained, payload.count, already_done, in_flight, d.id[:8],
                 )
+                self._set_override_status(d, "active", "")
+            else:
+                # train 失败可能是资源不够或 building 都 busy
+                self._set_override_status(d, "on_hold", "资源/building 不足")
         except Exception as exc:
             logger.debug("production_override train fail: %s", exc)
 
     def _exec_tech_override(self, d: Directive, payload: Any) -> None:
-        """L4 科技: bot.research(upgrade_id)。"""
+        """L4 科技: bot.research(upgrade_id)。带 prereq check + status tracking。"""
         upgrade_id = self._resolve_upgrade_id(payload.upgrade_id)
         if upgrade_id is None:
             logger.warning("resolve upgrade_id fail: %r", payload.upgrade_id)
+            return
+        # prereq check —— upgrade 的 _REQUIRED_STRUCTURE key 是 enum name(已 upper)
+        ready, missing = self._check_prereq_ready(upgrade_id.name)
+        if not ready:
+            self._set_override_status(d, "on_hold", f"需要 {missing}")
             return
         # already_pending_upgrade(u) 返回研究进度 [0, 1]
         try:
@@ -964,23 +1039,28 @@ class Director:
         except Exception:
             progress = 0.0
         if progress > 0.0:
-            return  # 已经在研究/已完成,don't re-research
+            # 在研究中(或已完成) = active
+            self._set_override_status(d, "active", f"研究中 {progress * 100:.0f}%")
+            return
         try:
             success = self._bot.research(upgrade_id)
             if success:
                 logger.info(
                     "tech_override RESEARCH %s (id=%s)", upgrade_id, d.id[:8]
                 )
+                self._set_override_status(d, "active", "")
+            else:
+                # 资源不够 / 没 idle research building
+                self._set_override_status(d, "on_hold", "资源/building 不足")
         except Exception as exc:
-            logger.debug("tech_override research fail: %s", exc)
+            logger.warning("tech_override research exception: %s", exc)
 
     async def _exec_expansion_override(self, d: Directive, payload: Any) -> None:
-        """L4 开矿: await bot.expand_now()。"""
+        """L4 开矿: await bot.expand_now()。带 status tracking(expand 无 prereq)。"""
         try:
             from sc2.ids.unit_typeid import UnitTypeId
 
             nexus_id = UnitTypeId.NEXUS
-            # 当前 expansion 数 = ready Nexus + pending Nexus
             current = len(self._bot.townhalls.ready) + int(
                 self._bot.already_pending(nexus_id)
             )
@@ -988,15 +1068,27 @@ class Director:
         except Exception:
             return
         if current >= target:
+            self._set_override_status(d, "active", f"{current}/{target} 已达成")
             return
+        # 资源 / mineral check
+        try:
+            if self._bot.minerals < 400:  # Nexus 需要 400 mineral
+                self._set_override_status(
+                    d, "on_hold", f"资源不足({self._bot.minerals}/400 矿)"
+                )
+                return
+        except Exception:
+            pass
         try:
             await self._bot.expand_now()
             logger.info(
                 "expansion_override EXPAND (target=%d current=%d, id=%s)",
                 target, current, d.id[:8],
             )
+            self._set_override_status(d, "active", f"{current + 1}/{target}")
         except Exception as exc:
             logger.debug("expansion_override fail: %s", exc)
+            self._set_override_status(d, "on_hold", "expand 失败")
 
     @staticmethod
     def _resolve_unit_type_id(name: str) -> Any:
@@ -1007,6 +1099,45 @@ class Director:
             return UnitTypeId[name.upper()]
         except (ImportError, KeyError):
             return None
+
+    # L4 override 的 prereq structure 表(canonical unit/upgrade name → required structure)。
+    # train Sentry 前 Cybernetics Core 要 ready;研究 Blink 前 Twilight Council 要 ready。
+    # None 表示无 prereq(如 Zealot / Archon 合成)。
+    # 不在表里的 unit(如 Probe)默认无 prereq。
+    _REQUIRED_STRUCTURE: ClassVar[dict[str, str | None]] = {
+        # ---- Units ----
+        "ZEALOT": None,
+        "SENTRY": "CYBERNETICSCORE",
+        "STALKER": "CYBERNETICSCORE",
+        "ADEPT": "CYBERNETICSCORE",
+        "HIGHTEMPLAR": "TEMPLARARCHIVES",
+        "DARKTEMPLAR": "DARKSHRINE",
+        "ARCHON": None,  # 合成,不需 structure
+        "IMMORTAL": "ROBOTICSFACILITY",
+        "OBSERVER": "ROBOTICSFACILITY",
+        "WARPPRISM": "ROBOTICSFACILITY",
+        "COLOSSUS": "ROBOTICSBAY",
+        "DISRUPTOR": "ROBOTICSBAY",
+        "PHOENIX": "STARGATE",
+        "VOIDRAY": "STARGATE",
+        "ORACLE": "STARGATE",
+        "TEMPEST": "FLEETBEACON",
+        "CARRIER": "FLEETBEACON",
+        "MOTHERSHIP": "FLEETBEACON",
+        # ---- Upgrades(已经 UpgradeId 名) ----
+        "WARPGATERESEARCH": "CYBERNETICSCORE",
+        "BLINKTECH": "TWILIGHTCOUNCIL",
+        "CHARGE": "TWILIGHTCOUNCIL",
+        "ADEPTPIERCINGATTACK": "TWILIGHTCOUNCIL",
+        "PSISTORMTECH": "TEMPLARARCHIVES",
+        "PROTOSSGROUNDWEAPONSLEVEL1": "FORGE",
+        "PROTOSSGROUNDARMORSLEVEL1": "FORGE",
+        "PROTOSSSHIELDSLEVEL1": "FORGE",
+        "PROTOSSAIRWEAPONSLEVEL1": "CYBERNETICSCORE",
+        "PROTOSSAIRARMORSLEVEL1": "CYBERNETICSCORE",
+        "TEMPESTRANGEUPGRADE": "FLEETBEACON",
+        "TEMPESTGROUNDATTACKUPGRADE": "FLEETBEACON",
+    }
 
     # LLM payload upgrade_id (跟 strategies/aliases yaml 一致) → sc2 UpgradeId enum
     # python-sc2 enum 名比 strategies yaml canonical id 多带 "TECH" / "LEVEL" 等后缀。
@@ -1166,6 +1297,7 @@ class Director:
                 self.production_overrides = [
                     d for d in self.production_overrides if d.id != did
                 ]
+                self._override_status.pop(did, None)
                 need_snapshot = True
 
         # 不再自动 submit transition directive;只更新 self._pending_recommendation,
