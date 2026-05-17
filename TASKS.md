@@ -56,7 +56,8 @@ W2 PWA banner / 父进程兜底层 / 重启 SC2 状态恢复 → 留 M3+（人�
 
 ## ✅ 4 类指令 e2e 4/4 PASS（2026-05-17 晚）
 
-`scripts/e2e_4_directive_types.py` — 每 case 独立 SC2 子进程 + fast mode +
+完整测试用例 spec + 用例选取逻辑 + 怎么扩展见 **`docs/e2e-directive-tests.md`**。
+驱动脚本 `scripts/e2e_4_directive_types.py`。每 case 独立 SC2 子进程 + fast mode +
 VeryEasy 对手 + watchdog 兜底，全过：
 
 | Case | inject | 验证 |
