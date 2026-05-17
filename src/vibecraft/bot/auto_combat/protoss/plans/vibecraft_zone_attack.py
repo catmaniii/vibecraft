@@ -1,0 +1,42 @@
+"""sharpy PlanZoneAttack 的 vibecraft 子类。
+
+优先读 `knowledge.vibecraft.{attack_target_override, combat_intent_override}`
+（由 SharpyFacade.set_attack_target_override / set_combat_intent_override 写入），
+无覆盖时走 sharpy 默认决策。
+
+L2 attack/defend/hold/retreat/vision 指令的执行端点 —— Director 调 facade，
+facade 写 knowledge namespace，本类下一 tick 在 _get_target / _should_attack 内读到。
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from sharpy.plans.tactics import PlanZoneAttack
+from sc2.position import Point2
+
+
+class VibeCraftZoneAttack(PlanZoneAttack):
+    """覆盖 sharpy 默认 attack target / should_attack 决策。"""
+
+    def _get_target(self) -> Any:
+        override = getattr(self.knowledge.vibecraft, "attack_target_override", None)
+        if override is not None:
+            # tuple → Point2；已经是 Point2 直接返回
+            if isinstance(override, tuple) and len(override) == 2:
+                return Point2(override)
+            return override
+        return super()._get_target()
+
+    def _should_attack(self, *args: Any, **kwargs: Any) -> Any:
+        """优先读 combat_intent_override；无 override 透传给 sharpy 默认逻辑。
+
+        sharpy 父类签名为 _should_attack(self, power: ExtendedPower)。
+        intent override 分支无需 power 参数；fallback 时透传 *args/**kwargs 保证兼容。
+        """
+        intent = getattr(self.knowledge.vibecraft, "combat_intent_override", None)
+        if intent == "attack":
+            return True
+        if intent in ("defend", "hold", "retreat", "vision"):
+            return False
+        return super()._should_attack(*args, **kwargs)
