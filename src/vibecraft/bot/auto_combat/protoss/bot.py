@@ -997,16 +997,16 @@ def make_protoss_bot_class(
             传 remap iter 让 sharpy 看到自己 namespace(0,1,2,...),
             保证 BuildingSolver 的 `if iteration == 0` 首次 init 条件命中。
             """
-            # M3 L4 wire:vibecraft 端补刀 train production_override 单位。
+            # M3 L4 wire:vibecraft 端补刀 production / tech / expansion override。
             # **在 super().on_step 之前**:抢在 sharpy plan 之前占 building 的
             # action slot —— python-sc2 BotAI 同 frame 一个 building 只能 receive
             # 一个 action(unit_tags_received_action set),后到者被 skip。玩家
-            # voice override 优先级 > sharpy plan auto-train。
+            # voice override 优先级 > sharpy plan auto-train/research/expand。
             if self.director is not None:
                 try:
-                    self.director.execute_production_overrides_step(now_s)
+                    await self.director.execute_overrides_step(now_s)
                 except Exception as exc:
-                    logger.warning("execute_production_overrides_step fail: %s", exc)
+                    logger.warning("execute_overrides_step fail: %s", exc)
             await super().on_step(self._sharpy_iteration)
             self._sharpy_iteration += 1
             self._refresh_llm_controlled_roles()

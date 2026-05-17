@@ -894,50 +894,109 @@ class Director:
         }
         self._push_event(event_dict)
 
-    def execute_production_overrides_step(self, now: float) -> None:
-        """每 sharpy bot step 调用。增量语义: count 是"额外多出"的数。
+    async def execute_overrides_step(self, now: float) -> None:
+        """每 sharpy bot step 调用,**async**(expand_now 是 async)。
 
-        策略:每 tick 最多 train 1 个,避免一波打光资源(下 tick 再来)。
-        实际 train 走 python-sc2 `bot.train(UnitTypeId)` —— 它内部检
-        affordability + 找 idle building,失败时静默(下 tick 再试)。
+        分发 L4 三类 override 到对应 handler:
+        - production_override → bot.train(unit_id) 抢 building action slot
+        - tech_override       → bot.research(upgrade_id)
+        - expansion_override  → await bot.expand_now()
 
-        done 判定由 task_monitor 检 done_when=unit_count_built_since:
-        EventBus.UNIT_CREATED → task_monitor counter +1 → counter >= count
-        → board.complete → production_overrides 自动 pop。
+        增量语义:不重复 train/research(用 bot.already_pending 防 spam)。
+        done 判定由 task_monitor (counter / tech_done flag / expansion_count
+        checker) 自动 mark + board.complete pop overrides list。
         """
-        from vibecraft.directives.models import ProductionOverridePayload
+        from vibecraft.directives.models import (
+            ExpansionOverridePayload,
+            ProductionOverridePayload,
+            TechOverridePayload,
+        )
 
         if not self.production_overrides or self._bot is None:
             return
-        # 只 train production_override(L4 unit 出兵);tech_override / expansion_override
-        # 留给 sharpy plan 自己处理(科技 / 开矿走 plan 路径)
-        for d in self.production_overrides:
+        # 用 list copy 防迭代时 board.complete pop 改 list
+        for d in list(self.production_overrides):
             payload = d.payload
-            if not isinstance(payload, ProductionOverridePayload):
-                continue
-            unit_id = self._resolve_unit_type_id(payload.unit_type)
-            if unit_id is None:
-                logger.warning("resolve unit_type_id fail: %r", payload.unit_type)
-                continue
-            already = self._production_override_built_count(d)
-            remaining = payload.count - already
-            if remaining <= 0:
-                continue
-            # python-sc2 bot.train: sync 方法, 内部 can_afford + find building。
-            # train_only_idle_buildings=False:允许 enqueue 进忙着的 building 队列后面
-            # (sharpy plan 通常已经 fill Gateway 队列,只看 idle 会永远返回 0)。
-            # 失败时返回 0;不抛异常。
-            try:
-                n_trained = self._bot.train(
-                    unit_id, amount=remaining, train_only_idle_buildings=False
+            if isinstance(payload, ProductionOverridePayload):
+                self._exec_production_override(d, payload)
+            elif isinstance(payload, TechOverridePayload):
+                self._exec_tech_override(d, payload)
+            elif isinstance(payload, ExpansionOverridePayload):
+                await self._exec_expansion_override(d, payload)
+
+    def _exec_production_override(self, d: Directive, payload: Any) -> None:
+        """L4 unit 出兵: bot.train(unit_id)。"""
+        unit_id = self._resolve_unit_type_id(payload.unit_type)
+        if unit_id is None:
+            logger.warning("resolve unit_type_id fail: %r", payload.unit_type)
+            return
+        # 已造数 + 已下单数(in-flight): 用 bot.already_pending 防 spam。
+        # bot.already_pending(unit_id) 返回当前队列里的同类 unit 数量(float)。
+        try:
+            in_flight = float(self._bot.already_pending(unit_id))
+        except Exception:
+            in_flight = 0.0
+        already_done = self._production_override_built_count(d)
+        remaining = payload.count - already_done - int(in_flight)
+        if remaining <= 0:
+            return
+        try:
+            n_trained = self._bot.train(
+                unit_id, amount=remaining, train_only_idle_buildings=False
+            )
+            if n_trained > 0:
+                logger.info(
+                    "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
+                    unit_id, n_trained, payload.count, already_done, in_flight, d.id[:8],
                 )
-                if n_trained > 0:
-                    logger.info(
-                        "production_override TRAIN %s ×%d (remaining=%d, already=%d, directive=%s)",
-                        unit_id, n_trained, remaining, already, d.id[:8],
-                    )
-            except Exception as exc:  # 保险兜底
-                logger.debug("production_override train fail: %s", exc)
+        except Exception as exc:
+            logger.debug("production_override train fail: %s", exc)
+
+    def _exec_tech_override(self, d: Directive, payload: Any) -> None:
+        """L4 科技: bot.research(upgrade_id)。"""
+        upgrade_id = self._resolve_upgrade_id(payload.upgrade_id)
+        if upgrade_id is None:
+            logger.warning("resolve upgrade_id fail: %r", payload.upgrade_id)
+            return
+        # already_pending_upgrade(u) 返回研究进度 [0, 1]
+        try:
+            progress = float(self._bot.already_pending_upgrade(upgrade_id))
+        except Exception:
+            progress = 0.0
+        if progress > 0.0:
+            return  # 已经在研究/已完成,don't re-research
+        try:
+            success = self._bot.research(upgrade_id)
+            if success:
+                logger.info(
+                    "tech_override RESEARCH %s (id=%s)", upgrade_id, d.id[:8]
+                )
+        except Exception as exc:
+            logger.debug("tech_override research fail: %s", exc)
+
+    async def _exec_expansion_override(self, d: Directive, payload: Any) -> None:
+        """L4 开矿: await bot.expand_now()。"""
+        try:
+            from sc2.ids.unit_typeid import UnitTypeId
+
+            nexus_id = UnitTypeId.NEXUS
+            # 当前 expansion 数 = ready Nexus + pending Nexus
+            current = len(self._bot.townhalls.ready) + int(
+                self._bot.already_pending(nexus_id)
+            )
+            target = payload.target_count
+        except Exception:
+            return
+        if current >= target:
+            return
+        try:
+            await self._bot.expand_now()
+            logger.info(
+                "expansion_override EXPAND (target=%d current=%d, id=%s)",
+                target, current, d.id[:8],
+            )
+        except Exception as exc:
+            logger.debug("expansion_override fail: %s", exc)
 
     @staticmethod
     def _resolve_unit_type_id(name: str) -> Any:
@@ -947,6 +1006,45 @@ class Director:
 
             return UnitTypeId[name.upper()]
         except (ImportError, KeyError):
+            return None
+
+    # LLM payload upgrade_id (跟 strategies/aliases yaml 一致) → sc2 UpgradeId enum
+    # python-sc2 enum 名比 strategies yaml canonical id 多带 "TECH" / "LEVEL" 等后缀。
+    _UPGRADE_NAME_MAP: ClassVar[dict[str, str]] = {
+        # Twilight
+        "BLINK": "BLINKTECH",
+        "CHARGE": "CHARGE",
+        "RESONATINGGLAIVES": "ADEPTPIERCINGATTACK",
+        "GLAIVE": "ADEPTPIERCINGATTACK",
+        # Templar Archives
+        "PSISTORM": "PSISTORMTECH",
+        # Cybernetics
+        "WARPGATERESEARCH": "WARPGATERESEARCH",
+        "WARPGATE": "WARPGATERESEARCH",
+        # Forge — 分 3 级,默认 level1
+        "PROTOSSGROUNDWEAPONS": "PROTOSSGROUNDWEAPONSLEVEL1",
+        "PROTOSSGROUNDARMOR": "PROTOSSGROUNDARMORSLEVEL1",
+        "PROTOSSSHIELDS": "PROTOSSSHIELDSLEVEL1",
+        # Fleet Beacon / Cybernetics
+        "PROTOSSAIRWEAPONS": "PROTOSSAIRWEAPONSLEVEL1",
+        "PROTOSSAIRARMOR": "PROTOSSAIRARMORSLEVEL1",
+        # Tempest
+        "TEMPESTRANGE": "TEMPESTRANGEUPGRADE",
+        "TEMPESTGROUND": "TEMPESTGROUNDATTACKUPGRADE",
+    }
+
+    @classmethod
+    def _resolve_upgrade_id(cls, name: str) -> Any:
+        """字符串 → UpgradeId enum。先查 _UPGRADE_NAME_MAP,fallback 直接 enum["NAME"]。"""
+        try:
+            from sc2.ids.upgrade_id import UpgradeId
+        except ImportError:
+            return None
+        up = name.upper()
+        mapped = cls._UPGRADE_NAME_MAP.get(up, up)
+        try:
+            return UpgradeId[mapped]
+        except KeyError:
             return None
 
     def _production_override_built_count(self, directive: Directive) -> int:
