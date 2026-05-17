@@ -5,7 +5,8 @@
 # base_url 改 null（或删掉该行）、use_prompt_cache 可设 true。
 
 provider: deepseek
-model: deepseek-v4-flash       # 或 deepseek-v4-pro（更强、更慢更贵）
+model: deepseek-v4-pro         # 更强、更慢更贵；Flash 在 L3b/L3d/L4c 边缘 case schema 错（verb='move' / stance='hold_position' / point='natural_third'）
+# model: deepseek-v4-flash     # 备选：成本敏感时切回
 base_url: https://api.deepseek.com/anthropic   # DeepSeek 的 Anthropic 兼容端点
 api_key_env: DEEPSEEK_API_KEY
 fallback_provider: null   # M0 不接 fallback；M1+ 可设
