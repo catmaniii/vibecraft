@@ -41,11 +41,17 @@ def _setup_sharpy_path():
         sys.path.insert(0, sharpy_path_str)
         inserted = True
 
+    # **绝不**碰 vendor/sharpy/config.ini —— 那是 bot 真实运行用的，
+    # fake 写入风险：若 cleanup 失败/被打断，会留个 fake config 让 bot 起不来。
+    # 若 config.ini 不存在，直接 skip。
     config_path = _VENDOR_SHARPY / "config.ini"
-    created_config = False
     if not config_path.exists():
-        config_path.write_text("[bot]\nname=test\n", encoding="utf-8")
-        created_config = True
+        if inserted:
+            sys.path.remove(sharpy_path_str)
+        pytest.skip(
+            f"vendor/sharpy/config.ini 不存在 → bot 跑不起来。"
+            f"从 git checkout 恢复：git checkout HEAD -- vendor/sharpy/config.ini"
+        )
 
     # sharpy KnowledgeBot.__init__() 用 cwd 找 config.ini
     old_cwd = os.getcwd()
@@ -57,8 +63,6 @@ def _setup_sharpy_path():
         os.chdir(old_cwd)
         if inserted:
             sys.path.remove(sharpy_path_str)
-        if created_config:
-            config_path.unlink(missing_ok=True)
         pytest.skip("sharpy 未安装（需 uv sync --extra sc2）")
 
     yield
@@ -66,8 +70,6 @@ def _setup_sharpy_path():
     os.chdir(old_cwd)
     if inserted:
         sys.path.remove(sharpy_path_str)
-    if created_config:
-        config_path.unlink(missing_ok=True)
 
 
 @pytest.mark.parametrize(
