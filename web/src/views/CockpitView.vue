@@ -50,6 +50,14 @@ const currentSlot = computed(() => {
   return props.strategy[currentStage.value]
 })
 
+// L1 剧本卡片不进统一 CommandCardStack：× 直接放在宏观策略框右上角
+const tacticalCards = computed(() => props.commandCards.filter(c => c.layer !== 'L1'))
+
+// 宏观策略框的 × 关闭：撤销当前 stage 的 L1 directive
+function revokeCurrentStrategy() {
+  emit('revokeCard', `l1_${currentStage.value}`)
+}
+
 const failedEcho = computed(() => {
   const t = props.lastEcho?.interpretation ?? ''
   if (t.startsWith('[解析失败]') || t.startsWith('[模糊]')) return t
@@ -94,8 +102,18 @@ function fmtTs(ts: number): string {
             <MinimapTrackpad :minimap="props.minimap" @absolute="onTrackpadAbsolute" />
           </div>
         </div>
-        <div class="flex-1 min-w-0 min-h-[260px] rounded-xl bg-surface-2 border border-border p-3 flex flex-col">
-          <p class="text-xs font-semibold text-muted uppercase tracking-wider mb-2">当前宏观策略</p>
+        <div class="flex-1 min-w-0 min-h-[260px] rounded-xl bg-surface-2 border border-border p-3 flex flex-col relative">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold text-muted uppercase tracking-wider">当前宏观策略</p>
+            <button
+              v-if="currentSlot"
+              type="button"
+              data-testid="revoke-strategy-btn"
+              class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors text-xs leading-none"
+              :aria-label="`取消当前${currentStage}剧本`"
+              @click="revokeCurrentStrategy"
+            >×</button>
+          </div>
           <StrategyCard
             v-if="currentSlot"
             :stage="currentStage"
@@ -139,7 +157,7 @@ function fmtTs(ts: number): string {
         <BotDecisionCard :tactics="props.tactics" />
 
         <CommandCardStack
-          :cards="props.commandCards"
+          :cards="tacticalCards"
           @revoke="(id) => emit('revokeCard', id)"
         />
 
