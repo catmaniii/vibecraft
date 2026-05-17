@@ -967,12 +967,16 @@ class Director:
     def _set_override_status(
         self, d: Directive, status: str, reason: str = ""
     ) -> None:
-        """更新 directive 的 status,变化时 emit event 给 PWA。"""
+        """更新 directive 的 status。**只 status 切换时**才 emit event(防 spam):
+        active 阶段 reason 可能高频变化("研究中 2% / 4% / 6%"),不让每次都 emit。
+        snapshot 字段照样透传最新 reason(PWA 可看到 progress % 但不被 event 刷屏)。
+        """
         cur = self._override_status.get(d.id, {})
-        if cur.get("status") == status and cur.get("reason", "") == reason:
-            return  # 没变化
+        prev_status = cur.get("status")
         self._override_status[d.id] = {"status": status, "reason": reason}
-        # emit event 让 PWA 卡片 update color
+        if prev_status == status:
+            return  # status 没变,reason 变化不 emit event
+        # status 真切换 → emit event 让 PWA 卡片 update color
         self._push_event({
             "type": "event",
             "kind": "directive.status_changed",
@@ -1053,7 +1057,24 @@ class Director:
                 # 资源不够 / 没 idle research building
                 self._set_override_status(d, "on_hold", "资源/building 不足")
         except Exception as exc:
-            logger.warning("tech_override research exception: %s", exc)
+            # sharpy do() override 不让 BotAI.research 调(传 bool 报错);
+            # 只第一次 log,sharpy plan 自带的 research 路径会接管(如果 plan 包含该 upgrade)
+            dbg = f"_dbg_research_exc_{d.id}"
+            if not getattr(self, dbg, False):
+                setattr(self, dbg, True)
+                logger.warning(
+                    "tech_override BotAI.research(%s) 不可用(sharpy 限制),由 sharpy plan 自带 research 路径接管: %s",
+                    upgrade_id, exc,
+                )
+            # 走 fallback:如果 sharpy plan 已经在研究(progress > 0),仍 set active
+            try:
+                progress = float(self._bot.already_pending_upgrade(upgrade_id))
+                if progress > 0.0:
+                    self._set_override_status(d, "active", f"研究中 {progress * 100:.0f}%")
+                    return
+            except Exception:
+                pass
+            self._set_override_status(d, "on_hold", "等 sharpy plan 研究")
 
     async def _exec_expansion_override(self, d: Directive, payload: Any) -> None:
         """L4 开矿: await bot.expand_now()。带 status tracking(expand 无 prereq)。"""
