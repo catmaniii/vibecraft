@@ -28,6 +28,7 @@ _PLANS_DIR = (
 # 需要换的 plan 文件（有 PlanZoneAttack 实例化）
 _PLANS_WITH_ATTACK_ACT = [
     "gate4_pressure.py",
+    "skytoss.py",
 ]
 
 

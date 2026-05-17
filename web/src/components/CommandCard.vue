@@ -33,9 +33,9 @@ const cardCls = computed(() => {
   if (props.card.status === 'done') return 'bg-surface-3/40 border-border/50 opacity-60'
   if (props.card.status === 'pending') return 'bg-muted/10 border-border/60'
   switch (props.card.layer) {
-    case 'L2': return 'bg-blue-500/10 border-blue-500/50'    // L2 战术 - 蓝
+    case 'L2': return 'bg-blue-500/10 border-blue-500/50'      // L2 战术 - 蓝
     case 'L3': return 'bg-purple-500/10 border-purple-500/50'  // L3 单位 - 紫
-    case 'L4': return 'bg-cyan-500/10 border-cyan-500/50'    // L4 产能 - 青
+    case 'L4': return 'bg-orange-500/10 border-orange-500/50'  // L4 产能 - 橙
     default:   return 'bg-surface-3 border-border'
   }
 })
@@ -45,7 +45,7 @@ const layerTagCls = computed(() => {
   switch (props.card.layer) {
     case 'L2': return 'bg-blue-500/25 text-blue-200 border-blue-500/50'
     case 'L3': return 'bg-purple-500/25 text-purple-200 border-purple-500/50'
-    case 'L4': return 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50'
+    case 'L4': return 'bg-orange-500/25 text-orange-200 border-orange-500/50'
     default:   return 'bg-surface-3/60 text-muted border-border/60'
   }
 })

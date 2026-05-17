@@ -194,6 +194,8 @@ class LategameDoctrine(BaseModel):
     win_condition: dict[str, str] = Field(default_factory=dict)
     counters_against: list[str] = Field(default_factory=list)
     weak_against: list[str] = Field(default_factory=list)
+    # 后期阶段进度（可选，PWA 显示用；lategame 不强制 supply 触发条件）
+    phases: list[Phase] = Field(default_factory=list)
     # M2+M3: sharpy dummy class（格式 "module:ClassName"）—— 留 M4 lategame 注入时用
     sharpy_dummy_class: str | None = None
 
