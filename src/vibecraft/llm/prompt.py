@@ -163,12 +163,18 @@ verb 消歧规则：
 "natural" / "natural_third" 都会校验失败）。如果你算不出精确坐标,
 **给 ambiguous 让玩家点击地图**,不要硬塞字符串。
 
-TacticalObjective verb 白名单（11 个，仅此 11 个）：
-- attack    进攻敌方目标区域
+TacticalObjective verb 白名单（12 个，仅此 12 个）：
+- attack    进攻敌方目标区域（committed 大军交战，不撤退）
 - defend    守卫己方区域
-- scout     侦察目标区域
+- scout     侦察目标区域（**只看不打**，纯视野；前期单农民/Obs 走一圈就跑，
+            低风险。玩家说 "看一眼 / 探一下 / 派农民去看看 / Obs 飞过去"）
+- recon     **火力侦查**（**中后期成建制小股部队** 3-8 单位，**带战斗力** 才能
+            安全脱离。前压试探，占便宜就占，不行撤。主要目标信息，次要保留实力。
+            **前期 scout 单农民够用，中后期敌兵密集，单农民进去凶多吉少，必须
+            用 recon**。玩家说 "火力侦查 / 试探一下 / 推上去看看 / 前压试试 /
+            用追猎前压 / 派 4 个追猎前压看看"）
 - expand    开矿 / 扩张
-- harass    骚扰敌方（凤凰提农民、追猎压矿等）
+- harass    骚扰敌方（凤凰提农民、追猎压矿等，主求经济伤害）
 - drop      载入空投目标
 - vision    在指定区域获得视野并保持
 - raze      彻底摧毁目标建筑群
@@ -209,6 +215,11 @@ done_when 语义规则：
   设 done_when 会被 task_monitor 立即判 done → bot 立刻回到 sharpy 默认决策，
   跟玩家原意冲突。
   注意：`hold`（原地不动）是 engagement_constraint.stance 的值，**不是** tactical_objective 的 verb。
+
+- recon (火力侦查) **特殊**：归 B 类，必带 done_when，常用：
+  - 占到便宜就回：`done_when=any_of([enemy_killed_in_area(>=, N), own_army_size_ratio(<=, 0.6)])`
+  - 时间到撤：`done_when=time_elapsed_since(seconds=30~60)`
+  - 主要拿信息：`done_when=vision_acquired(area=enemy_main, hold_seconds=3)`
 
 - engagement_constraint 政策:
   - 默认 done_when=None（同 A 类，玩家通过 PWA 点 X 解除）
@@ -340,14 +351,20 @@ def build_few_shot() -> str:
 
 --- done_when 典型 pattern ---
 
-例 10：「进攻对方自然」
-→ [tactical_objective: verb="attack", target_area="enemy_natural",
+例 10（recon 火力侦查 — 中后期小股部队前压试探）：
+「试探一下对方二矿」/「火力侦查一下他三矿」/「推上去看看对方虚实」/
+「用追猎前压一下试试」
+→ [tactical_objective: verb="recon", target_area="enemy_natural",
+   unit_count_hint=4, unit_type_hint=["Stalker"],
    done_when={kind:"any_of", conditions:[
-     {kind:"target_destroyed", target_kind:"natural"},
-     {kind:"own_army_size_ratio", op:"<=", value:0.3}
+     {kind:"enemy_killed_in_area", area:"enemy_natural", op:">=", value:3},
+     {kind:"own_army_size_ratio", op:"<=", value:0.6},
+     {kind:"time_elapsed_since", seconds:30, ref:"directive_issued"}
    ]},
-   timeout_s: 120]
-（任意子条件：自然基被摧毁，或己方军队损耗超 70%，完成）
+   timeout_s: 90]
+（recon 三条任意一条满足都退场：占到便宜（杀够人）/ 自己损耗超 40% / 30 秒到。
+  recon 必带 done_when 且必填 unit_count_hint+unit_type_hint，区别 attack（committed
+  大军，done_when=None）和 scout（纯视野，无伤亡阈值）。）
 
 例 11：「下个 BG 出 2 哨兵」
 → [production_override: items=[{unit_type:"Sentry", count:2}],
@@ -472,7 +489,7 @@ def build_few_shot() -> str:
 （同次语音的多建筑任务整体跟踪、全部造完才消失，作为一张 PWA 卡片。
   **绝不**拆成两条 directive。玩家下一次新的语音才开新卡片。）
 
-例 25 (A 类 done_when=None / 进攻): 「进攻对方自然」（A 类关键示范）
+例 25 (A 类 done_when=None / 进攻): 「打对方二矿」/「打对方分矿」/「A 上对方三矿」
 → [tactical_objective: verb="attack", target_area="enemy_natural",
    done_when=None,
    timeout_s=None]
@@ -480,6 +497,9 @@ def build_few_shot() -> str:
    task_monitor 设了 done_when 会立即判 done → bot 马上退回 sharpy 默认决策，
    跟玩家原意冲突。玩家通过 PWA 点 X 解除，不靠 done_when 自动结束。
    "全员别动"用 engagement_constraint(stance=hold)，不是 tactical_objective。
+   **注意 target_area 取 named_spot 字面值**（enemy_natural / enemy_third / enemy_main）;
+   玩家中文常说"分矿/二矿/三矿"，schema 用对应的 enemy_natural / enemy_third。
+   ⚠️ 玩家不会说"自然"这种英文借词，他们说"分矿/二矿/三矿"。
 
 例 26 (B 类 harass + done_when + unit_count_hint 必填): 「派 5 个凤凰去骚扰对方主基地」
 → [tactical_objective: verb="harass", target_area="enemy_main",

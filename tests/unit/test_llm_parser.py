@@ -649,19 +649,18 @@ class TestTacticalObjectivePrompt:
 
     def test_few_shot_contains_done_when_examples(self) -> None:
         fs = build_few_shot()
-        # 覆盖 done_when 典型 pattern
+        # 覆盖 done_when 典型 pattern（target_destroyed 在别处描述，例 10 改 recon 后移除）
         assert "done_when" in fs
         assert "vision_acquired" in fs
         assert "enemy_killed_in_area" in fs
         assert "time_elapsed_since" in fs
         assert "tech_done" in fs
         assert "unit_count_built_since" in fs
-        assert "target_destroyed" in fs
 
     def test_few_shot_done_when_examples_cover_all_6_patterns(self) -> None:
         fs = build_few_shot()
-        # 6 个典型例子
-        assert "进攻对方自然" in fs
+        # 典型例子（中文常说"打分矿/二矿"，不是"自然"借词）
+        assert "打对方二矿" in fs or "打对方分矿" in fs
         assert "凤凰打死对方 5 个农民就回" in fs
         assert "30 秒后撤" in fs
 

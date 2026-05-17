@@ -97,10 +97,11 @@ class TacticalSquad:
     n_locked: int
 
 
-# A 类 verb（全军 override flag 路径）
+# A 类 verb（全军 override flag 路径，done_when=None 持续到玩家点 ×）
 _A_VERBS: frozenset[str] = frozenset({"attack", "defend", "retreat", "vision"})
-# B 类 verb（squad 抢占路径）；raze/regroup/split/drop MVP 留 on_hold
-_B_VERBS: frozenset[str] = frozenset({"harass", "scout"})
+# B 类 verb（squad 抢占路径，必带 done_when）；raze/regroup/split/drop MVP 留 on_hold
+# recon = 火力侦查 = 中后期成建制小队带战斗力前压试探
+_B_VERBS: frozenset[str] = frozenset({"harass", "scout", "recon"})
 
 
 @dataclass(slots=True)
@@ -693,6 +694,7 @@ class Director:
         "attack": "进攻",
         "defend": "守",
         "scout": "探",
+        "recon": "火力侦查",
         "expand": "开矿",
         "harass": "骚扰",
         "drop": "投放",
@@ -2107,13 +2109,22 @@ class Director:
 
         if t == DirectiveType.SCOUT:
             assert isinstance(payload, ScoutPayload)
-            tags = self.facade.resolve_selector(
-                unit_type=(payload.selector.unit_type if payload.selector else None),
-                tag=(payload.selector.tag if payload.selector else None),
-                tags=(payload.selector.tags if payload.selector else None),
-            )
+            sel = payload.selector
+            # SCOUT 默认单单位（"派一个农民去探路"）。
+            # 仅当 LLM 显式给 selector.tag（单个）或 selector.tags（数组）时按其指定数量；
+            # 仅给 unit_type 时 → 1 个（不能按 resolve_selector 全量返回，否则
+            # 全军单位都会跟去 —— 2026-05-18 bug "一个农民探路，所有农民都出去了"）。
+            if sel and sel.tag is not None:
+                tags = [sel.tag]
+            elif sel and sel.tags:
+                tags = list(sel.tags)
+            else:
+                resolved = self.facade.resolve_selector(
+                    unit_type=(sel.unit_type if sel else None),
+                )
+                tags = resolved[:1]  # 只取第一个
             if not tags:
-                # 让 facade 自选 idle probe（fallback：调一次 execute_unit_action with tag=0 占位）
+                # fallback：让 facade 自选 idle probe（tag=0 占位）
                 self.facade.execute_unit_action(
                     unit_tag=0,
                     verb="scout",

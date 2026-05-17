@@ -497,6 +497,70 @@ def director(session: GameSession) -> Director:
     return Director(facade=facade, parser=parser, session=session)
 
 
+class TestScoutSingleUnitDefault:
+    """SCOUT 默认单单位，不能把所有匹配 unit_type 的兵都派出去。
+
+    2026-05-18 实战 bug：用户说"一个农民去探路"，LLM 输出 scout selector={unit_type:Probe}（无 count），
+    director 用 resolve_selector 拿到全部探机 tag → 全派出去。
+    """
+
+    def _make_scout_directive(
+        self, unit_type: str | None = "Probe", tag: int | None = None, tags: list[int] | None = None
+    ) -> Directive:
+        from vibecraft.directives.models import ScoutPayload
+        from vibecraft.directives.scope import Selector, TargetKind, TargetSpec
+
+        selector = None
+        if unit_type or tag is not None or tags:
+            selector = Selector(unit_type=unit_type, tag=tag, tags=tags)
+        return Directive(
+            payload=ScoutPayload(
+                selector=selector,
+                target=TargetSpec(kind=TargetKind.NAMED_SPOT, named_spot="enemy_main"),
+            ),
+            issued_at=5.0,
+        )
+
+    def test_scout_with_unit_type_only_picks_one(self, director: Director) -> None:
+        """selector={unit_type:Probe} 即使匹配多个 → 只派 1 个，不是全部。"""
+        # facade.selector_stub 模拟"unit_type=Probe → 多个探机 tag"
+        director.facade.selector_stub["Probe"] = [101, 102, 103, 104, 105, 106]
+        d = self._make_scout_directive(unit_type="Probe")
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)
+        # 应该只 execute_unit_action 一次
+        scout_actions = [a for a in director.facade.unit_actions if a["verb"] == "scout"]
+        assert len(scout_actions) == 1, f"期望 1 个 scout action，实际 {len(scout_actions)}：{scout_actions}"
+
+    def test_scout_with_explicit_tag_uses_that_tag(self, director: Director) -> None:
+        """selector.tag=X → 用指定 tag。"""
+        d = self._make_scout_directive(unit_type=None, tag=12345)
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)
+        scout_actions = [a for a in director.facade.unit_actions if a["verb"] == "scout"]
+        assert len(scout_actions) == 1
+        assert scout_actions[0]["tag"] == 12345
+
+    def test_scout_with_explicit_tags_uses_all_of_them(self, director: Director) -> None:
+        """selector.tags=[a,b,c] → 全部使用（显式列表 = 玩家想全用）。"""
+        d = self._make_scout_directive(unit_type=None, tags=[201, 202, 203])
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)
+        scout_actions = [a for a in director.facade.unit_actions if a["verb"] == "scout"]
+        assert len(scout_actions) == 3
+        assert sorted(a["tag"] for a in scout_actions) == [201, 202, 203]
+
+    def test_scout_no_match_falls_back_to_tag_zero(self, director: Director) -> None:
+        """selector 匹配 0 个 → fallback execute_unit_action(unit_tag=0) 让 facade 自选。"""
+        # selector_stub 不设 Probe key → resolve_selector 返回 []
+        d = self._make_scout_directive(unit_type="Probe")
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)
+        scout_actions = [a for a in director.facade.unit_actions if a["verb"] == "scout"]
+        assert len(scout_actions) == 1
+        assert scout_actions[0]["tag"] == 0  # fallback
+
+
 class TestStandingOrderRouting:
     """P1.2 Director 按 persistent 路由 directive 到 standing_orders 或 _in_flight。"""
 
