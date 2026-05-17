@@ -120,14 +120,6 @@ function fmtTs(ts: number): string {
             :is-active="true"
           />
           <div v-else class="text-sm text-muted italic">（bot 未选定）</div>
-          <!-- 切换失败提示 -->
-          <div
-            v-if="failedEcho"
-            class="mt-2 rounded-md bg-danger/10 border border-danger/40 px-2 py-1.5 text-xs text-danger"
-          >
-            <p class="font-semibold">切换未生效</p>
-            <p class="opacity-90 break-words">{{ failedEcho }}</p>
-          </div>
         </div>
       </div>
 
@@ -176,6 +168,17 @@ function fmtTs(ts: number): string {
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- LLM 解析失败 / 模糊指令的错误提示：紧贴输入框上方（fixed） -->
+  <div
+    v-if="failedEcho"
+    class="fixed bottom-[64px] left-0 right-0 z-40 px-3 pb-1 pointer-events-none"
+  >
+    <div class="rounded-md bg-danger/15 border border-danger/50 px-3 py-2 text-xs text-danger backdrop-blur shadow-lg pointer-events-auto">
+      <p class="font-semibold">指令未生效</p>
+      <p class="opacity-90 break-words">{{ failedEcho }}</p>
     </div>
   </div>
 

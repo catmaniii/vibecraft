@@ -65,6 +65,17 @@ const statusCls = computed(() => {
 function fmtProgress(c: { current: number; target: number; unit: string }): string {
   return `${c.current}/${c.target} ${c.unit}`
 }
+
+// 每条 condition 的 state badge（多兵种 production_override 每行单独显示）
+function stateBadge(state: string | undefined): { text: string; cls: string } | null {
+  switch (state) {
+    case 'blocked':   return { text: '缺前置', cls: 'text-danger bg-danger/15 border-danger/40' }
+    case 'waiting':   return { text: '等资源', cls: 'text-amber-400 bg-amber-500/15 border-amber-500/40' }
+    case 'producing': return { text: '生产中', cls: 'text-success bg-success/15 border-success/40' }
+    case 'done':      return { text: '已完成', cls: 'text-muted bg-surface-3/40 border-border/50' }
+    default:          return null
+  }
+}
 </script>
 
 <template>
@@ -99,19 +110,32 @@ function fmtProgress(c: { current: number; target: number; unit: string }): stri
     <!-- 条件清单（有 done_when 时显示） -->
     <ul
       v-if="card.conditions && card.conditions.length > 0"
-      class="mt-1 space-y-0.5"
+      class="mt-1 space-y-1"
     >
       <li
         v-for="(cond, idx) in card.conditions"
         :key="idx"
-        class="flex items-center gap-1.5 text-[11px]"
+        class="text-[11px]"
         :class="cond.met ? 'text-success' : 'text-muted'"
       >
-        <span class="font-mono w-3 shrink-0">{{ cond.met ? '✓' : '○' }}</span>
-        <span class="flex-1 min-w-0">{{ cond.text }}</span>
-        <span v-if="cond.progress" class="font-mono text-[10px] text-white/70">
-          {{ fmtProgress(cond.progress) }}
-        </span>
+        <!-- 主行：✓/○ + 条件文字 + state badge + 进度数字 -->
+        <div class="flex items-center gap-1.5">
+          <span class="font-mono w-3 shrink-0">{{ cond.met ? '✓' : '○' }}</span>
+          <span class="flex-1 min-w-0">{{ cond.text }}</span>
+          <span
+            v-if="stateBadge(cond.state)"
+            class="shrink-0 font-mono text-[9px] px-1 py-0.5 rounded border leading-none"
+            :class="stateBadge(cond.state)!.cls"
+          >{{ stateBadge(cond.state)!.text }}</span>
+          <span v-if="cond.progress" class="font-mono text-[10px] text-white/70 shrink-0">
+            {{ fmtProgress(cond.progress) }}
+          </span>
+        </div>
+        <!-- 副行：state_reason（"需要 Cybernetics Core" / "资源不足" / "队列 1 等出"） -->
+        <div
+          v-if="cond.state_reason"
+          class="pl-5 text-[10px] text-white/60"
+        >{{ cond.state_reason }}</div>
       </li>
     </ul>
   </div>

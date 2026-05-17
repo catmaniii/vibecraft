@@ -162,6 +162,17 @@ export interface ConditionView {
     target: number
     unit: string  // "个" / "秒" / ...
   }
+  /**
+   * L4 production_override 多兵种合并时每条进度行的"当前在等什么"状态。
+   * blocked  → 缺前置（"需要 Cybernetics Core"）
+   * waiting  → 资源/建筑不足（"资源不足"）
+   * producing → 正在生产（"队列 N 等出"或空）
+   * done     → 已造满
+   * 其它 condition kind 该字段缺省。
+   */
+  state?: 'blocked' | 'waiting' | 'producing' | 'done'
+  /** state 对应的人话描述（"需要 X" / "资源不足" / "队列 N 等出"） */
+  state_reason?: string
 }
 
 export interface CommandCardView {

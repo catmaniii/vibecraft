@@ -182,6 +182,10 @@ class Director:
         # snapshot.production_overrides[*].status 透传给 PWA;状态变化时 emit
         # directive.status_changed event。
         self._override_status: dict[str, dict[str, str]] = {}
+        # L4 production_override per-item 状态：
+        # {directive_id: {unit_type: {"state": "blocked"|"waiting"|"producing"|"done", "reason": str}}}
+        # 多兵种合并的 directive 让每条条件单独显示在等什么（缺前置 / 资源不够 / 生产中）。
+        self._production_item_status: dict[str, dict[str, dict[str, str]]] = {}
         # snapshot / event 推送回调（P0 / P1）
         self._snapshot_callback: Callable[[dict[str, Any]], None] | None = None
         self._event_callback: Callable[[dict[str, Any]], None] | None = None
@@ -575,11 +579,18 @@ class Director:
             ut_zh = self._UNIT_ZH.get(ut, ut)
             counter_key = ut or "*"
             current = int(tm._unit_built_counts.get(directive_id, {}).get(counter_key, 0))
-            return {
+            cond: dict[str, Any] = {
                 "text": f"造 {target} 个 {ut_zh}",
                 "met": current >= target,
                 "progress": {"current": current, "target": target, "unit": "个"},
             }
+            # 多兵种 production_override：附 per-item state（blocked/waiting/producing/done）
+            # 让 UI 卡片每条进度行单独显示在等什么（缺前置 / 资源不足 / 生产中）
+            item_st = self._production_item_status.get(directive_id, {}).get(ut)
+            if item_st:
+                cond["state"] = item_st.get("state", "")
+                cond["state_reason"] = item_st.get("reason", "")
+            return cond
         if kind == "time_elapsed_since" and tm is not None:
             target_s = int(dw.get("seconds", 0))
             ref = dw.get("ref", "directive_issued")
@@ -1088,6 +1099,7 @@ class Director:
         if len(self.production_overrides) < before:
             self.board.revoke(directive_id, now)
             self._override_status.pop(directive_id, None)
+            self._production_item_status.pop(directive_id, None)
             self._push_snapshot(now)
             return True
         return False
@@ -1391,11 +1403,13 @@ class Director:
         })
 
     def _exec_production_override(self, d: Directive, payload: Any) -> None:
-        """L4 unit 出兵: 遍历 items 逐个 bot.train(unit_id)。带 prereq check + status tracking。
+        """L4 unit 出兵: 遍历 items 逐个 bot.train(unit_id)。带 prereq check + per-item status。
 
-        多兵种语义：整条 directive 完成 = 所有 item 都下满。某 item 卡 on_hold
-        (缺 prereq / 缺资源)只标整条 on_hold + 该 item 描述，不阻塞其它 item 继续 train。
+        多兵种语义：整条 directive 完成 = 所有 item 都下满。每个 item 状态独立
+        存到 _production_item_status[did][unit_type]，让 PWA 多兵种合并卡片
+        每条进度行能单独显示"缺前置 / 资源不足 / 生产中 / 完成"。
         """
+        item_status: dict[str, dict[str, str]] = {}
         on_hold_reasons: list[str] = []
         any_active = False
         all_satisfied = True
@@ -1403,11 +1417,13 @@ class Director:
             unit_id = self._resolve_unit_type_id(item.unit_type)
             if unit_id is None:
                 logger.warning("resolve unit_type_id fail: %r", item.unit_type)
+                item_status[item.unit_type] = {"state": "blocked", "reason": "未知 unit_type"}
                 on_hold_reasons.append(f"{item.unit_type}: 未知 unit_type")
                 all_satisfied = False
                 continue
             ready, missing = self._check_prereq_ready(item.unit_type.upper())
             if not ready:
+                item_status[item.unit_type] = {"state": "blocked", "reason": f"需要 {missing}"}
                 on_hold_reasons.append(f"{item.unit_type}: 需要 {missing}")
                 all_satisfied = False
                 continue
@@ -1418,7 +1434,15 @@ class Director:
             already_done = self._production_override_built_count(d, item.unit_type)
             remaining = item.count - already_done - int(in_flight)
             if remaining <= 0:
-                continue  # 该 item 已下满，跳到下一个
+                # 该 item 已下满（in_flight 含队列；已造完或全队列里了）
+                if already_done >= item.count:
+                    item_status[item.unit_type] = {"state": "done", "reason": ""}
+                else:
+                    item_status[item.unit_type] = {
+                        "state": "producing",
+                        "reason": f"队列 {int(in_flight)} 等出",
+                    }
+                continue
             all_satisfied = False
             try:
                 n_trained = self._bot.train(
@@ -1429,11 +1453,20 @@ class Director:
                         "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
                         unit_id, n_trained, item.count, already_done, in_flight, d.id[:8],
                     )
+                    item_status[item.unit_type] = {"state": "producing", "reason": ""}
                     any_active = True
                 else:
+                    item_status[item.unit_type] = {
+                        "state": "waiting",
+                        "reason": "资源/building 不足",
+                    }
                     on_hold_reasons.append(f"{item.unit_type}: 资源/building 不足")
             except Exception as exc:
                 logger.debug("production_override train fail: %s", exc)
+                item_status[item.unit_type] = {"state": "waiting", "reason": "train 失败"}
+
+        # 持久化 per-item 状态供 snapshot 用
+        self._production_item_status[d.id] = item_status
 
         if all_satisfied:
             self._set_override_status(d, "active", "已下单等完成")
@@ -1826,6 +1859,7 @@ class Director:
                     d for d in self.production_overrides if d.id != did
                 ]
                 self._override_status.pop(did, None)
+                self._production_item_status.pop(did, None)
                 need_snapshot = True
 
         # 不再自动 submit transition directive;只更新 self._pending_recommendation,
