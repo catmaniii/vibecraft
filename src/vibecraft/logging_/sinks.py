@@ -58,7 +58,10 @@ class JsonlSink(Sink):
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = self.path.open("a", encoding="utf-8")
+        # buffering=1 强制 line buffering。Python text mode 在 non-tty(子进程 spawn 时
+        # stdout 不是 tty)默认 block buffered,会让 jsonl 文件在 process kill 前一直
+        # 空 -- 即便已经 write 了若干 record。子进程被 gp.stop() kill 时来不及 flush。
+        self._fh = self.path.open("a", encoding="utf-8", buffering=1)
         self._lock = threading.Lock()
         self._closed = False
 
