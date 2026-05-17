@@ -302,3 +302,47 @@ class TestL4ProductionOverrideCommandCard:
         snap = director.build_snapshot(now=20.0)
         l4_cards = [c for c in snap["command_cards"] if c["layer"] == "L4"]
         assert len(l4_cards) >= 1
+
+    def test_l4_structure_override_card_display_human_readable(self, director: Director) -> None:
+        """STRUCTURE_OVERRIDE card display 不应是'未知 override'。
+        display 应包含 structure_type（如 Gateway）。
+        """
+        from vibecraft.directives.models import StructureOverridePayload
+
+        payload = StructureOverridePayload(
+            structure_type="Gateway",
+            target_count=8,
+            location_hint=None,
+        )
+        d = Directive(payload=payload, issued_at=15.0)
+        director._submit_directives([d], now=15.0)
+        snap = director.build_snapshot(now=20.0)
+        # 找 type=structure_override 的 L4 卡片
+        l4_cards = [
+            c for c in snap["command_cards"]
+            if c["layer"] == "L4" and c.get("type") == "structure_override"
+        ]
+        assert len(l4_cards) >= 1, "缺 structure_override L4 卡片"
+        display = l4_cards[0]["display"]
+        assert "未知" not in display, f"display 仍是 fallback '未知 override': {display!r}"
+        assert "Gateway" in display, f"display 未包含 structure_type: {display!r}"
+
+    def test_l4_structure_override_with_location_hint(self, director: Director) -> None:
+        """structure_override 带 location_hint 时 display 包含 location_hint。"""
+        from vibecraft.directives.models import StructureOverridePayload
+
+        payload = StructureOverridePayload(
+            structure_type="PhotonCannon",
+            target_count=1,
+            location_hint="ramp",
+        )
+        d = Directive(payload=payload, issued_at=15.0)
+        director._submit_directives([d], now=15.0)
+        snap = director.build_snapshot(now=20.0)
+        l4_cards = [
+            c for c in snap["command_cards"]
+            if c["layer"] == "L4" and c.get("type") == "structure_override"
+        ]
+        assert len(l4_cards) >= 1, "缺 structure_override L4 卡片"
+        display = l4_cards[0]["display"]
+        assert "ramp" in display, f"display 未含 location_hint: {display!r}"

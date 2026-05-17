@@ -682,6 +682,7 @@ class Director:
         - PRODUCTION_OVERRIDE → '出 N <unit_zh>'（alias 翻译，无 alias 用英文）
         - TECH_OVERRIDE       → '研 <upgrade>'
         - EXPANSION_OVERRIDE  → '开 N 矿'
+        - STRUCTURE_OVERRIDE  → '造 N <structure_type>[ @ <location_hint>]'
         """
         if isinstance(payload, ProductionOverridePayload):
             unit_zh = self._UNIT_ZH.get(payload.unit_type, payload.unit_type)
@@ -690,6 +691,9 @@ class Director:
             return f"研 {payload.upgrade_id}"
         if isinstance(payload, ExpansionOverridePayload):
             return f"开 {payload.target_count} 矿"
+        if isinstance(payload, StructureOverridePayload):
+            loc = f" @ {payload.location_hint}" if payload.location_hint else ""
+            return f"造 {payload.target_count} {payload.structure_type}{loc}"
         return "未知 override"
 
     def _push_event(self, event_dict: dict[str, Any]) -> None:
