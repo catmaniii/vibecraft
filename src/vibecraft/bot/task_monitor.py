@@ -685,3 +685,138 @@ def _check_all_of(
         else:
             return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# P0d Task 6: L4 done_when 扩词表 checker
+# ---------------------------------------------------------------------------
+
+
+def _resolve_typeid(name: str) -> Any:
+    """str → UnitTypeId enum；未知或 sc2 不可用返回 None。"""
+    try:
+        from sc2.ids.unit_typeid import UnitTypeId  # noqa: PLC0415
+
+        return UnitTypeId[name.upper()]
+    except (KeyError, ImportError):
+        return None
+
+
+@register("structure_count")
+def _check_structure_count(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, structure_type, op, value} — 己方建筑数（ready + pending）。
+
+    structure_type: UnitTypeId 名称字符串（如 "Gateway"）。
+    未知 type 或 game_state None → False。
+    """
+    if game_state is None:
+        return False
+    type_id = _resolve_typeid(done_when["structure_type"])
+    if type_id is None:
+        return False
+    try:
+        current = game_state.structures(type_id).amount + int(game_state.already_pending(type_id))
+    except Exception:
+        return False
+    return _compare(current, done_when["op"], int(done_when["value"]))
+
+
+@register("own_unit_count")
+def _check_own_unit_count(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, unit_type, op, value} — 己方单位数（ready + pending）。
+
+    unit_type: UnitTypeId 名称字符串（如 "Immortal"）。
+    未知 type 或 game_state None → False。
+    """
+    if game_state is None:
+        return False
+    type_id = _resolve_typeid(done_when["unit_type"])
+    if type_id is None:
+        return False
+    try:
+        current = game_state.units(type_id).amount + int(game_state.already_pending(type_id))
+    except Exception:
+        return False
+    return _compare(current, done_when["op"], int(done_when["value"]))
+
+
+@register("supply_used")
+def _check_supply_used(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, op, value} — 当前已用人口满足条件。"""
+    if game_state is None:
+        return False
+    return _compare(game_state.supply_used, done_when["op"], done_when["value"])
+
+
+@register("supply_cap")
+def _check_supply_cap(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, op, value} — 当前人口上限满足条件。"""
+    if game_state is None:
+        return False
+    return _compare(game_state.supply_cap, done_when["op"], done_when["value"])
+
+
+@register("minerals")
+def _check_minerals(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, op, value} — 当前矿物量满足条件。"""
+    if game_state is None:
+        return False
+    return _compare(game_state.minerals, done_when["op"], done_when["value"])
+
+
+@register("gas")
+def _check_gas(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, op, value} — 当前气矿量满足条件。"""
+    if game_state is None:
+        return False
+    return _compare(game_state.gas, done_when["op"], done_when["value"])
+
+
+@register("worker_count")
+def _check_worker_count(
+    done_when: dict[str, Any],
+    directive_id: str,
+    game_state: Any,
+    monitor: TaskMonitor,
+    now: float = 0.0,
+) -> bool:
+    """done_when: {kind, op, value} — 当前探机数量满足条件。"""
+    if game_state is None:
+        return False
+    return _compare(game_state.workers.amount, done_when["op"], done_when["value"])
