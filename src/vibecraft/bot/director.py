@@ -1057,9 +1057,6 @@ class Director:
             # StrategySlot 当前没有 directive_id 字段，无法按真实 id 匹配
             return False
 
-        if target_stage is None:
-            return False
-
         if self.board.slots.get(target_stage) is None:
             return False
 

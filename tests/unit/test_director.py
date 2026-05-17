@@ -1077,3 +1077,189 @@ class TestStrategyCancelViaBoard:
         records = session.get_null_records(LogStream.DIRECTIVES)
         types = [r["type"] for r in records]
         assert "strategy_cancel" in types
+
+
+# =========================================================================
+# P0g Task 11: revoke_directive 扩 L2 (tactical override / squad) + L1 strategy
+# =========================================================================
+
+
+def _make_tactical_directive_a(verb: str = "attack") -> "Directive":
+    """构造 A 类 L2 TACTICAL_OBJECTIVE Directive（attack/defend 等 → override flag 路径）。"""
+    from vibecraft.directives.models import TacticalObjectivePayload
+
+    payload = TacticalObjectivePayload(verb=verb, target_area="enemy_natural")  # type: ignore[arg-type]
+    return Directive(payload=payload, issued_at=10.0)
+
+
+def _make_tactical_directive_b(unit_type: str = "Phoenix", count: int = 3) -> "Directive":
+    """构造 B 类 L2 TACTICAL_OBJECTIVE Directive（harass → squad 路径）。"""
+    from vibecraft.directives.models import TacticalObjectivePayload
+
+    payload = TacticalObjectivePayload(
+        verb="harass",  # type: ignore[arg-type]
+        target_area="enemy_main",
+        unit_count_hint=count,
+        unit_type_hint=[unit_type],
+    )
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestRevokeDirectiveExtended:
+    """P0g Task 11: revoke_directive 扩 L2 + L1。"""
+
+    # ------------------------------------------------------------------
+    # L2 A 类: attack → override flag
+    # ------------------------------------------------------------------
+
+    def test_revoke_l2_tactical_global_clears_facade_overrides(
+        self, session: GameSession
+    ) -> None:
+        """L2 A 类 revoke: 清 facade.set_attack_target_override(None) + set_combat_intent_override(None)。"""
+        facade = FakeFacade()
+        # 注入 selector stub 防止 resolve_selector 出错
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        d = _make_tactical_directive_a(verb="attack")
+        # 直接调 _exec_tactical_objective（绕过 board 延迟）
+        director._exec_tactical_objective(d, d.payload)
+        # 确认 override 已记录
+        assert facade.combat_intent_overrides and facade.combat_intent_overrides[-1] == "attack"
+
+        result = director.revoke_directive(d.id, now=20.0)
+
+        assert result is True
+        # facade 被调清
+        assert facade.attack_target_overrides[-1] is None
+        assert facade.combat_intent_overrides[-1] is None
+        # _tactical_overrides 清掉
+        assert d.id not in director._tactical_overrides
+        assert director._current_l2_global_id is None
+
+    def test_revoke_l2_tactical_global_returns_false_if_unknown(
+        self, session: GameSession
+    ) -> None:
+        """未知 id revoke_tactical 返 False。"""
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        assert director.revoke_tactical("nonexistent_id", now=10.0) is False
+
+    # ------------------------------------------------------------------
+    # L2 B 类: harass → squad
+    # ------------------------------------------------------------------
+
+    def test_revoke_l2_tactical_squad_releases_unit_roles(
+        self, session: GameSession
+    ) -> None:
+        """L2 B 类 revoke: 释放 unit_role 还给 sharpy + 清 _tactical_squads。"""
+        facade = FakeFacade()
+        facade.selector_stub["Phoenix"] = [101, 102, 103]
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        d = _make_tactical_directive_b(unit_type="Phoenix", count=3)
+        director._exec_tactical_objective(d, d.payload)
+        # 确认 squad 已建立 + 单位被接管
+        assert d.id in director._tactical_squads
+        assert 101 in facade.unit_roles
+        assert 102 in facade.unit_roles
+        assert 103 in facade.unit_roles
+
+        result = director.revoke_directive(d.id, now=20.0)
+
+        assert result is True
+        # release_unit_role 被调：unit_roles 被清
+        assert 101 not in facade.unit_roles
+        assert 102 not in facade.unit_roles
+        assert 103 not in facade.unit_roles
+        # squad 清掉
+        assert d.id not in director._tactical_squads
+
+    # ------------------------------------------------------------------
+    # L1 strategy
+    # ------------------------------------------------------------------
+
+    def test_revoke_l1_strategy_clears_board_slot(
+        self, session: GameSession
+    ) -> None:
+        """revoke_strategy('l1_midgame', now) 清 board.slots[MIDGAME] + facade.set_build('sustain')。"""
+        from vibecraft.directives.types import StageKind
+
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        # 注入 midgame slot（bypass delay）
+        director.board.set_initial_slot(StageKind.MIDGAME, "iac_2base", now=0.0)
+        assert director.board.slots[StageKind.MIDGAME] is not None
+
+        result = director.revoke_directive("l1_midgame", now=20.0)
+
+        assert result is True
+        assert director.board.slots[StageKind.MIDGAME] is None
+        # facade.set_build("sustain") 被调
+        assert "sustain" in facade.builds
+
+    def test_revoke_l1_strategy_empty_slot_returns_false(
+        self, session: GameSession
+    ) -> None:
+        """revoke_strategy 对 None slot 返 False。"""
+        from vibecraft.directives.types import StageKind
+
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        # LATEGAME slot 本来就是 None
+        assert director.board.slots[StageKind.LATEGAME] is None
+
+        result = director.revoke_directive("l1_lategame", now=20.0)
+
+        assert result is False
+
+    def test_revoke_unknown_id_returns_false(self, session: GameSession) -> None:
+        """完全不存在的 id revoke_directive 返 False。"""
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+        )
+        assert director.revoke_directive("d_doesntexist", now=10.0) is False
