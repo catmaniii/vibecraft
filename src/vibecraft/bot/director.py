@@ -400,7 +400,130 @@ class Director:
                     "source_text": d.source_text or "",
                     "reasons": reasons,
                 }
+        snapshot["command_cards"] = self._build_command_cards(now)
         return snapshot
+
+    def _build_command_cards(self, now: float) -> list[dict[str, Any]]:
+        """统一 command_cards array，透传 4 层 directive 给 PWA（P0f Task 10）。
+
+        每张卡片 8 字段：id / layer / type / display / issued_at / status /
+        status_reason / revokable。
+
+        来源：
+        - L1  board.slots（strategy slots）
+        - L2  _in_flight 中的 TACTICAL_OBJECTIVE（ephemeral）
+        - L3  standing_orders（persistent unit_claim）
+        - L4  production_overrides（production / tech / expansion / structure）
+        """
+        cards: list[dict[str, Any]] = []
+
+        # L1 strategy slots
+        for stage, slot in self.board.slots.items():
+            if slot is None:
+                continue
+            sid = slot.strategy_id
+            display = sid
+            if self.library is not None:
+                try:
+                    strat = self.library.get(sid)
+                    display = getattr(strat, "display_name_zh", sid)
+                except Exception:
+                    pass
+            cards.append(
+                {
+                    "id": f"l1_{stage.value}",
+                    "layer": "L1",
+                    "type": "strategy_set",
+                    "display": f"{stage.value}: {display}",
+                    "issued_at": slot.set_at,
+                    "status": "active",
+                    "status_reason": "",
+                    "revokable": True,
+                }
+            )
+
+        # L2 active tactics (TACTICAL_OBJECTIVE in _in_flight)
+        for d in self._in_flight.values():
+            if d.type == DirectiveType.TACTICAL_OBJECTIVE:
+                from vibecraft.directives.models import TacticalObjectivePayload
+
+                payload = d.payload
+                if isinstance(payload, TacticalObjectivePayload):
+                    target = payload.target_area
+                    if isinstance(target, (list, tuple)):
+                        target_str = f"({target[0]}, {target[1]})"
+                    elif target is not None:
+                        target_str = str(target)
+                    else:
+                        target_str = ""
+                    display = f"{payload.verb} {target_str}".strip()
+                else:
+                    display = "tactical"
+                st = self._override_status.get(d.id, {})
+                cards.append(
+                    {
+                        "id": d.id,
+                        "layer": "L2",
+                        "type": "tactical_objective",
+                        "display": display,
+                        "issued_at": d.issued_at,
+                        "status": st.get("status", "active"),
+                        "status_reason": st.get("reason", ""),
+                        "revokable": True,
+                    }
+                )
+            elif d.type == DirectiveType.ENGAGEMENT_CONSTRAINT:
+                from vibecraft.directives.models import EngagementConstraintPayload
+
+                payload = d.payload
+                stance = payload.stance if isinstance(payload, EngagementConstraintPayload) else ""
+                cards.append(
+                    {
+                        "id": d.id,
+                        "layer": "L2",
+                        "type": "engagement_constraint",
+                        "display": f"stance: {stance}",
+                        "issued_at": d.issued_at,
+                        "status": "active",
+                        "status_reason": "",
+                        "revokable": True,
+                    }
+                )
+
+        # L3 standing orders (persistent unit_claim)
+        for d in self.standing_orders:
+            display = self._format_standing_order_display(d.payload)
+            cards.append(
+                {
+                    "id": d.id,
+                    "layer": "L3",
+                    "type": "unit_claim",
+                    "display": display,
+                    "issued_at": d.issued_at,
+                    "status": "active",
+                    "status_reason": "",
+                    "revokable": True,
+                }
+            )
+
+        # L4 production_overrides (production / tech / expansion / structure)
+        for d in self.production_overrides:
+            st = self._override_status.get(d.id, {})
+            display = self._format_production_override_display(d.payload)
+            cards.append(
+                {
+                    "id": d.id,
+                    "layer": "L4",
+                    "type": d.type.value,
+                    "display": display,
+                    "issued_at": d.issued_at,
+                    "status": st.get("status", "pending"),
+                    "status_reason": st.get("reason", ""),
+                    "revokable": True,
+                }
+            )
+
+        return cards
 
     def _push_snapshot(self, now: float) -> None:
         """推 snapshot（若 callback 已注入）。"""
