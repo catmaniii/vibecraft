@@ -259,6 +259,21 @@ class ExpansionOverridePayload(_PayloadBase):
     priority: int = 50
 
 
+class StructureOverridePayload(_PayloadBase):
+    """L4 建筑数量目标（"补到 8 BG / ramp 1 cannon / 二矿放 2 PY 1 BF"）。
+
+    一次性：达成 target_count 就 done，被打掉不自动补
+    （MVP 决策，参见 design doc §2 边界 case）。
+    location_hint: main / natural / ramp / front / None（None = bot 自选 placement）
+    """
+
+    type: Literal[DirectiveType.STRUCTURE_OVERRIDE] = DirectiveType.STRUCTURE_OVERRIDE
+    structure_type: str
+    target_count: int = Field(ge=1)
+    location_hint: str | None = None
+    priority: int = 50
+
+
 class EngagementConstraintPayload(_PayloadBase):
     """全局交战策略：`守家` / `不要出门` / `撤退到家`。"""
 
@@ -322,6 +337,7 @@ Payload = Annotated[
     | ProductionOverridePayload
     | TechOverridePayload
     | ExpansionOverridePayload
+    | StructureOverridePayload  # NEW: P0e Task 8
     | EngagementConstraintPayload
     | TacticalObjectivePayload
     | UnitClaimPayload

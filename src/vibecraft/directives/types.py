@@ -12,7 +12,7 @@ class DirectiveType(str, Enum):
     - 大略 (剧本): STRATEGY_SET
     - 中略 (全局调参): PRODUCTION_* / TECH_* / EXPANSION_* / ENGAGEMENT_*
     - 微粒度 (单位): UNIT_CLAIM / SCOUT / MOVE / UNIT_RELEASE
-    - 微粒度 (建筑): BUILD_AT / PRODUCTION_OVERRIDE (带 building_tag)
+    - 微粒度 (建筑): BUILD_AT / PRODUCTION_OVERRIDE (带 building_tag) / STRUCTURE_OVERRIDE
     """
 
     # 剧本切换
@@ -24,6 +24,7 @@ class DirectiveType(str, Enum):
     PRODUCTION_OVERRIDE = "production_override"
     TECH_OVERRIDE = "tech_override"
     EXPANSION_OVERRIDE = "expansion_override"
+    STRUCTURE_OVERRIDE = "structure_override"
     ENGAGEMENT_CONSTRAINT = "engagement_constraint"
 
     # 战术目标（L2 中粒度，跨单位的战术指令）
