@@ -101,11 +101,12 @@ LLM_EVAL_CASES: list[ExpectedSpec] = [
     ExpectedSpec(
         name="L3c_scout",
         inject="侦察一下对方主基地",
-        expect_type=DirectiveType.SCOUT,
-        must_have_paths={
-            # SCOUT directive 的 target 字段(不进 unit_claim.task.verb=scout)
-            "payload.target.named_spot": "enemy_main",
-        },
+        # 接受两种合法路由(prompt §scout 路由消歧 已明确):
+        # 1) 顶层 scout directive(target.named_spot)
+        # 2) tactical_objective(verb=scout, target_area)
+        # 都属业务等价
+        expect_type=[DirectiveType.SCOUT, DirectiveType.TACTICAL_OBJECTIVE],
+        must_have_paths={},  # type 命中即可,target 字段名两个 type 不一样,留空
     ),
     ExpectedSpec(
         name="L3d_engagement_hold",

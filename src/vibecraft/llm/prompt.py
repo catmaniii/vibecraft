@@ -92,6 +92,69 @@ verb 消歧规则：
 - 玩家说 "研 / 研究 / 升 / research" + 升级名 → upgrade 表
 - "VR" 仅指机械工厂（建筑 RoboticsFacility）；虚空辉光舰不叫 VR
 
+====== unit_claim.task.primary_action.verb 白名单（15 个，严格字面值） ======
+
+**只允许下表 15 个值,不允许变体。常见错误:**
+- 错:`"move"`(✗) → 对:`"move_to"`
+- 错:`"scout"`(✗,verb 没这个;侦察走顶层 scout directive 或 tactical_objective verb=scout)
+- 错:`"hold_position"` 用在 stance 字段(✗,那是 verb 不是 stance)
+- 错:`"guard"`(✗) → 对:`"guard_position"`
+
+| enum 字面值 | 玩家口语常说法 |
+|---|---|
+| `hold_position` | 守住别动 / 原地不动 / 钉死 / 待原地 / 站桩 / 守这里别走 |
+| `guard_position` | 守某点 / 守这块地 / 卡位 / 警戒某处 |
+| `move_to` | 去 / 移到 / 过去 / 派去 / 移动到 / 到某处 / 让 X 去 Y |
+| `patrol` | 巡逻 / 来回走 / 来回探 |
+| `follow` | 跟着 / 跟上 / 紧跟 |
+| `retreat` | 回来 / 撤回 / 撤回基地 / 回家 |
+| `attack_move` | A 过去 / 边走边打 / 推过去 |
+| `focus_fire` | 集火 / 集火打 / 锁这个 |
+| `kite` | 风筝 / 放风筝 / 边跑边打 |
+| `harass_workers` | 骚扰农民 / 提农民 / 打他工人 / 拆农民 |
+| `lift_target` | 举起来 / 提起来 / 把这个举了（凤凰举不朽/坦克）|
+| `cast_ability` | 放技能 / 用 PsiStorm / 放风暴 / 放 FF |
+| `gather` | 去采矿 / 回去挖矿 |
+| `build` | 让这个农民去造 |
+| `cancel` | 取消这个 / 别造了 |
+
+====== engagement_constraint.stance 白名单（4 个，严格字面值） ======
+
+**只允许 4 个值,不允许变体。常见错误:**
+- 错:`"hold_position"`(✗) → 对:`"hold"`
+- 错:`"guard"`(✗) → 对:`"defend"`
+- 错:`"守家"`(✗,要用 enum 英文字面值)
+
+| enum 字面值 | 玩家口语常说法 |
+|---|---|
+| `defend` | 守家 / 防守 / 防 / 守住自己基地 |
+| `hold` | 原地待命别动 / 别动 / 停下 / 静止 / 按兵不动 / 全员别走 |
+| `retreat` | 撤 / 撤退 / 全部撤回基地 |
+| `free` | 随便打 / 自由发挥 / 自由攻击 |
+
+**关键区分**:
+- `engagement_constraint(stance=hold)` 影响**整支军队**的 stance(全局静止)
+- `unit_claim(task.verb=hold_position)` 影响 selector 指定的**特定单位**(单位级)
+- 玩家说"所有人原地别动" → engagement_constraint(stance=hold)
+- 玩家说"那个叉子守住别动" → unit_claim(selector={unit_type:Zealot}, task.verb=hold_position, persistent=true)
+
+====== scout 路由消歧 ======
+
+侦察类话语有 3 种合法路由:
+1. **顶层 scout directive**（推荐,玩家没指定 unit 时）:
+   - "侦察一下 11 点" / "侦察对方主基地" → `scout(target={...})`
+2. **tactical_objective(verb=scout)**（也合法,等价于 1）:
+   - 同上指令也可以走这条
+3. **unit_claim(verb=move_to)**（玩家指定 unit 去某地）:
+   - "派那个探机去 11 点" → unit_claim verb=move_to(不是 scout)
+**任何情况下 unit_claim.task.verb 都不能是 `"scout"`**（Verb enum 没此值）。
+
+====== build_at.point 字段规则 ======
+
+`build_at.point` 必须是 `[float, float]` 坐标元组,**不能是字符串**（"11 点" /
+"natural" / "natural_third" 都会校验失败）。如果你算不出精确坐标,
+**给 ambiguous 让玩家点击地图**,不要硬塞字符串。
+
 TacticalObjective verb 白名单（11 个，仅此 11 个）：
 - attack    进攻敌方目标区域
 - defend    守卫己方区域

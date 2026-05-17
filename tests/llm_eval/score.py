@@ -26,6 +26,9 @@ class ExpectedSpec:
 
     匹配语义:
     - `expect_type`: directives 列表里必须至少有一条 type 匹配
+      (单 DirectiveType 或 list[DirectiveType] —— list 表示"任一即可",
+       用于业务等价的多 type 路由，如 scout 既可走顶层 scout 也可走
+       tactical_objective(verb=scout))
     - `must_have_paths`: 匹配那条 directive 必须满足所有 path → value 条件
     - `forbidden_paths`: 匹配那条 directive 不允许任一 path → value 命中
       (value 用 list 表示"不允许的值集合")
@@ -35,7 +38,7 @@ class ExpectedSpec:
 
     name: str
     inject: str
-    expect_type: DirectiveType
+    expect_type: DirectiveType | list[DirectiveType]
     must_have_paths: dict[str, Any] = field(default_factory=dict)
     forbidden_paths: dict[str, list[Any]] = field(default_factory=dict)
     allow_extra_directives: bool = True
@@ -89,9 +92,15 @@ def _matches(actual: Any, expected: Any) -> bool:
 def _find_matching_directive(
     directives: list[Directive], spec: ExpectedSpec
 ) -> Directive | None:
-    """从 directives 列表里找 type 匹配 + must_have_paths 都满足的那条。"""
+    """从 directives 列表里找 type 匹配 + must_have_paths 都满足的那条。
+
+    expect_type 支持单值或 list(任一即可)。
+    """
+    allowed_types = (
+        spec.expect_type if isinstance(spec.expect_type, list) else [spec.expect_type]
+    )
     for d in directives:
-        if d.type != spec.expect_type:
+        if d.type not in allowed_types:
             continue
         if all(_matches(_get_path(d, p), v) for p, v in spec.must_have_paths.items()):
             return d
@@ -119,9 +128,14 @@ def score_outcome(outcome: ParseOutcome, spec: ExpectedSpec) -> Score:
     matched = _find_matching_directive(outcome.directives, spec)
     if matched is None:
         seen_types = [d.type.value for d in outcome.directives]
+        expected_str = (
+            "|".join(t.value for t in spec.expect_type)
+            if isinstance(spec.expect_type, list)
+            else spec.expect_type.value
+        )
         return Score(
             passed=False,
-            reason=f"没找到 type={spec.expect_type.value} 且 must_have 都满足的 directive (seen: {seen_types})",
+            reason=f"没找到 type∈{{{expected_str}}} 且 must_have 都满足的 directive (seen: {seen_types})",
         )
 
     # check forbidden
