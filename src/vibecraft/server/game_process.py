@@ -66,7 +66,10 @@ class GameConfig:
     """内置 AI 种族：Protoss / Terran / Zerg / Random（默认随机）。"""
 
     opponent_difficulty: str = "VeryHard"
-    """内置 AI 难度：VeryEasy / Easy / Medium / Hard / Harder / VeryHard / CheatVision。"""
+    """内置 AI 难度（sc2.data.Difficulty 全 10 档）：
+    VeryEasy / Easy / Medium / MediumHard / Hard / Harder / VeryHard /
+    CheatVision（全图视野）/ CheatMoney（白送资源）/ CheatInsane（视野+资源+速度全开）。
+    """
 
     realtime: bool = True
     """是否以实时（1x）速度跑。玩家要看画面，默认 True。"""
