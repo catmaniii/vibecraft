@@ -71,6 +71,11 @@ class DirectorConfig:
 class _RecentCommand:
     text: str
     ts: float
+    # B 摘要式局内 memory(2026-05-17):parse 完成后回填本条话的 outcome 摘要。
+    # 下次 build_parse_context 时一起传给 LLM,让它看到自己上次输出过什么(摘要,
+    # 不是完整 JSON;C 完整 multi-turn 才传 JSON)。None = 还没 parse 完(罕见
+    # 中途异常) / 历史 buffer 在 parse 前先 push 这条 text。
+    outcome_summary: str | None = None
 
 
 @dataclass(slots=True)
@@ -534,12 +539,15 @@ class Director:
         ctx = self.build_parse_context(now)
         outcome = await self.parser.parse(text, ctx)
 
+        # B 局内 memory:所有 outcome(含 ParseError) 都记进 _recent_commands +
+        # 回填摘要。这样 LLM 下次 parse 看到的不仅是上次说了什么,还看到上次解出了什么。
+        self._remember_command(text, now, outcome=outcome)
+
         if isinstance(outcome, IntentParseResult):
             self._submit_directives(outcome.directives, now)
-            self._remember_command(text, now)
         elif isinstance(outcome, AmbiguousParse):
             # 暂不 submit；UI 层等玩家二次确认后再 confirm_ambiguous
-            self._remember_command(text, now)
+            pass
         elif isinstance(outcome, ParseError):
             self.session.log_event(
                 Event(
@@ -849,10 +857,72 @@ class Director:
         # 主动推 snapshot
         self._push_snapshot(now)
 
-    def _remember_command(self, text: str, now: float) -> None:
-        self._recent_commands.append(_RecentCommand(text=text, ts=now))
+    def _remember_command(
+        self, text: str, now: float, outcome: ParseOutcome | None = None
+    ) -> None:
+        summary = self._summarize_outcome(outcome) if outcome is not None else None
+        self._recent_commands.append(_RecentCommand(text=text, ts=now, outcome_summary=summary))
         if len(self._recent_commands) > self.config.recent_command_buffer:
             self._recent_commands.pop(0)
+
+    def _summarize_outcome(self, outcome: ParseOutcome) -> str:
+        """把 ParseOutcome 压成一行摘要(给 LLM 看的局内 memory)。
+
+        例:
+          - "strategy_set(stage=midgame, strategy_id=iac_2base) id=d_a3f1c2"
+          - "unit_claim(Probe patrol natural, persistent=true) id=d_8b2d4e"
+          - "[parse error: schema validation]"
+          - "[ambiguous: 哪个剧本?]"
+        """
+        if isinstance(outcome, ParseError):
+            return f"[parse error: {outcome.message[:60]}]"
+        if isinstance(outcome, AmbiguousParse):
+            interp = outcome.result.interpretation_zh[:60]
+            return f"[ambiguous: {interp}]"
+        if isinstance(outcome, IntentParseResult):
+            if not outcome.directives:
+                return "[empty: no directives]"
+            return " | ".join(self._brief_directive(d) for d in outcome.directives)
+        return "[unknown outcome]"
+
+    def _brief_directive(self, d: Directive) -> str:
+        """单条 directive 关键字段摘要(给 LLM 看,不是 JSON)。"""
+        p = d.payload
+        t = d.type.value
+        sid = d.id[:8]
+        parts: list[str] = []
+        if isinstance(p, StrategySetPayload):
+            parts.append(f"stage={p.stage} id={p.strategy_id}")
+        elif isinstance(p, ProductionOverridePayload):
+            parts.append(f"{p.unit_type}×{p.count}")
+        elif isinstance(p, TechOverridePayload):
+            parts.append(f"upgrade={p.upgrade_id}")
+        elif isinstance(p, ExpansionOverridePayload):
+            parts.append(f"target_count={p.target_count}")
+        elif isinstance(p, EngagementConstraintPayload):
+            parts.append(f"stance={p.stance}")
+        elif isinstance(p, UnitClaimPayload):
+            unit = p.selector.unit_type or "?"
+            verb = p.task.primary_action.verb.value
+            target = p.task.primary_action.target
+            tgt = target.named_spot or target.unit_type or "?"
+            persist = ", persistent=true" if p.persistent else ""
+            parts.append(f"{unit} {verb} {tgt}{persist}")
+        elif isinstance(p, ScoutPayload):
+            unit = p.selector.unit_type if p.selector else "?"
+            tgt = p.target.named_spot or "?"
+            parts.append(f"{unit}→{tgt}")
+        elif isinstance(p, MovePayload):
+            unit = p.selector.unit_type or "?"
+            tgt = p.target.named_spot or "?"
+            parts.append(f"{unit}→{tgt}")
+        elif isinstance(p, BuildAtPayload):
+            parts.append(f"{p.structure_type}@{p.point}")
+        elif isinstance(p, UnitReleasePayload):
+            unit = p.selector.unit_type or "?"
+            parts.append(f"release {unit}")
+        body = ", ".join(parts) if parts else ""
+        return f"{t}({body}) id={sid}"
 
     # ------------------------------------------------------------------
     # 每 tick
@@ -1243,6 +1313,9 @@ class Director:
             enemy_summary=dict(state.enemy_summary),
             standing_orders=standing_orders,
             recent_commands=[c.text for c in self._recent_commands],
+            recent_outcomes=[
+                c.outcome_summary or "(未解析)" for c in self._recent_commands
+            ],
         )
 
     # ------------------------------------------------------------------

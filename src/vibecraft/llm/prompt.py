@@ -52,7 +52,15 @@ class ParseContext(BaseModel):
     )
     recent_commands: list[str] = Field(
         default_factory=list,
-        description="玩家最近 3 句话",
+        description="玩家最近 3 句话(原文)",
+    )
+    recent_outcomes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "B 局内 memory(2026-05-17):每条对应 recent_commands 同 index 的"
+            "解析摘要(directive 摘要 / parse error / ambiguous)。让 LLM 下次"
+            "parse 看到自己上次输出的什么(摘要,不是 JSON)"
+        ),
     )
     standing_orders: list[str] = Field(
         default_factory=list,
@@ -413,7 +421,17 @@ def build_dynamic_context(ctx: ParseContext) -> str:
     enemy = ", ".join(f"{k}:{v}" for k, v in sorted(ctx.enemy_summary.items())) or "(未侦察)"
 
     recent_evt = "\n  - ".join(ctx.recent_events) or "(无)"
-    recent_cmd = "\n  - ".join(ctx.recent_commands) or "(无)"
+    # B 局内 memory:有 recent_outcomes 时把"text → outcome 摘要"配对展开,
+    # 让 LLM 看到自己上次解出来什么(防止反复变风格 / 让 LLM 能引用上次 directive_id)。
+    # 没 outcomes 就退化只显示文本(向后兼容旧单测构造的 ParseContext)。
+    if ctx.recent_outcomes and len(ctx.recent_outcomes) == len(ctx.recent_commands):
+        recent_cmd_lines = [
+            f"{cmd}\n    → {outcome}"
+            for cmd, outcome in zip(ctx.recent_commands, ctx.recent_outcomes, strict=True)
+        ]
+        recent_cmd = "\n  - ".join(recent_cmd_lines) or "(无)"
+    else:
+        recent_cmd = "\n  - ".join(ctx.recent_commands) or "(无)"
     standing = "\n  - ".join(ctx.standing_orders) or "(无)"
 
     return f"""当前游戏状态：
@@ -427,7 +445,7 @@ def build_dynamic_context(ctx: ParseContext) -> str:
   - {standing}
 - 最近事件：
   - {recent_evt}
-- 玩家最近指令：
+- 玩家最近指令(含你上次解析摘要,延续风格 + 可回引 directive_id)：
   - {recent_cmd}
 """
 
