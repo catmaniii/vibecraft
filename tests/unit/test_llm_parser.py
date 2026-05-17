@@ -509,7 +509,11 @@ class TestDoneWhenValidate:
                 _provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW),  # 第 2 次：合法
             ]
         )
-        parser = IntentParser(provider, library)
+        # max_validation_retries=1 启用 1 次 retry(默认 0 不 retry,向后兼容旧调用方)
+        parser = IntentParser(
+            provider, library,
+            config=ParserConfig(max_validation_retries=1),
+        )
         outcome = await parser.parse("进攻对方自然", default_ctx)
 
         assert isinstance(outcome, IntentParseResult), f"expected IntentParseResult, got {outcome}"
@@ -535,7 +539,10 @@ class TestDoneWhenValidate:
                 _provider_response_for(_INVALID_DONE_WHEN_RAW),  # 第 2 次仍 invalid
             ]
         )
-        parser = IntentParser(provider, library)
+        parser = IntentParser(
+            provider, library,
+            config=ParserConfig(max_validation_retries=1),
+        )
         outcome = await parser.parse("进攻对方自然", default_ctx)
 
         assert isinstance(outcome, IntentParseResult), f"expected IntentParseResult, got {outcome}"

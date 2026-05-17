@@ -59,10 +59,13 @@ def llm_parser(strategy_library: StrategyLibrary) -> IntentParser:
     if override_model:
         llm_config.model = override_model
     provider = llm_config.build_provider()
+    # 环境变量 VIBECRAFT_MAX_RETRIES 控制 schema validation retry 次数
+    # (eval 对比 retry=0 vs retry=3 的 accuracy 提升)
+    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "0"))
     return IntentParser(
         provider=provider,
         library=strategy_library,
-        config=ParserConfig(timeout_s=30.0),  # eval 容忍更长 timeout(Pro 慢)
+        config=ParserConfig(timeout_s=30.0, max_validation_retries=max_retries),
     )
 
 

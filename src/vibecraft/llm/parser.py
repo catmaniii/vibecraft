@@ -45,24 +45,13 @@ logger = logging.getLogger(__name__)
 
 
 class _DirectiveValidationFailed(Exception):
-    """内部异常：directive pydantic 校验失败且涉及 done_when，需要 retry。"""
+    """内部异常：directive pydantic 校验失败，需要 retry feedback。"""
 
     def __init__(self, index: int, raw: dict[str, Any], exc: ValidationError | ValueError) -> None:
         self.index = index  # 第几条（0-based）
         self.raw_response = raw  # provider 的完整 raw 响应
         self.validation_exc = exc
         super().__init__(str(exc))
-
-
-def _is_done_when_error(exc: ValidationError | ValueError) -> bool:
-    """判断 ValidationError 是否跟 done_when 字段相关（才值得 retry）。"""
-    if not isinstance(exc, ValidationError):
-        return False
-    for err in exc.errors():
-        loc = err.get("loc", ())
-        if any(str(part) == "done_when" for part in loc):
-            return True
-    return False
 
 
 class ParserConfig(BaseModel):
@@ -74,6 +63,10 @@ class ParserConfig(BaseModel):
     max_retries: int = 0
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     max_directives_per_call: int = 10
+    # 任意 schema validation 失败时,把 error 回灌 LLM 重 call 几次。
+    # 默认 0 = 不 retry(向后兼容旧测试期望);eval 实测 retry=3 把 Flash
+    # 从 90.5% → 95%+(L3c/L4a 等 LLM 偶发结构错本来一次过不了,二次大概率修正)。
+    max_validation_retries: int = 0
 
 
 class IntentParser:
@@ -136,39 +129,46 @@ class IntentParser:
             self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
             return err
 
-        # 第 1 次尝试 validate
-        try:
-            outcome = self._build_outcome(response, user_text, context, raise_on_validation=True)
-        except _DirectiveValidationFailed as first_fail:
-            # 第 1 次 directive validate 失败 → 把 error 回灌 LLM retry
-            self._log_validate_fail(user_text, first_fail.raw_response, first_fail.validation_exc)
+        # validate + retry loop:max_validation_retries 个额外回合(每回合把
+        # 上次 LLM 错误信息回灌让它纠正)。retry 全失败后降级 strip done_when。
+        max_iter = 1 + max(0, self.config.max_validation_retries)
+        outcome: ParseOutcome | None = None
+        last_fail: _DirectiveValidationFailed | None = None
+        for attempt in range(max_iter):
             try:
-                retry_response = await asyncio.wait_for(
-                    self._call_llm_with_validation_error(
-                        user_text, context, dynamic, system_full,
-                        first_fail.raw_response, first_fail.validation_exc,
-                    ),
-                    timeout=self.config.timeout_s,
-                )
-            except Exception as e:
-                err = ParseError(
-                    kind=ParseErrorKind.PROVIDER_ERROR,
-                    message=f"validate retry provider 异常：{type(e).__name__}: {e}",
-                )
-                self._log_call(user_text, context, response, err, latency_ms=response.latency_ms)
-                return err
-
-            # 第 2 次尝试 validate
-            try:
+                # 始终 raise(让最后一次失败也走 fallback strip,而不是 ParseError)
                 outcome = self._build_outcome(
-                    retry_response, user_text, context, raise_on_validation=True
+                    response, user_text, context, raise_on_validation=True
                 )
-            except _DirectiveValidationFailed as second_fail:
-                # 第 2 次仍失败 → 降级：strip done_when + echo
-                outcome = self._fallback_strip_done_when(
-                    retry_response, user_text, context, second_fail.validation_exc
-                )
-            response = retry_response
+                break  # validate 成功
+            except _DirectiveValidationFailed as fail:
+                last_fail = fail
+                is_last = attempt == max_iter - 1
+                if is_last:
+                    break  # 不再 retry,出循环走 fallback
+                self._log_validate_fail(user_text, fail.raw_response, fail.validation_exc)
+                try:
+                    response = await asyncio.wait_for(
+                        self._call_llm_with_validation_error(
+                            user_text, context, dynamic, system_full,
+                            fail.raw_response, fail.validation_exc,
+                        ),
+                        timeout=self.config.timeout_s,
+                    )
+                except Exception as e:
+                    err = ParseError(
+                        kind=ParseErrorKind.PROVIDER_ERROR,
+                        message=f"validate retry provider 异常：{type(e).__name__}: {e}",
+                    )
+                    self._log_call(user_text, context, response, err, latency_ms=response.latency_ms)
+                    return err
+
+        # 所有 attempt 都没 break 成功(outcome is None) → fallback strip done_when 兜底
+        if outcome is None and last_fail is not None:
+            outcome = self._fallback_strip_done_when(
+                response, user_text, context, last_fail.validation_exc
+            )
+        assert outcome is not None  # 上面两条路径之一总会赋值
 
         self._log_call(user_text, context, response, outcome, latency_ms=response.latency_ms)
         return outcome
@@ -186,14 +186,19 @@ class IntentParser:
         raw_response: dict[str, Any],
         exc: ValidationError | ValueError,
     ) -> ProviderResponse:
-        """把 LLM 原响应 + validation error 组合成 retry prompt，再调一次 LLM。"""
+        """把 LLM 原响应 + validation error 组合成 retry prompt，再调一次 LLM。
+
+        通用 retry feedback:把上次完整 raw 输出 + pydantic error 详情灌回去。
+        LLM 看 error 里写明哪个 path 错、需要哪些字面值,大概率能修正。
+        """
         error_text = str(exc)
-        # 把原 LLM 输出 + error 消息注入 few_shot retry 段
         retry_few_shot = (
             self._few_shot
-            + f"\n\n[Retry] 你上次的输出：\n{json.dumps(raw_response, ensure_ascii=False)}\n"
-            f"校验失败原因：{error_text}\n"
-            "请修正 done_when / payload 字段后重新输出（只输出修正后的完整 directive 数组）。"
+            + f"\n\n[Retry] 你上次的输出（schema 校验失败,需要修正）：\n"
+            f"{json.dumps(raw_response, ensure_ascii=False)}\n\n"
+            f"pydantic 校验错误详情（注意 path 和 enum 字面值约束）：\n{error_text}\n\n"
+            "请按 system prompt 里的 enum 白名单严格修正,"
+            "**重新输出完整的 directive 数组**（不要只输出 diff;不要解释,只走 emit_directives tool）。"
         )
         return await self.provider.parse(
             system=system_full,
@@ -210,9 +215,9 @@ class IntentParser:
         raw_response: dict[str, Any],
         exc: ValidationError | ValueError,
     ) -> None:
-        """记录首次 validate 失败（Python logger + llm_call JSONL）。"""
+        """记录 validate 失败（Python logger + llm_call JSONL）。"""
         logger.warning(
-            "done_when validate failed, retrying: user_text=%r error=%s",
+            "validate failed, retrying with feedback: user_text=%r error=%s",
             user_text,
             exc,
         )
@@ -324,9 +329,11 @@ class IntentParser:
                 envelope = self._normalize_directive_raw(d_raw, user_text, context)
                 directives.append(Directive.model_validate(envelope))
             except (ValidationError, ValueError) as e:
-                # 只有 done_when 相关的 ValidationError 才触发 retry；
-                # 其他字段缺失（如 unit_type 缺失）直接返回错误（retry 无意义）。
-                if raise_on_validation and _is_done_when_error(e):
+                # 任意 ValidationError 都触发 retry(eval 实测:不只 done_when,
+                # verb/stance/missing required 字段等 retry 后大概率被 LLM 修正)。
+                # raise_on_validation=False 时(已 retry 完 或 fallback 路径)
+                # 直接返回 ParseError 不抛。
+                if raise_on_validation:
                     raise _DirectiveValidationFailed(i, raw, e) from e
                 return ParseError(
                     kind=ParseErrorKind.DIRECTIVE_INVALID,
