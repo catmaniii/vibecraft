@@ -26,6 +26,9 @@ class DirectiveType(str, Enum):
     EXPANSION_OVERRIDE = "expansion_override"
     ENGAGEMENT_CONSTRAINT = "engagement_constraint"
 
+    # 战术目标（L2 中粒度，跨单位的战术指令）
+    TACTICAL_OBJECTIVE = "tactical_objective"
+
     # 微粒度单位
     UNIT_CLAIM = "unit_claim"
     SCOUT = "scout"

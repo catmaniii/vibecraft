@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 from pydantic import ValidationError
 
@@ -417,3 +419,272 @@ class TestStandingOrderSchema:
         """UnitSelector 不接 count（extra=forbid 已实现）。"""
         with pytest.raises(ValidationError):
             Selector(unit_type="Probe", count=1)  # type: ignore[call-arg]
+
+
+# =========================================================================
+# TestDoneWhenSchema (P3)
+# =========================================================================
+
+
+from vibecraft.directives import TacticalObjectivePayload  # noqa: E402
+from vibecraft.directives.models import (  # noqa: E402
+    AllOf,
+    AnyOf,
+    EnemyKilledInArea,
+    ExpansionCount,
+    OwnArmySizeRatio,
+    TargetDestroyed,
+    TechDone,
+    TimeElapsedSince,
+    UnitCountBuiltSince,
+    VisionAcquired,
+)
+
+
+class TestDoneWhenSchema:
+    """DoneWhen discriminated union — 8 kind + 2 复合（P3）。"""
+
+    # ------------------------------------------------------------------
+    # 8 基本 kind valid cases
+    # ------------------------------------------------------------------
+
+    def test_unit_count_built_since_valid(self) -> None:
+        c = UnitCountBuiltSince(kind="unit_count_built_since", unit_type="Phoenix", op=">=", value=4)
+        assert c.kind == "unit_count_built_since"
+        assert c.unit_type == "Phoenix"
+        assert c.op == ">="
+        assert c.value == 4
+
+    def test_tech_done_valid(self) -> None:
+        c = TechDone(kind="tech_done", upgrade_id="Blink")
+        assert c.kind == "tech_done"
+        assert c.upgrade_id == "Blink"
+
+    def test_expansion_count_valid(self) -> None:
+        c = ExpansionCount(kind="expansion_count", op=">=", value=3)
+        assert c.kind == "expansion_count"
+        assert c.op == ">="
+        assert c.value == 3
+
+    def test_target_destroyed_valid(self) -> None:
+        c = TargetDestroyed(
+            kind="target_destroyed",
+            target_kind="natural",
+            area="enemy_natural",
+        )
+        assert c.kind == "target_destroyed"
+        assert c.target_kind == "natural"
+        assert c.area == "enemy_natural"
+        assert c.target_param is None
+
+    def test_own_army_size_ratio_valid(self) -> None:
+        c = OwnArmySizeRatio(kind="own_army_size_ratio", op=">=", value=0.8)
+        assert c.kind == "own_army_size_ratio"
+        assert c.value == 0.8
+
+    def test_vision_acquired_valid(self) -> None:
+        c = VisionAcquired(kind="vision_acquired", area="enemy_natural", hold_seconds=3.0)
+        assert c.kind == "vision_acquired"
+        assert c.hold_seconds == 3.0
+
+    def test_enemy_killed_in_area_valid(self) -> None:
+        c = EnemyKilledInArea(
+            kind="enemy_killed_in_area",
+            area="enemy_natural",
+            unit_type="Queen",
+            op=">=",
+            value=2,
+        )
+        assert c.kind == "enemy_killed_in_area"
+        assert c.unit_type == "Queen"
+
+    def test_time_elapsed_since_valid(self) -> None:
+        c = TimeElapsedSince(kind="time_elapsed_since", seconds=60.0)
+        assert c.kind == "time_elapsed_since"
+        assert c.ref == "directive_issued"  # default
+
+    def test_time_elapsed_since_game_start_ref(self) -> None:
+        c = TimeElapsedSince(kind="time_elapsed_since", seconds=300.0, ref="game_start")
+        assert c.ref == "game_start"
+
+    # ------------------------------------------------------------------
+    # 2 复合 kind valid cases
+    # ------------------------------------------------------------------
+
+    def test_any_of_valid(self) -> None:
+        c = AnyOf(
+            kind="any_of",
+            conditions=[
+                {"kind": "tech_done", "upgrade_id": "Blink"},
+                {"kind": "time_elapsed_since", "seconds": 120.0},
+            ],
+        )
+        assert c.kind == "any_of"
+        assert len(c.conditions) == 2
+        assert isinstance(c.conditions[0], TechDone)
+        assert isinstance(c.conditions[1], TimeElapsedSince)
+
+    def test_all_of_valid(self) -> None:
+        c = AllOf(
+            kind="all_of",
+            conditions=[
+                {"kind": "expansion_count", "op": ">=", "value": 3},
+                {"kind": "own_army_size_ratio", "op": ">=", "value": 0.9},
+            ],
+        )
+        assert c.kind == "all_of"
+        assert len(c.conditions) == 2
+
+    def test_nested_any_of_in_all_of(self) -> None:
+        """any_of 嵌套进 all_of（forward ref 解析正确）。"""
+        c = AllOf(
+            kind="all_of",
+            conditions=[
+                {
+                    "kind": "any_of",
+                    "conditions": [
+                        {"kind": "tech_done", "upgrade_id": "Blink"},
+                        {"kind": "tech_done", "upgrade_id": "Charge"},
+                    ],
+                },
+                {"kind": "expansion_count", "op": ">=", "value": 2},
+            ],
+        )
+        inner = c.conditions[0]
+        assert isinstance(inner, AnyOf)
+        assert len(inner.conditions) == 2
+
+    # ------------------------------------------------------------------
+    # Invalid / missing-field cases
+    # ------------------------------------------------------------------
+
+    def test_unit_count_built_since_missing_unit_type(self) -> None:
+        """缺 unit_type 应 ValidationError。"""
+        with pytest.raises(ValidationError):
+            UnitCountBuiltSince(kind="unit_count_built_since", op=">=", value=4)  # type: ignore[call-arg]
+
+    def test_unit_count_built_since_missing_op(self) -> None:
+        with pytest.raises(ValidationError):
+            UnitCountBuiltSince(kind="unit_count_built_since", unit_type="Stalker", value=2)  # type: ignore[call-arg]
+
+    def test_tech_done_missing_upgrade_id(self) -> None:
+        with pytest.raises(ValidationError):
+            TechDone(kind="tech_done")  # type: ignore[call-arg]
+
+    def test_vision_acquired_missing_area(self) -> None:
+        with pytest.raises(ValidationError):
+            VisionAcquired(kind="vision_acquired", hold_seconds=5.0)  # type: ignore[call-arg]
+
+    def test_bad_discriminator_kind(self) -> None:
+        """kind 不在白名单 → ValidationError（discriminator 拒绝）。"""
+
+        from pydantic import TypeAdapter
+
+        from vibecraft.directives.models import DoneWhen
+
+        ta = TypeAdapter(DoneWhen)
+        with pytest.raises(ValidationError):
+            ta.validate_python({"kind": "nonexistent_kind", "value": 1})
+
+    def test_bad_op_value_rejected(self) -> None:
+        """op 不在 Literal 白名单 → ValidationError。"""
+        with pytest.raises(ValidationError):
+            UnitCountBuiltSince(
+                kind="unit_count_built_since",
+                unit_type="Zealot",
+                op="!=",  # type: ignore[arg-type]
+                value=1,
+            )
+
+
+# =========================================================================
+# TestTacticalObjectivePayload (P3)
+# =========================================================================
+
+
+class TestTacticalObjectivePayload:
+    """TacticalObjectivePayload — L2 战术指令 schema。"""
+
+    VALID_VERBS: ClassVar[list[str]] = [
+        "attack", "defend", "scout", "expand", "harass",
+        "drop", "vision", "raze", "retreat", "regroup", "split",
+    ]
+
+    def test_all_valid_verbs_accepted(self) -> None:
+        for verb in self.VALID_VERBS:
+            p = TacticalObjectivePayload(verb=verb)  # type: ignore[arg-type]
+            assert p.verb == verb
+            assert p.type == DirectiveType.TACTICAL_OBJECTIVE
+
+    def test_invalid_verb_rejected(self) -> None:
+        """非法 verb 拒绝。"""
+        invalid_verbs = [
+            "charge", "rush", "turtle", "all_in", "cheese",
+            "build", "gather", "rally", "ambush", "flank",
+            "engage", "disengage",
+        ]
+        for verb in invalid_verbs:
+            with pytest.raises(ValidationError):
+                TacticalObjectivePayload(verb=verb)  # type: ignore[arg-type]
+
+    def test_target_area_str(self) -> None:
+        p = TacticalObjectivePayload(verb="attack", target_area="enemy_natural")
+        assert p.target_area == "enemy_natural"
+
+    def test_target_area_tuple(self) -> None:
+        p = TacticalObjectivePayload(verb="defend", target_area=(55.5, 32.0))
+        assert p.target_area == (55.5, 32.0)
+
+    def test_target_area_none(self) -> None:
+        p = TacticalObjectivePayload(verb="regroup")
+        assert p.target_area is None
+
+    def test_defaults(self) -> None:
+        p = TacticalObjectivePayload(verb="scout")
+        assert p.priority == 50
+        assert p.unit_count_hint is None
+        assert p.unit_type_hint is None
+        assert p.done_when is None
+        assert p.timeout_s is None
+
+    def test_unit_hints_accepted(self) -> None:
+        p = TacticalObjectivePayload(
+            verb="harass",
+            unit_count_hint=6,
+            unit_type_hint=["Phoenix", "Oracle"],
+        )
+        assert p.unit_count_hint == 6
+        assert p.unit_type_hint == ["Phoenix", "Oracle"]
+
+    def test_done_when_attached(self) -> None:
+        """TacticalObjectivePayload 可携带 done_when（来自 _PayloadBase）。"""
+        p = TacticalObjectivePayload(
+            verb="attack",
+            target_area="enemy_main",
+            done_when={"kind": "target_destroyed", "target_kind": "main"},
+        )
+        assert isinstance(p.done_when, TargetDestroyed)
+
+    def test_timeout_s_accepted(self) -> None:
+        p = TacticalObjectivePayload(verb="vision", timeout_s=120)
+        assert p.timeout_s == 120
+
+    def test_directive_envelope_tactical_objective(self) -> None:
+        """TacticalObjectivePayload 进 Directive envelope round-trip。"""
+        d = Directive(
+            payload=TacticalObjectivePayload(verb="expand", target_area="third_base"),
+            issued_at=200.0,
+        )
+        assert d.type == DirectiveType.TACTICAL_OBJECTIVE
+        dumped = d.model_dump(mode="json")
+        restored = Directive.model_validate(dumped)
+        assert isinstance(restored.payload, TacticalObjectivePayload)
+        assert restored.payload.verb == "expand"
+        assert restored.payload.target_area == "third_base"
+
+    def test_done_when_on_base_payload_is_optional(self) -> None:
+        """_PayloadBase.done_when 对所有 payload 可选（StrategySetPayload 验证）。"""
+        from vibecraft.directives import StrategySetPayload
+        p = StrategySetPayload(stage="opening", strategy_id="1g_robo")
+        assert p.done_when is None
+        assert p.timeout_s is None

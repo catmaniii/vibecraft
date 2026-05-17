@@ -403,7 +403,7 @@ class Director:
         "Mothership": "母舰",
     }
 
-    def _production_override_view(self, d: "Directive") -> dict[str, Any]:
+    def _production_override_view(self, d: Directive) -> dict[str, Any]:
         """把一条 production override Directive 转成 snapshot 里的 view dict（P2）。
 
         字段：id / display / issued_at。

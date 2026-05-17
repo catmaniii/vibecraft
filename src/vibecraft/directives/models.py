@@ -16,12 +16,130 @@ from vibecraft.directives.task import Task
 from vibecraft.directives.types import DirectiveType, IssuedBy
 
 # =========================================================================
+# DoneWhen discriminated union（8 kind + 2 复合）
+# =========================================================================
+
+
+class UnitCountBuiltSince(BaseModel):
+    """某兵种产量达到阈值（自 directive 下达以来）。"""
+
+    kind: Literal["unit_count_built_since"]
+    unit_type: str
+    op: Literal[">=", "<=", "==", ">", "<"]
+    value: int
+
+
+class TechDone(BaseModel):
+    """升级/科技研究完成。"""
+
+    kind: Literal["tech_done"]
+    upgrade_id: str
+
+
+class ExpansionCount(BaseModel):
+    """己方分基数量满足条件。"""
+
+    kind: Literal["expansion_count"]
+    op: Literal[">=", "<=", "==", ">", "<"]
+    value: int
+
+
+class TargetDestroyed(BaseModel):
+    """目标建筑/单位被摧毁。"""
+
+    kind: Literal["target_destroyed"]
+    target_kind: Literal["natural", "third", "main", "building_at", "unit_type"]
+    target_param: str | None = None
+    area: str | None = None  # 可选，e.g. "enemy_natural"
+
+
+class OwnArmySizeRatio(BaseModel):
+    """己方军队规模比例满足条件（相对于满编）。"""
+
+    kind: Literal["own_army_size_ratio"]
+    op: Literal[">=", "<=", "==", ">", "<"]
+    value: float
+
+
+class VisionAcquired(BaseModel):
+    """在指定区域保持视野 N 秒。"""
+
+    kind: Literal["vision_acquired"]
+    area: str  # named_spot
+    hold_seconds: float
+
+
+class EnemyKilledInArea(BaseModel):
+    """在指定区域击杀敌方单位数量满足条件。"""
+
+    kind: Literal["enemy_killed_in_area"]
+    area: str
+    unit_type: str
+    op: Literal[">=", "<=", "==", ">", "<"]
+    value: int
+
+
+class TimeElapsedSince(BaseModel):
+    """自某时间点起经过 N 秒。"""
+
+    kind: Literal["time_elapsed_since"]
+    seconds: float
+    ref: Literal["directive_issued", "game_start"] = "directive_issued"
+
+
+class AnyOf(BaseModel):
+    """复合：任意一个子条件满足即完成。"""
+
+    kind: Literal["any_of"]
+    conditions: list[DoneWhen]  # forward ref
+
+
+class AllOf(BaseModel):
+    """复合：所有子条件都满足才完成。"""
+
+    kind: Literal["all_of"]
+    conditions: list[DoneWhen]
+
+
+DoneWhen = Annotated[
+    UnitCountBuiltSince | TechDone | ExpansionCount | TargetDestroyed | OwnArmySizeRatio | VisionAcquired | EnemyKilledInArea | TimeElapsedSince | AnyOf | AllOf,
+    Field(discriminator="kind"),
+]
+
+# 解决 forward ref（AnyOf/AllOf 嵌套 DoneWhen）
+AnyOf.model_rebuild()
+AllOf.model_rebuild()
+
+
+# =========================================================================
+# TacticalVerb
+# =========================================================================
+
+TacticalVerb = Literal[
+    "attack",
+    "defend",
+    "scout",
+    "expand",
+    "harass",
+    "drop",
+    "vision",
+    "raze",
+    "retreat",
+    "regroup",
+    "split",
+]
+
+
+# =========================================================================
 # Payload models（每个 directive type 一个）
 # =========================================================================
 
 
 class _PayloadBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    # P3 新增（可选；L1 STRATEGY_SET 通常保持 None）：
+    done_when: DoneWhen | None = None
+    timeout_s: int | None = None
 
 
 class StrategySetPayload(_PayloadBase):
@@ -133,6 +251,17 @@ class ViewZoomPayload(_PayloadBase):
     level: float = Field(ge=0.1, le=2.0)
 
 
+class TacticalObjectivePayload(_PayloadBase):
+    """L2 战术指令：跨单位的中粒度战术目标（设计文档 §8.1 L2）。"""
+
+    type: Literal[DirectiveType.TACTICAL_OBJECTIVE] = DirectiveType.TACTICAL_OBJECTIVE
+    verb: TacticalVerb
+    target_area: str | tuple[float, float] | None = None  # named_spot 或坐标
+    unit_count_hint: int | None = None  # None = bot 自决
+    unit_type_hint: list[str] | None = None  # None = bot 自决
+    priority: int = 50
+
+
 Payload = Annotated[
     StrategySetPayload
     | StrategyCancelPayload
@@ -140,6 +269,7 @@ Payload = Annotated[
     | TechOverridePayload
     | ExpansionOverridePayload
     | EngagementConstraintPayload
+    | TacticalObjectivePayload
     | UnitClaimPayload
     | ScoutPayload
     | MovePayload
