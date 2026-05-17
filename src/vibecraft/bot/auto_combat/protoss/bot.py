@@ -1032,6 +1032,10 @@ def make_protoss_bot_class(
                     await self.director.execute_overrides_step(now_s)
                 except Exception as exc:
                     logger.warning("execute_overrides_step fail: %s", exc)
+                try:
+                    await self.director.execute_tactics_step(now_s)
+                except Exception as exc:
+                    logger.warning("execute_tactics_step fail: %s", exc)
             await super().on_step(self._sharpy_iteration)
             self._sharpy_iteration += 1
             self._refresh_llm_controlled_roles()
