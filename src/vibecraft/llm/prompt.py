@@ -349,6 +349,17 @@ def build_few_shot() -> str:
    timeout_s: 60]
 （自指令下达起，产出 2 个哨兵即完成）
 
+例 11b（一句话多兵种 → 拆多条 directive，**不要合并**）：「出 2 个叉子加 3 个追猎」
+→ [production_override: unit_type="Zealot", count=2,
+   done_when={kind:"unit_count_built_since", unit_type:"Zealot", op:">=", value:2},
+   timeout_s: 60,
+   production_override: unit_type="Stalker", count=3,
+   done_when={kind:"unit_count_built_since", unit_type:"Stalker", op:">=", value:3},
+   timeout_s: 60]
+（每个兵种独立一条 directive 独立 done_when；schema 不支持 unit_type 数组。
+  注：每条 directive 对应单兵种 + 单 done_when，不要试图用 any_of/all_of 把
+  多兵种塞一条 production_override。）
+
 例 12：「先研闪烁」
 → [tech_override: upgrade_id="Blink",
    done_when={kind:"tech_done", upgrade_id:"BlinkTech"},
