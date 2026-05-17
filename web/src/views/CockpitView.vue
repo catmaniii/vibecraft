@@ -9,7 +9,6 @@
 import { computed } from 'vue'
 import CommandInput from '@/components/CommandInput.vue'
 import StrategyCard from '@/components/StrategyCard.vue'
-import DecisionFeed from '@/components/DecisionFeed.vue'
 import Minimap from '@/components/Minimap.vue'
 import MinimapTrackpad from '@/components/MinimapTrackpad.vue'
 import M3Placeholder from '@/components/M3Placeholder.vue'
@@ -160,11 +159,6 @@ function fmtTs(ts: number): string {
           :cards="tacticalCards"
           @revoke="(id) => emit('revokeCard', id)"
         />
-
-        <div class="rounded-xl bg-surface-2 border border-border p-4">
-          <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Bot 决策流</p>
-          <DecisionFeed :events="props.events" />
-        </div>
 
         <div class="rounded-xl bg-surface-2 border border-border p-4">
           <p class="text-sm font-semibold text-muted uppercase tracking-wider mb-2">最近指令</p>

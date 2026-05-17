@@ -150,6 +150,20 @@ export interface TacticalObjectiveView {
  * 后端 build_snapshot._build_command_cards 构造。
  * 前端 CommandCardStack (Task 15) 消费。
  */
+/** 单条完成条件 + 当前进度（来自 task_monitor._done_when + counters） */
+export interface ConditionView {
+  /** 中文条件描述，e.g. "造 4 个 叉子" / "30 秒后" / "侦察到 enemy_main" */
+  text: string
+  /** 是否已满足（unit_count_built_since / time_elapsed_since 可算；其它 kind 后端给 false） */
+  met: boolean
+  /** 有进度的条件（counter / 倒计时）才有此字段 */
+  progress?: {
+    current: number
+    target: number
+    unit: string  // "个" / "秒" / ...
+  }
+}
+
 export interface CommandCardView {
   /** 直接来自 directive.id (L2/L3/L4) 或 L1 的 "l1_{stage}" 占位 */
   id: string
@@ -165,6 +179,8 @@ export interface CommandCardView {
   status_reason: string
   /** MVP 全部 true。未来某些 directive 可能不可 revoke */
   revokable: boolean
+  /** done_when 条件列表（L2/L3/L4 有 done_when 时附带；L1 不带，[] 表无条件） */
+  conditions?: ConditionView[]
 }
 
 export interface SnapshotFrame {

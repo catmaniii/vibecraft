@@ -417,8 +417,8 @@ class Director:
     def _build_command_cards(self, now: float) -> list[dict[str, Any]]:
         """统一 command_cards array，透传 4 层 directive 给 PWA（P0f Task 10）。
 
-        每张卡片 8 字段：id / layer / type / display / issued_at / status /
-        status_reason / revokable。
+        每张卡片字段：id / layer / type / display / issued_at / status /
+        status_reason / revokable / conditions（L2/L3/L4 有 done_when 时附带）。
 
         来源：
         - L1  board.slots（strategy slots）
@@ -481,6 +481,7 @@ class Director:
                         "status": st.get("status", "active"),
                         "status_reason": st.get("reason", ""),
                         "revokable": True,
+                        "conditions": self._build_conditions(d.id, now),
                     }
                 )
             elif d.type == DirectiveType.ENGAGEMENT_CONSTRAINT:
@@ -498,6 +499,7 @@ class Director:
                         "status": "active",
                         "status_reason": "",
                         "revokable": True,
+                        "conditions": [],
                     }
                 )
 
@@ -514,6 +516,7 @@ class Director:
                     "status": "active",
                     "status_reason": "",
                     "revokable": True,
+                    "conditions": self._build_conditions(d.id, now),
                 }
             )
 
@@ -531,10 +534,74 @@ class Director:
                     "status": st.get("status", "pending"),
                     "status_reason": st.get("reason", ""),
                     "revokable": True,
+                    "conditions": self._build_conditions(d.id, now),
                 }
             )
 
         return cards
+
+    def _build_conditions(self, directive_id: str, now: float) -> list[dict[str, Any]]:
+        """从 task_monitor 提取该 directive 的 done_when 条件 + 当前进度。
+
+        返回 list of {text, met, progress?}。无 done_when 或 task_monitor 未启返回 []。
+        any_of/all_of 展开为多条子条件，单条 done_when 返回 1 条。
+        """
+        tm = self.task_monitor
+        if tm is None:
+            return []
+        dw = tm._done_when.get(directive_id)
+        if not dw:
+            return []
+        kind = dw.get("kind")
+        if kind in ("any_of", "all_of"):
+            return [self._describe_condition(sub, directive_id, now) for sub in dw.get("subs", [])]
+        return [self._describe_condition(dw, directive_id, now)]
+
+    def _describe_condition(
+        self, dw: dict[str, Any], directive_id: str, now: float
+    ) -> dict[str, Any]:
+        """单条 done_when → {text, met, progress?}。
+
+        - unit_count_built_since: text="造 N 个 X"，progress={current, target}
+        - time_elapsed_since: text="N 秒后"，progress={current, target}（秒）
+        - 其它 kind: text=kind 描述，无 progress / met（UI 算不出，需 game_state）
+        """
+        tm = self.task_monitor
+        kind = dw.get("kind", "")
+        if kind == "unit_count_built_since" and tm is not None:
+            target = int(dw.get("value", 0))
+            ut = dw.get("unit_type", "")
+            ut_zh = self._UNIT_ZH.get(ut, ut)
+            current = int(tm._unit_built_counts.get(directive_id, 0))
+            return {
+                "text": f"造 {target} 个 {ut_zh}",
+                "met": current >= target,
+                "progress": {"current": current, "target": target, "unit": "个"},
+            }
+        if kind == "time_elapsed_since" and tm is not None:
+            target_s = int(dw.get("seconds", 0))
+            ref = dw.get("ref", "directive_issued")
+            issued = tm._issued_at.get(directive_id, 0.0)
+            elapsed = max(0, int(now - issued)) if ref == "directive_issued" else 0
+            return {
+                "text": f"{target_s} 秒后",
+                "met": elapsed >= target_s,
+                "progress": {"current": min(elapsed, target_s), "target": target_s, "unit": "秒"},
+            }
+        if kind == "tech_done":
+            up = dw.get("upgrade_id", "")
+            return {"text": f"完成升级 {up}", "met": False}
+        if kind == "target_destroyed":
+            return {"text": f"摧毁 {dw.get('target', '')}", "met": False}
+        if kind == "own_army_size_ratio":
+            return {"text": f"兵力比例 {dw.get('op', '>=')}{dw.get('value', 0)}", "met": False}
+        if kind == "vision_acquired":
+            return {"text": f"侦察到 {dw.get('area', '')}", "met": False}
+        if kind == "enemy_killed_in_area":
+            return {"text": f"歼敌 {dw.get('value', 0)} 于 {dw.get('area', '')}", "met": False}
+        if kind == "expansion_count":
+            return {"text": f"分矿数 {dw.get('op', '>=')}{dw.get('value', 0)}", "met": False}
+        return {"text": kind or "?", "met": False}
 
     def _push_snapshot(self, now: float) -> None:
         """推 snapshot（若 callback 已注入）。"""
@@ -762,17 +829,13 @@ class Director:
             self._submit_directives(ambiguous.result.directives, now)
 
     def _maybe_attach_task_monitor(self, submitted: Directive) -> None:
-        """P3.2: done_when 非空时把 directive 注册到 task_monitor。"""
+        """P3.2: done_when 非空时把 directive 注册到 task_monitor。
+
+        L4 production-type 永远不带 timeout_s（"造 N 个 X" 的完成条件就是个数，
+        LLM 偶尔会写 timeout_s=60 当兜底，但前期单位/科技 60s 造不完就误删；
+        没 done_when 时（"持续出叉子"）也不会 attach，自然只能手动 ×。
+        """
         if self.task_monitor is None:
-            return
-        # L4 production-type directives are standing orders — persist until player
-        # manually cancels (×). Ignore any done_when/timeout_s the LLM generates.
-        if submitted.type in {
-            DirectiveType.PRODUCTION_OVERRIDE,
-            DirectiveType.TECH_OVERRIDE,
-            DirectiveType.EXPANSION_OVERRIDE,
-            DirectiveType.STRUCTURE_OVERRIDE,
-        }:
             return
         dw = submitted.payload.done_when
         if dw is None:
@@ -780,11 +843,21 @@ class Director:
         from pydantic import BaseModel
 
         done_when_dict: dict[str, Any] = dw.model_dump() if isinstance(dw, BaseModel) else {}
+
+        timeout_s = submitted.payload.timeout_s
+        if submitted.type in {
+            DirectiveType.PRODUCTION_OVERRIDE,
+            DirectiveType.TECH_OVERRIDE,
+            DirectiveType.EXPANSION_OVERRIDE,
+            DirectiveType.STRUCTURE_OVERRIDE,
+        }:
+            timeout_s = None  # L4 production 不要时间兜底
+
         self.task_monitor.attach_directive(
             directive_id=submitted.id,
             done_when=done_when_dict,
             issued_at=submitted.issued_at,
-            timeout_s=submitted.payload.timeout_s,
+            timeout_s=timeout_s,
         )
 
     def _submit_directives(self, directives: list[Directive], now: float) -> None:

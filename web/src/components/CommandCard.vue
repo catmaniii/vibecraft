@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// 单张命令卡片（P0f Task 15）
-// - 按 status 染色：active 绿 / on_hold 黄 / pending 灰 / done 半透明
+// 单张命令卡片：
+// - 状态视觉区分：执行中绿 / 等待中橙 / pending 灰 / done 半透明
+//   执行中 vs 等待中 由 conditions 决定（任一未满足 → 等待中，全满足 / 无条件 → 执行中）
+// - conditions 列表：每条带 ✓/○ 图标 + 进度（造 2/4 个 叉子）
 // - revokable=true 时显示 × 按钮 → emit('revoke', card.id)
-// - 由 CommandCardStack (Task 15) 消费；CockpitView (Task 16) 转 WS revoke_directive 帧
 import { computed } from 'vue'
 import type { CommandCardView } from '@/types'
 
@@ -12,37 +13,58 @@ const emit = defineEmits<{
   revoke: [id: string]
 }>()
 
+// 是否所有条件都满足（无 conditions 或全 met=true）
+const allConditionsMet = computed(() => {
+  const cs = props.card.conditions
+  if (!cs || cs.length === 0) return true
+  return cs.every(c => c.met)
+})
+
+// 显示态：等待中（status=active 但有条件未满足）vs 执行中（无条件或全满足）
+const displayStatus = computed<'pending' | 'waiting' | 'executing' | 'on_hold' | 'done'>(() => {
+  if (props.card.status === 'done') return 'done'
+  if (props.card.status === 'pending') return 'pending'
+  if (props.card.status === 'on_hold') return 'on_hold'
+  // status === 'active'
+  if (allConditionsMet.value) return 'executing'
+  return 'waiting'
+})
+
 const statusLabel = computed(() => {
-  switch (props.card.status) {
-    case 'active':  return '执行中'
-    case 'on_hold': return '等待中'
-    case 'pending': return '等待生效'
-    case 'done':    return '已完成'
-    default:        return props.card.status
+  switch (displayStatus.value) {
+    case 'executing': return '执行中'
+    case 'waiting':   return '等待条件'
+    case 'on_hold':   return '已暂停'
+    case 'pending':   return '等待生效'
+    case 'done':      return '已完成'
+    default:          return ''
   }
 })
 
-// 卡片整体背景 + border
 const cardCls = computed(() => {
-  switch (props.card.status) {
-    case 'active':  return 'bg-success/10 border-success/30'
-    case 'on_hold': return 'bg-warn/10 border-warn/30'
-    case 'pending': return 'bg-muted/10 border-border'
-    case 'done':    return 'bg-surface-3/40 border-border/50 opacity-60'
-    default:        return 'bg-surface-3 border-border'
+  switch (displayStatus.value) {
+    case 'executing': return 'bg-success/10 border-success/40'
+    case 'waiting':   return 'bg-amber-500/10 border-amber-500/40'
+    case 'on_hold':   return 'bg-warn/10 border-warn/30'
+    case 'pending':   return 'bg-muted/10 border-border'
+    case 'done':      return 'bg-surface-3/40 border-border/50 opacity-60'
+    default:          return 'bg-surface-3 border-border'
   }
 })
 
-// status 标签文字色
 const statusCls = computed(() => {
-  switch (props.card.status) {
-    case 'active':  return 'text-success'
-    case 'on_hold': return 'text-warn'
-    case 'pending': return 'text-muted'
-    case 'done':    return 'text-muted'
-    default:        return 'text-muted'
+  switch (displayStatus.value) {
+    case 'executing': return 'text-success'
+    case 'waiting':   return 'text-amber-400'
+    case 'on_hold':   return 'text-warn'
+    default:          return 'text-muted'
   }
 })
+
+// 进度文本（兼顾计数和倒计时）："2/4 个" / "12/30 秒"
+function fmtProgress(c: { current: number; target: number; unit: string }): string {
+  return `${c.current}/${c.target} ${c.unit}`
+}
 </script>
 
 <template>
@@ -73,5 +95,24 @@ const statusCls = computed(() => {
       <span class="text-[11px] font-semibold" :class="statusCls">{{ statusLabel }}</span>
       <span v-if="card.status_reason" class="text-[11px] text-muted/80">— {{ card.status_reason }}</span>
     </div>
+
+    <!-- 条件清单（有 done_when 时显示） -->
+    <ul
+      v-if="card.conditions && card.conditions.length > 0"
+      class="mt-1 space-y-0.5"
+    >
+      <li
+        v-for="(cond, idx) in card.conditions"
+        :key="idx"
+        class="flex items-center gap-1.5 text-[11px]"
+        :class="cond.met ? 'text-success' : 'text-muted'"
+      >
+        <span class="font-mono w-3 shrink-0">{{ cond.met ? '✓' : '○' }}</span>
+        <span class="flex-1 min-w-0">{{ cond.text }}</span>
+        <span v-if="cond.progress" class="font-mono text-[10px] text-white/70">
+          {{ fmtProgress(cond.progress) }}
+        </span>
+      </li>
+    </ul>
   </div>
 </template>
