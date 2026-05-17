@@ -1,12 +1,13 @@
-# `docs/aliases/` —— SC2 各种族别名表
+# `docs/aliases/` —— SC2 各种族别名 + 通用术语
 
-VibeCraft LLM 解析的中央别名表。三个种族各一个 yaml：
+VibeCraft LLM 解析的中央别名表。
 
-| 文件 | 状态 | 启用 |
+| 文件 | 内容 | 状态 |
 |---|---|---|
-| `protoss.yaml` | ✅ 全 | MVP (v0.1) |
-| `terran.yaml` | 📝 占位 skeleton | v1.5 |
-| `zerg.yaml` | 📝 占位 skeleton | v1.5 |
+| `protoss.yaml` | 神族 building/unit/upgrade canonical id → aliases | ✅ MVP (v0.1) 启用 |
+| `terran.yaml` | 人族同上 | 📝 占位 skeleton（v1.5）|
+| `zerg.yaml` | 虫族同上 | 📝 占位 skeleton（v1.5）|
+| `system.yaml` | **跨种族**通用术语（地图位置 / 时钟方位 / 战术概念 / 经济概念 / 军事概念 / 情报视野）| 📝 已写,**加载逻辑未接入**(待 `build_glossary` 抽进 prompt) |
 
 ## yaml 格式
 
