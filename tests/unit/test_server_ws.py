@@ -12,6 +12,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from vibecraft.server.game_process import GameStatus
 from vibecraft.server.tokens import RoomRegistry
 from vibecraft.server.ws import WsConnection, make_ws_handler
 
@@ -77,7 +78,16 @@ class TestWsConnectionDispatch:
     def _make_conn(self) -> tuple[WsConnection, MagicMock]:
         registry = RoomRegistry(token="tok")
         ws = _make_ws_mock()
-        conn = WsConnection(ws, registry)
+        mock_gp = MagicMock()
+        mock_gp.is_running = False
+        mock_gp.status = GameStatus(sc2="idle", bot="idle")
+
+        async def _empty_events() -> Any:
+            return
+            yield  # makes this an async generator
+
+        mock_gp.raw_events = _empty_events
+        conn = WsConnection(ws, registry, game_process=mock_gp)
         return conn, ws
 
     async def test_invalid_json_does_not_raise(self) -> None:
