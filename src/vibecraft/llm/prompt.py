@@ -176,7 +176,7 @@ TacticalObjective verb 白名单（11 个，仅此 11 个）：
 - regroup   在指定点集结部队
 - split     分兵多路
 
-done_when 完成条件 kind 白名单（8 种基础 + 2 种复合）：
+done_when 完成条件 kind 白名单（8 种基础 + 7 种 P0d 扩展 + 2 种复合）：
 - unit_count_built_since  自指令下达以来产出某兵种数量达到阈值
 - tech_done               升级 / 科技研究完成
 - expansion_count         己方分基数量满足条件
@@ -185,6 +185,13 @@ done_when 完成条件 kind 白名单（8 种基础 + 2 种复合）：
 - vision_acquired         在指定区域保持视野 N 秒
 - enemy_killed_in_area    在指定区域击杀敌方单位数量满足条件
 - time_elapsed_since      自某时间点起经过 N 秒（ref: directive_issued / game_start）
+- structure_count         当前建筑存量满足条件（含 pending），区别 unit_count_built_since（增量）
+- own_unit_count          己方某兵种当前存量满足条件（含 pending）
+- supply_used             当前人口已用满足条件
+- supply_cap              当前人口上限满足条件
+- minerals                当前晶矿满足条件
+- gas                     当前瓦斯满足条件
+- worker_count            当前工人数满足条件
 - any_of                  [复合] 任意子条件满足即完成
 - all_of                  [复合] 所有子条件都满足才完成
 
@@ -194,6 +201,19 @@ done_when 语义规则：
 - L1（strategy_set）和 L3（unit_claim standing order）通常 done_when=null。
 - 每个 directive 只允许一个 done_when；复杂条件用 any_of / all_of 组合。
 - timeout_s 是兜底，无论 done_when 是否满足，超时后 directive 自动结束。
+
+====== L2 tactical_objective done_when 分流规则（A 类 / B 类） ======
+
+- A 系列 verb (attack / defend / retreat / hold / vision):
+  done_when **必须 None**。这些是"全军方向"覆盖，玩家通过 PWA 点 X 解除。
+  设 done_when 会被 task_monitor 立即判 done → bot 立刻回到 sharpy 默认决策，
+  跟玩家原意冲突。
+
+- B 系列 verb (harass / scout):
+  done_when **必须给**（打死 N 农民就回 → enemy_killed_in_area；
+  侦察到就回 → vision_acquired）。
+  unit_count_hint **必填**（玩家必须说"派 N 个 X"），没给数量 → 走 ambiguous，
+  不要 LLM 默认 N。
 
 ====== 指令的 4 层分类 (优先级金字塔) ======
 
@@ -219,12 +239,14 @@ L3 单兵 / Standing order (指定单位干啥, 可一次性可持久):
 - L3 done_when:一次性可加(如 "凤凰举完就回" = harass+done),
   standing order 通常 None (玩家撤销才完)
 
-L4 产能调整 (改造兵 / 升科技 / 开矿):
+L4 产能调整 (改造兵 / 升科技 / 开矿 / 补建筑):
 - "下个 BG 出 2 哨兵" → production_override(unit_type, count) +
   done_when=unit_count_built_since
 - "先研闪烁" → tech_override(upgrade_id) + done_when=tech_done
 - "开三矿" → expansion_override(target_count) +
   done_when=expansion_count(op=">=", value=3)
+- "家里补 8 BG / ramp 放 1 cannon" → structure_override(structure_type, target_count, location_hint?) +
+  done_when=structure_count
 - L4 必带 done_when
 
 判断规则:
@@ -401,6 +423,43 @@ def build_few_shot() -> str:
    selector + target 都给。如果玩家说"侦察一下 11 点"(没指定 unit),
    也可走顶层 scout(selector=None,bot 自选 idle probe);如果偏战术目标
    语义 "11 点那边查清楚" 可走 tactical_objective(verb=scout)。
+
+--- structure_override + A/B done_when 规则例示 ---
+
+例 23 (L4 补建筑 / structure_override): 「家里补到 8 BG」
+→ [structure_override: structure_type="Gateway", target_count=8, location_hint="main",
+   done_when={kind:"structure_count", structure_type:"Gateway", op:">=", value:8},
+   timeout_s: 180]
+注:structure_count 检查当前存量（含 pending），达到目标即 done。
+
+例 24 (L4 多建筑 / ramp 防御): 「ramp 放 2 cannon 1 BF」
+→ [structure_override: structure_type="PhotonCannon", target_count=2, location_hint="ramp",
+     done_when={kind:"structure_count", structure_type:"PhotonCannon", op:">=", value:2},
+     timeout_s: 120,
+   structure_override: structure_type="Forge", target_count=1, location_hint="ramp",
+     done_when={kind:"structure_count", structure_type:"Forge", op:">=", value:1},
+     timeout_s: 120]
+注:一句话含多建筑 → 拆成多条 structure_override directive。
+
+例 25 (A 类 done_when=None / 进攻): 「进攻对方自然」（A 类关键示范）
+→ [tactical_objective: verb="attack", target_area="enemy_natural",
+   done_when=None,
+   timeout_s=None]
+注:A 类 verb (attack / defend / retreat / hold / vision) done_when 必须 None。
+   task_monitor 设了 done_when 会立即判 done → bot 马上退回 sharpy 默认决策，
+   跟玩家原意冲突。玩家通过 PWA 点 X 解除，不靠 done_when 自动结束。
+
+例 26 (B 类 harass + done_when + unit_count_hint 必填): 「派 5 个凤凰去骚扰对方主基地」
+→ [tactical_objective: verb="harass", target_area="enemy_main",
+   unit_count_hint=5, unit_type_hint=["Phoenix"],
+   done_when={kind:"enemy_killed_in_area", area:"enemy_main", unit_type:"Probe", op:">=", value:5},
+   timeout_s: 90]
+注:B 类 verb (harass / scout) done_when 必须给；unit_count_hint 必填。
+
+例 27 (B 类无数量 → ambiguous): 「凤凰骚扰对面」
+→ confidence < 0.5, 空 directives list,
+   interpretation_zh="缺 unit_count_hint: 派几个凤凰去骚扰?"
+注:B 类必须给数量，LLM 不要假设默认值，没有数量 → 走 ambiguous。
 """
 
 
@@ -491,7 +550,8 @@ def build_tool_schema() -> dict[str, Any]:
                                     "DirectiveType enum value: strategy_set / "
                                     "strategy_cancel / "
                                     "production_override / tech_override / "
-                                    "expansion_override / engagement_constraint / "
+                                    "expansion_override / structure_override / "
+                                    "engagement_constraint / "
                                     "tactical_objective / "
                                     "unit_claim / scout / move / build_at / unit_release"
                                 ),
