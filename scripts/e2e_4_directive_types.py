@@ -329,17 +329,14 @@ def _verify_log_patterns(
         return True, "(no log verify)"
 
     # 构建 grep 目标字符串：所有 events payload + snapshots 的 JSON dump
+    import contextlib
     corpus_parts: list[str] = []
     for _ts, _k, payload in events:
-        try:
+        with contextlib.suppress(Exception):
             corpus_parts.append(json.dumps(payload, ensure_ascii=False))
-        except Exception:
-            pass
     for snap in snapshots:
-        try:
+        with contextlib.suppress(Exception):
             corpus_parts.append(json.dumps(snap, ensure_ascii=False))
-        except Exception:
-            pass
     corpus = "\n".join(corpus_parts)
 
     missing: list[str] = []
@@ -414,11 +411,10 @@ async def run_one_case(
             if sc2 or bot:
                 if str(sc2) == "playing":
                     seen_playing.set()
-                if str(sc2) in ("crashed", "ended"):
-                    if sc2_ended_at[0] is None:
-                        sc2_ended_at[0] = elapsed
-                        log.info("[+%.1fs] sc2=%s bot=%s detail=%s (drain %.1fs)", elapsed, sc2, bot, msg.get("detail", ""), DRAIN_AFTER_END_S)
-                        bot_crashed.set()
+                if str(sc2) in ("crashed", "ended") and sc2_ended_at[0] is None:
+                    sc2_ended_at[0] = elapsed
+                    log.info("[+%.1fs] sc2=%s bot=%s detail=%s (drain %.1fs)", elapsed, sc2, bot, msg.get("detail", ""), DRAIN_AFTER_END_S)
+                    bot_crashed.set()
             elif kind == "snapshot":
                 frame = msg.get("frame") or {}
                 snapshots.append(frame)

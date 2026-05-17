@@ -20,8 +20,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibecraft.bot.event_bus import EventBus
-
-logger = logging.getLogger(__name__)
 from vibecraft.bot.facade import Sc2Facade, UnitRole
 from vibecraft.directives.board import (
     BoardEvent,
@@ -62,6 +60,8 @@ from vibecraft.logging_.types import Event, EventKind, LogStream
 if TYPE_CHECKING:
     from vibecraft.bot.task_monitor import TaskMonitor
     from vibecraft.strategy.library import StrategyLibrary
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

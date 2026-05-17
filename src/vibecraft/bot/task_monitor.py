@@ -308,7 +308,6 @@ class TaskMonitor:
 
         # 遍历当前 attach 的所有 directive
         for directive_id in list(self._issued_at.keys()):
-            issued_at = self._issued_at[directive_id]
             timeout_s = self._timeout_s.get(directive_id)
             done_when = self._done_when.get(directive_id, {})
 
@@ -695,7 +694,7 @@ def _check_all_of(
 def _resolve_typeid(name: str) -> Any:
     """str → UnitTypeId enum；未知或 sc2 不可用返回 None。"""
     try:
-        from sc2.ids.unit_typeid import UnitTypeId  # noqa: PLC0415
+        from sc2.ids.unit_typeid import UnitTypeId
 
         return UnitTypeId[name.upper()]
     except (KeyError, ImportError):
