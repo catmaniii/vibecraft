@@ -18,6 +18,7 @@ import BotDecisionCard from '@/components/BotDecisionCard.vue'
 import PendingForceCard from '@/components/PendingForceCard.vue'
 import StandingOrdersCard from '@/components/StandingOrdersCard.vue'
 import ProductionOverridesCard from '@/components/ProductionOverridesCard.vue'
+import TacticsCard from '@/components/TacticsCard.vue'
 import type {
   SnapshotFrame,
   EventFrame,
@@ -70,6 +71,7 @@ const emit = defineEmits<{
   cancelForceStrategy: []
   revokeStanding: [id: string]
   revokeProduction: [id: string]
+  revokeTactics: [id: string]
 }>()
 
 // 触摸板 emit absolute 已是绝对坐标(基于按下时的基准 + dx/dy),直接转 viewMove
@@ -147,6 +149,11 @@ function fmtTs(ts: number): string {
         <StandingOrdersCard
           :orders="props.standingOrders"
           @revoke-order="(id) => emit('revokeStanding', id)"
+        />
+
+        <TacticsCard
+          :tactics="props.activeTactics"
+          @revoke="(id) => emit('revokeTactics', id)"
         />
 
         <ProductionOverridesCard

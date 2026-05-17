@@ -104,6 +104,7 @@ const sc2Label = computed(() => {
         @cancel-force-strategy="cancelForceStrategy"
         @revoke-standing="revokeDirective"
         @revoke-production="revokeDirective"
+        @revoke-tactics="revokeDirective"
       />
 
       <!-- 其他状态 → LaunchView -->
