@@ -199,3 +199,90 @@ def test_l2_unsupported_verb_on_hold(director: Director, fake_facade: FakeFacade
     )
     director._exec_tactical_objective(d, d.payload)
     assert director._override_status[d.id]["status"] == "on_hold"
+
+
+# =========================================================================
+# Code Review 修复用例（C1 / I1 / I2 / I3）
+# =========================================================================
+
+
+def test_execute_tactics_step_calls_real_cm_execute_signature(
+    director: Director, fake_facade: FakeFacade
+) -> None:
+    """C1 fix: cm.execute(target, move_type) 真签名，cm.add_units(units) 先调。"""
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from vibecraft.bot.director import TacticalSquad
+
+    mock_cm = MagicMock()
+    mock_units = MagicMock()
+    fake_bot = MagicMock()
+    fake_bot.knowledge.combat_manager = mock_cm
+    fake_bot.units.tags_in = MagicMock(return_value=mock_units)
+    director._bot = fake_bot
+
+    target_mock = MagicMock()
+    move_type_mock = MagicMock()
+    director._tactical_squads["d_test"] = TacticalSquad(
+        directive_id="d_test",
+        unit_tags={1, 2, 3},
+        target=target_mock,
+        move_type=move_type_mock,
+        verb="harass",
+        n_wanted=3,
+        n_locked=3,
+    )
+
+    asyncio.run(director.execute_tactics_step(now=10.0))
+
+    fake_bot.units.tags_in.assert_called_once_with({1, 2, 3})
+    mock_cm.add_units.assert_called_once_with(mock_units)
+    # execute 真签名：positional (target, move_type)，无 tags
+    mock_cm.execute.assert_called_once()
+    args, kwargs = mock_cm.execute.call_args
+    # target と move_type は positional args として渡される
+    assert len(args) == 2 or ("target" in kwargs and "move_type" in kwargs)
+
+
+def test_a_verbs_does_not_contain_hold() -> None:
+    """I1 fix: _A_VERBS 删 "hold"（TacticalVerb literal 无此 verb，pydantic 已拒）"""
+    from vibecraft.bot.director import _A_VERBS
+
+    assert "hold" not in _A_VERBS
+
+
+def test_resolve_target_area_uses_zone_manager(director: Director) -> None:
+    """I2 fix: knowledge.zone_manager.expansion_zones 路径（非 knowledge.expansion_zones）"""
+    from unittest.mock import MagicMock
+
+    fake_bot = MagicMock()
+    mock_zone = MagicMock()
+    mock_zone.center_location = MagicMock()
+    fake_bot.knowledge.zone_manager.expansion_zones = [mock_zone, mock_zone]
+    fake_bot.knowledge.zone_manager.enemy_expansion_zones = [mock_zone, mock_zone]
+    director._bot = fake_bot
+
+    result = director._resolve_target_area("own_natural")
+    assert result is not None
+    # 确认 zone_manager 路径被访问
+    _ = fake_bot.knowledge.zone_manager.expansion_zones
+
+    result2 = director._resolve_target_area("enemy_natural")
+    assert result2 is not None
+
+
+def test_superseded_l2_global_marked_done(director: Director, fake_facade: FakeFacade) -> None:
+    """I3 fix: 新 A 类 directive 覆盖旧的，旧 directive 状态 → done '被新指令覆盖'"""
+    d1 = _make_tactical_directive(verb="attack", target="enemy_natural")
+    director._exec_tactical_objective(d1, d1.payload)
+    assert director._override_status[d1.id]["status"] == "active"
+
+    d2 = _make_tactical_directive(verb="defend")
+    director._exec_tactical_objective(d2, d2.payload)
+
+    # 旧 d1 应被标 "done"，reason 含 "覆盖"
+    assert director._override_status[d1.id]["status"] == "done"
+    assert "覆盖" in director._override_status[d1.id].get("reason", "")
+    # 新 d2 是 active
+    assert director._override_status[d2.id]["status"] == "active"

@@ -98,7 +98,7 @@ class TacticalSquad:
 
 
 # A 类 verb（全军 override flag 路径）
-_A_VERBS: frozenset[str] = frozenset({"attack", "defend", "retreat", "hold", "vision"})
+_A_VERBS: frozenset[str] = frozenset({"attack", "defend", "retreat", "vision"})
 # B 类 verb（squad 抢占路径）；raze/regroup/split/drop MVP 留 on_hold
 _B_VERBS: frozenset[str] = frozenset({"harass", "scout"})
 
@@ -198,6 +198,7 @@ class Director:
         self._tactical_squads: dict[str, TacticalSquad] = {}
         self._tactical_overrides: dict[str, str] = {}
         self._current_l2_global_id: str | None = None
+        self._current_l2_global_directive: Directive | None = None
 
     # ------------------------------------------------------------------
     # snapshot / event 回调注入（P0 / P1）
@@ -972,14 +973,110 @@ class Director:
         return False
 
     def revoke_directive(self, directive_id: str, now: float) -> bool:
-        """统一撤销接口（P2）：先尝试 standing_orders，再尝试 production_overrides。
+        """统一撤销接口（P2/P0g Task 11）：L3 standing → L4 production → L2 tactical → L1 strategy。
 
         ws.py 和 bot._tick_view_channel 的 revoke_directive 分支改调此方法，
         不再直接调用 revoke_standing_order。
         """
         if self.revoke_standing_order(directive_id, now):
             return True
-        return self.revoke_production_override(directive_id, now)
+        if self.revoke_production_override(directive_id, now):
+            return True
+        if self.revoke_tactical(directive_id, now):
+            return True
+        return self.revoke_strategy(directive_id, now)
+
+    def revoke_tactical(self, directive_id: str, now: float) -> bool:
+        """L2 撤销：清 override flag (A 类) 或释放 squad unit (B 类)。
+
+        A 类（attack/defend/retreat 等）：清 facade override flag，重置 _current_l2_global_id。
+        B 类（harass/scout）：遍历 squad.unit_tags，调 facade.release_unit_role 还给 sharpy，
+        然后从 _tactical_squads 移除。
+        两类可共存（同一 directive 极罕见，但防御处理）。
+        """
+        cleared = False
+
+        # A 类：override flag 路径
+        if directive_id in self._tactical_overrides:
+            self._tactical_overrides.pop(directive_id, None)
+            if self._current_l2_global_id == directive_id:
+                try:
+                    self.facade.set_attack_target_override(None)
+                    self.facade.set_combat_intent_override(None)
+                except Exception as exc:  # pragma: no cover
+                    logger.debug("revoke_tactical facade clear fail: %s", exc)
+                self._current_l2_global_id = None
+            cleared = True
+
+        # B 类：squad 路径
+        if directive_id in self._tactical_squads:
+            squad = self._tactical_squads.pop(directive_id)
+            for tag in squad.unit_tags:
+                try:
+                    self.facade.release_unit_role(tag)
+                except Exception as exc:  # pragma: no cover
+                    logger.debug("revoke_tactical release_unit_role(%s) fail: %s", tag, exc)
+            cleared = True
+
+        if cleared:
+            self._override_status.pop(directive_id, None)
+            # board.revoke 若找不到此 id 也不报错（tactical 可能未经 board.submit）
+            try:
+                self.board.revoke(directive_id, now)
+            except Exception as exc:  # pragma: no cover
+                logger.debug("revoke_tactical board.revoke fail: %s", exc)
+            self._push_event(
+                {
+                    "kind": "directive.revoked",
+                    "ts": now,
+                    "payload": {"directive_id": directive_id, "reason": "player_x"},
+                }
+            )
+            self._push_snapshot(now)
+
+        return cleared
+
+    def revoke_strategy(self, directive_id: str, now: float) -> bool:
+        """L1 撤销：清 board.slots[stage] + facade.set_build("sustain")。
+
+        接受两种 directive_id 形式：
+        - "l1_{stage.value}" 占位 id（Task 10 约定），如 "l1_midgame"
+        - 无前缀时尝试按 slot 匹配（当前 StrategySlot 无 directive_id 字段，不支持）
+        """
+        import contextlib
+
+        target_stage: StageKind | None = None
+
+        if directive_id.startswith("l1_"):
+            suffix = directive_id[3:]
+            try:
+                target_stage = StageKind(suffix)
+            except Exception:
+                return False
+        else:
+            # StrategySlot 当前没有 directive_id 字段，无法按真实 id 匹配
+            return False
+
+        if target_stage is None:
+            return False
+
+        if self.board.slots.get(target_stage) is None:
+            return False
+
+        self.board.slots[target_stage] = None
+
+        with contextlib.suppress(Exception):
+            self.facade.set_build("sustain")
+
+        self._push_event(
+            {
+                "kind": "directive.revoked",
+                "ts": now,
+                "payload": {"directive_id": directive_id, "reason": "player_x"},
+            }
+        )
+        self._push_snapshot(now)
+        return True
 
     def _dispatch_cancel(self, directive: Directive, now: float) -> None:
         """兼容入口（已废弃旁路）。转发到 _apply_strategy_cancel。
@@ -1325,7 +1422,7 @@ class Director:
         if hint is None:
             return None
         try:
-            zones = self._bot.knowledge.expansion_zones
+            zones = self._bot.knowledge.zone_manager.expansion_zones
         except Exception:
             return None
         if hint == "main":
@@ -1920,10 +2017,14 @@ class Director:
     def _exec_l2_global(
         self, d: Directive, payload: TacticalObjectivePayload
     ) -> None:
-        """A 类：attack/defend/retreat/hold/vision → facade override flag。"""
-        # 清前一条 active L2 global
+        """A 类：attack/defend/retreat/vision → facade override flag。"""
+        # 清前一条 active L2 global；把旧 directive 标 done（被新指令覆盖）
         if self._current_l2_global_id and self._current_l2_global_id != d.id:
-            self._tactical_overrides.pop(self._current_l2_global_id, None)
+            old_id = self._current_l2_global_id
+            self._tactical_overrides.pop(old_id, None)
+            old_d = self._current_l2_global_directive
+            if old_d is not None and old_d.id == old_id:
+                self._set_override_status(old_d, "done", "被新指令覆盖")
         point = self._resolve_target_area(payload.target_area)
         try:
             self.facade.set_attack_target_override(point)
@@ -1934,6 +2035,7 @@ class Director:
             return
         self._tactical_overrides[d.id] = payload.verb
         self._current_l2_global_id = d.id
+        self._current_l2_global_directive = d
         target_desc = payload.target_area or ""
         self._set_override_status(d, "active", f"{payload.verb} {target_desc}".strip())
 
@@ -2000,32 +2102,53 @@ class Director:
                 return self._bot.enemy_start_locations[0]
             if area == "enemy_natural":
                 try:
-                    return self._bot.knowledge.enemy_expansion_zones[1].center_location
+                    return self._bot.knowledge.zone_manager.enemy_expansion_zones[1].center_location
                 except Exception:
                     return self._bot.enemy_start_locations[0]
             if area == "own_main":
-                return self._bot.knowledge.expansion_zones[0].center_location
+                return self._bot.knowledge.zone_manager.expansion_zones[0].center_location
             if area == "own_natural":
-                zones = self._bot.knowledge.expansion_zones
+                zones = self._bot.knowledge.zone_manager.expansion_zones
                 return zones[1].center_location if len(zones) > 1 else zones[0].center_location
         except Exception:
             return None
         return None
 
+    def _cached_combat_manager(self) -> Any:
+        """缓存 sharpy combat_manager 引用（lazy lookup once）。
+
+        真 sharpy 路径：knowledge.combat_manager（knowledge.py:59）。
+        """
+        if hasattr(self, "_cm_cache"):
+            return self._cm_cache
+        cm = None
+        try:
+            cm = self._bot.knowledge.combat_manager  # type: ignore[union-attr]
+        except Exception as exc:
+            logger.warning("combat_manager 不可用 (sharpy 接口不一致?): %s", exc)
+        self._cm_cache: Any = cm
+        return cm
+
     async def execute_tactics_step(self, now: float) -> None:
-        """每 sharpy step 调，给 active squad 派活（GroupCombatManager）。"""
+        """每 sharpy step 调，给 active squad 派活（GroupCombatManager）。
+
+        真 sharpy 签名：cm.add_units(units: Units)，然后 cm.execute(target, move_type)。
+        add_units 每 tick 都要调（execute 内部会 clear _tags）。
+        """
         if not self._tactical_squads:
             return
         if self._bot is None:
             return
+        cm = self._cached_combat_manager()
+        if cm is None:
+            return
         for squad in list(self._tactical_squads.values()):
             try:
-                cm = getattr(self._bot, "combat_manager", None) or getattr(
-                    self._bot, "group_combat", None
-                )
-                if cm is None:
+                units = self._bot.units.tags_in(squad.unit_tags)
+                if not units:
                     continue
-                cm.execute(list(squad.unit_tags), squad.target, squad.move_type)
+                cm.add_units(units)
+                cm.execute(squad.target, squad.move_type)
             except Exception as exc:
                 logger.debug(
                     "execute_tactics_step squad %s fail: %s", squad.directive_id[:8], exc
