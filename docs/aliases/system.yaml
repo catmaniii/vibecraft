@@ -36,25 +36,25 @@
 map_terms:
   main:
     display_zh: "主基地"
-    aliases: [main, main base, 主基地, 主矿, 老家, 一矿, 起手矿, 第一个基地, Main]
+    aliases: [main, main base, 主基地, 主矿, 家里, 自己家, 老家, 一矿, 第一个基地, Main]
     desc: "玩家开局的起始基地区域"
     maps_to_named_spot: "main"
 
   natural:
     display_zh: "二矿"
-    aliases: [natural, nat, 二矿, 二基, 分基, 自然分矿, 自然扩张, 离家最近的矿, Natural]
+    aliases: [natural, nat, 二矿, 二基地, 分基, 离家最近的矿, Natural]
     desc: "离主基地最近的扩张点,通常第一个开的分基"
     maps_to_named_spot: "natural"
 
   third:
     display_zh: "三矿"
-    aliases: [third, 3rd, 三矿, 三基, 第三矿, 第三基, Third]
+    aliases: [third, 3rd, 三矿, 三基地, 第三矿, 第三基, Third]
     desc: "主基地 + 二矿之后的第三个扩张点"
     maps_to_named_spot: "third"
 
   fourth:
     display_zh: "四矿"
-    aliases: [fourth, 4th, 四矿, 四基]
+    aliases: [fourth, 4th, 四矿, 四基地]
     desc: "第四个扩张点"
 
   ramp:
@@ -90,13 +90,13 @@ map_terms:
     desc: "中立 Xel'Naga 瞭望塔,被任何单位占据时提供大范围视野"
 
   mineral_line:
-    display_zh: "矿线"
-    aliases: [mineral line, mining line, 矿线, 农民线, 采矿区]
+    display_zh: "矿区"
+    aliases: [mineral line, mining line, 矿区, 采矿区]
     desc: "基地旁农民采矿的区域,是骚扰高优先目标"
 
   enemy_main:
     display_zh: "敌方主基地"
-    aliases: [enemy main, opponent's main, 对方主基地, 敌方主矿, 对面老家, 他家]
+    aliases: [enemy main, opponent's main, 对方主基地, 敌方主矿, 对面家里, 对面老家, 他家]
     desc: "敌方起始基地"
     maps_to_named_spot: "enemy_main"
 
@@ -163,7 +163,7 @@ tactical_concepts:
 
   rush:
     display_zh: "rush"
-    aliases: [rush, 速攻, 早压, 抢攻, 抢 rush, 抢节奏, 6 池 rush, cannon rush, 炮台 rush]
+    aliases: [rush, 速攻, 快攻, 抢攻, 抢 rush, 抢节奏, 6 池 rush, cannon rush, 炮台 rush, 光炮 rush]
     desc: "优化产能在指定时间点用早期军队压制对手"
 
   push:
@@ -174,7 +174,7 @@ tactical_concepts:
 
   harass:
     display_zh: "骚扰"
-    aliases: [harass, harassment, 骚扰, 拍脸, 偷, 揉, 拨, 凤凰提农民, 提农民, 黑兵, 摸黑, 偷农民, 偷家, 拆农民]
+    aliases: [harass, harassment, 骚扰, 拍脸, 偷, 摸黑, 偷农民, 偷家, 拆农民]
     desc: "小股高机动单位骚扰对方经济(农民/矿线),不主求大规模交战"
     routes_to: "tactical_objective(verb=harass)"
 
@@ -185,23 +185,23 @@ tactical_concepts:
     routes_to: "tactical_objective(verb=drop)"
 
   proxy:
-    display_zh: "前置 / proxy"
-    aliases: [proxy, 前置, 前哨, 偷家建筑, 提前在敌方家门口造, proxy 兵营]
+    display_zh: "野建筑/ 前置 / proxy"
+    aliases: [proxy, 前置, 前哨, 野建筑, 提前在敌方家门口造, proxy 兵营]
     desc: "在敌方基地附近建造生产建筑,缩短进攻路程"
 
   contain:
-    display_zh: "围控"
-    aliases: [contain, 围控, 卡门口, 关门口, 围, 封, 困死, 卡死出口]
+    display_zh: "限制出门"
+    aliases: [contain, 限制出门, 堵在门口, 关门口, 围, 封, 困死, 卡死出口]
     desc: "在敌方门口布置军队阻止他扩张/出门"
 
   base_trade:
-    display_zh: "拆家互换"
-    aliases: [base trade, base race, 拆家, 互换基地, 互拆, 互相拆家, 拆家流]
+    display_zh: "换家"
+    aliases: [base trade, base race, 换家, 互换基地, 互拆, 互相拆家, 换家流]
     desc: "双方都不防守,比谁先拆光对方建筑"
 
   turtle:
     display_zh: "龟缩"
-    aliases: [turtle, 龟缩, 龟壳, 守缩, 死守, 完全防御]
+    aliases: [turtle, 龟缩, 龟壳, 防守, 全防流, 死守, 完全防御]
     desc: "全程不出门,专心运营和升级,等大后期"
 
   kite:
@@ -257,13 +257,13 @@ economy_concepts:
     desc: "Terran=Supply / Zerg=Control / Protoss=Psi,生产兵的人口资源"
 
   supply_block:
-    display_zh: "人口堵了"
-    aliases: [supply block, supply blocked, 人口堵了, 卡人口, 人口爆了, 人口慢了]
+    display_zh: "卡人口"
+    aliases: [supply block, supply blocked, 人口卡了, 卡人口, 人口爆了, 人口慢了]
     desc: "人口达上限无法再造单位"
 
   mineral:
-    display_zh: "晶矿 / 钱"
-    aliases: [mineral, minerals, money, cash, 晶矿, 钱, 矿, 蓝水晶, 矿钱]
+    display_zh: "水晶 / 钱"
+    aliases: [mineral, minerals, money, cash, 水晶, 钱, 矿, 蓝水晶, 矿钱]
     desc: "基础资源,蓝色"
 
   gas:
@@ -288,7 +288,7 @@ economy_concepts:
 
 military_concepts:
   army:
-    display_zh: "军队"
+    display_zh: "部队"
     aliases: [army, 军队, 部队, 兵, 大部队, 主力, 军团]
     desc: "玩家所有战斗单位的统称"
 
@@ -336,7 +336,7 @@ military_concepts:
     desc: "正面交战双方军队"
 
   disengage:
-    display_zh: "脱战"
+    display_zh: "脱离战斗"
     aliases: [disengage, pull out, 脱战, 撤离, 脱离接触, 拉出来]
     desc: "中途撤出战斗"
 
