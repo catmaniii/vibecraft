@@ -73,7 +73,7 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
             # ---------- build order 主线 ----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
-                GridBuilding(UnitTypeId.BELON, 1),
+                GridBuilding(UnitTypeId.PYLON, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
                 BuildGas(1),
                 GridBuilding(UnitTypeId.GATEWAY, 1),
@@ -83,7 +83,7 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 21),
                 BuildGas(2),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 22),
-                GridBuilding(UnitTypeId.BELON, 1),
+                GridBuilding(UnitTypeId.PYLON, 1),
 
                 # 进入"折跃 + 科技 + 暴 Immortal"阶段
                 BuildOrder(

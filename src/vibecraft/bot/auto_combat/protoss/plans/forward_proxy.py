@@ -85,7 +85,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             from sharpy.managers.core.roles import UnitTask
 
             # 已造好检测(在 proxy 周围 14 格内有 BE+BG)
-            py_at_proxy = self.ai.structures(UnitTypeId.BELON).closer_than(14, self.proxy_location)
+            py_at_proxy = self.ai.structures(UnitTypeId.PYLON).closer_than(14, self.proxy_location)
             bg_at_proxy = self.ai.structures.of_type(
                 {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
             ).closer_than(14, self.proxy_location)
@@ -127,11 +127,11 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
 
             # 正常推进:没 BE → 造 BE
             if not py_at_proxy.exists:
-                if self.ai.can_afford(UnitTypeId.BELON) and not self._py_ordered:
-                    ok = worker.build(UnitTypeId.BELON, self.proxy_location)
+                if self.ai.can_afford(UnitTypeId.PYLON) and not self._py_ordered:
+                    ok = worker.build(UnitTypeId.PYLON, self.proxy_location)
                     if ok:
                         self._py_ordered = True
-                        logger.info("ForwardSupport ordered BELON at %s", self.proxy_location)
+                        logger.info("ForwardSupport ordered PYLON at %s", self.proxy_location)
                     return False
                 if worker.is_idle:
                     worker.move(self.proxy_location)

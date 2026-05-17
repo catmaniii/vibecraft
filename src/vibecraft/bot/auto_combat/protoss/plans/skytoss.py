@@ -101,7 +101,7 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             # Templar Archives（HT/Storm 前置）
             Step(
                 UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
-                GridBuilding(UnitTypeId.TEMPLARARCHIVES, 1),
+                GridBuilding(UnitTypeId.TEMPLARARCHIVE, 1),
             ),
             # 补到 4 Stargate（持续 Carrier 产能）
             Step(
@@ -138,7 +138,7 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             ),
             # Psi Storm（HT 关键技能）
             Step(
-                UnitReady(UnitTypeId.TEMPLARARCHIVES, 1),
+                UnitReady(UnitTypeId.TEMPLARARCHIVE, 1),
                 Tech(UpgradeId.PSISTORMTECH),
             ),
             # Tempest range upgrade（FleetBeacon，加 Tempest 射程，慢拆 turtle 用）
@@ -160,7 +160,7 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             ),
             # HT 持续 train（target 5，sharpy 自动合 2 HT → Archon）
             Step(
-                UnitReady(UnitTypeId.TEMPLARARCHIVES, 1),
+                UnitReady(UnitTypeId.TEMPLARARCHIVE, 1),
                 ProtossUnit(UnitTypeId.HIGHTEMPLAR, 5),
             ),
             # Tempest 后期补：6+ Carrier 后开始（反 lategame air）
