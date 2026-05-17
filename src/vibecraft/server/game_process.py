@@ -638,7 +638,13 @@ class GameProcess:
         self._terminate_and_join()
 
     def _terminate_and_join(self) -> None:
-        """强杀子进程（terminate + join）。"""
+        """强杀子进程（terminate + join）+ 清理 grandchild SC2_x64.exe 孤儿。
+
+        Windows 上 multiprocessing.Process.terminate() 走 TerminateProcess 强杀,
+        子进程没机会执行 atexit / sc2.kill_switch → python-sc2 spawn 的
+        SC2_x64.exe 成孤儿继续跑。显式 psutil kill SC2_x64 兜底,避免 service
+        长跑或 e2e 测试堆积一堆 SC2 窗口。
+        """
         if self._proc is None:
             return
         try:
@@ -651,6 +657,15 @@ class GameProcess:
         except Exception as exc:
             self._log.warning("game_process_terminate_error", error=str(exc))
         finally:
+            # 兜底 kill SC2_x64 孤儿(grandchild,Python terminate 不到)
+            try:
+                from vibecraft.bot.watchdog import kill_sc2_processes
+
+                killed = kill_sc2_processes()
+                if killed:
+                    self._log.info("game_process_killed_sc2_orphans", count=killed)
+            except Exception as exc:
+                self._log.warning("game_process_kill_sc2_error", error=str(exc))
             self._proc = None
             self._up_q = None
             self._down_q = None

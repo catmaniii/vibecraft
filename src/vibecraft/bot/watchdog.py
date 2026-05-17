@@ -26,8 +26,15 @@ _STALL_THRESHOLD_S = 30.0
 _HANG_EXIT_CODE = 87  # 任意约定值，父进程可识别
 
 
-def _kill_sc2_processes() -> int:
-    """Kill 所有 SC2_x64.exe 进程。返回 kill 数。"""
+def kill_sc2_processes() -> int:
+    """Kill 所有 SC2_x64.exe 进程。返回 kill 数。
+
+    公开 API,driver/GameProcess/watchdog 共用。**孤儿 grandchild 兜底**:
+    python-sc2 拉的 SC2_x64.exe 是 GameProcess 子进程的 grandchild,
+    `multiprocessing.Process.terminate()` 走 Windows TerminateProcess 强杀,
+    子进程没机会执行 atexit / sc2.kill_switch → SC2_x64 成孤儿。所有
+    "强制结束 game session" 路径都必须显式 kill 兜底。
+    """
     killed = 0
     try:
         import psutil
@@ -80,7 +87,7 @@ class HangWatchdog:
         stall_threshold_s: float = _STALL_THRESHOLD_S,
         check_interval_s: float = _CHECK_INTERVAL_S,
         on_hang: Callable[[], None] | None = None,
-        kill_sc2: Callable[[], int] = _kill_sc2_processes,
+        kill_sc2: Callable[[], int] = kill_sc2_processes,
         exit_fn: Callable[[int], None] | None = None,
     ) -> None:
         self._get_bot_time = get_bot_time

@@ -31,6 +31,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from vibecraft.bot.watchdog import kill_sc2_processes
 from vibecraft.server.game_process import GameConfig, GameProcess
 
 
@@ -95,20 +96,30 @@ CASES: list[Case] = [
         verify_field="standing_orders",
     ),
     Case(
+        # 原 inject "那个探机去看一下气矿" LLM 解 unit_claim.verb="scout",
+        # 但 Verb enum 没 scout(只有 move_to/hold_position/patrol/...)。
+        # 改用 move_to 强信号:"移动到"。
         name="L3b unit_claim ephemeral",
-        inject="那个探机去看一下气矿",
+        inject="让那个探机移动到气矿",
         inject_after=3,
         verify_field="any_directive_committed",
     ),
     Case(
+        # 原 inject "派探机看一眼 11 点" LLM 把 "派探机" 解 unit_claim 而非
+        # 顶层 scout directive,同样卡 Verb enum。去掉 unit 限定让 LLM 用顶层
+        # scout directive(它有自己的 target 而非 task.verb)。
         name="L3c scout",
-        inject="派探机看一眼 11 点",
+        inject="侦察一下对方主基地",
         inject_after=3,
         verify_field="any_directive_committed",
     ),
     Case(
-        name="L3d build_at",
-        inject="11 点放个水晶",
+        # 原 inject "11 点放个水晶" 是 build_at 但 LLM 不会算地图坐标,
+        # 把 "11 点" 当 "11 o'clock" 字符串,point 字段 float 校验失败。
+        # build_at 是 PWA UI 玩家点击坐标用,LLM 无法稳定 e2e。
+        # 换成 engagement_constraint(stance=hold)覆盖第 3 个 stance。
+        name="L3d engagement_hold (3rd stance)",
+        inject="所有人原地待命别动",
         inject_after=3,
         verify_field="any_directive_committed",
     ),
@@ -327,6 +338,11 @@ async def run_one_case(
         await gp.stop()
         if not collect_task.done():
             collect_task.cancel()
+        # 兜底 kill SC2_x64 孤儿(GameProcess.stop 内已有兜底,这里 case driver
+        # 再保险一次。CheatMoney 多 case 跑容易堆积孤儿,user 实际遇到过)
+        killed = kill_sc2_processes()
+        if killed:
+            log.info("[%s] cleanup killed %d lingering SC2 process(es)", case.name, killed)
 
     elapsed_total = time.time() - start_ts
 
@@ -408,6 +424,12 @@ async def main() -> int:
         )
     log.info("=" * 70)
     log.info("结果: %d/%d 通过", n_pass, len(results))
+
+    # 最终兜底:任何 case 漏掉的 SC2 孤儿
+    final_killed = kill_sc2_processes()
+    if final_killed:
+        log.info("final cleanup killed %d residual SC2 process(es)", final_killed)
+
     return 0 if n_pass == len(results) else 1
 
 

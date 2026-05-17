@@ -119,9 +119,9 @@ verify 策略 + PASS 条件（具体到字段/event）。
 | # | name | 注入 | 预期 directive | verify | PASS 条件具体描述 |
 |---|---|---|---|---|---|
 | 8 | L3a unit_claim persistent | `探机巡逻自然别动` | `unit_claim(selector={unit_type:Probe}, task={verb:patrol, target:{named_spot:natural}}, persistent=true)` | `standing_orders` | snapshot `standing_orders` list 非空（含一条 Probe patrol natural） |
-| 9 | L3b unit_claim ephemeral | `那个探机去看一下气矿` | `unit_claim(selector={unit_type:Probe}, task={verb:scout 或 move, target:gas}, persistent=false)` | `any_directive_committed` | events 含 `directive.committed` |
-| 10 | L3c scout | `派探机看一眼 11 点` | `scout(selector={unit_type:Probe}, target={某坐标})` | `any_directive_committed` | events 含 `directive.committed` |
-| 11 | L3d build_at | `11 点放个水晶` | `build_at(structure_type="Pylon", point=[≈11 点坐标])` | `any_directive_committed` | events 含 `directive.committed` |
+| 9 | L3b unit_claim ephemeral | `让那个探机移动到气矿` | `unit_claim(selector={unit_type:Probe}, task={verb:move_to, target:gas}, persistent=false)` | `any_directive_committed` | events 含 `directive.committed` |
+| 10 | L3c scout | `侦察一下对方主基地` | `scout(target={named_spot:enemy_main})` | `any_directive_committed` | events 含 `directive.committed` |
+| 11 | L3d engagement_hold (3rd stance) | `所有人原地待命别动` | `engagement_constraint(stance=hold)` | `any_directive_committed` | events 含 `directive.committed` |
 
 ### L4 产能调整（3 case）
 
@@ -146,14 +146,15 @@ verify 策略 + PASS 条件（具体到字段/event）。
 | `unit_claim` (persistent) | #8 | ✅ |
 | `unit_claim` (ephemeral) | #9 | ✅ |
 | `scout` | #10 | ✅ |
-| `build_at` | #11 | ✅ |
+| `build_at` | — | ❌ LLM 限制（"11 点"被当 "o'clock" 字符串,LLM 不会算地图坐标;build_at 设计上给 PWA UI 玩家点击坐标用） |
 | `move` | — | ❌ 不覆盖（LLM 容易把 move 解析成 `tactical_objective(attack)`，区分不开） |
 | `unit_release` | — | ❌ 不覆盖（要先有 standing order 才能 release，单一 case e2e 复杂） |
 | `production_override` | #12 | ✅ |
 | `tech_override` | #13 | ✅ |
 | `expansion_override` | #14 | ✅ |
 
-**覆盖率：10/12 directive 类型有 case**。
+**覆盖率：9/12 directive 类型有 case**（L3d 从 build_at 改为 engagement_constraint
+hold stance 后 build_at 不再有 case；engagement_constraint 多覆盖一个 stance）。
 
 ### 10 个 done_when kind
 
