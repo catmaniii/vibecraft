@@ -9,6 +9,16 @@ driver 读到 sc2=crashed 把该 case 判 FAIL，继续下一个。
 
 每个 case：fast mode + 可配置对手难度（默认 CheatMoney）+ 90s wall timeout。
 
+verify 分两层：
+  1. verify_field（原有）：snapshot 字段非空 OR events 有 directive.committed
+  2. verify_log_patterns（新）：正则 grep events/snapshots 序列化 JSON（可选，增强验证）
+
+注意：GameProcess 用 multiprocessing.Queue 做 IPC，子进程 stdout 不被 driver
+捕获。verify_log_patterns 因此对 **events + snapshots** 序列化 JSON 做 regex 匹配：
+- events 含 directive.queued（display 字段含中文描述）、directive.committed、
+  strategy.set（strategy_id 字段）、directive.status_changed（status/reason）
+- snapshots 含 active_tactics（verb 字段）、production_overrides（unit_type）等
+
 用法::
 
     uv run --no-sync python scripts/e2e_4_directive_types.py
@@ -21,8 +31,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -41,6 +53,18 @@ class Case:
     inject: str
     inject_after: int
     verify_field: str  # "strategy_changed" | "active_tactics" | "standing_orders" | "production_overrides"
+    verify_log_patterns: list[str] = field(default_factory=list)
+    """每条 pattern 对 events+snapshots 序列化 JSON 做 regex 搜索；全部命中才算执行层通过。
+    空 list 跳过执行层 verify（兼容现有 case，不破坏回归）。
+
+    能匹配的字段示例（因 GameProcess 用 multiprocessing.Queue，子进程 stdout 不可 grep）：
+    - events JSON：directive.queued.payload.display（如 "哨兵 × 2 已加入生产队列"）
+    - events JSON：strategy.set.payload.strategy_id（如 "iac_2base"）
+    - events JSON：directive.status_changed.payload.status（如 "active"）
+    - snapshots JSON：active_tactics[*].verb（如 "attack" / "harass"）
+    - snapshots JSON：production_overrides[*].unit_type（如 "SENTRY"）
+    - snapshots JSON：strategy.opening.id（如 "sustain"）
+    """
 
 
 CASES: list[Case] = [
@@ -50,12 +74,18 @@ CASES: list[Case] = [
         inject="切叉球一波",  # midgame 不被 _check_strategy_obsolete 拦
         inject_after=3,
         verify_field="strategy_changed",
+        # strategy.set event payload.strategy_id 含 iac（叉球剧本 id 前缀）；
+        # 或 snapshot strategy.midgame.id / strategy.opening.id 变化。
+        verify_log_patterns=["iac"],
     ),
     Case(
         name="L1b strategy_cancel",
         inject="取消所有剧本",
         inject_after=3,
         verify_field="strategy_cleared",
+        # _dispatch_cancel 调 facade.set_build("sustain")，
+        # snapshot strategy 字段清空后出现 "sustain" 或 opening:null。
+        verify_log_patterns=["sustain"],
     ),
     # ---- L2 战术目标 (tactical_objective + engagement_constraint) ----
     Case(
@@ -63,6 +93,8 @@ CASES: list[Case] = [
         inject="进攻对方自然",
         inject_after=3,
         verify_field="active_tactics",
+        # directive.status_changed payload.status="active" + snapshot active_tactics 含 verb=attack
+        verify_log_patterns=["attack"],
     ),
     Case(
         name="L2b tactical_scout (vision_acquired)",
@@ -81,6 +113,8 @@ CASES: list[Case] = [
         inject="守家别出门",
         inject_after=3,
         verify_field="any_directive_committed",
+        # snapshot active_tactics 或 directive.status_changed 含 defend
+        verify_log_patterns=["defend"],
     ),
     Case(
         name="L2e engagement_retreat (time_elapsed_since)",
@@ -129,18 +163,63 @@ CASES: list[Case] = [
         inject="下个 BG 出俩哨兵",
         inject_after=3,
         verify_field="production_overrides",
+        # directive.queued event display 含 "哨兵"；
+        # snapshot production_overrides[*].unit_type 含 SENTRY（大小写不限）
+        verify_log_patterns=[r"(?i)sentry|哨兵"],
     ),
     Case(
         name="L4b tech_override (tech_done)",
         inject="先研闪烁",
         inject_after=3,
         verify_field="production_overrides",
+        # directive.queued display 含 "BLINK" 或 "闪烁"
+        verify_log_patterns=[r"(?i)blink|闪烁"],
     ),
     Case(
         name="L4c expansion_override (expansion_count)",
         inject="马上去开三矿",
         inject_after=3,
         verify_field="production_overrides",
+        # directive.queued display 含 "矿" 或 "开矿"；snapshot 或事件含 expand
+        verify_log_patterns=[r"矿|expand"],
+    ),
+    # ---- O 系列：structure_override + L2 进阶 ----
+    Case(
+        name="O1 structure_override 补到 8 BG",
+        inject="家里补到 8 个 BG",
+        inject_after=5,
+        verify_field="production_overrides",
+        # director.py:1402 logger.info("structure_override BUILD %s near=...", type_id, ...)
+        # 该 log 走子进程 logging，不过 events 流有 directive.queued display "GATEWAY"
+        # 及 snapshot production_overrides[*].structure_type="GATEWAY"
+        verify_log_patterns=[r"(?i)gateway|BG|兵营"],
+    ),
+    Case(
+        name="O2 structure_override ramp 1 cannon",
+        inject="在坡道放一个炮台",
+        inject_after=5,
+        verify_field="production_overrides",
+        # snapshot production_overrides[*].structure_type="PHOTONCANNON"
+        # directive.queued display 含 "cannon" 或 "炮台"
+        verify_log_patterns=[r"(?i)photoncannon|cannon|炮台"],
+    ),
+    Case(
+        name="L2 进攻自然 done_when=None",
+        inject="进攻对方自然基地",
+        inject_after=3,
+        verify_field="active_tactics",
+        # 无 done_when → directive 不自动 done，active_tactics 持续有记录
+        # snapshot active_tactics verb=attack + status=active
+        verify_log_patterns=["attack"],
+    ),
+    Case(
+        name="L2 派 5 凤凰骚扰",
+        inject="派 5 个凤凰去骚扰对方主基地",
+        inject_after=3,
+        verify_field="active_tactics",
+        # _exec_l2_squad 路径：set_unit_role LLM_CONTROLLED + TacticalSquad 创建
+        # snapshot active_tactics verb=harass；events directive.status_changed status=active/on_hold
+        verify_log_patterns=[r"(?i)harass|骚扰"],
     ),
 ]
 
@@ -233,6 +312,45 @@ def _verify_strategy_cleared(
         f"opening 始终在(saw_initial={saw_initial}),没 cancel 成 None"
         f"（看了 {len(snapshots)} 个 snapshot）"
     )
+
+
+def _verify_log_patterns(
+    events: list[tuple[float, str, dict[str, Any]]],
+    snapshots: list[dict[str, Any]],
+    patterns: list[str],
+) -> tuple[bool, str]:
+    """所有 pattern 都在 events+snapshots 序列化 JSON 出现才 PASS。
+
+    grep 目标：events 每条 frame dict JSON + snapshots 每条 dict JSON，合并成
+    单个大字符串。GameProcess 用 multiprocessing.Queue IPC，子进程 stdout 不可
+    直接捕获，因此用 queue 传上来的结构化数据作为 log 替代来源。
+    """
+    if not patterns:
+        return True, "(no log verify)"
+
+    # 构建 grep 目标字符串：所有 events payload + snapshots 的 JSON dump
+    corpus_parts: list[str] = []
+    for _ts, _k, payload in events:
+        try:
+            corpus_parts.append(json.dumps(payload, ensure_ascii=False))
+        except Exception:
+            pass
+    for snap in snapshots:
+        try:
+            corpus_parts.append(json.dumps(snap, ensure_ascii=False))
+        except Exception:
+            pass
+    corpus = "\n".join(corpus_parts)
+
+    missing: list[str] = []
+    for p in patterns:
+        if not re.search(p, corpus):
+            missing.append(p)
+
+    if missing:
+        # 截前 3 条防输出过长
+        return False, f"events/snapshot 缺 pattern: {missing[:3]}"
+    return True, f"log patterns 全命中 ({len(patterns)})"
 
 
 def _verify_any_directive_committed(
@@ -346,15 +464,25 @@ async def run_one_case(
 
     elapsed_total = time.time() - start_ts
 
-    # verify
+    # verify — 两层：
+    # 1. verify_field（原有）：snapshot 字段非空 OR events directive.committed
+    # 2. verify_log_patterns（新，可选）：events+snapshots JSON grep
     if case.verify_field == "strategy_changed":
-        ok, reason = _verify_strategy_changed(snapshots, events, initial_opening)
+        ok1, reason1 = _verify_strategy_changed(snapshots, events, initial_opening)
     elif case.verify_field == "strategy_cleared":
-        ok, reason = _verify_strategy_cleared(snapshots, events, initial_opening)
+        ok1, reason1 = _verify_strategy_cleared(snapshots, events, initial_opening)
     elif case.verify_field == "any_directive_committed":
-        ok, reason = _verify_any_directive_committed(snapshots, events)
+        ok1, reason1 = _verify_any_directive_committed(snapshots, events)
     else:
-        ok, reason = _verify_field_non_empty(snapshots, events, case.verify_field)
+        ok1, reason1 = _verify_field_non_empty(snapshots, events, case.verify_field)
+
+    if ok1 and case.verify_log_patterns:
+        ok2, reason2 = _verify_log_patterns(events, snapshots, case.verify_log_patterns)
+        ok = ok1 and ok2
+        reason = f"{reason1} | log: {reason2}"
+    else:
+        ok = ok1
+        reason = reason1
 
     result = CaseResult(
         case=case,
