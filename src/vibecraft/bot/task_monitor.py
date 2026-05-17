@@ -210,7 +210,16 @@ class TaskMonitor:
                 def _filter_with_type(
                     e: Event, _ut: str = ut, _iat: float = issued_at
                 ) -> bool:
-                    return e.unit_type == _ut and e.owner == "own" and e.ts >= _iat
+                    if e.owner != "own" or e.ts < _iat:
+                        return False
+                    # 兼容多种 unit_type 格式:
+                    # - publisher 写 str(unit.type_id) = "UnitTypeId.ZEALOT"
+                    # - 或 unit.type_id.name = "ZEALOT"
+                    # - 或 LLM payload 给 "Zealot"
+                    # 全部 normalize 成 UPPER + 取最后段比较
+                    e_ut = (e.unit_type or "").rsplit(".", 1)[-1].upper()
+                    target = _ut.upper()
+                    return e_ut == target
 
                 filter_fn = _filter_with_type
             else:

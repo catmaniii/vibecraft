@@ -14,11 +14,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibecraft.bot.event_bus import EventBus
+
+logger = logging.getLogger(__name__)
 from vibecraft.bot.facade import Sc2Facade, UnitRole
 from vibecraft.directives.board import (
     BoardEvent,
@@ -914,15 +917,25 @@ class Director:
                 continue
             unit_id = self._resolve_unit_type_id(payload.unit_type)
             if unit_id is None:
+                logger.warning("resolve unit_type_id fail: %r", payload.unit_type)
                 continue
             already = self._production_override_built_count(d)
             remaining = payload.count - already
             if remaining <= 0:
                 continue
-            # python-sc2 bot.train: sync 方法, 内部 can_afford + find idle building,
-            # 失败时返回 0;不抛异常
+            # python-sc2 bot.train: sync 方法, 内部 can_afford + find building。
+            # train_only_idle_buildings=False:允许 enqueue 进忙着的 building 队列后面
+            # (sharpy plan 通常已经 fill Gateway 队列,只看 idle 会永远返回 0)。
+            # 失败时返回 0;不抛异常。
             try:
-                self._bot.train(unit_id, amount=1)
+                n_trained = self._bot.train(
+                    unit_id, amount=remaining, train_only_idle_buildings=False
+                )
+                if n_trained > 0:
+                    logger.info(
+                        "production_override TRAIN %s ×%d (remaining=%d, already=%d, directive=%s)",
+                        unit_id, n_trained, remaining, already, d.id[:8],
+                    )
             except Exception as exc:  # 保险兜底
                 logger.debug("production_override train fail: %s", exc)
 
