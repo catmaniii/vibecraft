@@ -225,8 +225,8 @@ def _inject_fake_sharpy() -> tuple[type, type, type, type]:
 
 @pytest.fixture(autouse=True)
 def _clean_sharpy_modules() -> Any:
-    """每个测试前后清理 sharpy 模块缓存，保证测试互相隔离。"""
-    _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
+    """每个测试前后清理 sharpy / sc2 模块缓存，保证测试互相隔离。"""
+    _prefixes = ("sc2", "sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
             del sys.modules[key]

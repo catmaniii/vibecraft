@@ -1029,8 +1029,11 @@ class Director:
                 self.board.revoke(directive_id, now)
             except Exception as exc:  # pragma: no cover
                 logger.debug("revoke_tactical board.revoke fail: %s", exc)
+            if self._current_l2_global_id is None:
+                self._current_l2_global_directive = None
             self._push_event(
                 {
+                    "type": "event",
                     "kind": "directive.revoked",
                     "ts": now,
                     "payload": {"directive_id": directive_id, "reason": "player_x"},
@@ -1071,6 +1074,7 @@ class Director:
 
         self._push_event(
             {
+                "type": "event",
                 "kind": "directive.revoked",
                 "ts": now,
                 "payload": {"directive_id": directive_id, "reason": "player_x"},
@@ -2127,7 +2131,8 @@ class Director:
             cm = self._bot.knowledge.combat_manager  # type: ignore[union-attr]
         except Exception as exc:
             logger.warning("combat_manager 不可用 (sharpy 接口不一致?): %s", exc)
-        self._cm_cache: Any = cm
+        if cm is not None:
+            self._cm_cache: Any = cm
         return cm
 
     async def execute_tactics_step(self, now: float) -> None:

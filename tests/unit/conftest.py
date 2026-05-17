@@ -111,6 +111,7 @@ def fake_sharpy_zone_attack_env() -> Any:
 # ---------------------------------------------------------------------------
 
 _BOT_PREFIXES = (
+    "sc2",
     "sharpy",
     "vibecraft.bot.auto_combat",
     "vibecraft.bot.sharpy_adapter",

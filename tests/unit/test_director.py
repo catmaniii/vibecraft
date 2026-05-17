@@ -1084,7 +1084,7 @@ class TestStrategyCancelViaBoard:
 # =========================================================================
 
 
-def _make_tactical_directive_a(verb: str = "attack") -> "Directive":
+def _make_tactical_directive_a(verb: str = "attack") -> Directive:
     """构造 A 类 L2 TACTICAL_OBJECTIVE Directive（attack/defend 等 → override flag 路径）。"""
     from vibecraft.directives.models import TacticalObjectivePayload
 
@@ -1092,7 +1092,7 @@ def _make_tactical_directive_a(verb: str = "attack") -> "Directive":
     return Directive(payload=payload, issued_at=10.0)
 
 
-def _make_tactical_directive_b(unit_type: str = "Phoenix", count: int = 3) -> "Directive":
+def _make_tactical_directive_b(unit_type: str = "Phoenix", count: int = 3) -> Directive:
     """构造 B 类 L2 TACTICAL_OBJECTIVE Directive（harass → squad 路径）。"""
     from vibecraft.directives.models import TacticalObjectivePayload
 
