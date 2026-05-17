@@ -46,7 +46,7 @@ default_transitions: [...]
 ### 真实运行差异
 
 - **4bg**：玩家切到 4bg → `Gate4Pressure.create_plan()` 接管，严格按
-  `gate4_pressure.py` 里写的 BuildOrder 跑（BE/BG/BC/折跃/3 BG/出门）
+  `gate4_pressure.py` 里写的 BuildOrder 跑（BE/BG/BY/折跃/3 BG/出门）
 - **skytoss**：玩家切到 skytoss → sharpy `MacroVoidray` 类接管，行为是
   "无脑暴虚空"，**不造航母、不造母舰、不出 HT/Archon、不出 Templar Archives**
 

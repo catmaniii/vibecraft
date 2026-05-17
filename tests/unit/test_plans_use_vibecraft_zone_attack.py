@@ -30,6 +30,7 @@ _PLANS_WITH_ATTACK_ACT = [
     "gate4_pressure.py",
     "skytoss.py",
     "robo_1gate.py",
+    "iac_2base.py",
 ]
 
 

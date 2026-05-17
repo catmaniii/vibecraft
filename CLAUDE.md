@@ -14,19 +14,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **中文沟通**。代码注释、commit message、log 字段名仍可英文（业界惯例），但所有面向用户的解释、设计讨论、PR 描述用中文。
 - **建筑用 hotkey 简称**，不写全名。**默认就要这样写**，不需要用户提醒：
-  - **BG** = Gateway / 兵营（折跃门同 BG）
-  - **BF** = Forge / BF
-  - **BC** = Cybernetics Core / BC
-  - **VC** = Assimilator / 气矿
-  - **VR** = Robotics Facility / VR（仅指建筑；虚空辉光舰不叫 VR，叫"虚空 / 辉光舰"）
-  - **VD** = Robotics Bay / VD
-  - **VS** = Stargate / VS
-  - **VT** = Twilight Council / VT
-  - **VX** = Fleet Beacon / VX
-  - **VA** = Templar Archives / VA
-  - **VB** = Dark Shrine / VB
-  - **BN** = Nexus / 基地（B 菜单 N 键）
-  - **BE** = Pylon / 水晶 / 水晶塔（B 菜单 E 键；**不要**写 PY，玩家不那么说）
+  - **B 系列（基础建筑）—— 按 SC2 默认 grid 键位**:
+    - **BG** = Gateway / 兵营 / 折跃门（B+G）
+    - **BE** = Pylon / 水晶 / 房子（B+E；**不要**写 PY）
+    - **BA** = Assimilator / 气矿（B+A；**不要**写 VC，VC 是 Terran 概念混淆）
+    - **BN** = Nexus / 基地 / 主基地（B+N；**不要**写 NX）
+    - **BF** = Forge / 锻炉（B+F）
+    - **BY** = Cybernetics Core / 控制核心（B+Y；**不是 BC**！）
+    - **BC** = Photon Cannon / 光子炮（B+C；BC 是炮塔，不是核心）
+    - **BB** = Shield Battery / 护盾电池（B+B）
+  - **V 系列（科技建筑）**:
+    - **VR** = Robotics Facility / 机械工厂（仅指建筑；虚空辉光舰不叫 VR，叫"虚空 / 辉光舰"）
+    - **VS** = Stargate / 星门
+    - **VT** = Twilight Council / 议会
+    - **VX** = Fleet Beacon / 舰队信标
+    - **VA** = Templar Archives / 圣堂档案
+    - **VB** = Dark Shrine / 黑暗神殿
+    - **VD** = Robotics Bay / 机械槽 / 球塔
 - 单位用中文（叉子 / 不朽 / 追猎 / 闪追 / 凤凰 / 航母 / DT / HT / 母舰 / 高坦 / 暗使 / 探机）。
 - 战术黑话保留：4BG / IAC / Skytoss / 12D / 两矿凤凰 / 闪追 timing 等。
 

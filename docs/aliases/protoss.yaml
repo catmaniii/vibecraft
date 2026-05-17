@@ -59,7 +59,9 @@ buildings:
     hotkey: "B+F"
   CyberneticsCore:
     default_display: "BY"
-    aliases: [BY, BC, 模拟芯, 模拟, CyberneticsCore]
+    # 注：不再接受 BC 作为 Cybernetics Core 别名 —— BC 是 PhotonCannon 的 hotkey
+    # （SC2 grid B+C = 光子炮）。CC 也不接受（Terran Command Center）。
+    aliases: [BY, 模拟芯, 模拟, 控制核心, CyberneticsCore]
     hotkey: "B+Y"
   PhotonCannon:
     default_display: "BC"

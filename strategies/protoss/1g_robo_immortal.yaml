@@ -1,7 +1,7 @@
 kind: opening_build
 id: 1g_robo_immortal
 display_name_zh: "1门Robo 不朽开"
-summary_zh: "稳健万金油开局：14 PROBE → 单 BG + BC → 20 双矿 → ROBO → 持续 chrono Immortal + Charge。主力 3-5 不朽 + Zealot 推进，对所有种族都能用"
+summary_zh: "稳健万金油开局：14 PROBE → 单 BG + BY → 20 双矿 → ROBO → 持续 chrono Immortal + Charge。主力 3-5 不朽 + Zealot 推进，对所有种族都能用"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.robo_1gate:Robo1GateImmortal"
 aliases:
   - "1门Robo"
@@ -30,12 +30,12 @@ phases:
     subtitle: "14 PROBE → BE → 16 PROBE → 气矿 → BG"
     start_at_supply: 13
   - id: tech
-    display: "上 BC + 双矿"
-    subtitle: "20 PROBE → 二矿 → BC → 21 PROBE → 气矿 2"
+    display: "上 BY + 双矿"
+    subtitle: "20 PROBE → 二矿 → BY → 21 PROBE → 气矿 2"
     start_at_supply: 20
   - id: robo_up
     display: "上 ROBO + 折跃"
-    subtitle: "BC 完成 → 研折跃 → TC → ROBO + 第 1 个 OB"
+    subtitle: "BY 完成 → 研折跃 → TC → ROBO + 第 1 个 OB"
     start_at_supply: 24
   - id: immortal_mass
     display: "暴 Immortal"
@@ -54,7 +54,7 @@ steps:
   - "16 build VC"
   - "16 build BG"
   - "20 build NX"
-  - "20 build BC"
+  - "20 build BY"
   - "21 build VC"
   - "22 build BE"
   - "23 research 折跃 @chrono"

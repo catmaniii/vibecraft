@@ -78,6 +78,7 @@ def _setup_sharpy_path():
         ("vibecraft.bot.auto_combat.protoss.plans.gate4_pressure", "Gate4Pressure"),
         ("vibecraft.bot.auto_combat.protoss.plans.robo_1gate", "Robo1GateImmortal"),
         ("vibecraft.bot.auto_combat.protoss.plans.skytoss", "Skytoss"),
+        ("vibecraft.bot.auto_combat.protoss.plans.iac_2base", "IacTwoBase"),
     ],
 )
 def test_plan_create_plan_smoke(module_path: str, class_name: str) -> None:

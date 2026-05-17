@@ -1,7 +1,7 @@
 """vibecraft 1门 Robo 不朽开 plan（标杆稳健开局，万金油应付未知情况）。
 
 Build 概要（标准 SC2 1g Robo Immortal 开局）：
-  14 BE → 16 BG + BA → 19 NX(二矿) || 17 BC（**并行**）→ Warpgate research +
+  14 BE → 16 BG + BA → 19 NX(二矿) || 17 BY（**并行**）→ Warpgate research +
   ROBO + TC（**全部 CC 一好的并行触发**）→ 1 不朽 + 1 OB + 持续不朽 +
   Charge 研究 + 5 分钟三矿
 

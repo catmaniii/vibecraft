@@ -1,7 +1,7 @@
 kind: opening_build
 id: 4bg
 display_name_zh: "4 门 BG 早压"
-summary_zh: "经典 4 BG 折跃压制(无闪烁):单 BG → BC → 升折跃,补 3 BG,折跃完成 + 探机前线修 BE+BG → 出门压制 + 火力侦察"
+summary_zh: "经典 4 BG 折跃压制(无闪烁):单 BG → BY → 升折跃,补 3 BG,折跃完成 + 探机前线修 BE+BG → 出门压制 + 火力侦察"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.gate4_pressure:Gate4Pressure"
 aliases:
   - "4BG"
@@ -26,8 +26,8 @@ phases:
     subtitle: "13 农 → BG + 1 气"
     start_at_supply: 13
   - id: tech
-    display: "BC + 持续 chrono 折跃"
-    subtitle: "BC 一好就停农 chrono,所有能量给折跃"
+    display: "BY + 持续 chrono 折跃"
+    subtitle: "BY 一好就停农 chrono,所有能量给折跃"
     start_at_supply: 18
   - id: massing
     display: "补 3 BG"
@@ -48,7 +48,7 @@ steps:
   - "9 build BE"
   - "13 build BG"
   - "15 build VC"
-  - "16 build BC"
+  - "16 build BY"
   - "17 build BE"
   - "19 train 追猎"
   - "20 build VC"

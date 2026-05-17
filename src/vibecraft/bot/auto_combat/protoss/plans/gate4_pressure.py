@@ -64,14 +64,14 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     async def create_plan(self) -> BuildOrder:
         return BuildOrder(
-            # 探机 chrono:仅在 BC 还没造之前用,BC 一出现就停 → 留所有能量给折跃 chrono
+            # 探机 chrono:仅在 BY 还没造之前用,BY 一出现就停 → 留所有能量给折跃 chrono
             Step(
                 None,
                 ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                 skip=UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
                 skip_until=UnitExists(UnitTypeId.ASSIMILATOR, 1),
             ),
-            # 折跃研究 chrono:BC 出现后所有 chrono 持续给 BC,直到折跃 99% 完成
+            # 折跃研究 chrono:BY 出现后所有 chrono 持续给 BY,直到折跃 99% 完成
             Step(
                 UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
@@ -93,11 +93,11 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 # 进入"折跃 + 3 补 BG"阶段
                 BuildOrder(
                     AutoPylon(),  # 房子自动补
-                    # 折跃研究(BC 好了立刻研)
+                    # 折跃研究(BY 好了立刻研)
                     Step(
                         UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)
                     ),
-                    # 折跃研究期间补到 4 BG:等 BC 好 + 攒够 450 矿(3 BG 同时下,
+                    # 折跃研究期间补到 4 BG:等 BY 好 + 攒够 450 矿(3 BG 同时下,
                     # 保证它们同时修好同时升折跃)。攒够后 GridBuilding 一个 step 内尽量下满。
                     Step(
                         self._three_bg_at_once,
@@ -142,7 +142,7 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _forward_ready(ai: Any) -> bool:
-        """ForwardSupport 触发:BC 完成 + 3 BG 已开始造(总 BG≥4 含 pending)。
+        """ForwardSupport 触发:BY 完成 + 3 BG 已开始造(总 BG≥4 含 pending)。
 
         意图:补 3 BG 是 massing 阶段,这之后才派农民去前线 — 否则前期
         家里 builder 紧张,影响主基地 build order。
@@ -163,7 +163,7 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
         若我们一直 train Stalker,Gateway 始终在生产 → 永远不空闲 → 不 morph。
         策略:折跃完成后等所有 BG 都转完(ready GATEWAY 数 = 0)再继续训练。
 
-        BC 未好 / 折跃未完成阶段 → 正常训练(走 BG 训练)。
+        BY 未好 / 折跃未完成阶段 → 正常训练(走 BG 训练)。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
@@ -180,7 +180,7 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
     def _three_bg_at_once(ai: Any) -> bool:
         """补 3 BG 的触发条件:折跃研究 >= 50% + 矿 ≥ 450(或已开造)。
 
-        推迟到折跃过半:前期能量都给 chrono BC,矿用来多补 PYLON,
+        推迟到折跃过半:前期能量都给 chrono BY,矿用来多补 PYLON,
         折跃过半后矿够 → 一次性下 3 BG,保证它们同时修好同时转 WarpGate,
         刚好和折跃完成 timing 对齐。
 

@@ -45,7 +45,7 @@ class Sustain(KnowledgeBot):  # type: ignore[misc]
                 ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                 skip=UnitExists(UnitTypeId.PROBE, 44, include_pending=True),
             ),
-            # 主线:13 农 BG → 上 BC → 折跃 → 第二矿
+            # 主线:13 农 BG → 上 BY → 折跃 → 第二矿
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
                 GridBuilding(UnitTypeId.PYLON, 1),
