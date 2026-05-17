@@ -474,20 +474,76 @@ class TestTechDone:
     def test_wrong_upgrade_id_does_not_trigger(self) -> None:
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "tech_done", "upgrade_id": "ProtossGroundWeaponsLevel1"}
+        done_when = {"kind": "tech_done", "upgrade_id": "Blink"}
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
-        # 发的是 Level2，不匹配
+        # 发的是 Charge，跟 Blink 完全不同（归一化也不匹配）
         bus.publish(
             Event(
                 kind=EventKind.UPGRADE_COMPLETE,
                 ts=5.0,
-                payload={"upgrade_id": "ProtossGroundWeaponsLevel2"},
+                payload={"upgrade_id": "CHARGE"},
             )
         )
         gs = _make_game_state(game_time=10.0)
         completed = monitor.tick(now=10.0, game_state=gs)
         assert "d1" not in completed
+
+    def test_upgrade_id_normalization_canonical_matches_enum_name(self) -> None:
+        """LLM 给 'ProtossGroundWeapons'，python-sc2 发 'PROTOSSGROUNDWEAPONSLEVEL1'，应匹配。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        # LLM canonical 形式（无 LEVEL 后缀）
+        done_when = {"kind": "tech_done", "upgrade_id": "ProtossGroundWeapons"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        # publisher 发的形式（python-sc2 enum.name，带 LEVEL1）
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "PROTOSSGROUNDWEAPONSLEVEL1"},
+            )
+        )
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_upgrade_id_normalization_handles_str_enum_prefix(self) -> None:
+        """publisher 老版本可能发 'UpgradeId.X'，也要能匹配。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "BlinkTech"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "UpgradeId.BLINKTECH"},
+            )
+        )
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" in completed
+
+    def test_upgrade_id_normalization_strips_tech_suffix(self) -> None:
+        """LLM 给 'PsiStorm'，enum 是 'PSISTORMTECH'，应匹配。"""
+        bus = EventBus()
+        monitor = TaskMonitor(board=None, event_bus=bus)
+        done_when = {"kind": "tech_done", "upgrade_id": "PsiStorm"}
+        monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
+
+        bus.publish(
+            Event(
+                kind=EventKind.UPGRADE_COMPLETE,
+                ts=5.0,
+                payload={"upgrade_id": "PSISTORMTECH"},
+            )
+        )
+        gs = _make_game_state(game_time=10.0)
+        completed = monitor.tick(now=10.0, game_state=gs)
+        assert "d1" in completed
 
     def test_detach_clears_tech_done_flag(self) -> None:
         bus = EventBus()

@@ -264,8 +264,10 @@ class TestBotEventWiring:
         received: list[Event] = []
         bus.subscribe(EventKind.UPGRADE_COMPLETE, received.append)
 
+        # publisher 优先用 enum.name（python-sc2 真 UpgradeId 有 .name 属性）
+        # 这样发出去的就是 "BLINKTECH" 不是 "UpgradeId.BLINKTECH"，便于 task_monitor 匹配
         upgrade = MagicMock()
-        upgrade.__str__ = lambda self: "BLINKTECH"
+        upgrade.name = "BLINKTECH"
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_upgrade_complete
         _publish_upgrade_complete(bot, upgrade)

@@ -23,13 +23,20 @@ logger = logging.getLogger(__name__)
 
 
 class ScoutWorker(ActBase):  # type: ignore[misc]
-    """1 农民巡逻探路,保命 + 必要时牺牲。"""
+    """1 农民巡逻探路,保命 + 必要时牺牲。
+
+    **中后期自动停用**：5 分钟（300s 游戏内）后中后期敌方兵力密集，
+    单农民进去十死无生 + 送掉农民经济上也亏。中后期切到火力侦察（recon
+    L2 directive，玩家显式发或 bot 内部 recon 触发）。
+    """
 
     # HP+shield 占比阈值
     RETREAT_RATIO: float = 0.5
     REENGAGE_RATIO: float = 0.9
     # 切下一个巡逻目标的间隔(秒,游戏内)
     TARGET_SWITCH_INTERVAL: float = 30.0
+    # 中后期停用阈值（游戏内秒）：5 分钟后敌方兵力密集，单农民送菜
+    MIDGAME_CUTOFF_S: float = 300.0
 
     def __init__(self) -> None:
         super().__init__()
@@ -72,6 +79,34 @@ class ScoutWorker(ActBase):  # type: ignore[misc]
         # 的 builder 选择(实测 bug:开局一直 "Can't find free position to build PYLON")
         if self.ai.time < 60.0:
             return False
+        # **中后期停用**：5 分钟后敌方兵力密集，单农民进去送菜。
+        # 此时切到火力侦察（recon L2 directive，玩家显式发或 bot 自决策走 recon）。
+        # 若 scout 还在外面，让它回家；新一波不再派。
+        if self.ai.time > self.MIDGAME_CUTOFF_S:
+            if self.scout_tag is not None:
+                # 让现有 scout 回家，然后释放
+                try:
+                    from sharpy.managers.core.roles import UnitTask
+
+                    scout = self.cache.by_tag(self.scout_tag)
+                    if scout is not None:
+                        if self.ai.townhalls:
+                            home = self.ai.townhalls.first.position
+                            if scout.distance_to(home) > 8:
+                                scout.move(home)
+                                return False  # 等到家了再释放
+                        # 到家了，释放 worker 角色让 sharpy 拉回去采矿
+                        self.knowledge.roles.clear_task(scout)
+                        self.knowledge.roles.set_task(UnitTask.Idle, scout)
+                        logger.info(
+                            "ScoutWorker midgame cutoff (%.0fs): released scout tag=%d",
+                            self.ai.time,
+                            self.scout_tag,
+                        )
+                except Exception as exc:
+                    logger.debug("ScoutWorker midgame release fail: %s", exc)
+                self.scout_tag = None
+            return True  # 任务完成，act 永久结束
         # 4bg 策略下让位给 ForwardSupportPylonGateway(它承担"探路+保命+躲起来修建筑")
         # 不同时派两个农民出去
         if getattr(self.ai, "active_recipe", None) == "4bg" and self.scout_tag is None:

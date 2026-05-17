@@ -139,7 +139,6 @@ class WsConnection:
             frame = json.dumps({"type": "ping", "ts": round(time.time(), 3)})
             try:
                 await self._ws.send(frame)
-                self._log.debug("ws_ping_sent")
             except ConnectionClosed:
                 break
             except Exception:
@@ -175,11 +174,8 @@ class WsConnection:
         view_move / view_follow / view_zoom /
         confirm_ambiguous / revoke / save_recipe / release_unit
         """
-        # view_move 拖拽时高频（10Hz），降到 debug 避免刷屏；其它帧保持 info
-        if frame_type == "view_move":
-            self._log.debug("ws_frame_received", frame_type=frame_type)
-        else:
-            self._log.info("ws_frame_received", frame_type=frame_type, frame=frame)
+        # ws_frame_received 之前用于 debug，但实战 log 太杂；现在彻底不记录。
+        # 关键帧（command / start_game 等）各自的 handler 有自己的 info log，不会丢信息。
 
         if frame_type == "start_game":
             await self._handle_start_game(frame)
@@ -288,8 +284,7 @@ class WsConnection:
                 "target_point": [float(pt[0]), float(pt[1])],
             }
         )
-        # debug 级别：拖拽时高频，info 会刷屏
-        self._log.debug("ws_view_move_sent", point=pt)
+        # ws_view_move_sent 不记录（拖拽时高频，log 太杂）
 
     # ------------------------------------------------------------------
     # start_game 处理（M1.2）
@@ -431,7 +426,6 @@ class WsConnection:
             mm_frame = raw["frame"]
             try:
                 await self._ws.send(json.dumps(mm_frame))
-                self._log.debug("ws_minimap_sent", ts=mm_frame.get("ts"))
             except Exception:
                 self._log.warning("ws_minimap_send_failed")
         else:

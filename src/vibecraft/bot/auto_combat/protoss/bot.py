@@ -125,11 +125,14 @@ def _publish_building_complete(bot_self: Any, unit: Any) -> None:
 
 
 def _publish_upgrade_complete(bot_self: Any, upgrade: Any) -> None:
+    # 发 enum.name（不带 "UpgradeId." 前缀），便于 task_monitor 归一化比较。
+    # 若 upgrade 不是 enum（mock 测试），fallback str()。
+    upgrade_name = getattr(upgrade, "name", None) or str(upgrade)
     bot_self.event_bus.publish(
         Event(
             kind=EventKind.UPGRADE_COMPLETE,
             ts=float(bot_self.time),
-            payload={"upgrade_id": str(upgrade)},
+            payload={"upgrade_id": upgrade_name},
             owner="own",
         )
     )

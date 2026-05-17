@@ -19,12 +19,40 @@ P3.2 wire: Director._submit_directives 调 attach_directive,
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
 from vibecraft.bot.event_bus import Event, EventBus, EventKind
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_upgrade_id(s: str) -> str:
+    """归一化 upgrade id 字符串便于跨格式比较。
+
+    输入可能形式：
+    - "UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1" (str(enum))
+    - "PROTOSSGROUNDWEAPONSLEVEL1" (enum.name)
+    - "ProtossGroundWeapons" (LLM 给的 canonical 无 LEVEL 后缀)
+    - "BlinkTech" / "BLINKTECH" / "blink" (各种 case + Tech 后缀)
+
+    归一化：去 "UpgradeId." 前缀 → upper → 去 LEVEL[0-9]+ 后缀 → 去 TECH 后缀
+    例：
+      "UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1" → "PROTOSSGROUNDWEAPONS"
+      "ProtossGroundWeapons"               → "PROTOSSGROUNDWEAPONS"
+      "BlinkTech" / "BLINKTECH"            → "BLINK"
+      "PsiStormTech"                       → "PSISTORM"
+    """
+    if not s:
+        return ""
+    if "." in s:
+        s = s.rsplit(".", 1)[-1]
+    s = s.upper()
+    s = re.sub(r"LEVEL\d+$", "", s)
+    if s.endswith("TECH"):
+        s = s[:-4]
+    return s
 
 # ---------------------------------------------------------------------------
 # done_when checker registry
@@ -271,9 +299,14 @@ class TaskMonitor:
 
             tech_filter: Callable[[Event], bool] | None = None
             if upgrade_id is not None:
+                # 两边归一化（处理 "ProtossGroundWeapons" vs
+                # "PROTOSSGROUNDWEAPONSLEVEL1" 这种 LLM canonical vs python-sc2 enum
+                # 命名差异）。详见 _normalize_upgrade_id。
+                expected = _normalize_upgrade_id(upgrade_id)
 
-                def _tech_filter(e: Event, _uid: str = upgrade_id) -> bool:
-                    return e.payload.get("upgrade_id") == _uid
+                def _tech_filter(e: Event, _expected: str = expected) -> bool:
+                    actual = e.payload.get("upgrade_id", "")
+                    return _normalize_upgrade_id(actual) == _expected
 
                 tech_filter = _tech_filter
 
