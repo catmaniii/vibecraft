@@ -224,9 +224,10 @@ class TestStrategyLibrary:
         ob = lib.get_opening("1g_robo_immortal")
         assert isinstance(ob, OpeningBuild)
         assert "1门Robo" in ob.aliases
-        # 第一步：13 build PY(vibecraft 用快捷键命名,PY=Pylon)
+        # 第一步：14 build PY（标准 1 BG Robo build：13 农 + 14 时下 PY；
+        # vibecraft 用快捷键命名,PY=Pylon）
         steps = ob.parsed_steps()
-        assert steps[0].supply == 13
+        assert steps[0].supply == 14
         assert steps[0].verb == "build"
         assert steps[0].obj == "PY"
 

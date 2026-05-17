@@ -191,11 +191,15 @@ class LategameDoctrine(BaseModel):
     required_tech: list[str] = Field(default_factory=list)
     required_structures: dict[str, int] = Field(default_factory=dict)
     engagement_doctrine: list[str] = Field(default_factory=list)
-    win_condition: dict[str, str] = Field(default_factory=dict)
+    # win_condition value 可以是 str（type / description）或 list[str]（signals 列表）
+    win_condition: dict[str, str | list[str]] = Field(default_factory=dict)
     counters_against: list[str] = Field(default_factory=list)
     weak_against: list[str] = Field(default_factory=list)
     # 后期阶段进度（可选，PWA 显示用；lategame 不强制 supply 触发条件）
     phases: list[Phase] = Field(default_factory=list)
+    # lategame 也允许 abort_signals（"该投降的时候投降" / warn 玩家硬转）；
+    # then 支持 "warn:<reason>" / "transition:<strategy_id>" 两种 action
+    abort_signals: list[AbortSignal] = Field(default_factory=list)
     # M2+M3: sharpy dummy class（格式 "module:ClassName"）—— 留 M4 lategame 注入时用
     sharpy_dummy_class: str | None = None
 

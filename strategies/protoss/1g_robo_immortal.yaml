@@ -1,51 +1,82 @@
 kind: opening_build
 id: 1g_robo_immortal
 display_name_zh: "1门Robo 不朽开"
-summary_zh: "单 BG 速开机械科技出不朽的标准开局:13 农 BG → BC → VR,出 OB+不朽,走双矿"
-sharpy_dummy_class: "dummies.protoss.robo:MacroRobo"
-aliases: ["1门Robo", "速不朽", "1G Robo", "1门机械", "单BG VR出不朽", "单BG出不朽", "1BG VR不朽", "1 Gate Robo"]
+summary_zh: "稳健万金油开局：14 PROBE → 单 BG + BC → 20 双矿 → ROBO → 持续 chrono Immortal + Charge。主力 3-5 不朽 + Zealot 推进，对所有种族都能用"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.robo_1gate:Robo1GateImmortal"
+aliases:
+  - "1门Robo"
+  - "1门 Robo"
+  - "1g Robo"
+  - "1G Robo"
+  - "1 Gate Robo"
+  - "单BG VR"
+  - "单BG VR出不朽"
+  - "单BG出不朽"
+  - "1BG VR不朽"
+  - "1门机械"
+  - "速不朽"
+  - "速不朽开"
+  - "不朽开局"
+  - "稳一点"
+  - "稳一手"
+  - "万金油"
+  - "稳健开局"
 matchup: [PvT, PvZ, PvP]
 
+# Phase 切换基于 supply 节点 + 时间兜底（PhaseTracker 自动推断当前 phase）
 phases:
   - id: opening
-    display: "开局"
-    subtitle: "13 农 BG"
+    display: "单 BG 开局"
+    subtitle: "14 PROBE → PY → 16 PROBE → 气矿 → BG"
     start_at_supply: 13
   - id: tech
-    display: "上折跃"
-    subtitle: "WG 研究"
-    start_at_supply: 22
-  - id: rallying
-    display: "集结追猎"
-    subtitle: "14 追猎"
-    start_at_supply: 32
-  - id: executing
-    display: "出发压制"
-    subtitle: "6:00 出门"
-    start_at_supply: 38
-    start_at_time: 360
+    display: "上 BC + 双矿"
+    subtitle: "20 PROBE → 二矿 → BC → 21 PROBE → 气矿 2"
+    start_at_supply: 20
+  - id: robo_up
+    display: "上 ROBO + 折跃"
+    subtitle: "BC 完成 → 研折跃 → TC → ROBO + 第 1 个 OB"
+    start_at_supply: 24
+  - id: immortal_mass
+    display: "暴 Immortal"
+    subtitle: "持续 chrono Immortal（target 3-5）+ Zealot 主力"
+    start_at_supply: 36
+    start_at_time: 300
+  - id: pressuring
+    display: "出门压制"
+    subtitle: "3+ Immortal + 折跃完成 → 出门"
+    start_at_supply: 50
+    start_at_time: 420
 
+# 仅用于 PWA 显示与 LLM 上下文,真实 build 由 Robo1GateImmortal.create_plan 控制
 steps:
-  - "13 build PY"
-  - "14 build BG"
-  - "14 build VC"
-  - "16 build PY"
-  - "17 build BC"
+  - "14 build PY"
+  - "16 build VC"
+  - "16 build BG"
   - "20 build NX"
+  - "20 build BC"
   - "21 build VC"
-  - "22 research 折跃 @chrono"
-  - "24 build VR"
-  - "32 train OB"
-  - "34 train 不朽"
+  - "22 build PY"
+  - "23 research 折跃 @chrono"
+  - "26 build VT"
+  - "28 build VR"
+  - "30 train OB"
+  - "32 train 不朽"
+  - "34 research 冲锋 @VT"
+  - "38 train 不朽"
 
 scout_at: "17 send_probe enemy_natural"
 
+# bot 默认时机 abort：明确情报触发硬转
 abort_signals:
   - sees: "enemy.units.phoenix.count >= 2"
     then: "transition:1g_stargate"
   - sees: "enemy.units.zergling.count >= 8 AND game.time < '3:00'"
     then: "transition:4_gateway_pressure"
+  - sees: "enemy.units.dark_templar.count >= 1"
+    then: "react:cannon_defense"
 
+# 默认中期转场建议（玩家可手动覆盖）
 default_transitions:
   - midgame_id: iac_2base
     when: "default"

@@ -29,6 +29,7 @@ _PLANS_DIR = (
 _PLANS_WITH_ATTACK_ACT = [
     "gate4_pressure.py",
     "skytoss.py",
+    "robo_1gate.py",
 ]
 
 

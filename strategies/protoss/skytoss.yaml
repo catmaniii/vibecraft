@@ -1,37 +1,62 @@
 kind: lategame_doctrine
 id: skytoss
 display_name_zh: "Skytoss 航母流"
-summary_zh: "后期航母为核心的空军体系：4 VS + Carrier + Tempest + HT/Archon + Mothership，靠空军远程 DPS 慢推"
+summary_zh: "后期航母为核心的空军体系：4 VS + Carrier ×12 + Tempest ×3 + HT/Archon + Mothership，靠空军远程 DPS 慢推；对手过不了 5 矿经济就赢"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.skytoss:Skytoss"
-aliases: ["航母流", "Skytoss", "天空", "航母收", "空军神族", "神族空军", "出航母", "憋航母"]
+aliases:
+  - "Skytoss"
+  - "skytoss"
+  - "天空神族"
+  - "天空"
+  - "空军神族"
+  - "神族空军"
+  - "航母流"
+  - "航母收"
+  - "出航母"
+  - "憋航母"
+  - "暴航母"
+  - "上航母"
+  - "VS 流"
+  - "母舰流"
+  - "舰队流"
+  - "carrier"
+  - "carrier flow"
 
-# 后期阶段进度（PWA 显示用，无 supply 触发条件 —— 后期没严格 supply 节点）
-# PhaseTracker 看到 start_at_supply=None / start_at_time=None 时不能自动推断 phase
-# 切换，玩家在 UI 上只看到第一个 phase ▶。后续可考虑加 phase_done_when 触发
-# 条件（如"Carrier ≥ 8 → 进入 late_composition"）。
+# 后期阶段进度（**lategame 无严格 supply 节点**，用 game_time + 关键单位/建筑
+# 数量来判断；PhaseTracker 看到 start_at_time 时按时间推断当前 phase）
+# 注：精确切阶段（如"Carrier ≥ 8 → late_composition"）需 PhaseTracker 加
+# `phase_done_when` checker，目前先按时间粗推。
 phases:
   - id: tech_up
     display: "上 VS + VX"
-    subtitle: "Stargate + Fleet Beacon + TwilightCouncil + TemplarArchives；升 Air Weapons/Armor 1"
+    subtitle: "VS / Fleet Beacon / TC / TA 建筑链 + Air Weapons/Armor 1 升级"
+    start_at_time: 0       # 切入即开始
   - id: carrier_massing
     display: "暴航母"
-    subtitle: "Fleet Beacon 完成 → 持续 Carrier，HT 攒能量自动合 Archon，研 Storm + Tempest 射程"
+    subtitle: "Fleet Beacon 完成 → 持续 Carrier + chrono VS；HT 合 Archon；研 Storm + Tempest 射程"
+    start_at_time: 60      # 切入 1 分钟后大概率 VX 在建
   - id: late_composition
     display: "完整组合"
     subtitle: "8+ Carrier + 3 Tempest + Mothership + 风暴 + 母舰罩"
+    start_at_time: 240     # 切入 4 分钟后通常已 6-8 Carrier
 
 target_composition:
   carrier: 12
   tempest: 3
   high_templar: 5
-  archon: 4
+  archon: 4         # 5 HT 自动合 ~2 Archon，sharpy 配 ProtossUnit 兜底加
   mothership: 1
   observer: 2
+  # 不写 zealot/stalker：后期航母为主，剩下的 supply 让 sharpy 自决策
 
 required_tech:
   - FleetBeacon
-  - ProtossAirWeapons
-  - ProtossAirArmor
+  - ProtossAirWeaponsLevel1
+  - ProtossAirWeaponsLevel2
+  - ProtossAirWeaponsLevel3
+  - ProtossAirArmorLevel1
+  - ProtossAirArmorLevel2
+  - ProtossAirArmorLevel3
   - PsiStorm
   - TempestGroundAttackUpgrade
 
@@ -39,17 +64,43 @@ required_structures:
   stargate: 4
   fleet_beacon: 1
   templar_archives: 1
+  twilight_council: 1
 
+# 交战教条（自由文本给 LLM 参考；MVP 不接 DSL 解析器，bot 内 sharpy 自己微操）
 engagement_doctrine:
-  - "spread_units against=storm radius=6"
-  - "feedback priority=[viking, ghost, infestor]"
-  - "storm priority=clumped_bio min_targets=4"
-  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%"
-  - "mass_recall when=fleet_total_hp<40%"
+  - "spread_units against=storm radius=6   # 自己 HT 风暴时也要散开避免误伤"
+  - "feedback priority=[ghost, viking, infestor, raven]   # HT 优先 feedback 敌方魔法 / 反隐单位"
+  - "storm priority=clumped_bio min_targets=4   # Storm 只甩 4+ 目标聚团（不浪费能量）"
+  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%   # 航母 hit-and-run，血少撤"
+  - "tempest_focus priority=[battlecruiser, brood_lord, mothership]   # Tempest 远程点高血单位"
+  - "mass_recall when=fleet_total_hp<40%   # 整队血少母舰回家保命"
 
 win_condition:
   type: composition_advantage
-  description: "靠航母远程DPS慢推，对面无法过 5 矿经济"
+  description: "靠航母 + Tempest 远程 DPS 慢拆，对方过不了 5 矿经济跟不上空军规模"
+  signals:
+    - "self.units.carrier.amount >= 10"
+    - "enemy.expansion_count < 5"
+    - "enemy.units.air_attacker.amount < 8"   # 对方没大量 Viking/Corruptor 反空
 
-counters_against: [bio, roach_hydra, broodlord_infestor]
-weak_against: [mass_viking, mass_corruptor, ghost_emp]
+# 优势对位（lategame 强势克制）
+counters_against:
+  - bio                   # T 生化部队，航母拉开距离风筝
+  - roach_hydra           # Z 蟑螂飞龙，航母 + Tempest 高地
+  - broodlord_infestor    # Z 后期组合，Tempest 点 Brood，HT feedback 感染
+  - mech_ground           # T 机械地面，航母不怕坦克
+
+# 劣势对位（需玩家手动 micro 或转兵种）
+weak_against:
+  - mass_viking           # T 大量 Viking，航母被反空秒
+  - mass_corruptor        # Z 大量 Corruptor，同上
+  - ghost_emp             # T Ghost EMP 清盾，HT 攒不出能量
+  - skytoss_mirror        # PP 后期镜像，比谁 micro 好（feedback 互甩、母舰互大招）
+
+# 后期"什么时候撑不住"信号（玩家可用 abort_signals 类似机制硬转，但 lategame
+# 通常没下一手，更多是"该投降的时候投降"）
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 12 AND self.units.carrier.amount < 6"
+    then: "warn:viking_swarm_no_carriers"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"
