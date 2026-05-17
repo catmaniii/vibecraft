@@ -383,8 +383,24 @@ def make_protoss_bot_class(
             pass
 
         def set_engagement_stance(self, stance: str) -> None:
-            # M1 noop
-            pass
+            """stance → combat_intent_override；free 清覆盖，其它转发同名 intent。"""
+            if stance == "free":
+                self.set_combat_intent_override(None)
+            elif stance in ("defend", "hold", "retreat"):
+                self.set_combat_intent_override(stance)
+            else:
+                # 未知 stance 不静默，写 log
+                logger.warning("set_engagement_stance: unknown stance %r, no-op", stance)
+
+        def set_attack_target_override(
+            self, point: tuple[float, float] | None
+        ) -> None:
+            """L2 attack target override；写 knowledge.vibecraft 给 VibeCraftZoneAttack 读。"""
+            self.bot.knowledge.vibecraft.attack_target_override = point
+
+        def set_combat_intent_override(self, intent: str | None) -> None:
+            """L2 全军交战意图覆盖；写 knowledge.vibecraft.combat_intent_override。"""
+            self.bot.knowledge.vibecraft.combat_intent_override = intent
 
         def move_camera(self, point: tuple[float, float]) -> None:
             """暂存相机目标点，真实 await 在 on_step 末尾 drain_pending_actions(ADR 0008)。
@@ -804,6 +820,15 @@ def make_protoss_bot_class(
         async def on_start(self) -> None:
             # KnowledgeBot.on_start() 初始化所有 Manager（含 roles / unit_cache 等）
             await super().on_start()
+
+            # vibecraft 专属 namespace：挂在 sharpy knowledge 上，Manager 不会清它。
+            # 必须在 super().on_start() 之后（knowledge 由 KnowledgeBot 初始化）。
+            from types import SimpleNamespace as _SNS
+
+            self.knowledge.vibecraft = _SNS(
+                attack_target_override=None,
+                combat_intent_override=None,
+            )
 
             self.facade = _SharpyFacade(self)
             self.director = director_factory(self.facade)

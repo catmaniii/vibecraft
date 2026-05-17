@@ -18,6 +18,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal, Protocol
 
+# L2 全军 combat intent 白名单。Protocol 跟 SharpyFacade impl 共用，
+# 防止两端 Literal 漂移。
+CombatIntent = Literal["attack", "defend", "hold", "retreat", "vision"]
+
 
 class UnitRole(str, Enum):
     """vibecraft 内部的 unit role；运行时由 `sharpy_adapter` 映射到真实
@@ -126,7 +130,7 @@ class Sc2Facade(Protocol):
 
     def set_combat_intent_override(
         self,
-        intent: Literal["attack", "defend", "hold", "retreat", "vision"] | None,
+        intent: CombatIntent | None,
     ) -> None:
         """L2 全军交战意图覆盖（None = 清覆盖）。
         set_engagement_stance 的同源接口；stance 内部转发到此。"""
