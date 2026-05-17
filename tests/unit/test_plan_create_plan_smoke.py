@@ -1,0 +1,98 @@
+"""Smoke 测试：每个 vibecraft plan class 必须能 instantiate + create_plan() 成功。
+
+**为什么需要这条测试**：
+2026-05-18 实战 bug —— Robo1GateImmortal 因 `UnitTypeId.BELON`（应为 PYLON）拼错
+被 sharpy KnowledgeBot.create_plan() 抛 AttributeError，bot.py 的
+`_make_fallback_plan()` 兜底成 `[ActUnit(PROBE, NEXUS, 14)]`，玩家看到的现象是
+"bot 攒了 600+ minerals 不修二基地也不修 BG"。
+
+只验证 import 不够（class 定义层面的拼错抓不到），必须实际调 `create_plan()`
+让 sharpy 解析所有 `Step(UnitReady(...))` / `GridBuilding(UnitTypeId.X)` 等。
+
+测试策略：
+1. 把 vendor/sharpy 加入 sys.path（生产环境也这么干）
+2. 临时塞一个 fake config.ini（sharpy KnowledgeBot.__init__() 要求）
+3. instantiate plan class + await create_plan()
+4. 期望返回 BuildOrder 实例，无 AttributeError / NameError
+
+**注意**：此测试需要 sharpy 实际可 import（`uv sync --extra sc2`），CI 若无
+sc2 extras 会被自动 skip。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_VENDOR_SHARPY = _PROJECT_ROOT / "vendor" / "sharpy"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _setup_sharpy_path():
+    """让 vendor/sharpy 可 import + 提供 fake config.ini。"""
+    sharpy_path_str = str(_VENDOR_SHARPY)
+    inserted = False
+    if sharpy_path_str not in sys.path:
+        sys.path.insert(0, sharpy_path_str)
+        inserted = True
+
+    config_path = _VENDOR_SHARPY / "config.ini"
+    created_config = False
+    if not config_path.exists():
+        config_path.write_text("[bot]\nname=test\n", encoding="utf-8")
+        created_config = True
+
+    # sharpy KnowledgeBot.__init__() 用 cwd 找 config.ini
+    old_cwd = os.getcwd()
+    os.chdir(_VENDOR_SHARPY)
+
+    try:
+        import sharpy.knowledges  # noqa: F401 — 仅验 import OK
+    except ImportError:
+        os.chdir(old_cwd)
+        if inserted:
+            sys.path.remove(sharpy_path_str)
+        if created_config:
+            config_path.unlink(missing_ok=True)
+        pytest.skip("sharpy 未安装（需 uv sync --extra sc2）")
+
+    yield
+
+    os.chdir(old_cwd)
+    if inserted:
+        sys.path.remove(sharpy_path_str)
+    if created_config:
+        config_path.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize(
+    "module_path,class_name",
+    [
+        ("vibecraft.bot.auto_combat.protoss.plans.gate4_pressure", "Gate4Pressure"),
+        ("vibecraft.bot.auto_combat.protoss.plans.robo_1gate", "Robo1GateImmortal"),
+        ("vibecraft.bot.auto_combat.protoss.plans.skytoss", "Skytoss"),
+    ],
+)
+def test_plan_create_plan_smoke(module_path: str, class_name: str) -> None:
+    """plan class instantiate + create_plan() 不抛 AttributeError / NameError 等。"""
+    import importlib
+
+    mod = importlib.import_module(module_path)
+    cls = getattr(mod, class_name)
+
+    inst = cls()
+    plan = inst.create_plan()
+    if asyncio.iscoroutine(plan):
+        plan = asyncio.get_event_loop().run_until_complete(plan)
+
+    # 验证返回的是 BuildOrder（或其子类）
+    from sharpy.plans import BuildOrder
+
+    assert isinstance(plan, BuildOrder), (
+        f"{class_name}.create_plan() should return BuildOrder, got {type(plan).__name__}"
+    )
