@@ -33,14 +33,13 @@
   - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
   - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
-- **阻塞 / 等待**：无，M2 P3 可开工
+- **阻塞 / 等待**：无，M2 P4 可开工
 - **下一步**（按 ADR 0010 / plan §7 次序）：
-  1. **M2 P3**：L2 tactics + `TACTICAL_OBJECTIVE` + **task_monitor 完整实现** +
-     8 个 condition kind dispatcher + LLM done_when prompt（~3d，最大块）
-  2. **M2 P5**：sharpy plan 让位机制泛化（reserved_tags + directive completed →
-     release `LLM_CONTROLLED` tags + `named_spot` registry）（~1d）
-  3. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
-  4. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
+  1. **M2 P4**：LLM prompt 重写精修（P3.4 已加 verb/done_when few-shot，P4 精修
+     4 层分类规则 + 边界 case 例子）（~0.5d）
+  2. **M2 P6**：收尾 + ADR 补 corner case + headless 全链路验证 + 修
+     headless_smoke 子进程 GameSession sinks（让 events.jsonl 不空）+ 排查 cross-test
+     pollution flaky tests（~0.5d）
 - **P1/P2/P3 deferred items（P5 已全部完成 ✅）**：
   - ✅ sharpy 真让位 standing order 单位 → P5.E
   - ✅ Director bot backref 让 6 game-state checker 真工作 → P5.C
