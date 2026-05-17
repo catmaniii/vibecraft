@@ -87,6 +87,71 @@ class TimeElapsedSince(BaseModel):
     ref: Literal["directive_issued", "game_start"] = "directive_issued"
 
 
+# ---------------------------------------------------------------------------
+# P0d L4 done_when 扩词表（运营类指令）
+# ---------------------------------------------------------------------------
+
+_OP = Literal[">=", "<=", "==", ">", "<"]
+
+
+class StructureCount(BaseModel):
+    """当前建筑存量（含 pending）。区别于 unit_count_built_since（增量）。"""
+
+    kind: Literal["structure_count"]
+    structure_type: str
+    op: _OP
+    value: int
+
+
+class OwnUnitCount(BaseModel):
+    """己方某兵种当前存量（含 pending）。"""
+
+    kind: Literal["own_unit_count"]
+    unit_type: str
+    op: _OP
+    value: int
+
+
+class SupplyUsed(BaseModel):
+    """当前人口已用。"""
+
+    kind: Literal["supply_used"]
+    op: _OP
+    value: int
+
+
+class SupplyCap(BaseModel):
+    """当前人口上限。"""
+
+    kind: Literal["supply_cap"]
+    op: _OP
+    value: int
+
+
+class Minerals(BaseModel):
+    """当前晶矿。"""
+
+    kind: Literal["minerals"]
+    op: _OP
+    value: int
+
+
+class Gas(BaseModel):
+    """当前瓦斯。"""
+
+    kind: Literal["gas"]
+    op: _OP
+    value: int
+
+
+class WorkerCount(BaseModel):
+    """当前工人数。"""
+
+    kind: Literal["worker_count"]
+    op: _OP
+    value: int
+
+
 class AnyOf(BaseModel):
     """复合：任意一个子条件满足即完成。"""
 
@@ -102,7 +167,11 @@ class AllOf(BaseModel):
 
 
 DoneWhen = Annotated[
-    UnitCountBuiltSince | TechDone | ExpansionCount | TargetDestroyed | OwnArmySizeRatio | VisionAcquired | EnemyKilledInArea | TimeElapsedSince | AnyOf | AllOf,
+    UnitCountBuiltSince | TechDone | ExpansionCount | TargetDestroyed
+    | OwnArmySizeRatio | VisionAcquired | EnemyKilledInArea | TimeElapsedSince
+    | StructureCount | OwnUnitCount | SupplyUsed | SupplyCap
+    | Minerals | Gas | WorkerCount
+    | AnyOf | AllOf,
     Field(discriminator="kind"),
 ]
 
