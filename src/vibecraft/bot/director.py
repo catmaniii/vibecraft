@@ -39,6 +39,7 @@ from vibecraft.directives.models import (
     StrategyCancelPayload,
     StrategySetPayload,
     StructureOverridePayload,
+    TacticalObjectivePayload,
     TechOverridePayload,
     UnitClaimPayload,
     UnitReleasePayload,
@@ -81,6 +82,25 @@ class _RecentCommand:
     # 不是完整 JSON;C 完整 multi-turn 才传 JSON)。None = 还没 parse 完(罕见
     # 中途异常) / 历史 buffer 在 parse 前先 push 这条 text。
     outcome_summary: str | None = None
+
+
+@dataclass
+class TacticalSquad:
+    """B 类 L2 squad 抢占状态（harass / scout）。"""
+
+    directive_id: str
+    unit_tags: set[int]
+    target: Any  # Point2 or None
+    move_type: Any  # sharpy MoveType or None
+    verb: str
+    n_wanted: int
+    n_locked: int
+
+
+# A 类 verb（全军 override flag 路径）
+_A_VERBS: frozenset[str] = frozenset({"attack", "defend", "retreat", "hold", "vision"})
+# B 类 verb（squad 抢占路径）；raze/regroup/split/drop MVP 留 on_hold
+_B_VERBS: frozenset[str] = frozenset({"harass", "scout"})
 
 
 @dataclass(slots=True)
@@ -174,6 +194,10 @@ class Director:
         self._tactics: Tactics | None = None
         # 玩家 voice 切剧本但时机已过 → 拦下来等"硬转"确认;(directive, reasons)
         self._pending_force_strategy: tuple[Directive, list[str]] | None = None
+        # P0b Task 12: L2 tactical_objective 状态
+        self._tactical_squads: dict[str, TacticalSquad] = {}
+        self._tactical_overrides: dict[str, str] = {}
+        self._current_l2_global_id: str | None = None
 
     # ------------------------------------------------------------------
     # snapshot / event 回调注入（P0 / P1）
@@ -1722,6 +1746,11 @@ class Director:
             # _apply_to_facade 不需额外 facade 调用（UI 透传走 snapshot 路径）。
             return
 
+        if t == DirectiveType.TACTICAL_OBJECTIVE:
+            assert isinstance(payload, TacticalObjectivePayload)
+            self._exec_tactical_objective(d, payload)
+            return
+
     def _apply_unit_claim(self, d: Directive, payload: UnitClaimPayload, now: float) -> None:
         tags = self.facade.resolve_selector(
             unit_type=payload.selector.unit_type,
@@ -1747,6 +1776,137 @@ class Director:
         target_role = UnitRole.IDLE if payload.return_to_role == "IDLE" else UnitRole.ARMY
         for tag in tags:
             self.facade.set_unit_role(tag, target_role)
+
+    # ------------------------------------------------------------------
+    # L2 tactical_objective executor（P0b Task 12）
+    # ------------------------------------------------------------------
+
+    def _exec_tactical_objective(
+        self, d: Directive, payload: TacticalObjectivePayload
+    ) -> None:
+        """L2 分流入口：A 类（override flag）/ B 类（squad 抢占）/ 其他（on_hold）。"""
+        verb = payload.verb
+        if verb in _A_VERBS:
+            self._exec_l2_global(d, payload)
+        elif verb in _B_VERBS:
+            self._exec_l2_squad(d, payload)
+        else:
+            logger.warning("L2 verb %r MVP 未支持 (id=%s)", verb, d.id[:8])
+            self._set_override_status(d, "on_hold", f"verb {verb} 未支持")
+
+    def _exec_l2_global(
+        self, d: Directive, payload: TacticalObjectivePayload
+    ) -> None:
+        """A 类：attack/defend/retreat/hold/vision → facade override flag。"""
+        # 清前一条 active L2 global
+        if self._current_l2_global_id and self._current_l2_global_id != d.id:
+            self._tactical_overrides.pop(self._current_l2_global_id, None)
+        point = self._resolve_target_area(payload.target_area)
+        try:
+            self.facade.set_attack_target_override(point)
+            self.facade.set_combat_intent_override(payload.verb)  # type: ignore[arg-type]
+        except Exception as exc:
+            logger.debug("L2 global override fail: %s", exc)
+            self._set_override_status(d, "on_hold", f"facade 失败: {exc}")
+            return
+        self._tactical_overrides[d.id] = payload.verb
+        self._current_l2_global_id = d.id
+        target_desc = payload.target_area or ""
+        self._set_override_status(d, "active", f"{payload.verb} {target_desc}".strip())
+
+    def _exec_l2_squad(
+        self, d: Directive, payload: TacticalObjectivePayload
+    ) -> None:
+        """B 类：harass/scout → 抢占 free unit → set_unit_role LLM_CONTROLLED。"""
+        if payload.unit_count_hint is None:
+            self._set_override_status(d, "on_hold", "缺 unit_count_hint")
+            return
+        n_wanted = payload.unit_count_hint
+        if not payload.unit_type_hint:
+            self._set_override_status(d, "on_hold", "缺 unit_type_hint")
+            return
+        unit_type = payload.unit_type_hint[0]
+        free_tags = self.facade.resolve_selector(unit_type=unit_type)
+        tags = free_tags[:n_wanted]
+        if not tags:
+            self._set_override_status(d, "on_hold", f"无空闲 {unit_type}")
+            return
+        for tag in tags:
+            self.facade.set_unit_role(tag, UnitRole.LLM_CONTROLLED)
+        target_pt = self._resolve_target_area(payload.target_area)
+        # sharpy MoveType lazy import（防 e2e import 路径错误）
+        try:
+            from sharpy.combat.move_type import MoveType
+
+            move_type: Any = MoveType.Harass if payload.verb == "harass" else MoveType.Assault
+        except Exception:
+            move_type = None
+        squad = TacticalSquad(
+            directive_id=d.id,
+            unit_tags=set(tags),
+            target=target_pt,
+            move_type=move_type,
+            verb=payload.verb,
+            n_wanted=n_wanted,
+            n_locked=len(tags),
+        )
+        self._tactical_squads[d.id] = squad
+        if len(tags) == n_wanted:
+            msg = f"已接管 {len(tags)} 个 {unit_type}"
+        else:
+            msg = f"已接管 {len(tags)}/{n_wanted} 个 {unit_type}（短缺）"
+        self._set_override_status(d, "active", msg)
+
+    def _resolve_target_area(self, area: Any) -> Any:
+        """area: str (named_spot) / (x,y) tuple / None → Point2 或 None。"""
+        if area is None:
+            return None
+        try:
+            from sc2.position import Point2
+        except Exception:
+            return None
+        if isinstance(area, (tuple, list)) and len(area) == 2:
+            try:
+                return Point2((float(area[0]), float(area[1])))
+            except Exception:
+                return None
+        if self._bot is None:
+            return None
+        try:
+            if area == "enemy_main":
+                return self._bot.enemy_start_locations[0]
+            if area == "enemy_natural":
+                try:
+                    return self._bot.knowledge.enemy_expansion_zones[1].center_location
+                except Exception:
+                    return self._bot.enemy_start_locations[0]
+            if area == "own_main":
+                return self._bot.knowledge.expansion_zones[0].center_location
+            if area == "own_natural":
+                zones = self._bot.knowledge.expansion_zones
+                return zones[1].center_location if len(zones) > 1 else zones[0].center_location
+        except Exception:
+            return None
+        return None
+
+    async def execute_tactics_step(self, now: float) -> None:
+        """每 sharpy step 调，给 active squad 派活（GroupCombatManager）。"""
+        if not self._tactical_squads:
+            return
+        if self._bot is None:
+            return
+        for squad in list(self._tactical_squads.values()):
+            try:
+                cm = getattr(self._bot, "combat_manager", None) or getattr(
+                    self._bot, "group_combat", None
+                )
+                if cm is None:
+                    continue
+                cm.execute(list(squad.unit_tags), squad.target, squad.move_type)
+            except Exception as exc:
+                logger.debug(
+                    "execute_tactics_step squad %s fail: %s", squad.directive_id[:8], exc
+                )
 
     # ------------------------------------------------------------------
     # ParseContext 构造（从 facade.get_state + board 当前快照）
