@@ -136,7 +136,7 @@ verb 消歧规则：
 - `engagement_constraint(stance=hold)` 影响**整支军队**的 stance(全局静止)
 - `unit_claim(task.verb=hold_position)` 影响 selector 指定的**特定单位**(单位级)
 - 玩家说"所有人原地别动" → engagement_constraint(stance=hold)
-- 玩家说"那个叉子守住别动" → unit_claim(selector={unit_type:Zealot}, task.verb=hold_position, persistent=true)
+- 玩家说"那个叉子守住别动" → unit_claim(selector={{unit_type:Zealot}}, task.verb=hold_position, persistent=true)
 
 ====== scout 路由消歧 ======
 
