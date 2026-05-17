@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibecraft.bot.event_bus import EventBus
 from vibecraft.bot.facade import Sc2Facade, UnitRole
@@ -311,6 +311,12 @@ class Director:
             "production_overrides": [
                 self._production_override_view(s) for s in self.production_overrides
             ],
+            # P3.5 active tactical objectives（L2 in-flight TACTICAL_OBJECTIVE）
+            "active_tactics": [
+                self._tactical_view(d)
+                for d in self._in_flight.values()
+                if d.type == DirectiveType.TACTICAL_OBJECTIVE
+            ],
         }
         # bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
         if self._pending_recommendation is not None:
@@ -398,7 +404,7 @@ class Director:
     # ------------------------------------------------------------------
 
     # 神族单位 canonical→中文 display 表（从 aliases/protoss.yaml units 节提取）
-    _UNIT_ZH: dict[str, str] = {
+    _UNIT_ZH: ClassVar[dict[str, str]] = {
         "Probe": "探机",
         "Zealot": "叉子",
         "Stalker": "追猎",
@@ -419,6 +425,71 @@ class Director:
         "Carrier": "航母",
         "Mothership": "母舰",
     }
+
+    # ------------------------------------------------------------------
+    # P3.5 active_tactics snapshot helpers
+    # ------------------------------------------------------------------
+
+    _TACTICAL_VERB_ZH: ClassVar[dict[str, str]] = {
+        "attack": "进攻",
+        "defend": "守",
+        "scout": "探",
+        "expand": "开矿",
+        "harass": "骚扰",
+        "drop": "投放",
+        "vision": "探视野",
+        "raze": "拆",
+        "retreat": "撤退",
+        "regroup": "集结",
+        "split": "分兵",
+    }
+
+    def _format_tactical_display(self, payload: Any) -> str:
+        """中文人话格式：'{verb_zh} {target_area}'（P3.5）。
+
+        例：'进攻 enemy_natural' / '探 enemy_main' / '骚扰 (12.5, 34.0)'。
+        target_area:named_spot 直显，tuple→坐标，None→'自定'。
+        """
+        from vibecraft.directives.models import TacticalObjectivePayload
+
+        if not isinstance(payload, TacticalObjectivePayload):
+            return "未知战术"
+        verb_zh = self._TACTICAL_VERB_ZH.get(payload.verb, payload.verb)
+        if payload.target_area is None:
+            target_display = "自定"
+        elif isinstance(payload.target_area, str):
+            target_display = payload.target_area
+        else:
+            # tuple[float, float]
+            target_display = f"({payload.target_area[0]}, {payload.target_area[1]})"
+        return f"{verb_zh} {target_display}"
+
+    def _tactical_view(self, d: Directive) -> dict[str, Any]:
+        """把一条 TACTICAL_OBJECTIVE Directive 转成 snapshot 里的 view dict（P3.5）。
+
+        字段：id / display / verb / target_area / issued_at。
+        """
+        from vibecraft.directives.models import TacticalObjectivePayload
+
+        payload = d.payload
+        display = self._format_tactical_display(payload)
+        verb = payload.verb if isinstance(payload, TacticalObjectivePayload) else ""
+        if isinstance(payload, TacticalObjectivePayload):
+            if payload.target_area is None:
+                target_area: str | None = None
+            elif isinstance(payload.target_area, str):
+                target_area = payload.target_area
+            else:
+                target_area = f"({payload.target_area[0]}, {payload.target_area[1]})"
+        else:
+            target_area = None
+        return {
+            "id": d.id,
+            "display": display,
+            "verb": verb,
+            "target_area": target_area,
+            "issued_at": d.issued_at,
+        }
 
     def _production_override_view(self, d: Directive) -> dict[str, Any]:
         """把一条 production override Directive 转成 snapshot 里的 view dict（P2）。

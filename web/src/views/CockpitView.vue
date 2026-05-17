@@ -29,6 +29,7 @@ import type {
   PendingForceStrategyView,
   StandingOrderView,
   ProductionOverrideView,
+  TacticalObjectiveView,
 } from '@/types'
 
 const props = defineProps<{
@@ -43,6 +44,7 @@ const props = defineProps<{
   pendingForceStrategy: PendingForceStrategyView | null
   standingOrders: readonly StandingOrderView[]
   productionOverrides: readonly ProductionOverrideView[]
+  activeTactics: readonly TacticalObjectiveView[]
 }>()
 
 const currentStage = computed<'opening' | 'midgame' | 'lategame'>(

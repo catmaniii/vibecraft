@@ -19,6 +19,7 @@ import type {
   PendingForceStrategyView,
   StandingOrderView,
   ProductionOverrideView,
+  TacticalObjectiveView,
   RevokeDirectiveFrame,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
@@ -64,6 +65,9 @@ export function useWs() {
 
   // P2：production overrides（snapshot 透传）
   const productionOverrides = ref<ProductionOverrideView[]>([])
+
+  // P3.5：active tactical objectives（snapshot 透传）
+  const activeTactics = ref<TacticalObjectiveView[]>([])
 
   // command_echo（最新一条）
   const lastEcho = ref<CommandEchoFrame | null>(null)
@@ -119,6 +123,7 @@ export function useWs() {
             pendingForceStrategy.value = f.pending_force_strategy ?? null
             standingOrders.value = f.standing_orders ?? []
             productionOverrides.value = f.production_overrides ?? []
+            activeTactics.value = f.active_tactics ?? []
             break
           }
           case 'event': {
@@ -236,6 +241,7 @@ export function useWs() {
     pendingForceStrategy: readonly(pendingForceStrategy),
     standingOrders: readonly(standingOrders),
     productionOverrides: readonly(productionOverrides),
+    activeTactics: readonly(activeTactics),
     send,
     sendViewMove,
     confirmRecommendation,

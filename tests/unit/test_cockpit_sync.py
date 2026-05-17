@@ -888,3 +888,76 @@ class TestSnapshotProductionOverrides:
         # EXPANSION_OVERRIDE: "开 3 矿"
         exp_view = by_id[exp_d.id]
         assert "开 3 矿" in exp_view["display"]
+
+
+# ---------------------------------------------------------------------------
+# P3.5: Snapshot active_tactics 字段
+# ---------------------------------------------------------------------------
+
+
+def _make_tactical_objective_directive(
+    verb: str = "attack",
+    target_area: str | tuple[float, float] | None = "enemy_natural",
+) -> Directive:
+    """构造一个 TACTICAL_OBJECTIVE Directive。"""
+    from vibecraft.directives.models import TacticalObjectivePayload
+
+    payload = TacticalObjectivePayload(verb=verb, target_area=target_area)  # type: ignore[arg-type]
+    return Directive(payload=payload, issued_at=30.0)
+
+
+class TestSnapshotActiveTactics:
+    """P3.5 build_snapshot 加 active_tactics 字段。"""
+
+    def test_snapshot_includes_active_tactics_field(self) -> None:
+        """build_snapshot 返回 dict 包含 active_tactics 且是 list（空 list 也 OK）。"""
+        d = _make_director()
+        snap = d.build_snapshot(now=10.0)
+        assert "active_tactics" in snap
+        assert isinstance(snap["active_tactics"], list)
+
+    def test_snapshot_active_tactics_empty_by_default(self) -> None:
+        """没有 TACTICAL_OBJECTIVE in-flight 时，active_tactics 是空 list。"""
+        d = _make_director()
+        snap = d.build_snapshot(now=10.0)
+        assert snap["active_tactics"] == []
+
+    def test_snapshot_active_tactics_contains_one_after_submit(self) -> None:
+        """TACTICAL_OBJECTIVE 进 _in_flight 后，snapshot.active_tactics 含 1 条。"""
+        d = _make_director()
+        board = DirectiveBoard(commit_delay_s=10.0)  # 不立即 commit，保持 in-flight
+        d.board = board
+        directive = _make_tactical_objective_directive("attack", "enemy_natural")
+        d._submit_directives([directive], now=30.0)
+        # directive 在 board pending 中，但已在 _in_flight
+        snap = d.build_snapshot(now=30.5)
+        assert len(snap["active_tactics"]) == 1
+
+    def test_snapshot_active_tactics_view_fields_correct(self) -> None:
+        """active_tactics 条目含正确字段：id / display / verb / target_area / issued_at。"""
+        d = _make_director()
+        board = DirectiveBoard(commit_delay_s=10.0)
+        d.board = board
+        directive = _make_tactical_objective_directive("attack", "enemy_natural")
+        d._submit_directives([directive], now=30.0)
+        snap = d.build_snapshot(now=30.5)
+        assert len(snap["active_tactics"]) == 1
+        view = snap["active_tactics"][0]
+        assert view["id"] == directive.id
+        assert view["verb"] == "attack"
+        assert view["target_area"] == "enemy_natural"
+        assert view["issued_at"] == 30.0
+        # display 应为中文 "进攻 enemy_natural"
+        assert view["display"] == "进攻 enemy_natural"
+
+    def test_snapshot_active_tactics_display_chinese(self) -> None:
+        """display 格式是中文动词 + target_area（e.g., '进攻 enemy_natural'）。"""
+        d = _make_director()
+        board = DirectiveBoard(commit_delay_s=10.0)
+        d.board = board
+        directive = _make_tactical_objective_directive("harass", "enemy_main")
+        d._submit_directives([directive], now=30.0)
+        snap = d.build_snapshot(now=30.5)
+        view = snap["active_tactics"][0]
+        assert "骚扰" in view["display"]
+        assert "enemy_main" in view["display"]

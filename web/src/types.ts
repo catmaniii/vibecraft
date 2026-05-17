@@ -136,6 +136,15 @@ export interface ProductionOverrideView {
   directive_type: 'production_override' | 'tech_override' | 'expansion_override'
 }
 
+// P3.5 新增：active tactical objective 单条视图（来自 Director._in_flight TACTICAL_OBJECTIVE）
+export interface TacticalObjectiveView {
+  id: string
+  display: string         // 中文人话，如 "进攻 enemy_natural"
+  verb: string            // 11 verb 之一（attack/defend/scout/...）
+  target_area: string | null
+  issued_at: number
+}
+
 export interface SnapshotFrame {
   type: 'snapshot'
   ts: number
@@ -150,6 +159,8 @@ export interface SnapshotFrame {
   standing_orders: StandingOrderView[]
   // P2 新增：production overrides 列表
   production_overrides?: ProductionOverrideView[]
+  // P3.5 新增：active tactical objectives（L2 in-flight）
+  active_tactics: TacticalObjectiveView[]
   // bot 推荐(玩家未 confirm 前一直 carry,confirm 后清掉)
   recommendation?: RecommendationView
   // bot 内部意图(进攻/守家/开矿/探路/运营)

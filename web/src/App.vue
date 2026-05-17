@@ -16,7 +16,7 @@ const {
   snapshotStrategy, recentCommands, events, minimap, lastEcho,
   recommendation, tactics, confirmRecommendation, dismissRecommendation,
   pendingForceStrategy, confirmForceStrategy, cancelForceStrategy,
-  standingOrders, productionOverrides, revokeDirective,
+  standingOrders, productionOverrides, activeTactics, revokeDirective,
 } = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
@@ -95,6 +95,7 @@ const sc2Label = computed(() => {
         :pending-force-strategy="pendingForceStrategy"
         :standing-orders="standingOrders"
         :production-overrides="productionOverrides"
+        :active-tactics="activeTactics"
         @command="onCommand"
         @view-move="onViewMove"
         @confirm-recommendation="confirmRecommendation"
