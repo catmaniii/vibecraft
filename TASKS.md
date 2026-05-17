@@ -7,13 +7,13 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD `936dcc2` + P3.7/.8 待 commit，tag `v0.1.0a3`）
+## 当前状态（最近更新：2026-05-17，HEAD `d1f795d` + P5 收尾待 commit，tag `v0.1.0a3`）
 
-- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 + P3 完成**（L1/L3/L4 + L2
-  TacticalObjective + task_monitor + done_when 8-kind dispatcher + LLM prompt
-  教 done_when + 4 个 PWA cards (Standing/Production/Tactics) 全套 ✅）。
-  剩 P5（sharpy 让位机制 + named_spot registry）/ P4（LLM prompt 重写）/
-  P6（收尾 + 真实 SC2 全链路 verify）。
+- **里程碑**：M1 出口已 tag `v0.1.0a3`。**M2 P1 + P2 + P3 + P5 完成**：
+  L1/L3/L4/L2 完整 directive 链路 + task_monitor + 8-kind done_when dispatcher +
+  LLM prompt 教 done_when + 4 个 PWA cards + **NamedSpotRegistry + sharpy 让位
+  机制 + Director bot backref + 6 game-state checker 真路径**。剩 P4（LLM prompt
+  精修）/ P6（收尾 + 真实 SC2 全链路 verify + 修 events.jsonl sinks）。
 - **本次 session 关键节点**：
   - M1 端到端真实 SC2 verify（M1.6 + M5 + M4 mock 全 PASS）
   - voicecraft → vibecraft 全局改名（包路径 + GitHub repo + 文档 + PDF）
@@ -22,16 +22,16 @@
     跑通；EventBus + 11 hook wire + L3/L4/L2 全套（state/snapshot/UI/撤销）+
     task_monitor + done_when 8-kind dispatcher + LLM prompt 教 done_when + 3 个
     新 PWA card
-- **最近 commit（M2 P3 系列，按时间倒序）**：
-  - `936dcc2` P3.6: PWA TacticsCard.vue + CockpitView 加 section
-  - `914cdc2` P3.5: snapshot 加 active_tactics + 前端 type
-  - `3deddf0` P3.4: prompt verb/done_when whitelist + few-shot + validate retry
-  - `b2f6021` P3.3: task_monitor 6 checker + any_of/all_of + pydantic
-  - `bf94a16` P3.2: wire task_monitor to Director + board.complete + L2 routing
-  - `477489f` P3 schema: TACTICAL_OBJECTIVE + DoneWhen 8-kind discriminated union
-  - `50aac9b` P3: TaskMonitor skeleton + 2 reference checkers
-  - `bfcc3c2` P2 收尾 + `8d00070` P2.b 前端 + `20982a5` P2.a 后端
-  - `6665886` P1 收尾 + `d3e1a96` ... `83fddad`（P1 系列 8 个 commit）
+- **最近 commit（M2 P5 系列，按时间倒序）**：
+  - `d1f795d` P5.G: target_destroyed 真路径 + 6 checker mock-bot 单测
+  - `308513d` P5.E: standing order unit assign + sharpy 让位 + board.revoke committed
+  - `855bc24` P5.D: publisher area inference (UNIT_DESTROYED + area)
+  - `1b203e8` P5.C: Director bot backref + named_spots field
+  - `8d2d87b` P5.B: vision_acquired 改 ts diff 而非 step count
+  - `f32039e` P5.A: NamedSpotRegistry 新建（15 spot + closest 反查）
+  - `7c6a8de` P3 收尾 + `936dcc2 ... 50aac9b`（P3 系列 7 commit）
+  - `bfcc3c2` P2 收尾 + `8d00070` + `20982a5`（P2 系列）
+  - `6665886` P1 收尾 + `d3e1a96 ... 83fddad`（P1 系列 8 个 commit）
 - **GitHub repo**：`catmaniii/vibecraft`，远端跟本地 sync
 - **阻塞 / 等待**：无，M2 P3 可开工
 - **下一步**（按 ADR 0010 / plan §7 次序）：
@@ -41,16 +41,22 @@
      release `LLM_CONTROLLED` tags + `named_spot` registry）（~1d）
   3. **M2 P4**：LLM prompt 重写（4 层例子 + 分类规则）（~0.5d）
   4. **M2 P6**：收尾 + ADR 补 corner case + headless 验证（~0.5d）
-- **P1/P2/P3 已知 deferred 到 P5/P6（详 ADR 0010 Implementation Notes）**：
-  - sharpy 真让位 standing order 单位（P1 只进列表 + UI，不真 hold）—— **P5**
-  - L4 production override 真 dispatch 到 sharpy（P3 task_monitor mark completed
-    但不真触发 sharpy 出兵）—— **P5/P6**
-  - Director 加 bot backref 让 6 个 game-state checker 真工作（P3 game_state=None） —— **P5**
-  - `named_spot` registry 完整（P3 只支持 natural/third/main 白名单）—— **P5**
-  - vision_acquired 用 ts diff 不用 step count（bug：counter 累加快 22x）—— **P5**
-  - enemy_killed_in_area: publisher 加 area inference（P1.0b 没填 payload.area）—— **P5**
-  - headless_smoke 子进程 GameSession sinks（events.jsonl 空，无法 verify task_monitor 真触发）—— **P6**
-  - `board.revoke()` 对已 committed standing order 返回 False（行为 OK 但不完整）—— **P5**
+- **P1/P2/P3 deferred items（P5 已全部完成 ✅）**：
+  - ✅ sharpy 真让位 standing order 单位 → P5.E
+  - ✅ Director bot backref 让 6 game-state checker 真工作 → P5.C
+  - ✅ `named_spot` registry 完整 → P5.A
+  - ✅ vision_acquired 用 ts diff → P5.B
+  - ✅ enemy_killed_in_area publisher area inference → P5.D
+  - ✅ `board.revoke()` 支持 committed overlay → P5.E
+  - ✅ target_destroyed 真路径 → P5.G
+- **剩余 deferred 到 P6**：
+  - headless_smoke 子进程 GameSession sinks（events.jsonl 空，无法 verify
+    task_monitor 真触发 directive_completed event）
+  - cross-test pollution flaky tests（`test_loads_real_strategies` /
+    `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`
+    full suite 偶发 fail，单跑永远 PASS）
+  - L4 production override 真 dispatch sharpy 出兵（P3 task_monitor mark completed
+    但 sharpy 端不主动响应；P6 决定要不要做 / 或留 M3）
 - **本次 session 协作模式**（已 verified）：parallel subagent + 主 agent review
   - 主 session (Opus, 我) = orchestrator + reviewer + debugger
   - subagent (Sonnet, fresh context, worktree isolation) = implementer + tester
@@ -197,6 +203,26 @@
   全链路 verify（含 events.jsonl sinks 修复）。
 
 P3 总计 527 后端 + 50 前端 passed（+109 since P2 done）。
+
+#### P5 sharpy 让位 + named_spot + 6 deferred items  ✅ done（2026-05-17，~1h wall-clock，4 波）
+
+7 个 sub-task：
+- [x] **P5.A** NamedSpotRegistry 新建（15 spot + closest_named_spot 反查）+ 22 单测
+- [x] **P5.B** vision_acquired 改 ts diff 而非 step count（dispatcher signature
+  加 now 参数）+ 6 vision tests
+- [x] **P5.C** Director bot backref + bot.named_spots field + task_monitor 用
+  registry 解析 spot + 9 单测
+- [x] **P5.D** publisher area inference (UNIT_DESTROYED + UNIT_TOOK_DAMAGE 加
+  area 字段，用 closest_named_spot 反查) + 8 单测
+- [x] **P5.E** standing order unit assign + sharpy 让位（_assign/_release standing
+  order units + facade.release_unit_role）+ board.revoke 支持 committed overlay +
+  11 单测
+- [x] **P5.F** （含在 P5.E）：board.revoke committed overlay
+- [x] **P5.G** target_destroyed 真路径（enemy_natural/third/main via registry）+
+  6 checker 真实 mock-bot 测试 + 18 单测
+
+P5 总计 591 后端 passed（+64 since P3 done）。1 个 P3 deferred 还在（L4 sharpy
+真出兵）→ M3 范围。
 
 #### ~~P3 L2 Tactics~~ ✅ done（见上一段）
 

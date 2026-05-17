@@ -308,3 +308,39 @@ P1 实施时定义 standing 守建筑的 schema 形态（**倾向**：用 `targe
   event**（events.jsonl 空，headless_smoke 子进程 GameSession 没 wire sinks，
   pre-existing issue）。task_monitor.tick 触发 board.complete 实际效果要 P6
   全链路 verify（含 sinks fix + 真实 SC2 30s 等待）。
+
+### P5 实施（2026-05-17）
+
+- **NamedSpotRegistry 完整**：15 个已知 spot（natural / third / main / enemy_*
+  / *_ramp / *_gas 变种）。`resolve(name, bot)` 走 sharpy zone_manager 或
+  python-sc2 fallback。`closest_named_spot(point, bot)` 反向查找（publisher
+  area inference 用）。
+- **vision_acquired 改 ts diff**：从 step count 累加（22x bug）改成
+  `_vision_first_visible_ts[id]` 记 spell 开始 wall-clock ts，每 tick 算
+  `now - first_ts >= hold_seconds`。dispatcher signature 加 `now` 参数，所有 8
+  checker 都加 `now: float = 0.0` 默认参数兼容。
+- **Director._bot backref**：`__init__(bot=None)`（向后兼容），`on_start` 时
+  `self.director._bot = self`（避免连锁修改 game_process / sharpy_adapter）。
+  task_monitor.tick(game_state=bot) 让 6 个 game-state checker 真工作。
+- **task_monitor._resolve_named_spot 优先 registry**：`isinstance(game_state.named_spots,
+  NamedSpotRegistry)` 检查（防 MagicMock 误匹配），fallback P3 白名单兼容旧测试。
+- **publisher area inference (UNIT_DESTROYED / UNIT_TOOK_DAMAGE)**：
+  `_publish_unit_destroyed` 在 `payload["area"]` 填 `bot.named_spots
+  .closest_named_spot(unit.position, bot)`（max_distance=15）。`MagicMock` 测试
+  用 `del bot.named_spots` 显式删除自动属性走 None 路径。
+- **standing order unit assign + sharpy 让位**：persistent unit_claim 进
+  standing_orders 时 resolve selector + `bot.facade.set_unit_role(LLM_CONTROLLED)`
+  + 记 `Director._standing_order_tags[id] = set(tags)`。revoke 时调
+  `bot.facade.release_unit_role(tag)` 让 sharpy 重新接管。
+- **board.revoke 支持 committed overlay**：从 pending miss → 检 overlays，
+  删除 + `_release_claims_for` + DIRECTIVE_REVOKED event。配套 standing order
+  revoke 链路完整。
+- **target_destroyed P5 真路径**：原 P3 natural/third/main hardcoded 返回 False。
+  P5 改：`target_kind` ∈ {natural, third, main} → 前缀 "enemy_" → registry
+  resolve → `enemy_structures.closer_than(8, pos)`。target_kind="unit_type"
+  现有路径保留。
+- **flaky cross-test pollution**：本 session 多次见 `test_loads_real_strategies`
+  / `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`
+  full suite 偶发 fail，单跑永远 PASS。推测 pytest fixture / module-level state
+  污染。**P6 排查**：用 `pytest -p no:randomly` 或 `--forked` 隔离，或 grep
+  module-level mutable state。
