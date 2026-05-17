@@ -1003,3 +1003,77 @@ class TestStandingOrderUnitAssign:
         # 且还未调 set_unit_role（committed 前不调）
         set_role_calls = [c for c in facade.calls if c.method == "set_unit_role"]
         assert len(set_role_calls) == 0
+
+
+# =========================================================================
+# P0c Task 7: strategy_cancel 统一走 board.submit
+# =========================================================================
+
+
+def _make_strategy_cancel_directive(stage: str = "all") -> Directive:
+    """构造一个 STRATEGY_CANCEL Directive。"""
+    from vibecraft.directives.models import StrategyCancelPayload
+
+    payload = StrategyCancelPayload(stage=stage)  # type: ignore[arg-type]
+    return Directive(payload=payload, issued_at=10.0)
+
+
+class TestStrategyCancelViaBoard:
+    """P0c Task 7: strategy_cancel 跟其它 directive 一样走 board.submit → _apply_to_facade。"""
+
+    def test_strategy_cancel_goes_via_board_submit(self, director: Director) -> None:
+        """submit 后 directive 应在 board.pending (还没到 effective_at)。"""
+        d = _make_strategy_cancel_directive(stage="all")
+        director._submit_directives([d], now=10.0)
+        # 还在 pending 中（1.5s delay 还没过）
+        pending_ids = [p.id for p in director.board.pending]
+        assert d.id in pending_ids
+
+    def test_strategy_cancel_not_immediately_applied(self, director: Director) -> None:
+        """submit 后未到 effective_at：facade.set_build 还没被调。"""
+        facade = director.facade
+        assert isinstance(facade, FakeFacade)
+        d = _make_strategy_cancel_directive(stage="all")
+        director._submit_directives([d], now=10.0)
+        # 0.5s 后 tick，还没 commit
+        director.on_tick(now=10.5)
+        assert "sustain" not in facade.builds
+
+    def test_strategy_cancel_applied_after_commit_delay(self, director: Director) -> None:
+        """到 effective_at 后 on_tick：facade.set_build('sustain') 被调用。"""
+        facade = director.facade
+        assert isinstance(facade, FakeFacade)
+        d = _make_strategy_cancel_directive(stage="all")
+        director._submit_directives([d], now=10.0)
+        # 推过 effective_at (10 + 1.5 = 11.5)
+        director.on_tick(now=12.0)
+        assert "sustain" in facade.builds
+
+    def test_strategy_cancel_clears_board_slot(self, director: Director) -> None:
+        """commit 后 board.slots 对应 stage 被清 None。"""
+        from vibecraft.directives.models import StrategySetPayload
+        from vibecraft.directives.types import StageKind
+
+        # 先手动在 board.slots 设置一个 opening slot（bypass delay）
+        director.board.slots[StageKind.OPENING] = None
+        # 用 set_initial_slot 绕过 delay
+        director.board.set_initial_slot(StageKind.OPENING, "gate1_robo_opening", now=0.0)
+        assert director.board.slots[StageKind.OPENING] is not None
+
+        d = _make_strategy_cancel_directive(stage="all")
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)
+
+        assert director.board.slots[StageKind.OPENING] is None
+
+    def test_strategy_cancel_logged_in_directives_stream(
+        self, session: GameSession, director: Director
+    ) -> None:
+        """board.submit 路径：directives.jsonl 有 STRATEGY_CANCEL submitted 记录。"""
+        from vibecraft.logging_ import LogStream
+
+        d = _make_strategy_cancel_directive()
+        director._submit_directives([d], now=10.0)
+        records = session.get_null_records(LogStream.DIRECTIVES)
+        types = [r["type"] for r in records]
+        assert "strategy_cancel" in types

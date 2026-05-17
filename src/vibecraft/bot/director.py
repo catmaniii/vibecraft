@@ -36,6 +36,7 @@ from vibecraft.directives.models import (
     MovePayload,
     ProductionOverridePayload,
     ScoutPayload,
+    StrategyCancelPayload,
     StrategySetPayload,
     TechOverridePayload,
     UnitClaimPayload,
@@ -608,9 +609,7 @@ class Director:
 
         for d in directives:
             d_with_ts = d.model_copy(update={"issued_at": now})
-            if d_with_ts.type == DirectiveType.STRATEGY_CANCEL:
-                self._dispatch_cancel(d_with_ts, now)
-            elif (
+            if (
                 d_with_ts.type == DirectiveType.STRATEGY_SET
                 and d_with_ts.issued_by == IssuedBy.VOICE
             ):
@@ -834,16 +833,24 @@ class Director:
         return self.revoke_production_override(directive_id, now)
 
     def _dispatch_cancel(self, directive: Directive, now: float) -> None:
-        """处理 STRATEGY_CANCEL:清掉 board 对应 slot + 切 sustain plan。
+        """兼容入口（已废弃旁路）。转发到 _apply_strategy_cancel。
 
-        玩家说"取消" / "停下" / "等等" → bot 切到 Sustain plan(macro + 守家,不出门),
-        等下个剧本指令。
+        原来直接旁路调用，现在走 board.submit → _apply_to_facade → _apply_strategy_cancel。
+        此方法保留防止外部仍有调用；内部不再从 _submit_directives 调用。
         """
-        from vibecraft.directives.models import StrategyCancelPayload
-
-        payload = directive.payload
-        if not isinstance(payload, StrategyCancelPayload):
+        if not isinstance(directive.payload, StrategyCancelPayload):
             return
+        self._apply_strategy_cancel(directive.payload, now, directive_id=directive.id)
+
+    def _apply_strategy_cancel(
+        self, payload: StrategyCancelPayload, now: float, directive_id: str
+    ) -> None:
+        """STRATEGY_CANCEL commit 后执行：清 board slot + 切 sustain + log + push snapshot。
+
+        由 _apply_to_facade 调用（board.submit → commit → 这里），不再是旁路直调。
+        """
+        import contextlib
+
         cleared_stages: list[StageKind] = []
         targets: list[StageKind] = (
             list(StageKind) if payload.stage == "all" else [StageKind(payload.stage)]
@@ -852,28 +859,27 @@ class Director:
             if self.board.slots.get(stage) is not None:
                 self.board.slots[stage] = None
                 cleared_stages.append(stage)
-        # 切 sustain plan(facade.set_build 即时生效)
-        import contextlib
-
+        # commit 后把 STRATEGY_CANCEL directive 从 board.overlays 移出（它已执行，不需持续活跃）
+        self.board.overlays = [d for d in self.board.overlays if d.id != directive_id]
+        # 切 sustain plan（facade.set_build 即时生效）
         with contextlib.suppress(Exception):
             self.facade.set_build("sustain")
-        # 清掉推荐(也许之前推荐是基于刚被清的 opening 算的)
+        # 清掉推荐
         self._pending_recommendation = None
-        # log 事件,触发 snapshot 刷新
+        # log 事件，触发 snapshot 刷新
         self.session.log_event(
             Event(
                 ts=now,
-                kind=EventKind.STRATEGY_SET,  # 复用,payload 标记是 cancel
+                kind=EventKind.STRATEGY_SET,
                 payload={
                     "action": "cancel",
                     "cleared_stages": [s.value for s in cleared_stages],
-                    "directive_id": directive.id,
+                    "directive_id": directive_id,
                 },
                 priority="medium",
-                caused_by=directive.source_text or "voice",
+                caused_by="voice",
             )
         )
-        # 主动推 snapshot
         self._push_snapshot(now)
 
     # ------------------------------------------------------------------
@@ -1533,6 +1539,11 @@ class Director:
     def _apply_to_facade(self, d: Directive, now: float) -> None:
         payload = d.payload
         t = d.type
+
+        if t == DirectiveType.STRATEGY_CANCEL:
+            assert isinstance(payload, StrategyCancelPayload)
+            self._apply_strategy_cancel(payload, now, directive_id=d.id)
+            return
 
         if t == DirectiveType.STRATEGY_SET:
             assert isinstance(payload, StrategySetPayload)
