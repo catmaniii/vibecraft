@@ -1,0 +1,82 @@
+kind: opening_build
+id: dt_rush
+display_name_zh: "暗使偷家"
+summary_zh: "极速 VB 暗使偷家（DT Rush）：速上 BY + VT + VB，~4:10 首波 DT 到位偷家，配合折跃门保主基地安全。PvT / PvZ 早期 all-in"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.dt_rush:DtRush"
+aliases:
+  - "DT速推"
+  - "DT Rush"
+  - "DT rush"
+  - "暗使偷家"
+  - "暗使"
+  - "暗影"
+  - "暗影修女"
+  - "黑暗圣堂武士"
+  - "黑暗圣堂"
+  - "DT"
+  - "DT偷家"
+  - "暗影骑士偷家"
+  - "暗使rush"
+  - "速DT"
+matchup: [PvT, PvZ]
+
+phases:
+  - id: opening
+    display: "单 BG + 双气"
+    subtitle: "14 BE → 15 BG → 16 双气 → 19 BY → 20 折跃"
+    start_at_supply: 14
+  - id: tech
+    display: "VT + VB 快速上科技"
+    subtitle: "BY 好 → VT → 21 VB，全程 chrono 折跃"
+    start_at_supply: 21
+  - id: massing
+    display: "补 2 BG + 二矿"
+    subtitle: "VB 建造期间补 2 BG + 开二矿（安全家底）"
+    start_at_supply: 25
+  - id: forward
+    display: "首波 DT 出发"
+    subtitle: "VB 完成 → 立刻 warp 3 DT → 赶在 4:10 到对方主基地"
+    start_at_supply: 29
+    start_at_time: 200
+  - id: pressuring
+    display: "持续 DT 压制 + 补充"
+    subtitle: "持续 warp DT + 追猎保家，如未被侦察可持续偷家"
+    start_at_supply: 36
+    start_at_time: 250
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 DtRush.create_plan 控制
+# 参考：lotv.spawningtool.com/build/47308/ + lotv.spawningtool.com/build/82515/
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA x2"
+  - "19 build BY"
+  - "20 research 折跃 @chrono"
+  - "21 build VT"
+  - "21 build BE"
+  - "23 build BG x2"
+  - "24 build VB"
+  - "25 build BE"
+  - "28 build NX"
+  - "29 warp 暗使 x3 @chrono"
+  - "36 warp 追猎 x2（保家）"
+  - "36 warp 暗使 x2（补充）"
+
+scout_at: "15 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.structures.sporecrawler.count >= 2"
+    then: "transition:iac_2base"
+  - sees: "enemy.structures.missileturret.count >= 2"
+    then: "transition:blink_stalker"
+
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+  - midgame_id: blink_stalker
+    when: "enemy.has_detection"
+
+attack_window:
+  open_at: "4:10"
+  close_at: "6:00"
+  target_priority: [main_base, natural, production]
