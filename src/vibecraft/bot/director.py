@@ -2125,8 +2125,22 @@ class Director:
             return
 
         if t == DirectiveType.ENGAGEMENT_CONSTRAINT:
+            # P1b 向后兼容映射：ENGAGEMENT_CONSTRAINT → TacticalObjective(persistent=True)
+            # 旧 jsonl 反序列化 / 现有测试走这里；新代码走 TacticalObjective 路径
             assert isinstance(payload, EngagementConstraintPayload)
-            self.facade.set_engagement_stance(payload.stance)
+            # stance "hold" / "free" 不是 TacticalVerb，fallback 到直接 set_engagement_stance
+            stance = payload.stance
+            if stance in ("defend", "retreat"):
+                # 映射为持续 TacticalObjective（同时立即 override + 写 stance_override）
+                _compat_payload = TacticalObjectivePayload(
+                    verb=stance,  # stance ∈ {"defend","retreat"} checked above
+                    target_area=None,
+                    persistent=True,
+                )
+                self._exec_l2_global(d, _compat_payload)
+            else:
+                # "hold" / "free" 直接走 stance facade
+                self.facade.set_engagement_stance(stance)
             return
 
         if t == DirectiveType.UNIT_CLAIM:
@@ -2242,7 +2256,12 @@ class Director:
             self._set_override_status(d, "on_hold", f"verb {verb} 未支持")
 
     def _exec_l2_global(self, d: Directive, payload: TacticalObjectivePayload) -> None:
-        """A 类：attack/defend/retreat/vision → facade override flag。"""
+        """A 类：attack/defend/retreat/vision → facade override flag。
+
+        persistent=True（原 engagement_constraint 语义）时额外写 stance_override，
+        让 VibeCraftZoneAttack 在本次 attack 结束后也继续保持该姿态（持续生效）。
+        persistent=False（默认）= 一次性，本次 attack 完成后 bot 恢复自由决策。
+        """
         # 清前一条 active L2 global；把旧 directive 标 done（被新指令覆盖）
         if self._current_l2_global_id and self._current_l2_global_id != d.id:
             old_id = self._current_l2_global_id
@@ -2254,6 +2273,9 @@ class Director:
         try:
             self.facade.set_attack_target_override(point)
             self.facade.set_combat_intent_override(payload.verb)  # type: ignore[arg-type]
+            # P1b: persistent=True 同时写 stance_override（持续生效，旧 engagement_constraint 语义）
+            if payload.persistent and payload.verb in ("defend", "retreat"):
+                self.facade.set_engagement_stance(payload.verb)
         except Exception as exc:
             logger.debug("L2 global override fail: %s", exc)
             self._set_override_status(d, "on_hold", f"facade 失败: {exc}")
@@ -2262,7 +2284,10 @@ class Director:
         self._current_l2_global_id = d.id
         self._current_l2_global_directive = d
         target_desc = payload.target_area or ""
-        self._set_override_status(d, "active", f"{payload.verb} {target_desc}".strip())
+        persistent_suffix = " [持续]" if payload.persistent else ""
+        self._set_override_status(
+            d, "active", f"{payload.verb} {target_desc}{persistent_suffix}".strip()
+        )
 
     def _exec_l2_squad(self, d: Directive, payload: TacticalObjectivePayload) -> None:
         """B 类：harass/scout → 抢占 free unit → set_unit_role LLM_CONTROLLED。"""

@@ -317,7 +317,13 @@ class StructureOverridePayload(_PayloadBase):
 
 
 class EngagementConstraintPayload(_PayloadBase):
-    """全局交战策略：`守家` / `不要出门` / `撤退到家`。"""
+    """全局交战策略：`守家` / `不要出门` / `撤退到家`。
+
+    DEPRECATED（P1b）：已合并到 TacticalObjectivePayload(persistent=True)。
+    保留此类型纯粹为向后兼容（旧 JSONL log 反序列化 + 现有单测不 break）。
+    Director._commit 收到此类型时自动映射为 TacticalObjective(verb=stance, persistent=True)。
+    新代码不应再直接生成此 payload；LLM prompt 已改为输出 TacticalObjective。
+    """
 
     type: Literal[DirectiveType.ENGAGEMENT_CONSTRAINT] = DirectiveType.ENGAGEMENT_CONSTRAINT
     stance: Literal["defend", "hold", "retreat", "free"]
@@ -363,7 +369,13 @@ class UnitReleasePayload(_PayloadBase):
 
 
 class TacticalObjectivePayload(_PayloadBase):
-    """L2 战术指令：跨单位的中粒度战术目标（设计文档 §8.1 L2）。"""
+    """L2 战术指令：跨单位的中粒度战术目标（设计文档 §8.1 L2）。
+
+    persistent: 是否持续姿态。
+      - False（默认）= 一次性指令（全军进攻/撤退/防守一波），由 task_monitor 判 done 或玩家点 × 解除
+      - True = 持续姿态（原 engagement_constraint 语义，写 stance_override 持续生效）
+        等价于旧 engagement_constraint(stance=verb)，由 P1b 向后兼容映射路径生成。
+    """
 
     type: Literal[DirectiveType.TACTICAL_OBJECTIVE] = DirectiveType.TACTICAL_OBJECTIVE
     verb: TacticalVerb
@@ -371,6 +383,7 @@ class TacticalObjectivePayload(_PayloadBase):
     unit_count_hint: int | None = None  # None = bot 自决
     unit_type_hint: list[str] | None = None  # None = bot 自决
     priority: int = 50
+    persistent: bool = False  # P1b: True = 持续姿态（旧 engagement_constraint 语义）
 
 
 Payload = Annotated[

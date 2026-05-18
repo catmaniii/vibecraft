@@ -126,35 +126,24 @@ verb 消歧规则：
 | `build` | 让这个农民去造 |
 | `cancel` | 取消这个 / 别造了 |
 
-====== engagement_constraint.stance 白名单（4 个，严格字面值） ======
+====== tactical_objective.persistent 字段规则 ======
 
-> **WARNING：优先用 `tactical_objective`。**
-> `engagement_constraint` 只在玩家**明确说"持续保持 / 一直 / 接下来都"**某种姿态时使用。
-> **一次性命令**（"所有部队回家防守"/"撤退"/"守一波"）**一律用**
-> `tactical_objective(verb=defend/retreat, target_area=natural/main)`，
-> done_when=None（A 类 verb）。
->
-> 判断标准：
-> - "守一波" / "回家防守" / "撤退" → **一次性** → `tactical_objective(verb=defend/retreat)`
-> - "接下来一直守家姿态" / "持续防守到闪烁好" → **持续** → `engagement_constraint(stance=defend)`
+> **P1b（合并）：`engagement_constraint` 已废弃。**
+> 持续姿态全部用 `tactical_objective(persistent=True)` 表达。
 
-**只允许 4 个值,不允许变体。常见错误:**
-- 错:`"hold_position"`(✗) → 对:`"hold"`
-- 错:`"guard"`(✗) → 对:`"defend"`
-- 错:`"守家"`(✗,要用 enum 英文字面值)
+- 一次性命令（"守一波" / "回家防守" / "撤退"）→
+  `tactical_objective(verb=defend/retreat, target_area=natural/main, persistent=False)`
+  done_when=None（A 类 verb），PWA 点 × 解除
+- 持续姿态（"接下来一直守家" / "持续防守到闪烁好"）→
+  `tactical_objective(verb=defend/retreat, persistent=True)`
+  done_when=None 或 tech_done/time_elapsed 等条件
 
-| enum 字面值 | 玩家口语常说法（仅"一直/持续"语境才走这里） |
-|---|---|
-| `defend` | 接下来一直守家 / 持续防守 / 保持防守姿态 |
-| `hold` | 持续按兵不动 / 一直别动 / 保持静止 |
-| `retreat` | 保持撤退状态 / 一直撤 |
-| `free` | 随便打 / 自由发挥 / 恢复自由攻击 |
+`persistent=True` 含义：bot 把此姿态写入 stance_override，attack 完成后也持续保持。
+`persistent=False`（默认）：一次性，bot 完成后恢复自由决策。
 
-**关键区分**:
-- `engagement_constraint(stance=hold)` 影响**整支军队**的 stance(全局静止,**持续**直到玩家解除)
-- `unit_claim(task.verb=hold_position)` 影响 selector 指定的**特定单位**(单位级)
-- 玩家说"所有人原地别动" → engagement_constraint(stance=hold)
-- 玩家说"那个叉子守住别动" → unit_claim(selector={{unit_type:Zealot}}, task.verb=hold_position, persistent=true)
+**全局 hold（所有人原地别动）注意**:
+- 玩家说"所有人原地别动" → `tactical_objective(verb=defend, persistent=True, target_area=None)`
+- 玩家说"那个叉子守住别动" → `unit_claim(selector={{unit_type:Zealot}}, task.verb=hold_position, persistent=true)`
 
 ====== scout 路由消歧 ======
 
@@ -231,8 +220,8 @@ done_when 语义规则：
   - 时间到撤：`done_when=time_elapsed_since(seconds=30~60)`
   - 主要拿信息：`done_when=vision_acquired(area=enemy_main, hold_seconds=3)`
 
-- engagement_constraint 政策:
-  - 默认 done_when=None（同 A 类，玩家通过 PWA 点 X 解除）
+- tactical_objective(persistent=True) 政策:
+  - 默认 done_when=None（玩家通过 PWA 点 X 解除）
   - 玩家明确说"直到 X"/"N 秒后"才给 done_when
     （例：retreat + time_elapsed_since / defend + tech_done）
 
@@ -254,8 +243,9 @@ L1 宏观策略 (整阶段持续):
 L2 战术指令 (阶段性 objective, 不指定 unit):
 - "进攻自然" / "守家" / "探中场" / "凤凰骚扰对面" →
   tactical_objective(verb, target_area, ...) + done_when
-- "守家 / 撤" → engagement_constraint(stance) + done_when (timing/condition)
-- L2 必带 done_when (任务完成判定),timeout_s 兜底
+- "守家 / 撤"（一次性）→ tactical_objective(verb=defend/retreat, persistent=False) + done_when=None
+- "接下来一直守家 / 持续防守"（持续）→ tactical_objective(verb=defend, persistent=True) + done_when
+- L2 必带 done_when (任务完成判定),timeout_s 兜底（A 类 verb 除外，done_when=None）
 
 L3 单兵 / Standing order (指定单位干啥, 可一次性可持久):
 - 一次性: "凤凰举不朽" / "DT 偷家" → unit_claim(selector, task, persistent=false)
@@ -343,7 +333,8 @@ def build_few_shot() -> str:
 → tactical_objective: verb=retreat, target_area="main", done_when=None, timeout_s=None
 
 例 4c：「接下来一直守家姿态」/「持续防守」/「保持防守状态」（持续姿态，明确说一直/持续）
-→ engagement_constraint: stance=defend, done_when=None
+→ tactical_objective: verb=defend, persistent=True, target_area=None, done_when=None
+（persistent=True 表示持续姿态；bot 完成当次 attack 后仍保持 defend stance）
 
 例 5：「凤凰举不朽」
 → unit_claim: selector={unit_type:"Phoenix"}, task={primary_action:{verb:"lift_target", target:{kind:"unit_type", unit_type:"Immortal"}}}, persistent=false
@@ -422,10 +413,10 @@ def build_few_shot() -> str:
 （在主基地区域击杀 5 个探机即完成）
 
 例 15：「30 秒后撤」
-→ [engagement_constraint: stance="retreat",
+→ [tactical_objective: verb="retreat", persistent=True,
    done_when={kind:"time_elapsed_since", seconds:30, ref:"directive_issued"},
    timeout_s: 60]
-（自指令下达起经过 30 秒即完成）
+（持续撤退姿态；自指令下达起经过 30 秒自动结束）
 
 --- 边界 case ---
 
@@ -441,11 +432,11 @@ def build_few_shot() -> str:
                timeout_s:120)   # L3 standing + done
   ]
 
-例 17 (L2 engagement + done): 「守家直到闪烁好」
-→ [engagement_constraint(stance="defend"),
+例 17 (L2 持续姿态 + done): 「守家直到闪烁好」
+→ [tactical_objective(verb="defend", persistent=True, target_area=None,
    done_when={kind:"tech_done", upgrade_id:"BlinkTech"},
-   timeout_s:300]
-（done_when 用 tech_done 把 stance lifecycle 绑定到科技完成）
+   timeout_s:300)]
+（persistent=True 持续守家；done_when 用 tech_done 把 stance lifecycle 绑定到科技完成）
 
 例 18 (撤销所有 standing): 「全部撤销 / 守家的都解散」
 → [strategy_cancel(stage="all")]
@@ -620,7 +611,6 @@ def build_tool_schema() -> dict[str, Any]:
                                     "strategy_cancel / "
                                     "production_override / tech_override / "
                                     "expansion_override / structure_override / "
-                                    "engagement_constraint / "
                                     "tactical_objective / "
                                     "unit_claim / scout / move / build_at / unit_release"
                                 ),
