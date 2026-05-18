@@ -263,7 +263,7 @@ class TestMakeBotClass:
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         with pytest.raises(NotImplementedError):
-            make_bot_class(lambda facade: None, race="Zerg")
+            make_bot_class(lambda facade: None, race="Unknown")
 
 
 # ---------------------------------------------------------------------------

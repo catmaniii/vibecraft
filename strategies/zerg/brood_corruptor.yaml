@@ -1,0 +1,72 @@
+kind: lategame_doctrine
+id: brood_corruptor
+display_name_zh: "巢虫领主腐化者"
+summary_zh: "后期巢虫领主 + 腐化者空军组合：BL 出小虫消耗对方，腐化者护卫 + 对空；搭配感染虫 / 毒蛇控场，慢推胜利"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.brood_corruptor:BroodCorruptor"
+aliases:
+  - "brood_corruptor"
+  - "巢虫腐化"
+  - "BL腐化"
+  - "BL流"
+  - "巢虫领主"
+  - "brood lord"
+  - "broodlord"
+  - "后期虫族"
+  - "BLC"
+
+phases:
+  - id: tech_up
+    display: "升大尖塔 + 感染深渊"
+    subtitle: "Spire → GreaterSpire + InfestationPit，研 Viper 技能"
+    start_at_time: 0
+  - id: composition
+    display: "暴 BL + 腐化者"
+    subtitle: "GreaterSpire 完成 → 持续转化 BL；腐化者护卫"
+    start_at_time: 90
+  - id: push
+    display: "推进"
+    subtitle: "8+ BL + 6+ 腐化者 + 2+ 毒蛇控场 → 推进对方主基地"
+    start_at_time: 300
+
+target_composition:
+  brood_lord: 10
+  corruptor: 8
+  infestor: 4
+  viper: 3
+  zergling: 20
+  queen: 6
+
+required_tech:
+  - GreaterSpire
+  - ZergFlyerWeapons
+  - ZergFlyerArmor
+  - InfestationPit
+
+required_structures:
+  greater_spire: 1
+  infestation_pit: 1
+  hatchery: 4
+
+engagement_doctrine:
+  - "BL 站后排缓慢推进，小虫吸引对方注意"
+  - "腐化者前排护卫 BL，优先打对方飞行单位"
+  - "毒蛇 Abduct 拉出对方 Tempest / BC / 母舰"
+  - "感染虫 Fungal 锁定地面大部队"
+  - "BL 血少时让腐化者上前护卫"
+
+win_condition:
+  type: composition_advantage
+  description: "BL 小虫消耗 + 腐化者护卫，对方单位被小虫淹没无法靠近 BL"
+  signals:
+    - "self.units.brood_lord.amount >= 8"
+    - "self.units.corruptor.amount >= 6"
+
+counters_against:
+  - skytoss
+  - bio
+  - mech_ground
+
+weak_against:
+  - mass_viking
+  - mass_phoenix
+  - ghost_emp

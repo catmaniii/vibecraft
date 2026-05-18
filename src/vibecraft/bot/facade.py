@@ -122,9 +122,7 @@ class Sc2Facade(Protocol):
 
     def set_engagement_stance(self, stance: str) -> None: ...
 
-    def set_attack_target_override(
-        self, point: tuple[float, float] | None
-    ) -> None:
+    def set_attack_target_override(self, point: tuple[float, float] | None) -> None:
         """L2 全军 attack target 覆盖（None = 清覆盖，恢复 sharpy 默认决策）。"""
         ...
 
@@ -252,9 +250,7 @@ class FakeFacade:
         self.engagement_stances.append(stance)
         self._record("set_engagement_stance", stance)
 
-    def set_attack_target_override(
-        self, point: tuple[float, float] | None
-    ) -> None:
+    def set_attack_target_override(self, point: tuple[float, float] | None) -> None:
         self.attack_target_overrides.append(point)
         self._record("set_attack_target_override", point)
 

@@ -1,0 +1,52 @@
+kind: midgame_stance
+id: mutalisk_harass
+display_name_zh: "飞龙骚扰中期"
+summary_zh: "双矿飞龙骚扰：快出尖塔 → 12+ 飞龙持续骚扰，干扰对方生产 + 拖延经济；配合地面部队形成多线威胁"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.mutalisk_harass:MutaliskHarass"
+aliases:
+  - "mutalisk_harass"
+  - "飞龙骚扰"
+  - "飞龙流"
+  - "飞龙"
+  - "muta"
+  - "muta harass"
+  - "muta fly"
+  - "空中骚扰"
+
+enter_when:
+  - "self.tech.spire.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [12pool, macro_hatch]"
+
+commitments:
+  units:
+    mutalisk: 12
+    zergling: 20
+    queen: 4
+    overseer: 1
+  tech: [MetabolicBoost]
+  structures:
+    spire: 1
+    evolution_chamber: 1
+  expansions: 2
+
+attack_window:
+  open_at: "6:30"
+  close_at: "10:00"
+  target_priority: [workers, production, army]
+
+micro_doctrine:
+  - "飞龙集群移动，避免分散被集火"
+  - "优先骚扰对方矿区 worker"
+  - "对方有防空火力时快速撤离"
+  - "地面狗配合飞龙形成多线骚扰"
+  - "飞龙血量低时及时回家回血"
+
+expire_action:
+  - "transition: brood_corruptor"
+
+lategame_transitions:
+  - lategame_id: brood_corruptor
+    when: "default"
+  - lategame_id: brood_corruptor
+    when: "enemy.mass_anti_air"

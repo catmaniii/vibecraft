@@ -19,6 +19,36 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+M6 虫族/人族 bot 骨架完成。
+
+### 新增 (Added)
+
+- **M6.0 `VibeCraftBotBase`**（`common_bot.py`）：三族共用抽象基类，提取
+  race-agnostic 生命周期 hooks（11 个 `_publish_xxx`）+ EventBus + hang watchdog
+  + `_llm_controlled_tags` 等。新增种族只需覆盖 3 处（EXCLUDE_FROM_ARMY /
+  DEFAULT_OPENING_ID / create_plan）
+- **M6.1 `GameConfig.my_race`**：`GameConfig` + `ServiceConfig` + CLI `--my-race`
+  参数，`sharpy_adapter.make_bot_class` 按种族 dispatch
+- **M6.2a 虫族 alias 表**（`docs/aliases/zerg.yaml`）：17 建筑 / 19 单位 / 15
+  升级完整别名，BS=母池 / BL=BroodLord / 小狗=Zergling 等玩家话语全覆盖
+- **M6.2b 虫族 bot**（`auto_combat/zerg/`）：`make_zerg_bot_class` 工厂 +
+  `_VibeCraftZergBot`（EXCLUDE={DRONE,OVERLORD,OVERSEER}，DEFAULT=12pool）+
+  5 个剧本 plans + ZergSustain + ScoutOverlord
+- **M6.2a 虫族策略文件**（`strategies/zerg/`）：12pool / macro_hatch / roach_hydra /
+  mutalisk_harass / brood_corruptor，形成完整 opening→midgame→lategame 转移图
+- **M6.3a 人族 alias 表**（`docs/aliases/terran.yaml`）：17 建筑 / 19 单位 / 15
+  升级完整别名，BB=Barracks / BC=FusionCore / 枪兵=Marine / 船长=Battlecruiser 等
+- **M6.3b 人族 bot**（`auto_combat/terran/`）：`make_terran_bot_class` 工厂 +
+  `_VibeCraftTerranBot`（EXCLUDE={SCV,MULE}，DEFAULT=marine_rush）+
+  5 个剧本 plans + TerranSustain + ScoutSCV
+- **M6.3a 人族策略文件**（`strategies/terran/`）：marine_rush / reaper_expand /
+  bio_stim / two_base_tanks / bc_late，形成完整转移图
+- **`StrategyLibrary.openings / .midgames / .lategames`** 属性：方便测试和外部查询
+
+---
+
+<!-- previous Unreleased content below -->
+
 M2 收尾补丁 + M3 准备。
 
 ### 新增 (Added)

@@ -79,7 +79,6 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
             ),
-
             # ---------- 早期主线（严守顺序）----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -91,24 +90,22 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(2),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 19),
             ),
-
             # ---------- BY 一好 → 折跃 + VT + VB 科技线 ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+            ),
             # ---------- VT 一好 → VB（DarkShrine，~2:36）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.DARKSHRINE, 1)),
-
             # ---------- 补 2 BG + 二矿（安全底）----------
             # 折跃研究中途补（攒矿后并行）
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 3)),
             # 二矿（VB 建造期间开，保证 DT rush 失败后有经济延续）
             Step(UnitExists(UnitTypeId.DARKSHRINE, 1), Expand(2)),
-
             # ---------- 第三气矿（DT 出兵需要）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
-
             # ---------- 单位训练 ----------
             # 2 追猎保家（BY 好立刻，防被 early rush）
             Step(
@@ -125,11 +122,9 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.GATEWAY, 3),
                 ProtossUnit(UnitTypeId.STALKER, 10),
             ),
-
             # ---------- 经济 ----------
             AutoPylon(),
             ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -141,8 +136,11 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 PlanZoneGather(),
                 # DT 到位 → 出门偷家；玩家强制 attack 直接绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(3),  # 3 DT 就可以偷家
                 ),
                 PlanFinishEnemy(),

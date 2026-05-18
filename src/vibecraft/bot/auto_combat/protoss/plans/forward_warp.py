@@ -130,9 +130,7 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
             wg.warp_in(self.unit_type, placement)
             self._last_warp_ts[wg.tag] = now
             try:
-                self.knowledge.cooldown_manager.used_ability(
-                    wg.tag, AbilityId.WARPGATETRAIN_ZEALOT
-                )
+                self.knowledge.cooldown_manager.used_ability(wg.tag, AbilityId.WARPGATETRAIN_ZEALOT)
             except Exception:
                 pass
             warped_count += 1
@@ -140,8 +138,11 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         if warped_count > 0:
             logger.info(
                 "ForwardWarpStalker warped %d %s to forward PYLON (%.1f, %.1f) game_t=%.1f",
-                warped_count, self.unit_type.name,
-                forward_pylon.position.x, forward_pylon.position.y, now,
+                warped_count,
+                self.unit_type.name,
+                forward_pylon.position.x,
+                forward_pylon.position.y,
+                now,
             )
         return False
 

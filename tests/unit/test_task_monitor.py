@@ -65,7 +65,12 @@ class TestAttachDetach:
     def test_detach_clears_all_state(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 2}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 2,
+        }
         monitor.attach_directive("d3", done_when, issued_at=0.0, timeout_s=30)
 
         # 确认 sub_id 已注册
@@ -180,7 +185,12 @@ class TestUnitCountBuiltCounter:
     def test_unit_created_event_increments_counter(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 3}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 3,
+        }
         monitor.attach_directive("d1", done_when, issued_at=5.0, timeout_s=None)
 
         assert monitor._unit_built_counts["d1"]["Sentry"] == 0
@@ -194,7 +204,12 @@ class TestUnitCountBuiltCounter:
     def test_different_unit_type_does_not_increment(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 2}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 2,
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         # Stalker != Sentry → 不应累加
@@ -204,7 +219,12 @@ class TestUnitCountBuiltCounter:
     def test_enemy_unit_created_does_not_increment(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Zealot", "op": ">=", "value": 1}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Zealot",
+            "op": ">=",
+            "value": 1,
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         # owner=enemy → filter 拦掉
@@ -246,7 +266,12 @@ class TestUnitCountBuiltDone:
     def test_triggers_when_count_reaches_value(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 2}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 2,
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         # 发 2 个 UNIT_CREATED
@@ -261,7 +286,12 @@ class TestUnitCountBuiltDone:
     def test_does_not_trigger_when_count_below_value(self):
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 3}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 3,
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         bus.publish(_make_unit_created_event("Sentry", ts=5.0))
@@ -303,7 +333,12 @@ class TestTimeout:
         # M3 fix: timeout 用 wall(monotonic),注入可控 fake
         wall = [0.0]
         monitor._monotonic = lambda: wall[0]
-        done_when = {"kind": "unit_count_built_since", "unit_type": "Sentry", "op": ">=", "value": 9999}
+        done_when = {
+            "kind": "unit_count_built_since",
+            "unit_type": "Sentry",
+            "op": ">=",
+            "value": 9999,
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=60)
         wall[0] = 70.0  # wall +70 > timeout 60
         gs = _make_game_state(game_time=70.0)
@@ -384,7 +419,9 @@ class TestPydanticAttach:
 
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        dw = UnitCountBuiltSince(kind="unit_count_built_since", unit_type="Zealot", op=">=", value=1)
+        dw = UnitCountBuiltSince(
+            kind="unit_count_built_since", unit_type="Zealot", op=">=", value=1
+        )
         monitor.attach_directive("d1", dw, issued_at=0.0, timeout_s=None)
 
         assert len(monitor._sub_ids["d1"]) == 1
@@ -563,7 +600,11 @@ class TestTargetDestroyed:
     def test_unit_type_target_destroyed_when_no_enemy_units(self) -> None:
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        done_when = {
+            "kind": "target_destroyed",
+            "target_kind": "unit_type",
+            "target_param": "Roach",
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         gs = MagicMock()
@@ -574,7 +615,11 @@ class TestTargetDestroyed:
     def test_unit_type_not_destroyed_when_enemy_units_remain(self) -> None:
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        done_when = {
+            "kind": "target_destroyed",
+            "target_kind": "unit_type",
+            "target_param": "Roach",
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         gs = MagicMock()
@@ -596,7 +641,11 @@ class TestTargetDestroyed:
     def test_none_game_state_returns_false(self) -> None:
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Roach"}
+        done_when = {
+            "kind": "target_destroyed",
+            "target_kind": "unit_type",
+            "target_param": "Roach",
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         completed = monitor.tick(now=5.0, game_state=None)
@@ -1259,7 +1308,11 @@ class TestTargetDestroyedP5:
         """unit_type target_kind 路径：enemy_units.of_type 返回空 → True。"""
         bus = EventBus()
         monitor = TaskMonitor(board=None, event_bus=bus)
-        done_when = {"kind": "target_destroyed", "target_kind": "unit_type", "target_param": "Stalker"}
+        done_when = {
+            "kind": "target_destroyed",
+            "target_kind": "unit_type",
+            "target_param": "Stalker",
+        }
         monitor.attach_directive("d1", done_when, issued_at=0.0, timeout_s=None)
 
         bot = MagicMock()

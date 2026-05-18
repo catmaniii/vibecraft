@@ -99,6 +99,18 @@ class StrategyLibrary:
             raise StrategyNotFoundError(f"未注册的 lategame: {strategy_id!r}")
         return self._lategames[strategy_id]
 
+    @property
+    def openings(self) -> list[OpeningBuild]:
+        return list(self._openings.values())
+
+    @property
+    def midgames(self) -> list[MidgameStance]:
+        return list(self._midgames.values())
+
+    @property
+    def lategames(self) -> list[LategameDoctrine]:
+        return list(self._lategames.values())
+
     def all_ids(self, kind: StrategyKind | None = None) -> list[str]:
         if kind == StrategyKind.OPENING:
             return list(self._openings)

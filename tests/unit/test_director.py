@@ -185,9 +185,7 @@ class TestProductionDispatch:
                 "directives": [
                     {
                         "type": "production_override",
-                        "payload": {
-                            "items": [{"unit_type": "Sentry", "count": 2}]
-                        },
+                        "payload": {"items": [{"unit_type": "Sentry", "count": 2}]},
                         "priority": 70,
                     }
                 ],
@@ -485,9 +483,7 @@ def director(session: GameSession) -> Director:
 
     facade = FakeFacade()
     provider = MockLLMProvider(
-        scripted=[
-            ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)
-        ]
+        scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
     )
     library_inst = StrategyLibrary.from_directories(
         strategies_dir=PROJECT_ROOT / "strategies",
@@ -530,7 +526,9 @@ class TestScoutSingleUnitDefault:
         director.on_tick(now=12.0)
         # 应该只 execute_unit_action 一次
         scout_actions = [a for a in director.facade.unit_actions if a["verb"] == "scout"]
-        assert len(scout_actions) == 1, f"期望 1 个 scout action，实际 {len(scout_actions)}：{scout_actions}"
+        assert len(scout_actions) == 1, (
+            f"期望 1 个 scout action，实际 {len(scout_actions)}：{scout_actions}"
+        )
 
     def test_scout_with_explicit_tag_uses_that_tag(self, director: Director) -> None:
         """selector.tag=X → 用指定 tag。"""
@@ -691,7 +689,9 @@ def _make_tactical_objective_directive(done_when_dict: dict | None = None) -> Di
     from vibecraft.directives.models import TacticalObjectivePayload, TimeElapsedSince
 
     if done_when_dict is not None:
-        dw = TimeElapsedSince(kind="time_elapsed_since", seconds=float(done_when_dict.get("seconds", 30)))
+        dw = TimeElapsedSince(
+            kind="time_elapsed_since", seconds=float(done_when_dict.get("seconds", 30))
+        )
     else:
         dw = None
 
@@ -779,8 +779,10 @@ class TestTaskMonitorWire:
 
         # mock task_monitor.tick 返回这个 id（模拟 checker 判定已完成）
         completed_ids = [d.id]
-        with patch.object(director.task_monitor, "tick", return_value=completed_ids) as mock_tick, \
-             patch.object(director.task_monitor, "detach") as mock_detach:
+        with (
+            patch.object(director.task_monitor, "tick", return_value=completed_ids) as mock_tick,
+            patch.object(director.task_monitor, "detach") as mock_detach,
+        ):
             director.on_tick(now=40.0)
             mock_tick.assert_called_once()
             mock_detach.assert_called_once_with(d.id)
@@ -811,8 +813,10 @@ class TestTaskMonitorWire:
         assert any(s.id == d.id for s in director.production_overrides)
 
         completed_ids = [d.id]
-        with patch.object(director.task_monitor, "tick", return_value=completed_ids), \
-             patch.object(director.task_monitor, "detach"):
+        with (
+            patch.object(director.task_monitor, "tick", return_value=completed_ids),
+            patch.object(director.task_monitor, "detach"),
+        ):
             director.on_tick(now=40.0)
 
         assert not any(s.id == d.id for s in director.production_overrides)
@@ -1043,9 +1047,7 @@ class TestStandingOrderUnitAssign:
         director.revoke_standing_order(d.id, now=15.0)
         assert d.id not in director._standing_order_tags
 
-    def test_non_persistent_claim_does_not_assign_units_early(
-        self, session: GameSession
-    ) -> None:
+    def test_non_persistent_claim_does_not_assign_units_early(self, session: GameSession) -> None:
         """non-persistent unit_claim 不走 _assign_standing_order_units（不提前 set_unit_role）。
 
         set_unit_role 在 committed 时由 _apply_unit_claim 处理（现有逻辑）。
@@ -1180,9 +1182,7 @@ class TestRevokeDirectiveExtended:
     # L2 A 类: attack → override flag
     # ------------------------------------------------------------------
 
-    def test_revoke_l2_tactical_global_clears_facade_overrides(
-        self, session: GameSession
-    ) -> None:
+    def test_revoke_l2_tactical_global_clears_facade_overrides(self, session: GameSession) -> None:
         """L2 A 类 revoke: 清 facade.set_attack_target_override(None) + set_combat_intent_override(None)。"""
         facade = FakeFacade()
         # 注入 selector stub 防止 resolve_selector 出错
@@ -1211,9 +1211,7 @@ class TestRevokeDirectiveExtended:
         assert d.id not in director._tactical_overrides
         assert director._current_l2_global_id is None
 
-    def test_revoke_l2_tactical_global_returns_false_if_unknown(
-        self, session: GameSession
-    ) -> None:
+    def test_revoke_l2_tactical_global_returns_false_if_unknown(self, session: GameSession) -> None:
         """未知 id revoke_tactical 返 False。"""
         facade = FakeFacade()
         director = _make_director(
@@ -1231,9 +1229,7 @@ class TestRevokeDirectiveExtended:
     # L2 B 类: harass → squad
     # ------------------------------------------------------------------
 
-    def test_revoke_l2_tactical_squad_releases_unit_roles(
-        self, session: GameSession
-    ) -> None:
+    def test_revoke_l2_tactical_squad_releases_unit_roles(self, session: GameSession) -> None:
         """L2 B 类 revoke: 释放 unit_role 还给 sharpy + 清 _tactical_squads。"""
         facade = FakeFacade()
         facade.selector_stub["Phoenix"] = [101, 102, 103]
@@ -1268,9 +1264,7 @@ class TestRevokeDirectiveExtended:
     # L1 strategy
     # ------------------------------------------------------------------
 
-    def test_revoke_l1_strategy_clears_board_slot(
-        self, session: GameSession
-    ) -> None:
+    def test_revoke_l1_strategy_clears_board_slot(self, session: GameSession) -> None:
         """revoke_strategy('l1_midgame', now) 清 board.slots[MIDGAME] + facade.set_build('sustain')。"""
         from vibecraft.directives.types import StageKind
 
@@ -1295,9 +1289,7 @@ class TestRevokeDirectiveExtended:
         # facade.set_build("sustain") 被调
         assert "sustain" in facade.builds
 
-    def test_revoke_l1_strategy_empty_slot_returns_false(
-        self, session: GameSession
-    ) -> None:
+    def test_revoke_l1_strategy_empty_slot_returns_false(self, session: GameSession) -> None:
         """revoke_strategy 对 None slot 返 False。"""
         from vibecraft.directives.types import StageKind
 

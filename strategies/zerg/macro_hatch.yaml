@@ -1,0 +1,49 @@
+kind: opening_build
+id: macro_hatch
+display_name_zh: "宏观双孵"
+summary_zh: "17 孵化扩张 → 快开自然基地，先经济后科技：17 农 → 开第二孵化场 → BS + OL，适合稳健风格"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.macro_hatch:MacroHatch"
+aliases:
+  - "macro_hatch"
+  - "macro"
+  - "双孵"
+  - "快扩"
+  - "宏观流"
+  - "17孵化"
+  - "hatch first"
+  - "经济流"
+matchup: [ZvT, ZvZ, ZvP]
+
+phases:
+  - id: opening
+    display: "17 开扩张"
+    subtitle: "17 农民开第二孵化场，先扩后池"
+    start_at_supply: 17
+  - id: eco
+    display: "BS + 女王"
+    subtitle: "扩张完成后 → BS → 两孵化场同时出女王"
+    start_at_supply: 22
+  - id: tech
+    display: "科技选择"
+    subtitle: "根据侦察选 蟑螂 / 飞龙 / 刺蛇 路线"
+    start_at_supply: 32
+    start_at_time: 200
+
+steps:
+  - "9 build Overlord"
+  - "13 build Extractor"
+  - "17 build Hatchery"
+  - "17 build SpawningPool"
+  - "17 build Overlord"
+  - "20 build Queen"
+  - "20 build Queen"
+  - "22 train Zergling"
+  - "22 train Zergling"
+  - "26 build RoachWarren"
+  - "28 build Overlord"
+
+default_transitions:
+  - midgame_id: roach_hydra
+    when: "default"
+  - midgame_id: mutalisk_harass
+    when: "enemy.skytoss OR enemy.mech"

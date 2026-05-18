@@ -157,6 +157,10 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:pydantic.*",
+    # Windows ProactorEventLoop GC timing：asyncio 在对象析构时发 ResourceWarning，
+    # 触发 PytestUnraisableExceptionWarning；这是已知的 Windows/asyncio 问题，
+    # 与测试顺序相关（test_server_http 的 event loop 在其他测试 GC 时被回收）。
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]

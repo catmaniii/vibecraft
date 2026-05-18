@@ -123,7 +123,16 @@ class TestCommandCardsFieldPresence:
 class TestCommandCardRequiredFields:
     """每张卡片必须包含 8 个必填字段。"""
 
-    REQUIRED_FIELDS = ("id", "layer", "type", "display", "issued_at", "status", "status_reason", "revokable")
+    REQUIRED_FIELDS = (
+        "id",
+        "layer",
+        "type",
+        "display",
+        "issued_at",
+        "status",
+        "status_reason",
+        "revokable",
+    )
 
     def test_l3_card_has_required_fields(self, director: Director) -> None:
         """L3 standing order 卡片包含所有必填字段。"""
@@ -317,7 +326,8 @@ class TestL4ProductionOverrideCommandCard:
         snap = director.build_snapshot(now=20.0)
         # 找 type=structure_override 的 L4 卡片
         l4_cards = [
-            c for c in snap["command_cards"]
+            c
+            for c in snap["command_cards"]
             if c["layer"] == "L4" and c.get("type") == "structure_override"
         ]
         assert len(l4_cards) >= 1, "缺 structure_override L4 卡片"
@@ -330,13 +340,16 @@ class TestL4ProductionOverrideCommandCard:
         from vibecraft.directives.models import StructureItem, StructureOverridePayload
 
         payload = StructureOverridePayload(
-            items=[StructureItem(structure_type="PhotonCannon", target_count=1, location_hint="ramp")],
+            items=[
+                StructureItem(structure_type="PhotonCannon", target_count=1, location_hint="ramp")
+            ],
         )
         d = Directive(payload=payload, issued_at=15.0)
         director._submit_directives([d], now=15.0)
         snap = director.build_snapshot(now=20.0)
         l4_cards = [
-            c for c in snap["command_cards"]
+            c
+            for c in snap["command_cards"]
             if c["layer"] == "L4" and c.get("type") == "structure_override"
         ]
         assert len(l4_cards) >= 1, "缺 structure_override L4 卡片"

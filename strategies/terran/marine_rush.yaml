@@ -1,0 +1,49 @@
+kind: opening_build
+id: marine_rush
+display_name_zh: "枪兵速攻"
+summary_zh: "1 BB 速出枪兵骚扰：早期兵营 + 刺激剂研发，快速推进对方矿线，通过持续骚扰打乱对方节奏"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.marine_rush:MarineRush"
+aliases:
+  - "marine_rush"
+  - "枪兵rush"
+  - "枪兵速攻"
+  - "速枪兵"
+  - "1BB"
+  - "bio rush"
+  - "marine M&M"
+  - "早期枪兵"
+matchup: [TvT, TvZ, TvP]
+
+phases:
+  - id: opening
+    display: "速 BB"
+    subtitle: "12 农 → 1 BB + 科技室，研刺激剂"
+    start_at_supply: 12
+  - id: building
+    display: "持续出兵"
+    subtitle: "BB 完成 → 持续出枪兵，补 BS"
+    start_at_supply: 16
+  - id: pressure
+    display: "出门骚扰"
+    subtitle: "8-12 枪兵出门压制对方矿线"
+    start_at_supply: 22
+    start_at_time: 180
+
+steps:
+  - "10 build SupplyDepot"
+  - "12 build Barracks"
+  - "13 build Refinery"
+  - "15 build SupplyDepot"
+  - "16 train Marine"
+  - "17 build TechLab @Barracks"
+  - "18 research Stimpack"
+  - "19 train Marine"
+  - "19 train Marine"
+  - "22 build Barracks"
+  - "25 build SupplyDepot"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_ground"

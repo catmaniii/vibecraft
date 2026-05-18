@@ -11,6 +11,7 @@ def _make_game_state(**kw):
 
     structures(type_id).amount / units(type_id).amount 通过 MagicMock 返回。
     already_pending(type_id) 同样 mock。"""
+
     def _typed_query(amount):
         result = MagicMock()
         result.amount = amount
@@ -29,6 +30,7 @@ def _make_game_state(**kw):
 
 
 # ---- structure_count ----
+
 
 def test_structure_count_true_when_amount_meets_threshold():
     checker = DONE_CHECKERS["structure_count"]
@@ -54,6 +56,7 @@ def test_structure_count_includes_pending():
 
 # ---- own_unit_count ----
 
+
 def test_own_unit_count_true():
     checker = DONE_CHECKERS["own_unit_count"]
     state = _make_game_state(unit_amount=6)
@@ -69,6 +72,7 @@ def test_own_unit_count_includes_pending():
 
 
 # ---- supply_used / supply_cap ----
+
 
 def test_supply_used_lt():
     checker = DONE_CHECKERS["supply_used"]
@@ -86,6 +90,7 @@ def test_supply_cap_ge():
 
 # ---- minerals / gas ----
 
+
 def test_minerals_ge():
     checker = DONE_CHECKERS["minerals"]
     state = _make_game_state(minerals=1200)
@@ -102,6 +107,7 @@ def test_gas_lt():
 
 # ---- worker_count ----
 
+
 def test_worker_count_ge():
     checker = DONE_CHECKERS["worker_count"]
     state = _make_game_state(worker_amount=50)
@@ -111,14 +117,21 @@ def test_worker_count_ge():
 
 # ---- 共通: 不识别的 UnitTypeId 返回 False（structure 类） ----
 
+
 def test_structure_count_unknown_type_returns_false():
     checker = DONE_CHECKERS["structure_count"]
     state = _make_game_state(structure_amount=99)
-    done_when = {"kind": "structure_count", "structure_type": "NonExistentBuilding", "op": ">=", "value": 1}
+    done_when = {
+        "kind": "structure_count",
+        "structure_type": "NonExistentBuilding",
+        "op": ">=",
+        "value": 1,
+    }
     assert checker(done_when, "d_1", state, MagicMock(), 0.0) is False
 
 
 # ---- game_state is None: 返回 False 不 crash ----
+
 
 def test_resource_checker_none_state_returns_false():
     checker = DONE_CHECKERS["minerals"]

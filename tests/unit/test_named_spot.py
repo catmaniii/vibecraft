@@ -260,11 +260,21 @@ class TestKnownSpots:
 
     def test_known_spots_contains_expected(self) -> None:
         expected = {
-            "natural", "third", "main",
-            "enemy_main", "enemy_natural", "enemy_third",
-            "main_ramp", "natural_ramp", "enemy_main_ramp",
-            "natural_gas", "third_gas", "main_gas",
-            "enemy_main_gas", "enemy_natural_gas", "enemy_third_gas",
+            "natural",
+            "third",
+            "main",
+            "enemy_main",
+            "enemy_natural",
+            "enemy_third",
+            "main_ramp",
+            "natural_ramp",
+            "enemy_main_ramp",
+            "natural_gas",
+            "third_gas",
+            "main_gas",
+            "enemy_main_gas",
+            "enemy_natural_gas",
+            "enemy_third_gas",
         }
         assert expected == NamedSpotRegistry.KNOWN_SPOTS
 

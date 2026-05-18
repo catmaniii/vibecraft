@@ -150,14 +150,10 @@ class _MockUnits:
         return self._units[0]
 
     def of_type(self, types):
-        return _MockUnits(
-            [u for u in self._units if getattr(u, "type_id", None) in types]
-        )
+        return _MockUnits([u for u in self._units if getattr(u, "type_id", None) in types])
 
     def closer_than(self, dist, pos):
-        return _MockUnits(
-            [u for u in self._units if u.position.distance_to(pos) < dist]
-        )
+        return _MockUnits([u for u in self._units if u.position.distance_to(pos) < dist])
 
     def closest_to(self, pos):
         return min(self._units, key=lambda u: u.position.distance_to(pos))
@@ -173,9 +169,7 @@ class _MockStructures(_MockUnits):
 
     def __call__(self, unit_type):
         """ai.structures(PYLON) → 过滤 type."""
-        return _MockUnits(
-            [u for u in self._units if getattr(u, "type_id", None) == unit_type]
-        )
+        return _MockUnits([u for u in self._units if getattr(u, "type_id", None) == unit_type])
 
 
 # ============================================================================

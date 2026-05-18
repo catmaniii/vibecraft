@@ -78,7 +78,7 @@ def _load_real_library():
     from vibecraft.strategy.library import StrategyLibrary
 
     return StrategyLibrary.from_directories(
-        _PROJECT_ROOT / "strategies",
+        _PROJECT_ROOT / "strategies" / "protoss",
         _PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
     )
 
@@ -88,8 +88,7 @@ def test_strategy_library_loads_all_8_strategies() -> None:
     lib = _load_real_library()
     loaded_ids = {s.id for s in lib.all_strategies()}
     assert loaded_ids == _EXPECTED_STRATEGY_IDS, (
-        f"miss: {_EXPECTED_STRATEGY_IDS - loaded_ids}, "
-        f"extra: {loaded_ids - _EXPECTED_STRATEGY_IDS}"
+        f"miss: {_EXPECTED_STRATEGY_IDS - loaded_ids}, extra: {loaded_ids - _EXPECTED_STRATEGY_IDS}"
     )
 
 
@@ -127,9 +126,7 @@ def test_bot_create_plan_loads_all_8_strategies_into_ifelse_tree() -> None:
 
     from sharpy.plans import BuildOrder
 
-    assert isinstance(plan, BuildOrder), (
-        f"create_plan 返回非 BuildOrder: {type(plan).__name__}"
-    )
+    assert isinstance(plan, BuildOrder), f"create_plan 返回非 BuildOrder: {type(plan).__name__}"
 
     # IfElse 树深度应该 ≥ 8（每个 recipe 一层嵌套，最深 fallback 是 sustain）
     # BuildOrder.orders 应包含 IfElse 或类似嵌套结构
@@ -161,9 +158,9 @@ def test_bot_create_plan_no_fallback_warning_for_any_strategy(
         asyncio.get_event_loop().run_until_complete(inst.create_plan())
 
     fallback_warnings = [
-        r for r in caplog.records
-        if "fallback" in r.getMessage().lower()
-        and "create_plan" in r.getMessage().lower()
+        r
+        for r in caplog.records
+        if "fallback" in r.getMessage().lower() and "create_plan" in r.getMessage().lower()
     ]
     assert not fallback_warnings, (
         "以下策略 import / create_plan 失败被 fallback：\n  - "

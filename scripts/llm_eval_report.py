@@ -28,6 +28,7 @@ from tests.llm_eval.expected_specs import LLM_EVAL_CASES  # noqa: E402
 @dataclass
 class RunData:
     """单次 eval run(一个 model + retry config)的数据。"""
+
     label: str
     model: str
     max_retries: int
@@ -48,16 +49,18 @@ def load_runs(json_dir: Path) -> list[RunData]:
         # 短名:flash / pro
         short = "Flash" if "flash" in model else ("Pro" if "pro" in model else model)
         label = f"{short} (retry={retries})"
-        runs.append(RunData(
-            label=label,
-            model=model,
-            max_retries=retries,
-            total_pass=data["total_pass"],
-            total_runs=data["total_runs"],
-            accuracy=data["accuracy"],
-            avg_latency_ms=data["avg_latency_ms"],
-            trials=data["trials"],
-        ))
+        runs.append(
+            RunData(
+                label=label,
+                model=model,
+                max_retries=retries,
+                total_pass=data["total_pass"],
+                total_runs=data["total_runs"],
+                accuracy=data["accuracy"],
+                avg_latency_ms=data["avg_latency_ms"],
+                trials=data["trials"],
+            )
+        )
     return runs
 
 
@@ -85,16 +88,18 @@ def _format_outcome(o: dict[str, Any] | None) -> str:
         return "(no outcome)"
     kind = o.get("kind", "?")
     if kind == "ParseError":
-        return f"❌ ParseError({o.get('error_kind','?')}): {o.get('message','')[:200]}"
+        return f"❌ ParseError({o.get('error_kind', '?')}): {o.get('message', '')[:200]}"
     if kind == "AmbiguousParse":
         return (
-            f"⚠️ AmbiguousParse confidence={o.get('confidence','?')} "
-            f"interp={o.get('interpretation_zh','')[:80]}"
+            f"⚠️ AmbiguousParse confidence={o.get('confidence', '?')} "
+            f"interp={o.get('interpretation_zh', '')[:80]}"
         )
     if kind == "IntentParseResult":
         directives = o.get("directives", [])
         if not directives:
-            return f"✓ IntentParseResult (空 directives, interp={o.get('interpretation_zh','')[:80]})"
+            return (
+                f"✓ IntentParseResult (空 directives, interp={o.get('interpretation_zh', '')[:80]})"
+            )
         # 抽每条 directive 的 type + 关键字段
         summaries = []
         for d in directives:
@@ -102,9 +107,22 @@ def _format_outcome(o: dict[str, Any] | None) -> str:
             t = p.get("type", "?")
             # 抽几个关键字段
             keyfields = {}
-            for k in ["stage", "strategy_id", "verb", "stance", "target_area",
-                      "unit_type", "count", "upgrade_id", "target_count",
-                      "selector", "task", "target", "done_when", "persistent"]:
+            for k in [
+                "stage",
+                "strategy_id",
+                "verb",
+                "stance",
+                "target_area",
+                "unit_type",
+                "count",
+                "upgrade_id",
+                "target_count",
+                "selector",
+                "task",
+                "target",
+                "done_when",
+                "persistent",
+            ]:
                 if k in p:
                     v = p[k]
                     if isinstance(v, dict):
@@ -191,7 +209,7 @@ def render_report(runs: list[RunData]) -> str:
         lines.append(f"### {case_name}\n")
         lines.append(f"**Inject**：`{first_inject}`\n")
         lines.append("**Expected**：")
-        lines.append(f"- type: `{spec.get('expect_type','?')}`")
+        lines.append(f"- type: `{spec.get('expect_type', '?')}`")
         if spec.get("must_have"):
             mh = ", ".join(f"`{k}`={v!r}" for k, v in spec["must_have"].items())
             lines.append(f"- must_have: {mh}")
@@ -210,9 +228,7 @@ def render_report(runs: list[RunData]) -> str:
             n_total = len(trials)
             avg_latency = sum(t["latency_ms"] for t in trials) / max(1, n_total)
             mark = "✓" if n_pass == n_total else ("✗" if n_pass == 0 else "~")
-            lines.append(
-                f"**{run.label}**：{mark} {n_pass}/{n_total} (avg {avg_latency:.0f} ms)"
-            )
+            lines.append(f"**{run.label}**：{mark} {n_pass}/{n_total} (avg {avg_latency:.0f} ms)")
             for i, t in enumerate(trials, 1):
                 status = "PASS" if t["passed"] else "**FAIL**"
                 lines.append(f"- trial {i} {status} ({t['latency_ms']:.0f} ms)")
@@ -242,7 +258,9 @@ def main() -> int:
         return 1
     print(f"已加载 {len(runs)} 个 eval run:")
     for r in runs:
-        print(f"  - {r.label}: {r.total_pass}/{r.total_runs} = {r.accuracy:.1f}%, {r.avg_latency_ms:.0f}ms")
+        print(
+            f"  - {r.label}: {r.total_pass}/{r.total_runs} = {r.accuracy:.1f}%, {r.avg_latency_ms:.0f}ms"
+        )
 
     report = render_report(runs)
     out_path = Path(args.out)

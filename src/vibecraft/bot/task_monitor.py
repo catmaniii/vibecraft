@@ -54,6 +54,7 @@ def _normalize_upgrade_id(s: str) -> str:
         s = s[:-4]
     return s
 
+
 # ---------------------------------------------------------------------------
 # done_when checker registry
 # ---------------------------------------------------------------------------
@@ -97,7 +98,9 @@ def _resolve_named_spot(name: str, game_state: Any) -> Any | None:
 
     # P3 fallback: 只支持 natural/third/main，其它返回 None
     if name not in _NAMED_SPOT_WHITELIST:
-        logger.warning("named_spot '%s' 不在 P3 白名单 [natural, third, main]，checker 返回 False", name)
+        logger.warning(
+            "named_spot '%s' 不在 P3 白名单 [natural, third, main]，checker 返回 False", name
+        )
         return None
     # P3 placeholder: 返回 sentinel 让 caller 知道 spot 已知但坐标未实现
     return _NAMED_SPOT_PLACEHOLDER(name)
@@ -254,19 +257,13 @@ class TaskMonitor:
             counter_key = ut or "*"
             self._unit_built_counts[directive_id].setdefault(counter_key, 0)
 
-            def _handler(
-                event: Event, _did: str = directive_id, _key: str = counter_key
-            ) -> None:
-                self._unit_built_counts[_did][_key] = (
-                    self._unit_built_counts[_did].get(_key, 0) + 1
-                )
+            def _handler(event: Event, _did: str = directive_id, _key: str = counter_key) -> None:
+                self._unit_built_counts[_did][_key] = self._unit_built_counts[_did].get(_key, 0) + 1
 
             filter_fn: Callable[[Event], bool] | None
             if ut is not None:
 
-                def _filter_with_type(
-                    e: Event, _ut: str = ut, _iat: float = issued_at
-                ) -> bool:
+                def _filter_with_type(e: Event, _ut: str = ut, _iat: float = issued_at) -> bool:
                     if e.owner != "own" or e.ts < _iat:
                         return False
                     # 兼容多种 unit_type 格式:
@@ -455,9 +452,11 @@ def _check_time_elapsed_since(
         try:
             # sharpy bot 真实 attr 是 .time (python-sc2 BotAI 标准),
             # mock 测试常用 .game_time -- 兜底两个
-            game_time = float(getattr(game_state, "game_time", None)
-                              if getattr(game_state, "game_time", None) is not None
-                              else game_state.time)
+            game_time = float(
+                getattr(game_state, "game_time", None)
+                if getattr(game_state, "game_time", None) is not None
+                else game_state.time
+            )
         except Exception:
             return False
         return (game_time - issued_at) >= seconds
@@ -466,9 +465,11 @@ def _check_time_elapsed_since(
         try:
             # sharpy bot 真实 attr 是 .time (python-sc2 BotAI 标准),
             # mock 测试常用 .game_time -- 兜底两个
-            game_time = float(getattr(game_state, "game_time", None)
-                              if getattr(game_state, "game_time", None) is not None
-                              else game_state.time)
+            game_time = float(
+                getattr(game_state, "game_time", None)
+                if getattr(game_state, "game_time", None) is not None
+                else game_state.time
+            )
         except Exception:
             return False
         return game_time >= seconds
@@ -596,9 +597,7 @@ def _check_target_destroyed(
             return False
 
     # building_at 及其它
-    logger.warning(
-        "target_destroyed target_kind=%s 暂不支持（P5 范围外），返回 False", target_kind
-    )
+    logger.warning("target_destroyed target_kind=%s 暂不支持（P5 范围外），返回 False", target_kind)
     return False
 
 

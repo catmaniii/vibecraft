@@ -93,16 +93,12 @@ def _matches(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
-def _find_matching_directive(
-    directives: list[Directive], spec: ExpectedSpec
-) -> Directive | None:
+def _find_matching_directive(directives: list[Directive], spec: ExpectedSpec) -> Directive | None:
     """从 directives 列表里找 type 匹配 + must_have_paths 都满足的那条。
 
     expect_type 支持单值或 list(任一即可)。
     """
-    allowed_types = (
-        spec.expect_type if isinstance(spec.expect_type, list) else [spec.expect_type]
-    )
+    allowed_types = spec.expect_type if isinstance(spec.expect_type, list) else [spec.expect_type]
     for d in directives:
         if d.type not in allowed_types:
             continue

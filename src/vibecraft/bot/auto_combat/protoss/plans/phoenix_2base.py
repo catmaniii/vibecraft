@@ -91,7 +91,6 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.STARGATE, 1),
                 ChronoUnit(UnitTypeId.PHOENIX, UnitTypeId.STARGATE),
             ),
-
             # ---------- 早期主线 ----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -101,36 +100,32 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 19),
             ),
-
             # ---------- 快速双矿（~1:24）+ BY ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
-
             # ---------- 双矿气矿（凤凰吃气多）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
-
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-
             # ---------- VT（TwilightCouncil，闪烁前置）----------
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+            ),
             # ---------- VR（Robotics，Observer + Warp Prism）----------
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
+            ),
             # ---------- 闪烁（Blink，PvT 有用；VT 完成后研）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.BLINKTECH)),
-
             # ---------- 双星门（核心！VS x2）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.STARGATE, 2)),
-
             # ---------- 三矿延续（5:28 三矿）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
-
             # ---------- 三气（三矿后补）----------
             Step(UnitExists(UnitTypeId.NEXUS, 3), BuildGas(4)),
-
             # ---------- 单位训练 ----------
             # Observer（VR 完成立刻，反隐必须）
             Step(
@@ -152,11 +147,9 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.STALKER, 8, priority=True),
             ),
-
             # ---------- 经济 ----------
             AutoPylon(),
             ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 60),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -168,8 +161,11 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
                 PlanZoneGather(),
                 # 8 凤凰 → 出门骚扰；玩家强制 attack 绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(8),  # 8 凤凰集结出门
                 ),
                 PlanFinishEnemy(),

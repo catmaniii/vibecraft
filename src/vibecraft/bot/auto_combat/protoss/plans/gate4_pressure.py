@@ -144,8 +144,11 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 # VibeCraftZoneAttack 优先读 knowledge.vibecraft 的 attack/intent override;
                 # 玩家强制发 tactical_objective(attack) 时绕过 _ready_to_pressure 时机检查
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(4),
                 ),
                 PlanFinishEnemy(),

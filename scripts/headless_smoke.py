@@ -47,9 +47,7 @@ async def main() -> int:
         action="store_true",
         help="realtime=False,bot 全速跑(~10-100x),适合 smoke 验证。默认 1x。",
     )
-    p.add_argument(
-        "--inject", default=None, help='注入一条指令(等同手机说话),如 "切 4BG"'
-    )
+    p.add_argument("--inject", default=None, help='注入一条指令(等同手机说话),如 "切 4BG"')
     p.add_argument(
         "--initial-opening",
         default=None,
@@ -125,13 +123,20 @@ async def main() -> int:
                 strat = frame.get("strategy") or {}
                 opening = (strat.get("opening") or {}).get("id") if strat.get("opening") else None
                 midgame = (strat.get("midgame") or {}).get("id") if strat.get("midgame") else None
-                lategame = (strat.get("lategame") or {}).get("id") if strat.get("lategame") else None
+                lategame = (
+                    (strat.get("lategame") or {}).get("id") if strat.get("lategame") else None
+                )
                 current_stage = strat.get("current_stage", "?")
                 key = (opening, midgame, lategame, current_stage)
                 if key != last_strat:
                     log.info(
                         "[+%.1fs] SNAPSHOT #%d stage=%s opening=%s midgame=%s lategame=%s",
-                        elapsed, snap_count[0], current_stage, opening, midgame, lategame,
+                        elapsed,
+                        snap_count[0],
+                        current_stage,
+                        opening,
+                        midgame,
+                        lategame,
                     )
                     # M5 verify: dump attack_window / micro_doctrine 字段(midgame/lategame)
                     for sk in ("midgame", "lategame"):
@@ -142,7 +147,9 @@ async def main() -> int:
                             if aw or md:
                                 log.info(
                                     "             %s: attack_window=%s micro_doctrine=%s",
-                                    sk, aw, md,
+                                    sk,
+                                    aw,
+                                    md,
                                 )
                     last_strat = key
             elif kind == "echo":

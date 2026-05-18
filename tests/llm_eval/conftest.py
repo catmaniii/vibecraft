@@ -28,9 +28,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     markexpr = config.getoption("-m", "") or ""
     if "llm_eval" in markexpr:
         return  # 用户明确选,放过
-    skip_marker = pytest.mark.skip(
-        reason="llm_eval 默认 skip(真调 LLM API);用 -m llm_eval 跑"
-    )
+    skip_marker = pytest.mark.skip(reason="llm_eval 默认 skip(真调 LLM API);用 -m llm_eval 跑")
     for item in items:
         if "llm_eval" in {m.name for m in item.iter_markers()}:
             item.add_marker(skip_marker)
@@ -114,14 +112,16 @@ class _EvalStats:
         self.per_case.setdefault(case_name, []).append(passed)
         self.per_case_reason.setdefault(case_name, []).append(reason)
         self.latencies_ms.append(latency_ms)
-        self.trials.append({
-            "case_name": case_name,
-            "inject": inject,
-            "passed": passed,
-            "reason": reason,
-            "latency_ms": round(latency_ms, 1),
-            "outcome": outcome_dump,
-        })
+        self.trials.append(
+            {
+                "case_name": case_name,
+                "inject": inject,
+                "passed": passed,
+                "reason": reason,
+                "latency_ms": round(latency_ms, 1),
+                "outcome": outcome_dump,
+            }
+        )
 
 
 @pytest.fixture(scope="session")
@@ -165,9 +165,7 @@ def serialize_outcome(outcome: Any) -> dict[str, Any]:
     return {"kind": "Unknown", "repr": str(outcome)[:200]}
 
 
-def pytest_terminal_summary(
-    terminalreporter: Any, exitstatus: int, config: pytest.Config
-) -> None:
+def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
     """eval 跑完后输出每 case 的命中率汇总。"""
     stats: _EvalStats | None = getattr(config, "_eval_stats", None)
     if stats is None or not stats.per_case:

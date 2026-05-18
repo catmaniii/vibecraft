@@ -54,6 +54,9 @@ class ServiceConfig:
     PWA 在 start_game.config.realtime 显式传值时优先使用 PWA 值。
     """
 
+    default_my_race: str = "Protoss"
+    """我方种族（Protoss / Zerg / Terran），默认 Protoss。由 CLI --my-race 控制。"""
+
 
 class BotService:
     """HTTP+WS bot service 实例。
@@ -107,6 +110,7 @@ class BotService:
             self._registry,
             game_process=self._game_process,
             default_realtime=self._config.default_realtime,
+            default_my_race=self._config.default_my_race,
         )
 
         self._log.info("bot_service_starting")

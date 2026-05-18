@@ -80,7 +80,10 @@ class TestFindForwardWarpgate:
 
         home_wg = _make_struct((125, 115), UnitTypeId.WARPGATE)  # 距家 4 距敌方 ~117 → 远非 forward
         inst = _make_instance(warpgates=[home_wg])
-        assert inst._find_forward_warpgate(inst.ai.start_location, inst.ai.enemy_start_locations[0]) is None
+        assert (
+            inst._find_forward_warpgate(inst.ai.start_location, inst.ai.enemy_start_locations[0])
+            is None
+        )
 
     def test_forward_warpgate_picked(self):
         """距敌方 < 距家 * 0.7 → forward。"""
@@ -108,9 +111,10 @@ class TestFindForwardWarpgate:
 
     def test_no_warpgate_returns_none(self):
         inst = _make_instance(warpgates=[])
-        assert inst._find_forward_warpgate(
-            inst.ai.start_location, inst.ai.enemy_start_locations[0]
-        ) is None
+        assert (
+            inst._find_forward_warpgate(inst.ai.start_location, inst.ai.enemy_start_locations[0])
+            is None
+        )
 
 
 class TestFindForwardPylon:
@@ -119,9 +123,7 @@ class TestFindForwardPylon:
 
         forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
         inst = _make_instance(pylons=[forward_py])
-        result = inst._find_forward_pylon(
-            inst.ai.start_location, inst.ai.enemy_start_locations[0]
-        )
+        result = inst._find_forward_pylon(inst.ai.start_location, inst.ai.enemy_start_locations[0])
         assert result is forward_py
 
     def test_home_pylon_not_forward(self):
@@ -129,9 +131,10 @@ class TestFindForwardPylon:
 
         home_py = _make_struct((127, 119), UnitTypeId.PYLON)
         inst = _make_instance(pylons=[home_py])
-        assert inst._find_forward_pylon(
-            inst.ai.start_location, inst.ai.enemy_start_locations[0]
-        ) is None
+        assert (
+            inst._find_forward_pylon(inst.ai.start_location, inst.ai.enemy_start_locations[0])
+            is None
+        )
 
 
 class TestExecuteShortCircuits:

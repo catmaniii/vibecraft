@@ -37,8 +37,15 @@ def cli(ctx: click.Context) -> None:
     help="SC2 是否按 wall-clock 实时跑（--no-realtime 让 SC2 按 step 推进，调试用）。"
     "PWA 在 start_game 帧里显式传 realtime 时优先使用 PWA 值。",
 )
+@click.option(
+    "--my-race",
+    default="Protoss",
+    show_default=True,
+    type=click.Choice(["Protoss", "Zerg", "Terran"], case_sensitive=True),
+    help="我方种族（默认 Protoss）。",
+)
 def serve(
-    port: int, host: str, token: str | None, ip: str | None, realtime: bool
+    port: int, host: str, token: str | None, ip: str | None, realtime: bool, my_race: str
 ) -> None:
     """启动 bot service：HTTP+WS 同端口，显示二维码，run forever。
 
@@ -52,6 +59,7 @@ def serve(
         token=token,
         display_ip=ip,
         default_realtime=realtime,
+        default_my_race=my_race,
     )
     svc = BotService(config)
     try:

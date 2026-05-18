@@ -32,9 +32,7 @@ NUM_TRIALS = 3
 
 
 @pytest.mark.llm_eval
-@pytest.mark.parametrize(
-    "spec", LLM_EVAL_CASES, ids=[c.name for c in LLM_EVAL_CASES]
-)
+@pytest.mark.parametrize("spec", LLM_EVAL_CASES, ids=[c.name for c in LLM_EVAL_CASES])
 @pytest.mark.parametrize("trial", range(NUM_TRIALS), ids=[f"trial{i}" for i in range(NUM_TRIALS)])
 async def test_parse_accuracy(
     spec: ExpectedSpec,

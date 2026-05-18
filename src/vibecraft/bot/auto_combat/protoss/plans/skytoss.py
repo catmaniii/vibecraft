@@ -80,16 +80,13 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             # ---------- 经济基线 ----------
             ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 80),
             AutoPylon(),
-
             # ---------- 扩张：自动开到 4 矿（Skytoss 撑 12 Carrier 产能必需）----------
             # 切入时假设已有 2 矿；不主动开 3 矿会卡气矿。
             # Expand 内部判断已有数量，不会重复开。
             Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
             Step(UnitExists(UnitTypeId.NEXUS, 3), Expand(4)),
-
             # ---------- 气矿：6 个（3 矿满气）----------
             BuildGas(6),
-
             # ---------- 建筑链 ----------
             # CC（前置，若还没有）
             Step(
@@ -131,14 +128,12 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 UnitReady(UnitTypeId.NEXUS, 2),
                 GridBuilding(UnitTypeId.FORGE, 1),
             ),
-
             # ---------- 防御：二三矿各 2-3 PhotonCannon（防 Mutalisk / Liberator / DT）----------
             # Forge ready + 二矿 ready 时开始造 Cannon
             Step(
                 UnitReady(UnitTypeId.FORGE, 1),
                 GridBuilding(UnitTypeId.PHOTONCANNON, 4),  # 主二三矿各 1-2 个
             ),
-
             # ---------- 升级链 ----------
             # **关键**：空军升级用 SequentialList 强制 1→2→3 顺序
             # CC 一次只研一个，并行的 Tech() 会乱抢；SequentialList 确保
@@ -179,7 +174,6 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 UnitReady(UnitTypeId.FLEETBEACON, 1),
                 Tech(UpgradeId.TEMPESTGROUNDATTACKUPGRADE),
             ),
-
             # ---------- 单位训练 ----------
             # Observer 2 个（Robo 完成立刻）
             Step(
@@ -206,7 +200,6 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 self._after_n_carriers(8),
                 ProtossUnit(UnitTypeId.MOTHERSHIP, 1),
             ),
-
             # ---------- Chrono：分两阶段 ----------
             # 阶段 A：FleetBeacon 没好之前 → chrono Air Weapons 1（让升级抢 timing）
             Step(
@@ -223,7 +216,6 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 UnitReady(UnitTypeId.FLEETBEACON, 1),
                 ChronoUnit(UnitTypeId.CARRIER, UnitTypeId.STARGATE),
             ),
-
             # ---------- 战术 / 维护 / 战斗触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -234,8 +226,11 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 PlanZoneGather(),
                 # 8+ Carrier → 出门推；玩家强制 attack 直接绕过
                 Step(
-                    lambda ai: self._ready_to_push(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_push(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(8),
                 ),
                 PlanFinishEnemy(),
@@ -245,8 +240,10 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
     @staticmethod
     def _after_n_carriers(n: int) -> Any:
         """返回一个谓词函数：当前 Carrier 数量 >= n。"""
+
         def predicate(ai: Any) -> bool:
             return ai.units(UnitTypeId.CARRIER).amount >= n
+
         return predicate
 
     @staticmethod

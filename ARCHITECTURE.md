@@ -43,9 +43,17 @@ src/vibecraft/
     ├── director.py      # 中央编排器，下面单独讲
     ├── sharpy_adapter.py  # make_bot_class() 工厂；仅真实对局 import（见 ADR 0009）
     └── auto_combat/
-        ├── common.py    # build_role_map() + run_command_with_echo()
-        └── protoss/
-            └── bot.py   # _VibeCraftProtossBot（KnowledgeBot 子类）+ _SharpyFacade
+        ├── common.py       # build_role_map() + run_command_with_echo()
+        ├── common_bot.py   # VibeCraftBotBase（三族共用基类）+ _make_xxx 工厂函数（M6.0）
+        ├── protoss/
+        │   ├── bot.py      # make_protoss_bot_class() + _VibeCraftProtossBot（薄壳）
+        │   └── plans/      # 8 个 protoss 剧本 plan class（KnowledgeBot 子类）
+        ├── zerg/           # M6.2b 新增
+        │   ├── bot.py      # make_zerg_bot_class() + _VibeCraftZergBot（薄壳）
+        │   └── plans/      # 5 个 zerg 剧本 plan class（sustain/scout_overlord/5剧本）
+        └── terran/         # M6.3b 新增
+            ├── bot.py      # make_terran_bot_class() + _VibeCraftTerranBot（薄壳）
+            └── plans/      # 5 个 terran 剧本 plan class（sustain/scout_scv/5剧本）
 
 vendor/sharpy/           # sharpy-sc2 源码（MIT，vendor 因不在 PyPI；见 ADR 0009）
 ```
@@ -99,7 +107,13 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
   Reserved，确保 sharpy `UnitRoleManager.update()` 每帧清 `had_task_set` 后角色不丢。
   `PlanZoneAttack` 的 `free_units`（Idle+Moving）天然不含 Reserved，Reserved 单位
   不会被拉去出门攻击或守基地（见 ADR 0009 §Hook C）。
-- **`_VibeCraftProtossBot` 继承 `KnowledgeBot`，`create_plan()` 返回
+- **`VibeCraftBotBase` 是三族 bot 的共同基类**（M6.0）：race-agnostic 生命周期
+  hook（`_publish_xxx`）、EventBus、`_llm_controlled_tags`、`named_spots`、
+  `_voice_step_count`、hang watchdog 全在 `common_bot.py`。新增种族走
+  `make_<race>_bot_class(...)` 工厂模板，只需覆盖 `EXCLUDE_FROM_ARMY`、
+  `DEFAULT_OPENING_ID`、`create_plan()`。三族 `make_*_bot_class` 共享签名，
+  `sharpy_adapter.py` 按 `race` 参数 dispatch。见 ADR 0010。
+- **`_VibeCraft{Protoss,Zerg,Terran}Bot` 继承 `KnowledgeBot`，`create_plan()` 返回
   `BuildOrder(IfElse(...))` 树**：`active_recipe` flag 控制路由，`set_build()` 写入
   后下一个 step IfElse 立即生效（lambda 每 step 重新求值）。见 ADR 0009 §Hook A。
 - **IntentParser 任何异常都不抛**：失败一律返回 `ParseError`，bot 状态完全不

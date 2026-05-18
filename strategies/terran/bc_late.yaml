@@ -1,0 +1,73 @@
+kind: lategame_doctrine
+id: bc_late
+display_name_zh: "战列巡洋舰后期"
+summary_zh: "后期战巡 + 老鸦控场：4-6 BC + Raven 干扰 + Ghost EMP，靠 BC 超级武器 + Raven 干扰拿下后期资源战"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bc_late:BcLate"
+aliases:
+  - "bc_late"
+  - "战巡后期"
+  - "战列巡洋舰"
+  - "BC流"
+  - "船长流"
+  - "Battlecruiser"
+  - "BC"
+  - "空军人族"
+
+phases:
+  - id: tech_up
+    display: "上 FusionCore + BC"
+    subtitle: "FusionCore 完 → 第一艘 BC + Yamato 技能研究"
+    start_at_time: 0
+  - id: composition
+    display: "积累 BC 数量"
+    subtitle: "持续出 BC + Raven + Ghost；研究 BC 武器升级"
+    start_at_time: 120
+  - id: dominance
+    display: "制空权"
+    subtitle: "4+ BC + 制空 → 收割对方经济基地"
+    start_at_time: 360
+
+target_composition:
+  battlecruiser: 6
+  raven: 3
+  ghost: 4
+  viking: 4
+  marine: 8
+
+required_tech:
+  - FusionCore
+  - YamatoGun
+  - TacticalJump
+  - TerranShipWeapons
+
+required_structures:
+  fusion_core: 1
+  starport: 2
+  ghost_academy: 1
+  engineering_bay: 1
+
+engagement_doctrine:
+  - "BC Tactical Jump 瞬移到对方矿区 + Yamato 打对方大型单位"
+  - "Raven Auto-Turret 骚扰矿区，Raven Interference Matrix 锁定对方高价值单位"
+  - "Ghost EMP 清除对方神族/虫族魔法值"
+  - "Viking 护卫 BC，防止被 Corruptor / Phoenix 集火"
+  - "BC 血低时 Tactical Jump 撤回维修"
+
+win_condition:
+  type: composition_advantage
+  description: "BC Yamato + Tactical Jump 机动性，搭配 Raven 骚扰，拿下多线经济战"
+  signals:
+    - "self.units.battlecruiser.amount >= 4"
+    - "self.tech.tactical_jump.done"
+    - "enemy.expansion_count >= 3"
+
+counters_against:
+  - roach_hydra
+  - mech_ground
+  - bio_ground
+
+weak_against:
+  - mass_corruptor
+  - mass_phoenix
+  - mass_viking
+  - ghost_emp_mirror

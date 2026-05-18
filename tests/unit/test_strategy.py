@@ -304,17 +304,17 @@ class TestStrategyLibrary:
         # 分两层:B basic + V advanced)。2026-05-17 把原项目自创简称(VD=RoboticsBay
         # / VA=TemplarArchives / VX=FleetBeacon 等)改成真 hotkey。
         for hotkey, expected in [
-            ("BG", "Gateway"),           # B+G
-            ("BF", "Forge"),             # B+F
-            ("BA", "Assimilator"),       # B+A (原 VC)
-            ("BB", "ShieldBattery"),     # B+B (原 B+H)
-            ("VS", "Stargate"),          # V+S
+            ("BG", "Gateway"),  # B+G
+            ("BF", "Forge"),  # B+F
+            ("BA", "Assimilator"),  # B+A (原 VC)
+            ("BB", "ShieldBattery"),  # B+B (原 B+H)
+            ("VS", "Stargate"),  # V+S
             ("VR", "RoboticsFacility"),  # V+R (原 B+R)
-            ("VB", "RoboticsBay"),       # V+B (原 VD)
-            ("VC", "TwilightCouncil"),   # V+C (原 VT)
-            ("VT", "TemplarArchives"),   # V+T (原 VA)
-            ("VD", "DarkShrine"),        # V+D (原 VB)
-            ("VF", "FleetBeacon"),       # V+F (原 VX)
+            ("VB", "RoboticsBay"),  # V+B (原 VD)
+            ("VC", "TwilightCouncil"),  # V+C (原 VT)
+            ("VT", "TemplarArchives"),  # V+T (原 VA)
+            ("VD", "DarkShrine"),  # V+D (原 VB)
+            ("VF", "FleetBeacon"),  # V+F (原 VX)
         ]:
             canonical, group = lib.aliases.resolve(hotkey, verb=VerbHint.BUILD)
             assert canonical == expected, f"hotkey {hotkey!r} 应解析为 {expected!r}"

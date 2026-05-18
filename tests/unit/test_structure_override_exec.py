@@ -134,9 +134,7 @@ def _make_mock_bot(
 class TestStructureOverrideRouting:
     """STRUCTURE_OVERRIDE directive 经 _submit_directives 路由到 production_overrides。"""
 
-    def test_structure_override_goes_to_production_overrides(
-        self, session: GameSession
-    ) -> None:
+    def test_structure_override_goes_to_production_overrides(self, session: GameSession) -> None:
         """_submit_directives → production_overrides list（不进 _in_flight）。"""
         bot = _make_mock_bot()
         director = _make_director_with_bot(session, bot)
@@ -145,9 +143,7 @@ class TestStructureOverrideRouting:
         assert any(s.id == d.id for s in director.production_overrides)
         assert d.id not in director._in_flight
 
-    def test_structure_override_not_in_standing_orders(
-        self, session: GameSession
-    ) -> None:
+    def test_structure_override_not_in_standing_orders(self, session: GameSession) -> None:
         """STRUCTURE_OVERRIDE 不进 standing_orders。"""
         bot = _make_mock_bot()
         director = _make_director_with_bot(session, bot)
@@ -200,9 +196,7 @@ class TestStructureOverrideExec:
         bot.build.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_structure_override_prereq_missing_nexus(
-        self, session: GameSession
-    ) -> None:
+    async def test_structure_override_prereq_missing_nexus(self, session: GameSession) -> None:
         """GATEWAY 需要 Nexus，Nexus 数量为 0 → status=on_hold，reason 含 'Nexus'。"""
         bot = _make_mock_bot(gateway_count=0, nexus_count=0, pending_nexus=0.0)
         director = _make_director_with_bot(session, bot)

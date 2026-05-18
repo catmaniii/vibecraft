@@ -7,28 +7,26 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-17，HEAD = 469e126，分支 `m4-l2-l4-executor`，PR #1 open）
+## 当前状态（最近更新：2026-05-18，HEAD = a5e63e0，分支 `m6-zerg-terran-bot`）
 
-- **里程碑**：M2 已 `v0.1.0a4`。**本次 session（M4）：L2 战术执行器 + L4 done_when 扩词表 + 统一命令卡片 全部完成，727 unit test PASS（0 skipped），PR #1 已开**
-- **M4 新功能（branch `m4-l2-l4-executor`，PR #1）**：
-  - P0a: facade 新增 2 override 方法 + VibeCraftZoneAttack fork，A 类 L2 attack/defend/retreat 真正影响 bot sharpy plan
-  - P0b: TacticalSquad + execute_tactics_step，B 类 L2 harass/scout unit 抢占
-  - P0c-P0g: L1 cancel 统一 board.submit、7 新 done_when kind、STRUCTURE_OVERRIDE directive type、command_cards 统一快照、revoke 扩 L2/L1
-  - P0h: CommandCard/Stack PWA 组件 + CockpitView 切统一卡片
-  - P0i-P0k: LLM prompt A/B 类规则 + llm_eval + e2e O 系列
-  - Bug fix: revoke_strategy 补 session.log_event 落盘（Bug C）、test_server_ws 注入 mock GameProcess 防 SC2 spawn、6 个 S2 历史遗留 skip 测试清理
-- **最近 commit（分支 HEAD = 469e126）**：
-  - `469e126` fix: 单测注入 mock GameProcess，彻底消除 SC2 黑窗口
-  - `7d846b4` fix: Bug A+B（上一 session 完成）
-  - `e83b0bf` fix: ruff lint 清零
-  - `cdd595f` docs(adr): ADR 0011
-  - `ebc1b1b` fix: revoke event type + cm None cache + UP037 + test isolation
-- **GitHub PR**：https://github.com/catmaniii/vibecraft/pull/1（待 merge → main）
-- **下一步**：
-  1. PR merge → main，打 `v0.1.0a5` tag
-  2. **M3 开始**：完整驾驶舱精修 + L4 production override sharpy 真出兵 wire + phase stepper
-  3. **backlog**：3 个 flaky cross-test（`test_loads_real_strategies` / `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`），pytest-forked 排查
-  4. **e2e O 系列 case**（需 SC2 客户端）：O1-O4 case 需跑 `scripts/e2e_4_directive_types.py` 验证 L2/L4 新路径真工作
+- **里程碑**：**M6 全部完成**（Tasks 0/1/2a/2b/3a/3b/4）。**905 unit test PASS**
+- **M6 完成内容（分支 `m6-zerg-terran-bot`）**：
+  - M6.0: `VibeCraftBotBase` 抽 `common_bot.py`，神族瘦身为薄壳
+  - M6.1: `GameConfig.my_race` + `sharpy_adapter` 三族 dispatch + CLI `--my-race`
+  - M6.2a: 虫族 alias 表 + 5 个 strategy yaml（12pool / macro_hatch / roach_hydra / mutalisk_harass / brood_corruptor）
+  - M6.2b: 虫族 bot（`_VibeCraftZergBot`）+ 7 个 plan + `ZergSustain` + `ScoutOverlord`
+  - M6.3a: 人族 alias 表 + 5 个 strategy yaml（marine_rush / reaper_expand / bio_stim / two_base_tanks / bc_late）
+  - M6.3b: 人族 bot（`_VibeCraftTerranBot`）+ 7 个 plan + `TerranSustain` + `ScoutSCV`
+  - M6.4: 文档（ARCHITECTURE / USER_GUIDE / CLAUDE / CHANGELOG + ADR 0012）
+- **最近 commit（分支 HEAD = a5e63e0）**：M4/M5/M6 完整历史见 git log
+- **下一步（M7 候选）**：
+  1. PR merge → main，打 `v0.6.0` tag（三族可用里程碑）
+  2. **M7a PWA race selector**：手机端加种族选择器，不需要手动改 CLI flag
+  3. **M7b random race / opponent_race counter**：随机种族模式；根据对手种族自动推荐剧本
+  4. **M7c 虫族 creep tumor**：ZergSustain 加 `PlaceCreepTumor` + `SpreadCreepTumors`
+  5. **M7d 人族 lift building**：Terran bot 支持建筑起飞（`LiftBuilding`）逃离被围困矿
+  6. **backlog（继承 M4）**：3 个 flaky cross-test（`test_loads_real_strategies` / `test_transitions_of` / `test_not_triggered_when_visible_but_insufficient_duration`）
+- **e2e 待做**（需 SC2 客户端）：三族各跑 1 局 vs VeryEasy 验证 smoke
 
 ---
 
