@@ -16,7 +16,7 @@ import RecommendationCard from '@/components/RecommendationCard.vue'
 import BotDecisionCard from '@/components/BotDecisionCard.vue'
 import PendingForceCard from '@/components/PendingForceCard.vue'
 import CommandCardStack from '@/components/CommandCardStack.vue'
-import TacticsButton from '@/components/TacticsButton.vue'
+// TacticsButton 已集成进 BotDecisionCard,这里不再 import
 import StrategyPicker from '@/components/StrategyPicker.vue'
 import type {
   SnapshotFrame,
@@ -41,6 +41,7 @@ const props = defineProps<{
   tactics: TacticsView | null
   pendingForceStrategy: PendingForceStrategyView | null
   commandCards: readonly CommandCardView[]
+  activeTactics?: readonly import('@/types').TacticalObjectiveView[]
   myRace?: 'Protoss' | 'Zerg' | 'Terran'
 }>()
 
@@ -107,16 +108,22 @@ function fmtTs(ts: number): string {
           </div>
         </div>
         <div class="flex-1 min-w-0 min-h-[260px] rounded-xl bg-surface-2 border border-border p-3 flex flex-col relative">
-          <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center justify-between mb-2 gap-2">
             <p class="text-xs font-semibold text-muted uppercase tracking-wider">当前宏观策略</p>
-            <button
-              v-if="currentSlot"
-              type="button"
-              data-testid="revoke-strategy-btn"
-              class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors text-xs leading-none"
-              :aria-label="`取消当前${currentStage}剧本`"
-              @click="revokeCurrentStrategy"
-            >×</button>
+            <div class="flex items-center gap-1.5">
+              <StrategyPicker
+                :race="(props.myRace?.toLowerCase() as 'protoss' | 'zerg' | 'terran') ?? 'protoss'"
+                @strategy-action="(id) => emit('strategyAction', id)"
+              />
+              <button
+                v-if="currentSlot"
+                type="button"
+                data-testid="revoke-strategy-btn"
+                class="shrink-0 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors text-xs leading-none"
+                :aria-label="`取消当前${currentStage}剧本`"
+                @click="revokeCurrentStrategy"
+              >×</button>
+            </div>
           </div>
           <StrategyCard
             v-if="currentSlot"
@@ -149,17 +156,13 @@ function fmtTs(ts: number): string {
 
       <!-- 下方内容(可 scroll,本身已经在外层 scroll 容器内) -->
       <div class="flex flex-col gap-3 px-4 py-2">
-        <!-- bot 当前决策(独立大卡片) -->
-        <BotDecisionCard :tactics="props.tactics" />
-
-        <!-- 快速战术按钮 + 剧本按钮（都折叠为单按钮,点击展开浮层） -->
-        <div class="flex items-center gap-2">
-          <StrategyPicker
-            :race="(props.myRace?.toLowerCase() as 'protoss' | 'zerg' | 'terran') ?? 'protoss'"
-            @strategy-action="(id) => emit('strategyAction', id)"
-          />
-          <TacticsButton @tactical-action="(v) => emit('tacticalAction', v)" />
-        </div>
+        <!-- bot 当前决策(集成"切换战术"按钮 + 玩家 override + X 撤销) -->
+        <BotDecisionCard
+          :tactics="props.tactics"
+          :active-tactics="props.activeTactics"
+          @tactical-action="(v) => emit('tacticalAction', v)"
+          @revoke-override="(id) => emit('revokeCard', id)"
+        />
 
         <CommandCardStack
           :cards="tacticalCards"

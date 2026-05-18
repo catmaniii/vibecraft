@@ -95,6 +95,7 @@ const sc2Label = computed(() => {
         :tactics="tactics"
         :pending-force-strategy="pendingForceStrategy"
         :command-cards="commandCards"
+        :active-tactics="activeTactics"
         :my-race="myRace"
         @command="onCommand"
         @view-move="onViewMove"

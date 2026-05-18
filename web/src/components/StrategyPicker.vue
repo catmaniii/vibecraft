@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // StrategyPicker: 按种族过滤的剧本选择浮层。
-// 默认折叠为一个按钮，点击展开当前种族对应的策略 chip 列表。
-//
-// race prop 决定显示哪一族的策略 — 神族 8 个 / 虫族 5 个 / 人族 5 个。
-// 不显示其他种族的策略（玩家选的种族就是 service 启动时的种族，跨族 chip 是噪音）。
+// 默认折叠为一个"切换"小按钮(集成在"当前宏观策略"框右上角),
+// 点击展开下拉菜单显示当前种族对应的策略 chip 列表。
+// 点击别处自动关闭(click-outside)。
 
 import { ref } from 'vue'
+import { useClickOutside } from '@/composables/useClickOutside'
 
 const props = defineProps<{
   race: 'protoss' | 'zerg' | 'terran'
@@ -22,7 +22,7 @@ interface StrategyChip {
   stage: 'opening' | 'midgame' | 'lategame'
 }
 
-// 与 strategies/<race>/*.yaml 完全对齐（id 必须精确匹配）
+// 与 strategies/<race>/*.yaml 完全对齐(id 必须精确匹配)
 const ALL_STRATEGIES: StrategyChip[] = [
   // 神族 8
   { id: '4bg',                display: '4 门 BG 早压',    race: 'protoss', stage: 'opening' },
@@ -60,6 +60,9 @@ const STAGE_COLORS: Record<string, string> = {
 }
 
 const expanded = ref(false)
+const rootEl = ref<HTMLElement | null>(null)
+
+useClickOutside(rootEl, () => { expanded.value = false }, () => expanded.value)
 
 function strategiesByRace() {
   return ALL_STRATEGIES.filter((s) => s.race === props.race)
@@ -72,26 +75,21 @@ function pickStrategy(id: string) {
 </script>
 
 <template>
-  <div data-testid="strategy-picker" class="relative inline-block">
-    <!-- 触发按钮：折叠时只显示这一个按钮 -->
+  <div ref="rootEl" data-testid="strategy-picker" class="relative inline-block">
+    <!-- 触发按钮:小图标"切换"(集成在 strategy 框右上角) -->
     <button
       type="button"
       data-testid="strategy-picker-toggle"
-      :class="[
-        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors',
-        'bg-surface-2 border-border text-fg hover:bg-surface-3 active:scale-95',
-      ]"
+      class="shrink-0 px-2 py-0.5 rounded text-xs text-muted border border-border hover:text-accent hover:border-accent/50 hover:bg-accent/10 transition-colors leading-none"
+      :aria-label="expanded ? '关闭剧本菜单' : '切换剧本'"
       @click="expanded = !expanded"
-    >
-      <span>剧本</span>
-      <span class="opacity-60">{{ expanded ? '▲' : '▼' }}</span>
-    </button>
+    >切换</button>
 
-    <!-- 展开后的浮层 -->
+    <!-- 展开后的下拉菜单 -->
     <div
       v-if="expanded"
       data-testid="strategy-picker-popup"
-      class="absolute right-0 top-full mt-1 z-20 bg-surface-2 border border-border rounded-lg shadow-lg p-2 min-w-[240px]"
+      class="absolute right-0 top-full mt-1 z-30 bg-surface-2 border border-border rounded-lg shadow-lg p-2 min-w-[240px]"
     >
       <div
         v-for="stage in ['opening', 'midgame', 'lategame']"
