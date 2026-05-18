@@ -10,24 +10,21 @@
 
 关键路径
 ========
-1. 快速双矿（~1:24 NX）+ 折跃
+1. 快速双矿（~1:24 NX）→ BY（BY 优先于 NX，1:24 BY 先下 → 1:35 NX）
 2. VT（TwilightCouncil）→ 研 Blink（~3:19，chrono 加速）
-3. VR（Robotics）→ Observer + Warp Prism
+3. VR（Robotics，VT exists 后约 30s）→ Observer + Warp Prism
 4. 4 BG 补全（~3:23-3:39）
 5. 5:07 benchmark：68 supply / 11 stalkers / 1 adept / 1 warp prism
 
 Build 节奏（参考 spawningtool.com 178931，Harstem 4 Gate Blink PvT）
 ===================================================================
-  1:24  NX（双矿）
-  1:35  BY（CyberneticsCore）
-  1:40  Pylon
+  1:24  BY（CyberneticsCore，**先于 NX**）
+  1:35  NX（双矿，**跟在 BY 之后**）
   1:49  BA x2
   1:57  Adept @chrono
   2:00  Warp Gate @chrono
-  2:17  Stalker @chrono
   2:32  VT（TwilightCouncil）
-  2:41  Stalker
-  2:59  VR（Robotics）
+  2:59  VR（Robotics，VT exists 后）
   3:19  Blink @chrono（关键！）
   3:23  BG x2（补到 3 BG）
   3:39  BG（第 4 门）
@@ -35,7 +32,7 @@ Build 节奏（参考 spawningtool.com 178931，Harstem 4 Gate Blink PvT）
   4:08  Warp Prism @chrono
   4:30  BA（三气）
   **5:07 出门 benchmark**（11 Stalkers + 1 Adept + 1 Warp Prism）
-  5:28  NX（三矿延续）
+  5:28  NX（三矿延续，Time(60*5) 触发）
 """
 
 from __future__ import annotations
@@ -55,7 +52,7 @@ from sharpy.plans.acts.protoss import (
     ProtossUnit,
     RestorePower,
 )
-from sharpy.plans.require import UnitExists, UnitReady
+from sharpy.plans.require import Time, UnitExists, UnitReady
 from sharpy.plans.tactics import (
     DistributeWorkers,
     PlanCancelBuilding,
@@ -103,21 +100,26 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 19),
             ),
-            # ---------- 快速双矿（~1:24）+ BY ----------
-            Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
+            # ---------- BG ready → BY 先建，NX 跟在 BY 之后（关键顺序！）----------
+            # 标准 build：1:24 BY → 1:35 NX
+            # 原版 BG ready 时同时触发 Expand(2)+GridBuilding(BY)，NX 可能先完成 → BY 延后
+            # 修复：BY 在 BG ready 时建，NX 等 BY exists（确保 BY 先下）
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
+            Step(UnitExists(UnitTypeId.CYBERNETICSCORE, 1), Expand(2)),
             # ---------- 双矿气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            # ---------- VT（TwilightCouncil，闪烁前置）----------
+            # ---------- VT（TwilightCouncil，闪烁前置，BY ready 时建）----------
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
             ),
-            # ---------- VR（Robotics，Observer + Warp Prism）----------
+            # ---------- VR（Robotics，VT exists 后约 30s，避免同时建挤矿）----------
+            # 标准 build：VT 2:32 → VR 2:59（约 30s 间隔）
+            # 原版 VT 和 VR 在 BY ready 时同时触发，矿资源竞争导致两者都延后
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                UnitExists(UnitTypeId.TWILIGHTCOUNCIL, 1),
                 GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
             ),
             # ---------- 闪烁研究（Blink，关键升级 ~3:19）----------
@@ -126,8 +128,10 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
             # ---------- 三气（4:30）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
-            # ---------- 三矿延续（5:28）----------
-            Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
+            # ---------- 三矿延续（标准 5:28，用 Time 对齐避免过早开）----------
+            # 原版 UnitExists(NEXUS, 2) 触发 → 二矿存在就开三矿（约 2:30 过早）
+            # 改为 Time(60*5)，对齐标准 5:28 时序，闪烁集结后再开三矿
+            Step(Time(60 * 5), Expand(3)),
             # ---------- 单位训练 ----------
             # Observer（VR 一好立刻，反隐必须）
             Step(
