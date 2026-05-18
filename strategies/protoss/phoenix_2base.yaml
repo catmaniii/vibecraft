@@ -1,0 +1,96 @@
+kind: midgame_stance
+id: phoenix_2base
+display_name_zh: "两矿凤凰"
+summary_zh: "双矿双星门凤凰（Phoenix Opener）：快速上 VS x2，持续 chrono 凤凰吊资源 / 骚扰，PvZ 对飞虫/蟑螂线 / PvT 对 bio 均有效"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.phoenix_2base:Phoenix2Base"
+aliases:
+  - "两矿凤凰"
+  - "双矿凤凰"
+  - "凤凰开局"
+  - "凤凰流"
+  - "两星门"
+  - "双星门凤凰"
+  - "phoenix opener"
+  - "Phoenix Opener"
+  - "2 stargate phoenix"
+  - "2SG phoenix"
+  - "凤凰骚扰"
+  - "凤凰飞"
+  - "飞凤凰"
+  - "Phoenix PvZ"
+matchup: [PvZ, PvT]
+
+enter_when:
+  - "self.tech.warpgate.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [1g_robo_immortal, 4bg]"
+
+# 数据来源：lotv.spawningtool.com/build/126982/ (HuShang Double Stargate Phoenix PvZ)
+# 关键 build 节点：
+# - 1:24 Nexus（双矿）
+# - 1:49 Assimilator x2
+# - 2:00 Warp Gate @chrono
+# - 2:17 Stalker @chrono（保家 + 侦察）
+# - 2:32 VT（TwilightCouncil，闪现升级备用）
+# - 2:59 VR（Robotics，Observer 前置）
+# - 3:19 研 Blink（选项，对 PvT 有用）
+# - 3:23 VS x2（双星门，主力产能）
+# - 3:52 Stalker @chrono
+# - 4:08 Warp Prism @chrono
+# - 4:30 Assimilator（三气）
+# - 5:28 Nexus（三矿）
+commitments:
+  units:
+    phoenix: 8         # 主力骚扰 + 吊资源
+    stalker: 8         # 地面防守 + 保家
+    observer: 1        # 侦察 + 反隐
+    warp_prism: 1      # 运载 + 骚扰
+  tech: [WarpGateResearch, BlinkTech, ProtossAirWeaponsLevel1]
+  structures:
+    gateway: 3
+    stargate: 2
+    robotics: 1
+    twilight: 1
+    forge: 1
+  expansions: 2
+
+attack_window:
+  open_at: "5:00"
+  close_at: "8:00"
+  target_priority: [worker_lines, overlords, army]
+
+micro_doctrine:
+  - "phoenix lift_unit Zerg overseer / Terran medivac / Zerg mutalisk"
+  - "phoenix focus_fire worker_mineral_lines（快速吊 drone / scv）"
+  - "stalker 留家防 zergling / marine harass，不随 phoenix 出"
+  - "warp_prism 2 stalkers 绕后 drop，配合 phoenix 两线骚扰"
+  - "if enemy.muta_flock: phoenix priority target mutalisk（mass phoenix 克飞虫）"
+
+expire_action:
+  - "transition: skytoss"
+
+lategame_transitions:
+  - lategame_id: skytoss
+    when: "default"
+  - lategame_id: iac_2base
+    when: "enemy.ground_heavy"
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 Phoenix2Base.create_plan 控制
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA"
+  - "19 build NX（双矿）"
+  - "20 build BY"
+  - "21 build BA x2"
+  - "22 train 追猎 @chrono"
+  - "22 research 折跃 @chrono"
+  - "28 build VT"
+  - "34 build VR"
+  - "37 research 闪烁 @chrono（选）"
+  - "38 build VS x2"
+  - "43 train 凤凰 @chrono"
+  - "46 build Warp Prism @chrono"
+  - "53 train 凤凰 @chrono"
+  - "58 train 凤凰 x2 @chrono"
+  - "58 build NX（三矿）"
