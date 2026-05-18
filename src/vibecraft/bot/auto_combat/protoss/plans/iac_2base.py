@@ -15,20 +15,21 @@
 1. WarpgateResearch（必，BY 一好立刻研，~140s）
 2. Charge（必，VT 一好立刻研，~100s，5 分钟必出）
 3. ProtossGroundWeapons +1（强烈推荐，BF 研，charge 叉 +1 攻提升显著）
-4. （可选）ProtossShields +1 / PsiStorm 后期补
 
 Build 节奏（spawningtool.com 标准 IAC 2-base all-in）
 =====================================================
   1:25  二矿（natural NX）
   1:35  BY（CyberneticsCore）
-  2:10  Warpgate research
+  2:10  Warpgate research + Adept x1（保家侦察）
   2:22  VR（Robotics）
+  2:25  BB（Shield Battery，防早期骚扰）
   3:25 / 4:05  Immortal × 2
-  3:40  VT（TwilightCouncil）
+  3:40  VT（TwilightCouncil，**3:40 时机，不在 BY ready 时**）
   4:27  Charge research
   4:35 / 4:56  暴 7 BG（总数）
-  5:01  VA（TemplarArchives，后期补 HT）
   **6:15 出门**  Charge 完 + +1 武器研究中
+
+注：IAC 2-base all-in 是短平快，**不用 VA / HT / Storm**（来不及 + 分散资源）
 
 设计差异 vs sharpy macro_stalkers dummy
 ========================================
@@ -105,14 +106,23 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             # ---------- 第二气矿（二矿启动后立刻补；IAC 用气多）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-            # ---------- BY 一好的并行触发（折跃研究 + VR + VT 三件事同时启动）----------
+            # ---------- BY 一好的并行触发（折跃研究 + VR 同时启动）----------
+            # VT 不在 BY ready 时建（标准 3:40，过早建 VT 会抢占给 VR 的矿资源）
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
             ),
+            # ---------- BB（Shield Battery，VR ready 后建，防早期骚扰）----------
+            # 标准 build 2:25 建 BB，比 VR ready（2:22）稍后，跟 VR ready 触发合理
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                GridBuilding(UnitTypeId.SHIELDBATTERY, 1),
+            ),
+            # ---------- VT 在 3 分钟建（标准 3:40，不过早抢 VR 矿资源）----------
+            # 原版在 BY ready（~2:10）就并行建 VT，150 矿本该给 VR（200 矿）优先
+            Step(
+                Time(60 * 3),
                 GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
             ),
             # ---------- VT 一好立刻研 Charge（关键，5 分钟必出）----------
@@ -126,15 +136,15 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             Step(UnitExists(UnitTypeId.NEXUS, 2), GridBuilding(UnitTypeId.FORGE, 1)),
             # +1 攻击（charge 叉 dps 提升显著）
             Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
-            # ---------- VA + Storm（后期补，HT 增援）----------
-            Step(
-                UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.TEMPLARARCHIVE, 1)
-            ),
-            Step(UnitReady(UnitTypeId.TEMPLARARCHIVE, 1), Tech(UpgradeId.PSISTORMTECH)),
-            # ---------- 防身 ----------
+            # ---------- 防身 + 保家 ----------
             ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
+            # Adept x1（BY ready 后出，保家侦察；标准 2:10）
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                ProtossUnit(UnitTypeId.ADEPT, 1, priority=True),
+            ),
             # ---------- 单位训练队列 ----------
-            # VR 一好：先 2 不朽 + 1 OB
+            # VR 一好：先 2 不朽 + 1 OB + 后续补到 3 不朽
             [
                 Step(
                     UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
@@ -150,14 +160,14 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                     ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 3, priority=True),
                 ),
             ],
-            # Sentry × 2（力场切阵）
+            # Sentry × 2（力场切阵，标准 build 有 1 个，2 个合理）
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.SENTRY, 2, priority=True),
             ),
-            # HT × 4（合 2 Archon + 2 Storm 储能）
-            Step(UnitReady(UnitTypeId.TEMPLARARCHIVE, 1), ProtossUnit(UnitTypeId.HIGHTEMPLAR, 4)),
-            # Charge Zealot 主力（target 16+）
+            # Charge Zealot 主力（target 18，叉球一波的主体）
+            # VA / HT / Psi Storm 移除：IAC 2-base all-in 是 6:15 出门，
+            # Storm 研究需要 VA+TA 各 60s 共 120s，来不及完成，只会分散资源
             Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 18)),
             # ---------- 经济（sequential pacing）----------
             AutoPylon(),
