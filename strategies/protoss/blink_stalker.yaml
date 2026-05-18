@@ -1,0 +1,95 @@
+kind: midgame_stance
+id: blink_stalker
+display_name_zh: "闪追压制"
+summary_zh: "4 门闪烁追猎压制（Blink Stalker timing）：双矿 + 4 BG + 研闪烁 + Warp Prism，5:07 左右出门。PvT/PvP 中期主线"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.blink_stalker:BlinkStalker"
+aliases:
+  - "闪追"
+  - "闪追压制"
+  - "闪烁追猎"
+  - "4门闪追"
+  - "blink stalker"
+  - "Blink Stalker"
+  - "blink压制"
+  - "闪追timing"
+  - "闪烁timing"
+  - "blink timing"
+  - "4 Gate Blink"
+  - "4gate blink"
+  - "Parting blink"
+  - "PartinG blink"
+  - "闪现"
+  - "stalker blink"
+matchup: [PvT, PvP]
+
+enter_when:
+  - "self.tech.warpgate.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [1g_robo_immortal, 4bg]"
+
+# 数据来源：lotv.spawningtool.com/build/178931/ (Harstem's Guide to Parting 4 Gate Blink PvT)
+# 关键 build 节点：
+# - 1:24 Nexus（双矿）
+# - 2:00 Warp Gate @chrono
+# - 2:17 Stalker @chrono（保家）
+# - 2:32 VT（TwilightCouncil，闪烁前置）
+# - 2:59 VR（Robotics，Observer + Warp Prism）
+# - 3:19 Blink @chrono（关键升级）
+# - 3:23 BG x2（补门到 4）
+# - 3:39 BG（第 4 门）
+# - 4:08 Warp Prism @chrono
+# - 5:07 benchmark：68 supply 11 stalkers 1 adept 1 warp prism 1 observer
+# - 5:28 三矿（Nexus）
+commitments:
+  units:
+    stalker: 14        # 主力（闪烁后战斗力大幅提升）
+    adept: 1           # 哨兵 / 骚扰
+    observer: 1        # 反隐 / 侦察
+    warp_prism: 1      # drop 骚扰 + 接出受伤 stalker
+  tech: [WarpGateResearch, BlinkTech]
+  structures:
+    gateway: 4
+    robotics: 1
+    twilight: 1
+  expansions: 2
+
+attack_window:
+  open_at: "5:07"
+  close_at: "7:00"
+  target_priority: [army, natural, production]
+
+micro_doctrine:
+  - "stalker blink_micro 重点：每个 stalker 血量低时手动 blink 撤"
+  - "warp prism 2 stalkers 绕后 drop，造成双线压力"
+  - "blink stalker vs bio: focus medivac 优先（切断治疗 = 大幅提升换血率）"
+  - "vs tank: blink 越过 siege_line，focus_fire tank 一个一个点"
+  - "if vs colossus: shift_attack 追猎 focus_fire colossus（必须干掉）"
+
+expire_action:
+  - "transition: iac_2base"
+
+lategame_transitions:
+  - lategame_id: iac_2base
+    when: "default"
+  - lategame_id: skytoss
+    when: "enemy.lategame_composition"
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 BlinkStalker.create_plan 控制
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA"
+  - "20 build NX（双矿）"
+  - "20 build BY"
+  - "21 build BA x2"
+  - "21 train 追猎 @chrono"
+  - "22 research 折跃 @chrono"
+  - "28 build VT"
+  - "34 build VR"
+  - "37 research 闪烁 @chrono"
+  - "38 build BG x2"
+  - "40 build BG"
+  - "40 train OB（Observer）"
+  - "46 build Warp Prism @chrono"
+  - "55 build BA（三气）"
+  - "72 build NX（三矿）"

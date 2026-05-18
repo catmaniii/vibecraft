@@ -33,6 +33,7 @@ _PLANS_WITH_ATTACK_ACT = [
     "iac_2base.py",
     "dt_rush.py",
     "phoenix_2base.py",
+    "blink_stalker.py",
 ]
 
 
