@@ -14,6 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **中文沟通**。代码注释、commit message、log 字段名仍可英文（业界惯例），但所有面向用户的解释、设计讨论、PR 描述用中文。
 - **建筑用 hotkey 简称**，不写全名。**默认就要这样写**，不需要用户提醒：
+
+  #### 神族建筑 hotkey
+
   - **B 系列（基础建筑）—— 按 SC2 默认 grid 键位**:
     - **BG** = Gateway / 兵营 / 折跃门（B+G）
     - **BE** = Pylon / 水晶 / 房子（B+E；**不要**写 PY）
@@ -31,8 +34,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **VA** = Templar Archives / 圣堂档案
     - **VB** = Dark Shrine / 黑暗神殿
     - **VD** = Robotics Bay / 机械槽 / 球塔
-- 单位用中文（叉子 / 不朽 / 追猎 / 闪追 / 凤凰 / 航母 / DT / HT / 母舰 / 高坦 / 暗使 / 探机）。
-- 战术黑话保留：4BG / IAC / Skytoss / 12D / 两矿凤凰 / 闪追 timing 等。
+
+  #### 虫族建筑 hotkey
+
+  - **B 系列（基础建筑）**:
+    - **BH** = Hatchery / 孵化场（B+H）
+    - **BE** = Extractor / 气矿（B+E）
+    - **BS** = Spawning Pool / 母池（B+S）
+    - **BV** = Evolution Chamber / 进化腔（B+V）
+    - **BR** = Roach Warren / 蟑螂窝（B+R）
+    - **BB** = Baneling Nest / 妖虫巢（B+B）
+    - **BC** = Spine Crawler / 刺蛇匍匐者（B+C；防御建筑）
+    - **BP** = Spore Crawler / 孢子匍匐者（B+P；防空）
+  - **V 系列（科技建筑）**:
+    - **VH** = Hydralisk Den / 刺蛇巢（V+H）
+    - **VL** = Lurker Den / 潜伏者巢（V+L）
+    - **VI** = Infestation Pit / 感染坑（V+I）
+    - **VS** = Spire / 刺翼（V+S）
+    - **VN** = Nydus Network / 尼德斯网络（V+N）
+    - **VU** = Ultralisk Cavern / 雷兽洞（V+U）
+    - **VG** = Greater Spire / 大刺翼（V+G；原刺翼升级）
+
+  #### 人族建筑 hotkey
+
+  - **B 系列（基础建筑）**:
+    - **BN** = Command Center / 指挥中心（B+N）
+    - **BS** = Supply Depot / 补给站（B+S）
+    - **BR** = Refinery / 精炼厂（B+R）
+    - **BB** = Barracks / 兵营（B+B）
+    - **BE** = Engineering Bay / 工程湾（B+E）
+    - **BU** = Bunker / 碉堡（B+U）
+    - **BT** = Missile Turret / 导弹炮塔（B+T）
+    - **BF** = Factory / 工厂（B+F）
+    - **BP** = Starport / 星港（B+P）
+    - **BA** = Armory / 军火库（B+A）
+    - **BG** = Ghost Academy / 幽灵学院（B+G）
+    - **BC** = Fusion Core / 聚变芯（B+C；**人族 BC = 聚变芯，不是神族 BC = 光子炮**）
+    - **BW** = Sensor Tower / 传感器塔（B+W）
+
+- 单位用中文（叉子 / 不朽 / 追猎 / 闪追 / 凤凰 / 航母 / DT / HT / 母舰 / 高坦 / 暗使 / 探机 / 小狗 / 妖虫 / 蟑螂 / 刺蛇 / 飞龙 / BL / 枪兵 / 坦克 / 医疗船 / 船长）。
+- 战术黑话保留：4BG / IAC / Skytoss / 12D / 两矿凤凰 / 闪追 timing / MMM / 12pool 等。
+- **跨族 hotkey 歧义**：BC 在神族是光子炮，在人族是聚变芯。同一 session 按当前 `--my-race` 种族的 alias 表解析，不会混淆。
 
 ---
 
