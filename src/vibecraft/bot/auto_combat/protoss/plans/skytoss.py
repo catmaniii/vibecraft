@@ -60,6 +60,7 @@ from sharpy.plans.acts.protoss import (
 from sharpy.plans.require import UnitExists, UnitReady
 from sharpy.plans.tactics import (
     DistributeWorkers,
+    PlanCancelBuilding,
     PlanFinishEnemy,
     PlanZoneDefense,
     PlanZoneGather,
@@ -98,15 +99,16 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 GridBuilding(UnitTypeId.STARGATE, 1),
             ),
-            # **并行**：FleetBeacon 跟 VS 2-4 同时建（不等 FB 完成才补 VS）
+            # **并行**：FleetBeacon 跟 VS 2-3 同时建（不等 FB 完成才补 VS）
             # 1 VS 一好就启动两条并行线
+            # VS 目标 3（对齐标准 Zest build，3 VS 产 Carrier + 保家；4 VS supply 压力过大）
             Step(
                 UnitReady(UnitTypeId.STARGATE, 1),
                 GridBuilding(UnitTypeId.FLEETBEACON, 1),
             ),
             Step(
                 UnitReady(UnitTypeId.STARGATE, 1),
-                GridBuilding(UnitTypeId.STARGATE, 4),  # 补到 4 VS
+                GridBuilding(UnitTypeId.STARGATE, 3),  # 补到 3 VS（标准 Zest build）
             ),
             # VR（Observer 前置；从 4bg / 单 VS 切的人没 Robo 必须自己造）
             Step(
@@ -135,17 +137,13 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 GridBuilding(UnitTypeId.PHOTONCANNON, 4),  # 主二三矿各 1-2 个
             ),
             # ---------- 升级链 ----------
-            # **关键**：空军升级用 SequentialList 强制 1→2→3 顺序
-            # CC 一次只研一个，并行的 Tech() 会乱抢；SequentialList 确保
-            # 武器 1 → 护甲 1 → 武器 2 → 护甲 2 → 武器 3 → 护甲 3
+            # **关键**：Weapons 和 Armor 拆成两条独立 SequentialList，并行进行
+            # 原版单条 SequentialList（Weapons1→Armor1→Weapons2→...）
+            # 导致 Armor1 研完才开始 Weapons2，比并行慢约 120-180s
             SequentialList(
                 Step(
                     UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                     Tech(UpgradeId.PROTOSSAIRWEAPONSLEVEL1),
-                ),
-                Step(
-                    UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                    Tech(UpgradeId.PROTOSSAIRARMORSLEVEL1),
                 ),
                 Step(
                     UnitReady(UnitTypeId.FLEETBEACON, 1),
@@ -153,11 +151,17 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
                 ),
                 Step(
                     UnitReady(UnitTypeId.FLEETBEACON, 1),
-                    Tech(UpgradeId.PROTOSSAIRARMORSLEVEL2),
+                    Tech(UpgradeId.PROTOSSAIRWEAPONSLEVEL3),
+                ),
+            ),
+            SequentialList(
+                Step(
+                    UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                    Tech(UpgradeId.PROTOSSAIRARMORSLEVEL1),
                 ),
                 Step(
                     UnitReady(UnitTypeId.FLEETBEACON, 1),
-                    Tech(UpgradeId.PROTOSSAIRWEAPONSLEVEL3),
+                    Tech(UpgradeId.PROTOSSAIRARMORSLEVEL2),
                 ),
                 Step(
                     UnitReady(UnitTypeId.FLEETBEACON, 1),
@@ -179,6 +183,14 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             Step(
                 UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
                 ProtossUnit(UnitTypeId.OBSERVER, 2),
+            ),
+            # **Void Ray 过渡期**：VS 完成后到 VX 完成前，先出 Void Ray 防守 + 骚扰
+            # 标准 Skytoss VS 一好出 Void Ray 过渡（守家 + 骚扰），VX 完成后切 Carrier
+            # 原版缺少这段，VS 好到 VX 完成之间数分钟完全空档，守家困难
+            Step(
+                UnitReady(UnitTypeId.STARGATE, 1),
+                ProtossUnit(UnitTypeId.VOIDRAY, 3),
+                skip=UnitReady(UnitTypeId.FLEETBEACON, 1),  # VX 完成后停产 Void Ray
             ),
             # Carrier 持续 train（target 12）
             Step(
@@ -219,6 +231,7 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
             # ---------- 战术 / 维护 / 战斗触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
+                PlanCancelBuilding(),  # 建筑被攻击时取消重建（VS 被 EMP/胆汁打中时自愈）
                 PlanZoneDefense(),
                 RestorePower(),
                 DistributeWorkers(),
@@ -242,7 +255,7 @@ class Skytoss(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Knowledge
         """返回一个谓词函数：当前 Carrier 数量 >= n。"""
 
         def predicate(ai: Any) -> bool:
-            return ai.units(UnitTypeId.CARRIER).amount >= n
+            return bool(ai.units(UnitTypeId.CARRIER).amount >= n)
 
         return predicate
 
