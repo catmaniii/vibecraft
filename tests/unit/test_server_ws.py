@@ -215,6 +215,50 @@ class TestHeartbeat:
 
 
 # ---------------------------------------------------------------------------
+# default_realtime：CLI / ServiceConfig 透传到 _handle_start_game
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultRealtimeFallback:
+    """验证 PWA start_game 帧不传 realtime 时回退到 ServiceConfig.default_realtime。"""
+
+    def _make_conn(self, default_realtime: bool) -> tuple[WsConnection, MagicMock]:
+        registry = RoomRegistry(token="tok")
+        ws = _make_ws_mock()
+        mock_gp = MagicMock()
+        mock_gp.is_running = False
+        mock_gp.start = MagicMock()
+        mock_gp.status = GameStatus(sc2="launching", bot="idle")
+        conn = WsConnection(
+            ws, registry, game_process=mock_gp, default_realtime=default_realtime
+        )
+        return conn, ws
+
+    async def test_pwa_omits_realtime_uses_service_default_true(self) -> None:
+        conn, _ = self._make_conn(default_realtime=True)
+        await conn._handle_start_game({"type": "start_game", "config": {}})
+        gp = conn._game_process
+        gp.start.assert_called_once()  # type: ignore[attr-defined]
+        passed_config = gp.start.call_args[0][0]  # type: ignore[attr-defined]
+        assert passed_config.realtime is True
+
+    async def test_pwa_omits_realtime_uses_service_default_false(self) -> None:
+        conn, _ = self._make_conn(default_realtime=False)
+        await conn._handle_start_game({"type": "start_game", "config": {}})
+        passed_config = conn._game_process.start.call_args[0][0]  # type: ignore[attr-defined]
+        assert passed_config.realtime is False
+
+    async def test_pwa_explicit_realtime_overrides_service_default(self) -> None:
+        """PWA 显式传 realtime=True 时优先使用 PWA 值（即使 service 默认 False）。"""
+        conn, _ = self._make_conn(default_realtime=False)
+        await conn._handle_start_game(
+            {"type": "start_game", "config": {"realtime": True}}
+        )
+        passed_config = conn._game_process.start.call_args[0][0]  # type: ignore[attr-defined]
+        assert passed_config.realtime is True
+
+
+# ---------------------------------------------------------------------------
 # make_ws_handler：握手逻辑
 # ---------------------------------------------------------------------------
 

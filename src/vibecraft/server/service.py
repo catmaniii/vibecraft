@@ -46,6 +46,14 @@ class ServiceConfig:
     display_ip: str | None = None
     """二维码显示用 IP；None 时自动检测局域网 IP。"""
 
+    default_realtime: bool = True
+    """start_game 帧未显式传 realtime 时的 SC2 默认运行模式。
+
+    True = SC2 按 wall-clock 实时跑（玩家观战速度，默认）。
+    False = SC2 按 step 推进（速度由 SC2 引擎决定，远快于 1x，调试用）。
+    PWA 在 start_game.config.realtime 显式传值时优先使用 PWA 值。
+    """
+
 
 class BotService:
     """HTTP+WS bot service 实例。
@@ -80,8 +88,26 @@ class BotService:
     async def run(self) -> None:
         """启动 server，打印二维码，run forever（收到 SIGINT / CancelledError 退出）。"""
         cfg = self._config
+
+        # 启用 server log file 捕获(父进程 stdout/stderr/logging 全镜像到文件 +
+        # 通过 env 让 spawn 子进程接力到同一文件)。失败不阻塞 service。
+        try:
+            from vibecraft.logging_.server_log import (
+                default_server_log_path,
+                init_server_log_file,
+            )
+
+            log_path = init_server_log_file(default_server_log_path())
+            self._log.info("server_log_file", path=str(log_path))
+        except Exception as exc:
+            self._log.warning("server_log_init_failed", error=str(exc))
+
         process_request = make_process_request(static_dir=cfg.static_dir)
-        ws_handler = make_ws_handler(self._registry, game_process=self._game_process)
+        ws_handler = make_ws_handler(
+            self._registry,
+            game_process=self._game_process,
+            default_realtime=self._config.default_realtime,
+        )
 
         self._log.info("bot_service_starting")
 

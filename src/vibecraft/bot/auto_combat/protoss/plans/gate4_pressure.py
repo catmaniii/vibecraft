@@ -53,6 +53,9 @@ from sharpy.plans.tactics import (
 from vibecraft.bot.auto_combat.protoss.plans.forward_proxy import (
     ForwardSupportPylonGateway,
 )
+from vibecraft.bot.auto_combat.protoss.plans.forward_warp import (
+    ForwardWarpStalker,
+)
 from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCraftZoneAttack
 
 
@@ -77,6 +80,13 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
                 skip=TechReady(UpgradeId.WARPGATERESEARCH, 0.99),
             ),
+            # 前线 warp:**抢在主线 ProtossUnit(STALKER) 之前 execute** —
+            # sharpy BuildOrder.execute 是顺序遍历 orders,sharpy 自带 ProtossUnit
+            # 会用所有 ready WARPGATE(含 forward)warp 兵但 target=家 NEXUS。
+            # 把 ForwardWarpStalker 放在主线 SequentialList 之前 → 每 step 先抢
+            # forward warpgate + mark cooldown_manager.used_ability,sharpy 后续
+            # 看到 forward wg in cooldown 就跳过 → 兵真在 forward 区域出生。
+            ForwardWarpStalker(UnitTypeId.STALKER),
             # build order 主线
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -109,14 +119,16 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                         self._can_train_stalker,
                         ProtossUnit(UnitTypeId.STALKER, 100),
                     ),
-                    # 前线支援:3 BG 已开始造之后,派 1 农民到前线安全位置修 BE+BG
-                    # 时机考虑:补 3 BG 这一步先(massing),农民再出去(forward),
-                    # 让 forward 跟折跃完成 timing 对齐,折跃一好前线 BG 也接近完成
-                    Step(
-                        self._forward_ready,
-                        ForwardSupportPylonGateway(),
-                    ),
                 ),
+            ),
+            # 前线支援:**顶层并行**而非嵌在主线 SequentialList 里 —— SequentialList 一直
+            # 卡在 22 PROBE 这一步直到达成,导致 forward 实际触发延迟到 ~3min(supply 22+),
+            # 那时敌方 scout 满地图巡逻,农民走过去必死(实战 log:2 worker death 终止)。
+            # 拎出来 + _forward_ready=1 BG ready → supply ~16(~2:30) 派农民,抢在
+            # 敌方 scout 摸到中线前到位 + 修建。
+            Step(
+                self._forward_ready,
+                ForwardSupportPylonGateway(),
             ),
             # 战术 / 维护 / 攻击触发(全是 sharpy 自带 Manager)
             SequentialList(
@@ -142,39 +154,46 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _forward_ready(ai: Any) -> bool:
-        """ForwardSupport 触发:BY 完成 + 3 BG 已开始造(总 BG≥4 含 pending)。
+        """ForwardSupport 触发:首个 BG ready 就派农民(supply ~16)。
 
-        意图:补 3 BG 是 massing 阶段,这之后才派农民去前线 — 否则前期
-        家里 builder 紧张,影响主基地 build order。
+        历史:
+        - v1: BY ready + 4 BG pending (~supply 32) - 太晚,主力都准备出门了
+        - v2: BY 开始造 + 总 BG ≥ 3 (~supply 24-26) - 仍太晚,实战 log 显示
+          (game_20260518_042334) 农民派出时敌方 scout 已布满地图,走 28s 路过
+          敌方视野必死;两次 worker_death 直接触发 D 条件提前终止
+        - v3 (当前): 1 BG ready (supply ~16) - 抢在敌方 scout 摸到中线前,
+          家里 1 BG + BY 在筑,builder 微紧张但能撑住
+
+        意图:让 forward 农民走在敌方 scout 之前,减少路上交手机会。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
-        if not ai.structures(_U.CYBERNETICSCORE).ready.exists:
-            return False
-        current_bg = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).amount
-        pending_bg = ai.already_pending(_U.GATEWAY)
-        return bool(current_bg + pending_bg >= 4)
+        ready_bg = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
+        return bool(ready_bg >= 1)
 
     @staticmethod
     def _can_train_stalker(ai: Any) -> bool:
-        """折跃完成后,若仍有 ready Gateway(还没 morph 到 WarpGate)→ 暂停训练。
+        """sharpy ProtossUnit(STALKER) **只在折跃没完成前**训练(GATEWAY mode)。
 
-        SC2 引擎:WarpGate 研究完后,空闲 Gateway 会自动 MORPH_WARPGATE。
-        若我们一直 train Stalker,Gateway 始终在生产 → 永远不空闲 → 不 morph。
-        策略:折跃完成后等所有 BG 都转完(ready GATEWAY 数 = 0)再继续训练。
+        折跃完成后(WARPGATE mode)由 ForwardWarpStalker 完全接管 — 它会把所有
+        ready WARPGATE 都 warp 到 forward PYLON 附近。sharpy ProtossUnit 不再
+        触发,避免与 ForwardWarpStalker 同帧 race condition 让兵 spawn 在家
+        (用户反馈:"前面几个条件都满足的情况下,要杜绝从家里刷兵")。
 
-        BY 未好 / 折跃未完成阶段 → 正常训练(走 BG 训练)。
+        BY 未好 / 折跃未完成阶段 → 仍由 sharpy ProtossUnit GATEWAY mode train
+        (此阶段没 warpgate,ForwardWarpStalker 直接 return True 让出)。
+
+        防 Gateway 不 morph:sharpy ProtossUnit train 持续触发会让 Gateway 不空闲
+        → 不 morph。所以折跃 ready 后立即停 sharpy train,留空闲 Gateway 给
+        WarpGate morph(MORPH 后由 ForwardWarpStalker warp)。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
         if not ai.structures(_U.CYBERNETICSCORE).ready.exists:
             return False
         warpgate_done = UpgradeId.WARPGATERESEARCH in ai.state.upgrades
-        if not warpgate_done:
-            return True  # 折跃前正常训练
-        # 折跃完成后:还有 ready Gateway 没 morph → 等
-        ready_bg = ai.structures(_U.GATEWAY).ready.amount
-        return bool(ready_bg == 0)
+        # 折跃完成后 sharpy 不再 train — 把 stalker warp 完全交给 ForwardWarpStalker
+        return not warpgate_done
 
     @staticmethod
     def _three_bg_at_once(ai: Any) -> bool:

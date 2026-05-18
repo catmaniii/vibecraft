@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
 from vibecraft.bot.task_monitor import DONE_CHECKERS
 
 

@@ -22,10 +22,9 @@ from tests.llm_eval.expected_specs import LLM_EVAL_CASES
 from tests.llm_eval.score import ExpectedSpec, score_outcome
 
 if TYPE_CHECKING:
+    from tests.llm_eval.conftest import _EvalStats
     from vibecraft.llm.parser import IntentParser
     from vibecraft.llm.prompt import ParseContext
-
-    from tests.llm_eval.conftest import _EvalStats
 
 
 # 每 case 跑 3 次(design 拍板:平衡 accuracy 估计 vs LLM cost)
@@ -40,9 +39,9 @@ NUM_TRIALS = 3
 async def test_parse_accuracy(
     spec: ExpectedSpec,
     trial: int,
-    llm_parser: "IntentParser",
-    mock_parse_context: "ParseContext",
-    eval_stats: "_EvalStats",
+    llm_parser: IntentParser,
+    mock_parse_context: ParseContext,
+    eval_stats: _EvalStats,
 ) -> None:
     """单 case 单 trial:调真 LLM → score → 记录到 stats → assert PASS。
 

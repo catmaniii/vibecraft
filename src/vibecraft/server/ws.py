@@ -59,10 +59,12 @@ class WsConnection:
         ws: ServerConnection,
         registry: RoomRegistry,
         game_process: GameProcess | None = None,
+        default_realtime: bool = True,
     ) -> None:
         self._ws = ws
         self._registry = registry
         self._game_process = game_process or GameProcess()
+        self._default_realtime = default_realtime
         self._status_pump_task: asyncio.Task[None] | None = None
         self._log = logger.bind(
             remote=str(ws.remote_address),
@@ -302,7 +304,7 @@ class WsConnection:
             opponent_difficulty=str(
                 raw_config.get("opponent_difficulty", GameConfig.opponent_difficulty)
             ),
-            realtime=bool(raw_config.get("realtime", GameConfig.realtime)),
+            realtime=bool(raw_config.get("realtime", self._default_realtime)),
         )
 
         self._log.info(
@@ -467,6 +469,7 @@ class WsConnection:
 def make_ws_handler(
     registry: RoomRegistry,
     game_process: GameProcess | None = None,
+    default_realtime: bool = True,
 ) -> Any:
     """返回 websockets handler coroutine。
 
@@ -474,6 +477,9 @@ def make_ws_handler(
 
     game_process：可注入，用于测试；None 时每条连接自建一个（服务端默认行为应传入共享实例）。
     M1.2 阶段 BotService 传入 service 级共享 GameProcess（一个 service 实例 = 一局）。
+
+    default_realtime：start_game 帧未显式传 realtime 时的 SC2 默认运行模式
+    （来自 ServiceConfig.default_realtime，最终由 CLI --realtime/--no-realtime 控制）。
     """
     # 若外部没注入，handler 每次新建一个（MVP 一 token 一连接，一局一 GameProcess）
     _gp = game_process
@@ -502,7 +508,7 @@ def make_ws_handler(
             await ws.close(1008, "Invalid room token")
             return
 
-        conn = WsConnection(ws, registry, game_process=_gp)
+        conn = WsConnection(ws, registry, game_process=_gp, default_realtime=default_realtime)
         evicted = registry.attach(conn)
         if evicted is not None:
             log.info("ws_evicting_old_connection")

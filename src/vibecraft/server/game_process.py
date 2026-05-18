@@ -137,6 +137,16 @@ def _child_entry(
     - 改用 make_bot_class 造真 bot（Gap 1），同时传 status_callback 和 down_q（Gap 5+2）
     - 子进程内装配 GameSession / StrategyLibrary / LLMProvider / IntentParser（Gap 4）
     """
+    # 子进程接力 server log 捕获:父进程通过 env VIBECRAFT_SERVER_LOG_PATH 传过来,
+    # 让子进程 stdout/stderr 和 logging 都镜像到同一文件 — 早期 traceback 不再只
+    # 落到 service terminal。失败不阻塞子进程启动。
+    try:
+        from vibecraft.logging_.server_log import init_from_env
+
+        init_from_env()
+    except Exception:
+        pass
+
     # 子进程需要重新配置日志（spawn 后父进程 logging state 不继承）
     logging.basicConfig(level=log_level)
     # vibecraft 自己的模块用 INFO(生产可观察 directive 流转 / production_override

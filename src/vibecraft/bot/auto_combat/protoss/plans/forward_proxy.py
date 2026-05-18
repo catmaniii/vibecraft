@@ -45,14 +45,25 @@ logger = logging.getLogger(__name__)
 _PROXY_R: float = 30.0
 # 自家所有 Nexus 这个距离内的建筑视为"家里"，不算 forward
 _MIN_HOME_DIST: float = 25.0
-# 距离敌方主基地的硬下限（太近敌方视野必看到）
-_MIN_DIST_TO_ENEMY: float = 12.0
+# 距离敌方主基地的硬下限（太近敌方视野必看到 + 撞 main NEXUS/gas 区域 placement fail）
+# 历史:
+# - 12/18: 撞 main / natural 占地范围
+# - 28: 仍选到敌方 natural/third 区域被发现
+# - 40: 用户反馈"proxy 离对方基地可以更近一点 — 贴边走廊已经救了路上安全"
+# - 30(当前): 配合贴边评分(权重 50),贴边走廊优先,允许 ring 30/35 距敌方更近
+#   但 natural ~16/third ~25 仍被避开
+_MIN_DIST_TO_ENEMY: float = 30.0
 # 距离敌方主基地的硬上限（太远没折跃 timing 价值）
-_MAX_DIST_TO_ENEMY: float = 55.0
+_MAX_DIST_TO_ENEMY: float = 60.0
 # 任务超时（秒，游戏内）
-_TASK_TIMEOUT_S: float = 90.0
+# 历史:90 - 走路 ~30s + PYLON 18s + GATEWAY 35s = 83s,余量 7s,placement 一次失败
+# 就崩。提到 150:走路 + 双建造 + 失败重试余量充足。
+_TASK_TIMEOUT_S: float = 150.0
 # worker 死亡次数上限（再多就放弃）
-_MAX_WORKER_DEATHS: int = 2
+# 历史:2 - 实战 log(game_20260518_043040)PYLON 修完 + GATEWAY 修了 ~10s 就 worker 死,
+# 第 2 个 worker 接力又死,卡 2 死阈值放弃 → GATEWAY 没修完任务失败。
+# 提到 4:多让几个农民送也值得换 GATEWAY 修完(50 矿 vs forward BG timing 价值)
+_MAX_WORKER_DEATHS: int = 4
 # HP+shield 撤退/复出阈值
 _RETREAT_RATIO: float = 0.5
 _REENGAGE_RATIO: float = 0.9
@@ -147,24 +158,44 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             return None
 
     def _generate_candidates(self) -> list[Point2]:
-        """生成候选 proxy 点：敌方扩张点（含 natural）+ 环形点。"""
+        """生成候选 proxy 点：敌方主基地外围中距环形点(避开二矿等已知 scout 必经点)。
+
+        历史:
+        - v1: 含敌方扩张点 zones[1:]+ ring 20-35 → 实测(game_20260518_043040)选了
+          (145.5, 98.5)= 敌方 natural,worker 修建被对方 worker/zealot 立刻发现 + 围殴
+        - v2: 去掉 expansion zones,ring 30-45 → 仍选到 natural/third 附近
+          (game_20260518_044000 用户反馈"出生在左下时 proxy 修到了对方二矿")
+        - v3(当前): ring 40-55,加"地图中线候选" — proxy 落在中线偏敌方一侧,
+          安全性大幅提升(距敌方扩张点 ≥40),折跃 timing 多走 ~3-4s 可接受
+        """
         candidates: list[Point2] = []
         try:
             enemy = self.ai.enemy_start_locations[0]
+            own = self.ai.start_location
         except (IndexError, AttributeError):
             return []
 
-        # A. 敌方扩张点 zones[1:]（跳过 enemy_main 本身）
-        zone_mgr = getattr(self.knowledge, "zone_manager", None)
-        enemy_zones = getattr(zone_mgr, "enemy_expansion_zones", None) if zone_mgr else None
-        if enemy_zones:
-            for zone in enemy_zones[1:]:
-                pos = getattr(zone, "center_location", None)
-                if pos is not None:
-                    candidates.append(pos)
+        # A. 中线候选:自家 → 敌家直线上偏敌方一侧的几个点,加上侧向偏移
+        # 这是"地图中线 + 偏敌方"的安全玩家手法 — 距双方家都远,不在已知扩张点连线上
+        dx, dy = enemy.x - own.x, enemy.y - own.y
+        path_len = math.hypot(dx, dy)
+        if path_len > 1e-3:
+            ux, uy = dx / path_len, dy / path_len  # 主轴单位向量
+            # 垂直向量(顺时针 90°)
+            vx, vy = -uy, ux
+            # 沿主轴在 60%-75% 位置(偏敌方一侧),3 个进度点 × 3 个侧向偏移(0/+15/-15)
+            for t in (0.60, 0.67, 0.75):
+                base_x = own.x + dx * t
+                base_y = own.y + dy * t
+                for offset in (0.0, 15.0, -15.0):
+                    candidates.append(
+                        Point2((base_x + vx * offset, base_y + vy * offset))
+                    )
 
-        # B. 环形点：敌方主基地外环 15/20/25/30 距离 × 6 方向
-        for dist in (15, 20, 25, 30):
+        # B. 环形点：敌方主基地外环 30/40/50/55 距离 × 6 方向
+        # 30 起点 = 与 _MIN_DIST_TO_ENEMY 配套,贴边走廊可以更靠近敌方
+        # 55 上限仍小于 _MAX_DIST_TO_ENEMY=60
+        for dist in (30, 40, 50, 55):
             for angle_deg in range(0, 360, 60):
                 angle_rad = math.radians(angle_deg)
                 candidates.append(
@@ -182,6 +213,13 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         except (IndexError, AttributeError):
             return -1.0
 
+        # —— 硬约束 0:地图边界 ——
+        # ring 在某些角度可能越过地图边界(实战 log game_20260518_044957:
+        # proxy (28.5, -6.14) ring angle=240°,负 Y!)。playable_area Rect
+        # 在 in_placement_grid 检查前先过滤,避免 grid 抛 IndexError 被 except 吞掉。
+        if not self._in_map_bounds(pos):
+            return -1.0
+
         dist = pos.distance_to(enemy)
         # —— 硬约束 ——
         if dist < _MIN_DIST_TO_ENEMY:
@@ -194,7 +232,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             if not self.ai.in_placement_grid(pos):
                 return -1.0  # 放不了建筑
         except Exception:
-            pass  # 不能查 placement 时不否决
+            return -1.0  # placement 查询失败说明位置异常(out of bounds 等),保守过滤
 
         # —— 软评分：距离越近越好 ——
         s = 100.0
@@ -204,6 +242,29 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         try:
             off_path = self._off_main_path(pos)
             s += min(off_path, 20)
+        except Exception:
+            pass
+
+        # **农民走路时不被发现**：偏离"自家 → 敌家"直线加分。
+        # 实战 log(2026-05-18) 选 (112.5, 119.5) 距家 110,走直线必经地图中央敌方
+        # scout 巡逻区,2 worker 被打死任务终止。此项加分鼓励选地图边缘点 — 农民
+        # 沿边走绕过敌方探路视野。权重 1.5(比 off_main_path 高,因为"走路安全"
+        # 比"建好后隐蔽"更关键 — 死了就修不成)
+        try:
+            off_attack = self._off_attack_axis(pos)
+            s += min(off_attack * 1.5, 30)
+        except Exception:
+            pass
+
+        # **贴地图边加分**：距离 playable_area 边界越近,加分越多。
+        # 实战 log(2026-05-18 04:55): 自家左下时选 (90.1, 99.3) 距 edge ~30,
+        # 在敌方下二矿必经路被发现 → done(C: timeout 152s)。
+        # 玩家手法:proxy 永远贴边走廊 → 远离 scout 巡逻区 + 远离扩张连线。
+        # 权重 50 max,比其他评分项都高 — 这是最关键的安全因素。
+        try:
+            edge_d = self._edge_distance(pos)
+            # 距边 0 → +50, 距边 25+ → 0(线性衰减)
+            s += max(0.0, 50.0 - edge_d * 2.0)
         except Exception:
             pass
 
@@ -217,6 +278,80 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             pass
 
         return s
+
+    def _edge_distance(self, pos: Point2) -> float:
+        """pos 到 playable_area 最近一条边的距离(越小 = 越贴边)。
+
+        贴边 proxy 的优势:
+        - 远离敌方 scout/probe 巡逻区(SCV/probe 通常走 main → expansion 直线)
+        - 远离敌方扩张点连线
+        - worker 走过去可沿边缘走廊,被发现概率最低
+        """
+        try:
+            area = self.ai.game_info.playable_area
+            return min(
+                pos.x - area.x,
+                area.x + area.width - pos.x,
+                pos.y - area.y,
+                area.y + area.height - pos.y,
+            )
+        except Exception:
+            return 100.0  # 不能查时按"非边缘"处理(不加分)
+
+    def _in_map_bounds(self, pos: Point2) -> bool:
+        """pos 是否在 playable_area 矩形内(防止 ring 越过地图边界生成负坐标点)。
+
+        playable_area 是 SC2 给出的"地图可玩区域"矩形(剔除四周不可达边缘),
+        Point2 在此矩形外的查询(in_placement_grid 等)会 IndexError 或返回不准。
+        """
+        try:
+            area = self.ai.game_info.playable_area
+            return bool(
+                area.x <= pos.x <= area.x + area.width
+                and area.y <= pos.y <= area.y + area.height
+            )
+        except Exception:
+            return True  # 不能查 area 时不否决,留给 in_placement_grid 处理
+
+    async def _safe_find_placement(
+        self, unit_type: UnitTypeId, near: Point2
+    ) -> Point2 | None:
+        """python-sc2 find_placement 包装,handle async + exception 兜底。
+
+        find_placement 实际会向 SC2 client query "这里能放吗",所以是 async。
+        返回 None = SC2 拒绝(没有合法 placement 在 near 周围 20 格内)。
+        """
+        try:
+            result = await self.ai.find_placement(unit_type, near, max_distance=20)
+            return result  # 可能 None
+        except Exception as exc:
+            logger.warning(
+                "ForwardSupport find_placement fail for %s near (%.1f,%.1f): %s",
+                unit_type.name, near.x, near.y, exc,
+            )
+            return None
+
+    def _off_attack_axis(self, pos: Point2) -> float:
+        """pos 到 own_main→enemy_main 直线的垂直距离。
+
+        农民从自家走到 proxy 这一段路要远离主进攻轴线,否则路上必被敌方 scout/
+        zealot 拦截。返回值越大 = 越偏轴 = 走路越安全。
+        """
+        try:
+            own = self.ai.start_location
+            enemy = self.ai.enemy_start_locations[0]
+        except (IndexError, AttributeError):
+            return 0.0
+        dx, dy = enemy.x - own.x, enemy.y - own.y
+        line_len_sq = dx * dx + dy * dy
+        if line_len_sq < 1e-6:
+            return 0.0
+        # 投影 + 垂直距离
+        px, py = pos.x - own.x, pos.y - own.y
+        t = max(0.0, min(1.0, (px * dx + py * dy) / line_len_sq))
+        proj_x = own.x + t * dx
+        proj_y = own.y + t * dy
+        return math.hypot(pos.x - proj_x, pos.y - proj_y)
 
     def _in_enemy_vision(self, pos: Point2) -> bool:
         """pos 是否在任何已见敌方单位/建筑的视野半径内。"""
@@ -300,8 +435,11 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         worker = self._get_proxy_worker()
         if worker is not None:
             build_abils = _BUILD_ABILITIES.get(unit_type, set())
+            # python-sc2 的 UnitOrder.ability 是 AbilityData(不是 AbilityId);
+            # 真正的 AbilityId 在 .ability.id —— 写 .ability_id 会 AttributeError
             for order in getattr(worker, "orders", []):
-                if order.ability_id in build_abils:
+                ability = getattr(order, "ability", None)
+                if ability is not None and getattr(ability, "id", None) in build_abils:
                     return "ordering"
 
         return "none"
@@ -470,7 +608,21 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             # 没 PYLON 也没在 build → 造 PYLON
             if py_state == "none":
                 if self.ai.can_afford(UnitTypeId.PYLON):
-                    worker.build(UnitTypeId.PYLON, self.proxy_location)
+                    # find_placement 自动找邻近合法 2x2 placement(避开占地建筑/矿块)
+                    # 历史:直接 worker.build(proxy_location) 在 placement fail 时 sc2
+                    # 拒绝,worker.orders 不会有 PROTOSSBUILD_PYLON → 每帧重发都 fail →
+                    # 92s timeout 0 个 PYLON。
+                    place = await self._safe_find_placement(
+                        UnitTypeId.PYLON, self.proxy_location
+                    )
+                    if place is not None:
+                        logger.info(
+                            "ForwardSupport build PYLON at (%.1f, %.1f)",
+                            place.x, place.y,
+                        )
+                        worker.build(UnitTypeId.PYLON, place)
+                    elif worker.is_idle:
+                        worker.move(self.proxy_location)
                 elif worker.is_idle:
                     worker.move(self.proxy_location)  # 走过去等钱
                 return False
@@ -486,10 +638,22 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                         else None
                     )
                     if py_struct is not None:
-                        bg_pos = py_struct.position.towards(
-                            self.ai.enemy_start_locations[0], 3
+                        # GATEWAY 放 PYLON 后方(towards 自家)而非前方(towards 敌方),
+                        # 让 PYLON 当屏障。前方放法实测(game_20260518_043040)GATEWAY
+                        # 修了 ~10s worker 就被敌方探机/zealot 打死。
+                        bg_near = py_struct.position.towards(
+                            self.ai.start_location, 3
                         )
-                        worker.build(UnitTypeId.GATEWAY, bg_pos)
+                        # find_placement 找 3x3 合法 placement(psi matrix 内 + 不撞)
+                        bg_pos = await self._safe_find_placement(
+                            UnitTypeId.GATEWAY, bg_near
+                        )
+                        if bg_pos is not None:
+                            logger.info(
+                                "ForwardSupport build GATEWAY at (%.1f, %.1f)",
+                                bg_pos.x, bg_pos.y,
+                            )
+                            worker.build(UnitTypeId.GATEWAY, bg_pos)
                 elif worker.is_idle:
                     py_tag = self._proxy_tags.get(UnitTypeId.PYLON)
                     py_struct = (

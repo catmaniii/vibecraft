@@ -573,8 +573,8 @@ def make_protoss_bot_class(
         _decision_watcher: Any = None
         _hang_watchdog: HangWatchdog | None = None
         # 当前剧本名：IfElse 路由树每 step 检查此值；set_build 写入后下个 step 立即生效。
-        # 默认 "1g_robo_immortal"（opening fallback），on_start 会根据 strategy_library 重设。
-        active_recipe: str = "1g_robo_immortal"
+        # 默认 "4bg"（opening fallback），on_start 会根据 strategy_library 重设。
+        active_recipe: str = "4bg"
         # M4: LLM_CONTROLLED 单位的 tag 集合（跨 step 持久化）
         _llm_controlled_tags: set[int]
         # tactics 节流
@@ -612,7 +612,7 @@ def make_protoss_bot_class(
             self._minimap_builder = None
             self._decision_watcher = None
             self._hang_watchdog = None
-            self.active_recipe = "1g_robo_immortal"
+            self.active_recipe = "4bg"
             self._llm_controlled_tags = set()
             self._tactics_last_s = 0.0
             self._voice_step_count = 0
@@ -918,7 +918,7 @@ def make_protoss_bot_class(
 
                 self._decision_watcher = DecisionWatcher(event_callback)
 
-            # 初始化 active_recipe:bot 从所有 opening 剧本里随机挑一个,
+            # 初始化 active_recipe:默认 "4bg" 开局(用户指定),
             # set_by=BOT_INTERNAL → PWA badge 显示 "⚙️ bot 默认"。
             # 玩家随时可 voice 切其他剧本(VOICE > BOT_INTERNAL 优先级)。
             if strategy_library is not None:
@@ -927,6 +927,7 @@ def make_protoss_bot_class(
 
                 from vibecraft.strategy.models import OpeningBuild
 
+                _DEFAULT_OPENING_ID = "4bg"
                 openings = [
                     s for s in strategy_library.all_strategies() if isinstance(s, OpeningBuild)
                 ]
@@ -938,10 +939,20 @@ def make_protoss_bot_class(
                         chosen = next((o for o in openings if o.id == forced_id), None)
                         if chosen is None:
                             logger.warning(
-                                "forced initial opening %r 不在 catalog,回退 random", forced_id
+                                "forced initial opening %r 不在 catalog,回退默认 4bg", forced_id
                             )
                     if chosen is None:
-                        chosen = random.choice(openings)
+                        # 优先用默认 4bg;catalog 没有时再 random.choice 兜底
+                        chosen = next(
+                            (o for o in openings if o.id == _DEFAULT_OPENING_ID),
+                            None,
+                        )
+                        if chosen is None:
+                            logger.warning(
+                                "default opening %r 不在 catalog,回退 random",
+                                _DEFAULT_OPENING_ID,
+                            )
+                            chosen = random.choice(openings)
                     # active_recipe 不依赖 director(create_plan() 在 KnowledgeBot.on_start
                     # 内被调用,此时 director 尚未构造,所以 active_recipe 是 plan 路由的真理源)
                     self.active_recipe = chosen.id

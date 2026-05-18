@@ -109,6 +109,8 @@ def _make_mock_ai(
     ai.get_terrain_height = lambda p: 100
     ai.knowledge = SimpleNamespace(vibecraft=SimpleNamespace(combat_intent_override=None))
     ai.can_afford = lambda _t: True
+    # playable_area: 默认 0-160 矩形(SC2 标准 LE 地图大小)
+    ai.game_info.playable_area = SimpleNamespace(x=0, y=0, width=160, height=160)
 
     return ai
 
@@ -214,9 +216,39 @@ class TestScorePos:
 
         inst = _make_proxy_instance()
         inst.ai = _make_mock_ai(enemy_main=(120, 30), map_center=(70, 80))
-        s_close = inst._score_pos(Point2((105, 30)))  # 距 15
-        s_far = inst._score_pos(Point2((85, 30)))  # 距 35
+        # 都在 _MIN_DIST_TO_ENEMY=40 之外（避开二矿/三矿区域）
+        s_close = inst._score_pos(Point2((78, 30)))  # 距 42
+        s_far = inst._score_pos(Point2((65, 30)))  # 距 55
         assert s_close > s_far, f"close={s_close} should > far={s_far}"
+
+    def test_edge_position_scores_higher_than_middle(self):
+        """贴地图边的点(edge_d 小)比地图中央点(edge_d 大)得分高。
+
+        实战 log: 自家左下时选 (90.1, 99.3) edge_d ~30 → 在敌方下二矿必经路被发现。
+        新评分项偏好贴边点 — 玩家手法 proxy 永远走边缘走廊。
+        """
+        from sc2.position import Point2
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai(enemy_main=(120, 30))
+        # 都距敌方 ~40,但 edge_pos 贴边(y=2),middle_pos 在中央(y=30)
+        edge_pos = Point2((85, 2))
+        middle_pos = Point2((85, 30))
+        # 两个点都满足 dist 40+ 在 _MIN 之外
+        assert inst._score_pos(edge_pos) > inst._score_pos(middle_pos), (
+            f"edge={inst._score_pos(edge_pos)} should > middle={inst._score_pos(middle_pos)}"
+        )
+
+    def test_out_of_map_bounds_returns_negative(self):
+        """Regression: ring 在地图边界外的点必须被过滤(实战 log:proxy (28.5, -6.14))。"""
+        from sc2.position import Point2
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai(enemy_main=(50, 30))
+        # 负坐标:在 playable_area (0-160) 之外
+        assert inst._score_pos(Point2((28.5, -6.14))) < 0
+        # 也测 X 越界
+        assert inst._score_pos(Point2((200, 50))) < 0
 
 
 # ============================================================================
@@ -262,7 +294,7 @@ class TestIsDone:
         inst.ai = _make_mock_ai()
         inst.proxy_location = Point2((120, 50))
         inst._start_time = 0.0
-        inst.ai.time = 100.0  # > 90s 超时
+        inst.ai.time = 200.0  # > 150s 超时(_TASK_TIMEOUT_S)
         assert inst._is_done()
 
     def test_done_when_too_many_worker_deaths(self):
@@ -273,7 +305,7 @@ class TestIsDone:
         inst.proxy_location = Point2((120, 50))
         inst._start_time = 0.0
         inst.ai.time = 10.0
-        inst._worker_death_count = 2  # 达上限
+        inst._worker_death_count = 4  # 达上限(_MAX_WORKER_DEATHS=4)
         assert inst._is_done()
 
     def test_done_when_main_army_attacking(self):
@@ -286,6 +318,38 @@ class TestIsDone:
         inst._start_time = 0.0
         inst.ai.time = 10.0
         assert inst._is_done()
+
+    def test_building_state_ordering_via_worker_orders(self):
+        """worker 正在 build Pylon → _building_state 应识别为 "ordering"。
+
+        Regression：之前写 `order.ability_id` AttributeError，python-sc2 的
+        UnitOrder 字段是 `ability: AbilityData`，AbilityId 在 `.ability.id`。
+        """
+        from sc2.ids.ability_id import AbilityId
+        from sc2.ids.unit_typeid import UnitTypeId
+        from sc2.position import Point2
+
+        # 构造一个 mock worker，其 orders 含 PROTOSSBUILD_PYLON
+        worker = MagicMock()
+        worker.tag = 555
+        worker.position = Point2((120, 50))
+
+        # python-sc2 UnitOrder 真实形态：order.ability 是 AbilityData(有 .id)
+        ability_data = SimpleNamespace(id=AbilityId.PROTOSSBUILD_PYLON)
+        unit_order = SimpleNamespace(ability=ability_data, target=None, progress=0.0)
+        worker.orders = [unit_order]
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai()
+        # _get_proxy_worker 走 self.cache.by_tag(sharpy ActBase 上的 cache，不是 ai.cache)
+        inst.cache = SimpleNamespace(by_tag=lambda _t: worker)
+        inst.proxy_location = Point2((120, 50))
+        inst.proxy_worker_tag = 555
+        inst._proxy_tags = {}  # 没 tag 还没建筑实体 → 走 worker.orders 分支
+
+        # 不应抛 AttributeError，且应识别为 "ordering"
+        state = inst._building_state(UnitTypeId.PYLON)
+        assert state == "ordering", f"expected 'ordering', got {state!r}"
 
     def test_not_done_in_progress(self):
         inst = _make_proxy_instance()

@@ -3,9 +3,12 @@
 #   (Double-clicking a .ps1 opens it in Notepad and will NOT run it.)
 #
 # Optional parameters:
-#   -Port <int>   listen port, default 8080
-#   -Token <str>  fixed room_token (default: auto-generated)
-#   -Ip <str>     IP shown in the QR code (default: auto-detect LAN IP)
+#   -Port <int>     listen port, default 8080
+#   -Token <str>    fixed room_token (default: auto-generated)
+#   -Ip <str>       IP shown in the QR code (default: auto-detect LAN IP)
+#   -NoRealtime     Run SC2 in non-realtime mode (step-paced, faster than 1x,
+#                   debug only). Default: realtime on (wall-clock pacing).
+#                   PWA start_game.config.realtime overrides this per game.
 #
 # NOTE: keep this file ASCII-only. PowerShell 5.1 decodes a BOM-less file with
 # the system code page (GBK on zh-CN Windows); non-ASCII bytes break the parser.
@@ -13,7 +16,8 @@
 param(
     [int]$Port = 8080,
     [string]$Token = "",
-    [string]$Ip = ""
+    [string]$Ip = "",
+    [switch]$NoRealtime
 )
 
 Set-StrictMode -Version Latest
@@ -59,6 +63,7 @@ $ServeArgs = @(
 )
 if ($Token -ne "") { $ServeArgs += @("--token", $Token) }
 if ($Ip -ne "") { $ServeArgs += @("--ip", $Ip) }
+if ($NoRealtime) { $ServeArgs += @("--no-realtime") }
 
 Write-Host "VibeCraft starting... (Ctrl+C to stop)" -ForegroundColor Cyan
 Write-Host ""

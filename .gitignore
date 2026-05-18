@@ -58,6 +58,9 @@ coverage.xml
 
 # Project-specific
 logs/
+# 根目录调试 log 文件(临时 paste 分析的 sharpy/loguru 输出,不入版本控制)
+l4_log_*.txt
+*_train_log.txt
 *.SC2Replay
 .env
 .env.local

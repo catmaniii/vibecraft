@@ -30,7 +30,16 @@ def cli(ctx: click.Context) -> None:
 @click.option("--host", default="0.0.0.0", show_default=True, help="监听地址")
 @click.option("--token", default=None, help="指定 room_token（默认自动生成）")
 @click.option("--ip", default=None, help="二维码显示用 IP（默认自动检测局域网 IP）")
-def serve(port: int, host: str, token: str | None, ip: str | None) -> None:
+@click.option(
+    "--realtime/--no-realtime",
+    default=True,
+    show_default=True,
+    help="SC2 是否按 wall-clock 实时跑（--no-realtime 让 SC2 按 step 推进，调试用）。"
+    "PWA 在 start_game 帧里显式传 realtime 时优先使用 PWA 值。",
+)
+def serve(
+    port: int, host: str, token: str | None, ip: str | None, realtime: bool
+) -> None:
     """启动 bot service：HTTP+WS 同端口，显示二维码，run forever。
 
     玩家用手机扫码即可连接驾驶舱 PWA。
@@ -42,6 +51,7 @@ def serve(port: int, host: str, token: str | None, ip: str | None) -> None:
         host=host,
         token=token,
         display_ip=ip,
+        default_realtime=realtime,
     )
     svc = BotService(config)
     try:

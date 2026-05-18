@@ -41,6 +41,15 @@ class TestServiceConfig:
         cfg = ServiceConfig()
         assert cfg.token is None  # BotService 构造时才生成
 
+    def test_default_realtime_true(self) -> None:
+        """默认 realtime=True（玩家观战速度）。"""
+        cfg = ServiceConfig()
+        assert cfg.default_realtime is True
+
+    def test_default_realtime_can_be_overridden(self) -> None:
+        cfg = ServiceConfig(default_realtime=False)
+        assert cfg.default_realtime is False
+
 
 class TestBotService:
     def test_auto_generates_token(self) -> None:

@@ -1007,14 +1007,14 @@ class TestCreatePlan:
         plan = await instance.create_plan()
         assert isinstance(plan, FakeBuildOrder)
 
-    def test_default_active_recipe_is_1g_robo_immortal(self) -> None:
-        """_VibeCraftProtossBot.__init__ 设 active_recipe = '1g_robo_immortal'。"""
+    def test_default_active_recipe_is_4bg(self) -> None:
+        """_VibeCraftProtossBot.__init__ 设 active_recipe = '4bg'(用户指定默认开局)。"""
         _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: None)
         # 直接访问类属性（类级别默认值）
-        assert BotClass.active_recipe == "1g_robo_immortal"
+        assert BotClass.active_recipe == "4bg"
 
 
 # ---------------------------------------------------------------------------
