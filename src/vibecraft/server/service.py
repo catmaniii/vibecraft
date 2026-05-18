@@ -71,7 +71,10 @@ class BotService:
     def __init__(self, config: ServiceConfig | None = None) -> None:
         self._config = config or ServiceConfig()
         self._registry = RoomRegistry(token=self._config.token or generate_room_token())
+        # GameProcess 初始 my_race 取 CLI default,让 PWA 一连上(游戏还没开始时)
+        # 就拿到正确种族,过滤剧本列表
         self._game_process = GameProcess()
+        self._game_process._my_race = self._config.default_my_race
         self._log = logger.bind(port=self._config.port, host=self._config.host)
 
     @property

@@ -100,6 +100,7 @@ class GameStatus:
     bot: BotState
     ts: float = field(default_factory=time.time)
     detail: str = ""
+    my_race: str = "Protoss"  # PWA 用它过滤剧本列表(只显示当前种族剧本)
 
 
 # -----------------------------------------------------------------------
@@ -457,6 +458,7 @@ def _build_game_status_frame_dict(status: GameStatus) -> dict[str, object]:
         "sc2": status.sc2,
         "bot": status.bot,
         "detail": status.detail,
+        "my_race": status.my_race,
     }
 
 
@@ -488,12 +490,13 @@ class GameProcess:
         self._down_q: multiprocessing.Queue[dict[str, Any]] | None = None
         self._sc2_state: Sc2State = "idle"
         self._bot_state: BotState = "idle"
+        self._my_race: str = "Protoss"  # 上次 start 用的种族,push 给 PWA 过滤剧本列表
         self._log = logger.bind(component="game_process")
 
     @property
     def status(self) -> GameStatus:
         """当前状态快照（同步读取，不阻塞）。"""
-        return GameStatus(sc2=self._sc2_state, bot=self._bot_state)
+        return GameStatus(sc2=self._sc2_state, bot=self._bot_state, my_race=self._my_race)
 
     @property
     def is_running(self) -> bool:
@@ -515,6 +518,7 @@ class GameProcess:
 
         self._sc2_state = "launching"
         self._bot_state = "idle"
+        self._my_race = config.my_race  # 记下本局种族用于 status frame
 
         # SpawnContext.Process 返回 SpawnProcess，是 multiprocessing.Process 子类；
         # multiprocessing stubs 的类型窄化不够精确，用 cast 告诉 mypy 这里是 Process。

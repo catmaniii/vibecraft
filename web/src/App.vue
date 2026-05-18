@@ -12,11 +12,12 @@ import { useWs } from '@/composables/useWs'
 import type { CommandFrame } from '@/types'
 
 const {
-  status, send, sendViewMove, token,
+  status, send, sendViewMove, token, myRace,
   snapshotStrategy, recentCommands, events, minimap, lastEcho,
   recommendation, tactics, confirmRecommendation, dismissRecommendation,
   pendingForceStrategy, confirmForceStrategy, cancelForceStrategy,
   standingOrders, productionOverrides, activeTactics, commandCards, revokeDirective,
+  sendTacticalAction, sendStrategyAction,
 } = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
@@ -94,6 +95,7 @@ const sc2Label = computed(() => {
         :tactics="tactics"
         :pending-force-strategy="pendingForceStrategy"
         :command-cards="commandCards"
+        :my-race="myRace"
         @command="onCommand"
         @view-move="onViewMove"
         @confirm-recommendation="confirmRecommendation"
@@ -101,6 +103,8 @@ const sc2Label = computed(() => {
         @confirm-force-strategy="confirmForceStrategy"
         @cancel-force-strategy="cancelForceStrategy"
         @revoke-card="revokeDirective"
+        @tactical-action="sendTacticalAction"
+        @strategy-action="sendStrategyAction"
       />
 
       <!-- 其他状态 → LaunchView -->

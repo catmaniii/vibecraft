@@ -49,6 +49,9 @@ export function useWs() {
   // 系统状态链（响应式）
   const status = ref<SystemStatus>({ ...DEFAULT_STATUS })
 
+  // 我方种族(game_status 推):用于过滤剧本列表显示
+  const myRace = ref<'Protoss' | 'Zerg' | 'Terran'>('Protoss')
+
   // P0：snapshot strategy + recent_commands（响应式）
   const snapshotStrategy = ref<SnapshotFrame['strategy'] | null>(null)
   const recentCommands = ref<{ text: string; ts: number }[]>([])
@@ -116,6 +119,10 @@ export function useWs() {
               sc2: f.sc2,
               bot: f.bot,
               detail: f.detail ?? '',
+            }
+            // M6 / 改: my_race 字段用于过滤剧本 chip 列表
+            if (f.my_race) {
+              myRace.value = f.my_race
             }
             break
           }
@@ -248,6 +255,7 @@ export function useWs() {
 
   return {
     status: readonly(status),
+    myRace: readonly(myRace),
     snapshotStrategy: readonly(snapshotStrategy),
     recentCommands: readonly(recentCommands),
     events: readonly(events),

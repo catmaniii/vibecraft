@@ -84,6 +84,8 @@ export interface GameStatusFrame {
   sc2: Sc2State
   bot: BotState
   detail?: string
+  // PWA 用它过滤剧本列表(只显示当前种族的策略)
+  my_race?: 'Protoss' | 'Zerg' | 'Terran'
 }
 
 export interface PingFrame {

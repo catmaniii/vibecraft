@@ -41,6 +41,7 @@ const props = defineProps<{
   tactics: TacticsView | null
   pendingForceStrategy: PendingForceStrategyView | null
   commandCards: readonly CommandCardView[]
+  myRace?: 'Protoss' | 'Zerg' | 'Terran'
 }>()
 
 const currentStage = computed<'opening' | 'midgame' | 'lategame'>(
@@ -151,11 +152,12 @@ function fmtTs(ts: number): string {
         <!-- bot 当前决策(独立大卡片) -->
         <BotDecisionCard :tactics="props.tactics" />
 
-        <!-- 快速战术按钮 + 剧本 chip（绕 LLM 直接下指令） -->
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex-1 min-w-0">
-            <StrategyPicker @strategy-action="(id) => emit('strategyAction', id)" />
-          </div>
+        <!-- 快速战术按钮 + 剧本按钮（都折叠为单按钮,点击展开浮层） -->
+        <div class="flex items-center gap-2">
+          <StrategyPicker
+            :race="(props.myRace?.toLowerCase() as 'protoss' | 'zerg' | 'terran') ?? 'protoss'"
+            @strategy-action="(id) => emit('strategyAction', id)"
+          />
           <TacticsButton @tactical-action="(v) => emit('tacticalAction', v)" />
         </div>
 
