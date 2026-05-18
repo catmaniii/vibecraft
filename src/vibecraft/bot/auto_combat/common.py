@@ -31,7 +31,7 @@ def build_role_map() -> dict[Any, Any]:
 
     见 docs/plans/2026-05-16-sharpy-migration.md §2 hook 映射表。
     """
-    from vibecraft.bot.auto_combat.protoss.bot import _ensure_sharpy_on_path
+    from vibecraft.bot.auto_combat.common_bot import _ensure_sharpy_on_path
 
     _ensure_sharpy_on_path()
 

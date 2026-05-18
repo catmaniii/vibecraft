@@ -240,6 +240,16 @@ def _inject_sharpy_for_bot() -> None:
 
     class FakeUnitTypeId:
         NEXUS = "NEXUS"
+        # 神族常用 unit type（EXCLUDE_FROM_ARMY + _compute_stance 用）
+        PROBE = "PROBE"
+        OBSERVER = "OBSERVER"
+        WARPPRISM = "WARPPRISM"
+        GATEWAY = "GATEWAY"
+        WARPGATE = "WARPGATE"
+        CYBERNETICSCORE = "CYBERNETICSCORE"
+        ASSIMILATOR = "ASSIMILATOR"
+        PYLON = "PYLON"
+        STALKER = "STALKER"
 
     sys.modules["sc2.ids.unit_typeid"].UnitTypeId = FakeUnitTypeId  # type: ignore[attr-defined]
 
