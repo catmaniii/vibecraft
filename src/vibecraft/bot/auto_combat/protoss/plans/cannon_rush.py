@@ -3,42 +3,35 @@
 战术核心
 ========
 探机提前修 BF（Forge）+ BC（PhotonCannon）在对方 natural 附近，压制矿线：
-  - 主炮轰：1:27 前 BC 开始建造，压制 Drone/Probe 采矿
-  - 护盾电池（BB）撑炮塔存活，延长压制窗口
+  - 主炮轰：BF 尽早完成（< 1:30），BC 立刻跟建压制 Drone/Probe 采矿
+  - 护盾电池（BB）在追猎出来后建，撑前线炮塔存活
   - 后手追猎（Stalker）：折跃完成后前出配合炮塔，钳住对方
 
 关键路径
 ========
-1. 12 探机前出（去对方 natural / main 附近）
-2. 家里 BG + BA 同时下，BF 修在前线
-3. BF 完成 → 立刻 BC × 2-3，配合 BB × 2 撑
+1. 12 探机前出（去对方 natural 旁），BF 修在前线（forward_cannon_proxy）
+2. 家里 BG（先下，不要 BA —— 炮塔速攻阶段不需要气矿）
+3. BF 完成 → 立刻 BC × 2-3（在对方矿线旁，压制核心）
 4. 家里 BY → 折跃 → 追猎后手
-5. 追猎前出支援，若炮塔压住 → 开二矿延续
+5. 追猎出来后建 BB × 2 撑前线炮塔
+6. 追猎前出支援，若炮塔压住 → 开二矿延续
 
 Build 节奏（参考 spawningtool.com 111586，PvZ Cannon Rush / Proxy Stalkers）
 ===========================================================================
-  12  探机前出（去对方 natural 旁）
+  12  探机前出（去对方 natural 旁，ForwardCannonProxy 接管）
   14  BE（home Pylon）
-  16  BF（forward，靠近对方 natural BE）
-  16  BA（home Assimilator）
-  18  BC x2（forward，压制矿线）
-  18  BG（home Gateway）
-  18  BE（forward Pylon，给 BC 供电）
+  16  BF（forward，ForwardCannonProxy 自动建造）
+  18  BC x2（forward，BC 紧跟 BF 完成后建）
+  18  BG（home Gateway，**无 BA**—— 炮塔速攻阶段纯矿）
   19  BC（第 3 个加强封锁）
   20  BY（home CyberneticsCore）
-  20  BG × 2（home，第 2 门）
+  20  BG × 2（共 3 门，追猎产能）
   21  Stalker @chrono（保家 + 后手）
   22  Warp Gate @chrono
-  23  BB × 2（Shield Battery，撑炮塔）
-  25  Stalker @chrono
-  27  Stalker @chrono
+  23  BB × 2（追猎出来后才建，撑前线炮塔）
+  25  Stalker
   27  折跃完成 → 追猎前出
-  31  BG（第 3 门，提升追猎产能）
-
-注意：真实前线建筑（forward BF / BC）需要 ForwardProxy 类支持。
-本 plan 用 GridBuilding 在 home 位置建 BF / BC（sharpy 默认放在家附近的
-网格位），前线 proxy 需要 ForwardSupportPylonGateway 类扩展实现（暂无，
-留 TODO：未来加 forward_cannon_proxy.py）。
+  31  BG（第 4 门）
 """
 
 from __future__ import annotations
@@ -68,6 +61,7 @@ from sharpy.plans.tactics import (
     SpeedMining,
 )
 
+from vibecraft.bot.auto_combat.protoss.plans.forward_cannon_proxy import ForwardCannonProxy
 from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCraftZoneAttack
 
 
@@ -79,6 +73,11 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
 
     async def create_plan(self) -> BuildOrder:
         return BuildOrder(
+            # ---------- 前线 proxy（核心！BF + BC 建在对方 natural 矿线旁）----------
+            # ForwardCannonProxy 派 1 探机去对方 natural 附近：
+            #   先建 BF（Forge）提供电力，BF 完成后立刻建 BC（PhotonCannon）压矿
+            # 这是 cannon rush 存在的必要条件，不在前线就等于无效战术
+            ForwardCannonProxy(),
             # ---------- chrono ----------
             # 探机 chrono 到 BY 出现
             Step(
@@ -93,35 +92,38 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
             ),
             # ---------- 早期主线（严守顺序）----------
+            # 炮塔速攻阶段不需要气矿（BF + BC 都是纯矿建筑）：
+            # BA 移除，把矿留给 BF 更快建造
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 12),
-                GridBuilding(UnitTypeId.PYLON, 1),  # 14 supply BE
+                GridBuilding(UnitTypeId.PYLON, 1),  # 14 supply BE（家里）
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
-                # BF（Forge）：家附近先建（TODO 真前线 proxy 需 forward_cannon_proxy）
-                GridBuilding(UnitTypeId.FORGE, 1),
-                BuildGas(1),
-                # BG 同时开
+                # 家里先下 BG（BF 由 ForwardCannonProxy 在前线负责）
                 GridBuilding(UnitTypeId.GATEWAY, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 18),
             ),
-            # ---------- BC（Photon Cannon）× 3 —— BF 完成立刻建 ----------
-            # sharpy GridBuilding 会找网格位（默认在家附近；前线 proxy 留 TODO）
-            Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.PHOTONCANNON, 3)),
-            # ---------- 家里补 BG × 2 + BY ----------
+            # ---------- 家里补 BY ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
+            # ---------- 补到 3 门（追猎产能）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 3)),
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            # ---------- 护盾电池 × 2（撑炮塔存活）----------
-            Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.SHIELDBATTERY, 2)),
-            # ---------- 后续 BC 扩张（把对方矿线完全锁住）----------
-            Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.PHOTONCANNON, 6)),
-            # ---------- 二矿延续（炮塔压住后开）----------
+            # ---------- 护盾电池 × 2（追猎出来后才建，比标准 3:07 对齐）----------
+            # 标准 build：BB 在 Stalker 出来后才建（撑前线炮塔）
+            # 不在 BF ready 时立刻建（炮塔速攻早期矿要留给 BG/BY）
+            Step(
+                UnitExists(UnitTypeId.STALKER, 1),
+                GridBuilding(UnitTypeId.SHIELDBATTERY, 2),
+            ),
+            # ---------- 二矿延续（至少 3 BC 压住后开）----------
             Step(UnitExists(UnitTypeId.PHOTONCANNON, 3), Expand(2)),
             # ---------- 二矿气矿 ----------
+            Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(1)),
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
+            # ---------- 后期补 BG（追猎产能）----------
+            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
             # ---------- 单位训练 ----------
-            # 追猎（折跃好后前出，配合炮塔钳制）
+            # 追猎（折跃好后前出，配合前线炮塔钳制）
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.STALKER, 12),
@@ -146,7 +148,7 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
                         or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
                         == "attack"
                     ),
-                    VibeCraftZoneAttack(6),  # 6 Stalker 出门配合炮塔
+                    VibeCraftZoneAttack(6),  # 6 Stalker 出门配合前线炮塔
                 ),
                 PlanFinishEnemy(),
             ),
