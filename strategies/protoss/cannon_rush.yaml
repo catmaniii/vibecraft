@@ -1,0 +1,86 @@
+kind: opening_build
+id: cannon_rush
+display_name_zh: "炮塔速攻"
+summary_zh: "极速 BF + BC 前置偷家（Cannon Rush）：探机提前下 BF + BC 压制对方矿线 / 自然矿，配合追猎后手。PvZ/PvP 早期偷家"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.cannon_rush:CannonRush"
+aliases:
+  - "炮塔速攻"
+  - "炮塔偷家"
+  - "cannon rush"
+  - "Cannon Rush"
+  - "前置炮塔"
+  - "速炮"
+  - "BC偷家"
+  - "光子炮偷家"
+  - "光子炮速攻"
+  - "proxy forge"
+  - "Proxy Forge"
+  - "前置BF"
+  - "前置炮"
+  - "速炮rush"
+  - "cannon proxy"
+matchup: [PvZ, PvP]
+
+phases:
+  - id: opening
+    display: "速 BF + 探机前出"
+    subtitle: "12 探机 → BF + BG + BA 同时，探机去对方 natural 附近修 BE + BF"
+    start_at_supply: 12
+  - id: tech
+    display: "BC 速建"
+    subtitle: "BF 完成 → 立刻建 BC x2-3 在对方 natural / 矿线"
+    start_at_supply: 18
+  - id: massing
+    display: "BY + 追猎后手"
+    subtitle: "家里 BG → BY → 折跃 → 追猎作为后手跟进"
+    start_at_supply: 20
+  - id: forward
+    display: "追猎前出支援"
+    subtitle: "折跃完成 → 追猎前出，配合炮塔拖住对方"
+    start_at_supply: 27
+    start_at_time: 200
+  - id: pressuring
+    display: "二矿 + 追猎持续压制"
+    subtitle: "炮塔锁住对方矿线后开二矿，追猎持续刷兵"
+    start_at_supply: 35
+    start_at_time: 280
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 CannonRush.create_plan 控制
+# 参考：lotv.spawningtool.com/build/111586/ (PvZ Cannon Rush / Proxy Stalkers)
+steps:
+  - "12 send probe forward（去对方 natural 附近）"
+  - "14 build BE（home）"
+  - "16 build BF（forward，靠近对方 natural BE）"
+  - "16 build BA（home）"
+  - "18 build BC x2（forward，压制对方矿线）"
+  - "18 build BG（home）"
+  - "18 build BE（forward）"
+  - "19 build BC（再 1 个加强封锁）"
+  - "20 build BY（home）"
+  - "20 build BG（home，第 2 门）"
+  - "21 train 追猎 @chrono"
+  - "22 research 折跃 @chrono"
+  - "25 build BB x2（护盾电池，撑炮塔）"
+  - "27 追猎出门支援前线炮塔"
+  - "31 build BG（第 3 门）"
+
+scout_at: "12 send_probe forward_proxy"
+
+abort_signals:
+  - sees: "enemy.structures.sporecrawler.count >= 3"
+    then: "transition:4bg"
+  - sees: "enemy.structures.spinecrawler.count >= 4"
+    then: "transition:iac_2base"
+  - sees: "enemy.units.roach.count >= 4"
+    then: "transition:iac_2base"
+
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+  - midgame_id: blink_stalker
+    when: "enemy.has_ground_army"
+
+attack_window:
+  open_at: "1:27"
+  close_at: "5:00"
+  target_priority: [worker_lines, natural, production]

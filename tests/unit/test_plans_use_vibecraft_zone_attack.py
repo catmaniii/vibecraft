@@ -34,6 +34,7 @@ _PLANS_WITH_ATTACK_ACT = [
     "dt_rush.py",
     "phoenix_2base.py",
     "blink_stalker.py",
+    "cannon_rush.py",
 ]
 
 
