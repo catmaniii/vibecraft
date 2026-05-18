@@ -9,30 +9,29 @@
 关键路径
 ========
 1. 快速双矿（~1:24 NX）+ 折跃
-2. VT（TwilightCouncil）+ 闪烁备用（PvT 选研）
-3. VS x2（双星门）→ 持续 chrono 凤凰
-4. VR（Observer 反隐）+ Warp Prism（运载骚扰）
-5. 三矿延续 / 转 Skytoss
+2. 第 1 VS（BY ready 后建，~2:19）→ 凤凰开始产出
+3. 4 凤凰后建第 2 VS（双星门拉产能）
+4. VR（5 分钟后建，Observer 反隐）
+5. 8 凤凰后三矿延续
+
+注：无 VT / Blink（与 Phoenix build 不符，白烧约 300 gas）
+   无 Warp Prism（两矿凤凰阶段用不上）
 
 Build 节奏（参考 spawningtool.com 126982，HuShang Double Stargate Phoenix PvZ）
 =============================================================================
   1:24  NX（双矿）
-  1:35  BY（CyberneticsCore）
-  1:49  BA x2（第 2、3 气）
-  2:00  Warp Gate @chrono
-  2:17  Stalker @chrono（保家）
-  2:32  VT（TwilightCouncil）
-  2:41  Stalker
-  2:59  VR（Robotics，Observer）
-  3:19  Blink @chrono（选，PvT 有用）
-  3:23  VS x2（双星门，凤凰产能核心）
-  3:45  Pylon
-  3:47  Observer
-  3:52  Stalker @chrono
-  4:08  Warp Prism @chrono
-  4:30  BA（三气）
+  1:34  BY（CyberneticsCore）
+  1:43  BA x2（第 2 气）
+  2:01  Adept @chrono（保家侦察）
+  2:19  VS x1（**第一星门，先建 1 个**）
+  2:28  Warp Gate @chrono
+  3:31  Phoenix 第 1 个
+  3:47  BA x3（三气）
+  3:59  VS x2（第二星门，**等凤凰开始产出后加**）
+  ~4:30 三气满采
   ~5:00 凤凰集结 8 → 出门骚扰
-  5:28  NX（三矿）
+  ~5:00 NX（三矿，等 8 凤凰后）
+  ~5:30 VR（Robo，Observer 反隐）
 """
 
 from __future__ import annotations
@@ -108,44 +107,44 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            # ---------- VT（TwilightCouncil，闪烁前置）----------
+            # ---------- 第 1 VS（BY ready 后建，~2:19）----------
+            # 标准 build：先建 1 VS，等凤凰产出后再加第 2 VS
+            # 不同时建 2 VS（矿资源竞争导致凤凰延后）
+            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.STARGATE, 1)),
+            # ---------- 第 2 VS（4 凤凰出来后建，~3:59）----------
+            # 等首批凤凰产出后才加第 2 星门，避免过早挤矿
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+                UnitExists(UnitTypeId.PHOENIX, 4),
+                GridBuilding(UnitTypeId.STARGATE, 2),
             ),
-            # ---------- VR（Robotics，Observer + Warp Prism）----------
+            # ---------- 三气（第 2 VS 建造期间补）----------
+            Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(4)),
+            # ---------- VR（Robotics，8 凤凰后建 Observer 反隐）----------
+            # 标准 build：5:30 才建 VR；早期 VR 挤占凤凰矿资源
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                UnitExists(UnitTypeId.PHOENIX, 6),
                 GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
             ),
-            # ---------- 闪烁（Blink，PvT 有用；VT 完成后研）----------
-            Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.BLINKTECH)),
-            # ---------- 双星门（核心！VS x2）----------
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.STARGATE, 2)),
-            # ---------- 三矿延续（5:28 三矿）----------
-            Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
+            # ---------- 三矿延续（8 凤凰后开，约 ~5:00）----------
+            # 过早三矿（二矿存在就开）会在凤凰集结前守家压力过大
+            Step(UnitExists(UnitTypeId.PHOENIX, 8), Expand(3)),
             # ---------- 三气（三矿后补）----------
-            Step(UnitExists(UnitTypeId.NEXUS, 3), BuildGas(4)),
+            Step(UnitExists(UnitTypeId.NEXUS, 3), BuildGas(5)),
             # ---------- 单位训练 ----------
             # Observer（VR 完成立刻，反隐必须）
             Step(
                 UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
                 ProtossUnit(UnitTypeId.OBSERVER, 2),
             ),
-            # Warp Prism（1 个，运载 Stalker 骚扰）
-            Step(
-                UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                ProtossUnit(UnitTypeId.WARPPRISM, 1),
-            ),
             # 凤凰主力（双星门 chrono，target 12）
             Step(
                 UnitReady(UnitTypeId.STARGATE, 1),
                 ProtossUnit(UnitTypeId.PHOENIX, 12),
             ),
-            # Stalker 保家（2 个先出，后期补到 8）
+            # Stalker 保家（4 个，Stalker 目标降至 4 避免占用 BY 产槽拖慢凤凰）
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                ProtossUnit(UnitTypeId.STALKER, 8, priority=True),
+                ProtossUnit(UnitTypeId.STALKER, 4, priority=True),
             ),
             # ---------- 经济 ----------
             AutoPylon(),
