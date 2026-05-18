@@ -753,6 +753,16 @@ def _make_vibecraft_bot_base_class(
                             directive_id = msg.get("directive_id")
                             if directive_id and self.director is not None:
                                 self.director.revoke_directive(directive_id, now_s)
+                        elif msg_type == "tactical_action":
+                            # UI 战术按钮：绕过 LLM 直接 submit TacticalObjectivePayload
+                            verb = msg.get("verb", "")
+                            if verb and self.director is not None:
+                                self._submit_tactical_action(verb, now_s)
+                        elif msg_type == "strategy_action":
+                            # UI 剧本 chip：绕过 LLM 直接 submit StrategySetPayload
+                            strategy_id = msg.get("strategy_id", "")
+                            if strategy_id and self.director is not None:
+                                self._submit_strategy_action(strategy_id, now_s)
                         elif msg_type == "leave":
                             logger.info("bot 收到 leave 信号，等待 on_end")
                 except queue_module.Empty:
@@ -790,6 +800,74 @@ def _make_vibecraft_bot_base_class(
             await super().on_step(self._sharpy_iteration)
             self._sharpy_iteration += 1
             self._refresh_llm_controlled_roles()
+
+        def _submit_tactical_action(self, verb: str, now_s: float) -> None:
+            """UI 战术按钮：直接 submit TacticalObjectivePayload，绕过 LLM。"""
+            try:
+                from vibecraft.directives.models import Directive, TacticalObjectivePayload
+                from vibecraft.directives.types import IssuedBy
+
+                payload = TacticalObjectivePayload(verb=verb, target_area=None)  # type: ignore[arg-type]
+                directive = Directive(
+                    payload=payload,
+                    issued_at=now_s,
+                    issued_by=IssuedBy.VOICE,
+                    source_text=f"UI button: {verb}",
+                )
+                self.director.submit_directive(directive, now_s)
+                logger.info("tactical_action submitted via UI button verb=%s", verb)
+            except Exception as exc:
+                logger.warning("tactical_action submit failed verb=%s err=%s", verb, exc)
+
+        def _submit_strategy_action(self, strategy_id: str, now_s: float) -> None:
+            """UI 剧本 chip：直接 submit StrategySetPayload，绕过 LLM / voice。
+
+            stage 通过 strategy_library 反查（每个 strategy_id 对应哪个 stage）。
+            """
+            try:
+                from vibecraft.directives.models import Directive, StrategySetPayload
+                from vibecraft.directives.types import IssuedBy
+                from vibecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+
+                if strategy_library is None:
+                    logger.warning("strategy_action: no strategy_library, skip")
+                    return
+
+                try:
+                    strat = strategy_library.get(strategy_id)
+                except Exception:
+                    logger.warning("strategy_action: unknown strategy_id=%s", strategy_id)
+                    return
+
+                if isinstance(strat, OpeningBuild):
+                    stage = "opening"
+                elif isinstance(strat, MidgameStance):
+                    stage = "midgame"
+                elif isinstance(strat, LategameDoctrine):
+                    stage = "lategame"
+                else:
+                    logger.warning(
+                        "strategy_action: unrecognized strategy type %s", type(strat)
+                    )
+                    return
+
+                payload = StrategySetPayload(stage=stage, strategy_id=strategy_id)  # type: ignore[arg-type]
+                directive = Directive(
+                    payload=payload,
+                    issued_at=now_s,
+                    issued_by=IssuedBy.VOICE,
+                    source_text=f"UI chip: {strategy_id}",
+                )
+                self.director.submit_directive(directive, now_s)
+                logger.info(
+                    "strategy_action submitted via UI chip strategy_id=%s stage=%s",
+                    strategy_id,
+                    stage,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "strategy_action submit failed strategy_id=%s err=%s", strategy_id, exc
+                )
 
         async def on_unit_created(self, unit: Any) -> None:
             _publish_unit_created(self, unit)

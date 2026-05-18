@@ -198,6 +198,12 @@ class WsConnection:
         elif frame_type == "revoke_directive":
             # 玩家撤销 standing order（P1.4）
             await self._handle_revoke_directive(frame)
+        elif frame_type == "tactical_action":
+            # UI 战术按钮直接下 tactical_objective，绕过 LLM
+            await self._handle_tactical_action(frame)
+        elif frame_type == "strategy_action":
+            # UI 剧本 chip 直接切剧本，绕过 LLM / voice
+            await self._handle_strategy_action(frame)
         elif frame_type in {
             "view_follow",
             "view_zoom",
@@ -287,6 +293,52 @@ class WsConnection:
             }
         )
         # ws_view_move_sent 不记录（拖拽时高频，log 太杂）
+
+    # ------------------------------------------------------------------
+    # tactical_action 处理（UI 战术按钮绕 LLM）
+    # ------------------------------------------------------------------
+
+    _VALID_TACTICAL_VERBS: frozenset[str] = frozenset(
+        {"attack", "defend", "retreat", "recon", "scout"}
+    )
+
+    async def _handle_tactical_action(self, frame: dict[str, Any]) -> None:
+        """UI 战术按钮点击 → 直接发到子进程 down_q，绕过 LLM。
+
+        frame 格式：{type: 'tactical_action', verb: 'attack'|'defend'|'retreat'|'recon'|'scout'}
+        子进程消费后调 director.submit_directive(TacticalObjectivePayload)。
+        """
+        verb = frame.get("verb")
+        if not isinstance(verb, str) or verb not in self._VALID_TACTICAL_VERBS:
+            self._log.warning("ws_tactical_action_invalid_verb", verb=verb)
+            return
+        if not self._game_process.is_running:
+            self._log.debug("ws_tactical_action_no_game_running", verb=verb)
+            return
+        self._game_process.send_command({"type": "tactical_action", "verb": verb})
+        self._log.info("ws_tactical_action_sent", verb=verb)
+
+    # ------------------------------------------------------------------
+    # strategy_action 处理（UI 剧本 chip 直接切剧本）
+    # ------------------------------------------------------------------
+
+    async def _handle_strategy_action(self, frame: dict[str, Any]) -> None:
+        """UI 剧本 chip 点击 → 直接发到子进程 down_q，绕过 LLM / voice。
+
+        frame 格式：{type: 'strategy_action', strategy_id: 'iac_2base'}
+        子进程消费后调 director.submit_directive(StrategySetPayload)。
+        """
+        strategy_id = frame.get("strategy_id")
+        if not isinstance(strategy_id, str) or not strategy_id.strip():
+            self._log.warning("ws_strategy_action_invalid_id", strategy_id=strategy_id)
+            return
+        if not self._game_process.is_running:
+            self._log.debug("ws_strategy_action_no_game_running", strategy_id=strategy_id)
+            return
+        self._game_process.send_command(
+            {"type": "strategy_action", "strategy_id": strategy_id.strip()}
+        )
+        self._log.info("ws_strategy_action_sent", strategy_id=strategy_id)
 
     # ------------------------------------------------------------------
     # start_game 处理（M1.2）

@@ -22,6 +22,8 @@ import type {
   TacticalObjectiveView,
   CommandCardView,
   RevokeDirectiveFrame,
+  TacticalActionFrame,
+  StrategyActionFrame,
 } from '@/types'
 import { DEFAULT_STATUS } from '@/types'
 
@@ -206,6 +208,16 @@ export function useWs() {
     send(frame)
   }
 
+  // UI 战术按钮直接下战术指令（绕过 LLM）
+  function sendTacticalAction(verb: string) {
+    send({ type: 'tactical_action', verb } as TacticalActionFrame)
+  }
+
+  // UI 剧本 chip 直接切剧本（绕过 LLM / voice）
+  function sendStrategyAction(strategyId: string) {
+    send({ type: 'strategy_action', strategy_id: strategyId } as StrategyActionFrame)
+  }
+
   function send(frame: UpFrame) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(frame))
@@ -255,6 +267,8 @@ export function useWs() {
     confirmForceStrategy,
     cancelForceStrategy,
     revokeDirective,
+    sendTacticalAction,
+    sendStrategyAction,
     close,
     token,
   }

@@ -16,6 +16,8 @@ import RecommendationCard from '@/components/RecommendationCard.vue'
 import BotDecisionCard from '@/components/BotDecisionCard.vue'
 import PendingForceCard from '@/components/PendingForceCard.vue'
 import CommandCardStack from '@/components/CommandCardStack.vue'
+import TacticsButton from '@/components/TacticsButton.vue'
+import StrategyPicker from '@/components/StrategyPicker.vue'
 import type {
   SnapshotFrame,
   EventFrame,
@@ -71,6 +73,8 @@ const emit = defineEmits<{
   confirmForceStrategy: []
   cancelForceStrategy: []
   revokeCard: [id: string]
+  tacticalAction: [verb: string]
+  strategyAction: [strategyId: string]
 }>()
 
 // 触摸板 emit absolute 已是绝对坐标(基于按下时的基准 + dx/dy),直接转 viewMove
@@ -146,6 +150,14 @@ function fmtTs(ts: number): string {
       <div class="flex flex-col gap-3 px-4 py-2">
         <!-- bot 当前决策(独立大卡片) -->
         <BotDecisionCard :tactics="props.tactics" />
+
+        <!-- 快速战术按钮 + 剧本 chip（绕 LLM 直接下指令） -->
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <StrategyPicker @strategy-action="(id) => emit('strategyAction', id)" />
+          </div>
+          <TacticsButton @tactical-action="(v) => emit('tacticalAction', v)" />
+        </div>
 
         <CommandCardStack
           :cards="tacticalCards"

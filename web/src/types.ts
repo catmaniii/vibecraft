@@ -46,6 +46,18 @@ export interface RevokeDirectiveFrame {
   directive_id: string
 }
 
+// 上行：UI 战术按钮直接下战术指令（绕过 LLM）
+export interface TacticalActionFrame {
+  type: 'tactical_action'
+  verb: 'attack' | 'defend' | 'retreat' | 'recon' | 'scout'
+}
+
+// 上行：UI 剧本 chip 直接切剧本（绕过 LLM / voice）
+export interface StrategyActionFrame {
+  type: 'strategy_action'
+  strategy_id: string
+}
+
 export type UpFrame =
   | StartGameFrame
   | CommandFrame
@@ -55,6 +67,8 @@ export type UpFrame =
   | ConfirmForceStrategyFrame
   | CancelForceStrategyFrame
   | RevokeDirectiveFrame
+  | TacticalActionFrame
+  | StrategyActionFrame
 
 // ---- 下行帧（Bot → 手机）----
 

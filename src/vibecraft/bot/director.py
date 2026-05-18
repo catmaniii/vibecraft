@@ -888,6 +888,14 @@ class Director:
             timeout_s=timeout_s,
         )
 
+    def submit_directive(self, directive: Directive, now: float) -> None:
+        """单条 directive 便捷入口（UI 按钮 / 子进程 down_q handler 调用）。
+
+        直接委托 _submit_directives，保持相同路由逻辑（strategy 时机检测 / standing /
+        production_overrides / _in_flight 分流）。
+        """
+        self._submit_directives([directive], now)
+
     def _submit_directives(self, directives: list[Directive], now: float) -> None:
         from vibecraft.directives.types import IssuedBy
 
