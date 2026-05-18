@@ -62,6 +62,9 @@ class GameConfig:
     默认 DaybreakLE —— 用户环境 `<SC2PATH>/Maps/` 下实际就位的地图（M0c 用的同一张）。
     M2+ 可做成 PWA 可选 / 配置项。"""
 
+    my_race: str = "Protoss"
+    """我方种族：Protoss / Zerg / Terran（默认 Protoss）。"""
+
     opponent_race: str = "Random"
     """内置 AI 种族：Protoss / Terran / Zerg / Random（默认随机）。"""
 
@@ -269,7 +272,13 @@ def _child_entry(
 
     try:
         bot_class = _build_bot_class(
-            _put, down_q, _put_echo, _put_snapshot, _put_event, _put_minimap
+            _put,
+            down_q,
+            _put_echo,
+            _put_snapshot,
+            _put_event,
+            _put_minimap,
+            my_race=config.my_race,
         )
     except Exception as exc:
         _put("crashed", "error", detail=f"bot_class构造失败: {type(exc).__name__}: {exc}")
@@ -293,7 +302,7 @@ def _child_entry(
                 GameMatch(
                     sc2_map,
                     [
-                        Bot(Race.Protoss, bot_instance, name="VibeCraft"),
+                        Bot(Race[config.my_race], bot_instance, name="VibeCraft"),
                         Computer(
                             Race[config.opponent_race],
                             Difficulty[config.opponent_difficulty],
@@ -322,6 +331,7 @@ def _build_bot_class(
     put_snapshot: Any | None = None,
     put_event: Any | None = None,
     put_minimap: Any | None = None,
+    my_race: str = "Protoss",
 ) -> type:
     """在子进程内构造 bot 类（M1.6：改用真 VibeCraftBot）。
 
@@ -331,6 +341,7 @@ def _build_bot_class(
     put_snapshot：snapshot 推送回调（P0-4）。None 时忽略。
     put_event：event 推送回调（P1-4）。None 时忽略。
     put_minimap：minimap 推送回调（5Hz 下行流）。None 时忽略。
+    my_race：我方种族（Protoss/Zerg/Terran），默认 Protoss。
 
     fallback 逻辑（向后兼容 M0c smoke / 没有 sc2 的环境）：
     - sc2 装了 → 调 make_bot_class 造真 _VibeCraftProtossBot（sharpy KnowledgeBot 子类）
@@ -382,7 +393,7 @@ def _build_bot_class(
     _src_dir = _src_vc_dir.parent  # src/
     _project_root = _src_dir.parent  # 项目根
     strategies_dir = _project_root / "strategies"
-    aliases_path = _project_root / "docs" / "aliases" / "protoss.yaml"
+    aliases_path = _project_root / "docs" / "aliases" / f"{my_race.lower()}.yaml"
 
     strategy_library: StrategyLibrary
     if strategies_dir.exists() and aliases_path.exists():
@@ -416,6 +427,7 @@ def _build_bot_class(
         snapshot_callback=put_snapshot,
         event_callback=put_event,
         minimap_callback=put_minimap,
+        race=my_race,
     )
 
 

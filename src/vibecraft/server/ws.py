@@ -60,11 +60,13 @@ class WsConnection:
         registry: RoomRegistry,
         game_process: GameProcess | None = None,
         default_realtime: bool = True,
+        default_my_race: str = "Protoss",
     ) -> None:
         self._ws = ws
         self._registry = registry
         self._game_process = game_process or GameProcess()
         self._default_realtime = default_realtime
+        self._default_my_race = default_my_race
         self._status_pump_task: asyncio.Task[None] | None = None
         self._log = logger.bind(
             remote=str(ws.remote_address),
@@ -254,9 +256,7 @@ class WsConnection:
         if not self._game_process.is_running:
             self._log.debug("ws_revoke_directive_no_game_running", directive_id=directive_id)
             return
-        self._game_process.send_command(
-            {"type": "revoke_directive", "directive_id": directive_id}
-        )
+        self._game_process.send_command({"type": "revoke_directive", "directive_id": directive_id})
         self._log.info("ws_revoke_directive_sent", directive_id=directive_id)
 
     # ------------------------------------------------------------------
@@ -305,6 +305,7 @@ class WsConnection:
                 raw_config.get("opponent_difficulty", GameConfig.opponent_difficulty)
             ),
             realtime=bool(raw_config.get("realtime", self._default_realtime)),
+            my_race=str(raw_config.get("my_race", self._default_my_race)),
         )
 
         self._log.info(
@@ -470,6 +471,7 @@ def make_ws_handler(
     registry: RoomRegistry,
     game_process: GameProcess | None = None,
     default_realtime: bool = True,
+    default_my_race: str = "Protoss",
 ) -> Any:
     """返回 websockets handler coroutine。
 
@@ -480,6 +482,7 @@ def make_ws_handler(
 
     default_realtime：start_game 帧未显式传 realtime 时的 SC2 默认运行模式
     （来自 ServiceConfig.default_realtime，最终由 CLI --realtime/--no-realtime 控制）。
+    default_my_race：我方种族，来自 ServiceConfig.default_my_race（CLI --my-race）。
     """
     # 若外部没注入，handler 每次新建一个（MVP 一 token 一连接，一局一 GameProcess）
     _gp = game_process
@@ -508,7 +511,13 @@ def make_ws_handler(
             await ws.close(1008, "Invalid room token")
             return
 
-        conn = WsConnection(ws, registry, game_process=_gp, default_realtime=default_realtime)
+        conn = WsConnection(
+            ws,
+            registry,
+            game_process=_gp,
+            default_realtime=default_realtime,
+            default_my_race=default_my_race,
+        )
         evicted = registry.attach(conn)
         if evicted is not None:
             log.info("ws_evicting_old_connection")

@@ -47,19 +47,33 @@ def make_bot_class(
     race="Protoss" → 返回 _VibeCraftProtossBot（KnowledgeBot 子类）。
     Terran / Zerg 留 M3+。
     """
+    from vibecraft.bot.auto_combat.common import run_command_with_echo
+
+    _common_kwargs: dict[str, Any] = {
+        "director_factory": director_factory,
+        "strategy_library": strategy_library,
+        "status_callback": status_callback,
+        "down_q": down_q,
+        "echo_callback": echo_callback,
+        "snapshot_callback": snapshot_callback,
+        "event_callback": event_callback,
+        "minimap_callback": minimap_callback,
+        "run_command_with_echo_fn": run_command_with_echo,
+    }
+
     if race == "Protoss":
-        from vibecraft.bot.auto_combat.common import run_command_with_echo
         from vibecraft.bot.auto_combat.protoss.bot import make_protoss_bot_class
 
-        return make_protoss_bot_class(
-            director_factory=director_factory,
-            strategy_library=strategy_library,
-            status_callback=status_callback,
-            down_q=down_q,
-            echo_callback=echo_callback,
-            snapshot_callback=snapshot_callback,
-            event_callback=event_callback,
-            minimap_callback=minimap_callback,
-            run_command_with_echo_fn=run_command_with_echo,
-        )
-    raise NotImplementedError(f"race={race!r} 暂未实现（Terran/Zerg 留 M3+）")
+        return make_protoss_bot_class(**_common_kwargs)
+
+    if race == "Zerg":
+        from vibecraft.bot.auto_combat.zerg.bot import make_zerg_bot_class
+
+        return make_zerg_bot_class(**_common_kwargs)  # type: ignore[no-any-return]
+
+    if race == "Terran":
+        from vibecraft.bot.auto_combat.terran.bot import make_terran_bot_class
+
+        return make_terran_bot_class(**_common_kwargs)  # type: ignore[no-any-return]
+
+    raise NotImplementedError(f"race={race!r} 不支持；有效值：Protoss / Zerg / Terran")
