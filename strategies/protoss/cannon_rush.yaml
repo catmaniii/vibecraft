@@ -48,21 +48,21 @@ phases:
 # 仅用于 PWA 显示与 LLM 上下文，真实 build 由 CannonRush.create_plan 控制
 # 参考：lotv.spawningtool.com/build/111586/ (PvZ Cannon Rush / Proxy Stalkers)
 steps:
-  - "12 send probe forward（去对方 natural 附近）"
-  - "14 build BE（home）"
-  - "16 build BF（forward，靠近对方 natural BE）"
-  - "16 build BA（home）"
-  - "18 build BC x2（forward，压制对方矿线）"
-  - "18 build BG（home）"
-  - "18 build BE（forward）"
-  - "19 build BC（再 1 个加强封锁）"
-  - "20 build BY（home）"
-  - "20 build BG（home，第 2 门）"
+  - "14 build BE"
+  - "16 build BF"
+  - "16 build BA"
+  - "18 build BC"
+  - "18 build BC"
+  - "18 build BG"
+  - "18 build BE"
+  - "19 build BC"
+  - "20 build BY"
+  - "20 build BG"
   - "21 train 追猎 @chrono"
   - "22 research 折跃 @chrono"
-  - "25 build BB x2（护盾电池，撑炮塔）"
-  - "27 追猎出门支援前线炮塔"
-  - "31 build BG（第 3 门）"
+  - "25 build BB"
+  - "25 build BB"
+  - "31 build BG"
 
 scout_at: "12 send_probe forward_proxy"
 
@@ -77,10 +77,5 @@ abort_signals:
 default_transitions:
   - midgame_id: iac_2base
     when: "default"
-  - midgame_id: blink_stalker
-    when: "enemy.has_ground_army"
-
-attack_window:
-  open_at: "1:27"
-  close_at: "5:00"
-  target_priority: [worker_lines, natural, production]
+# 注：attack_window 是 midgame_stance 字段,opening_build 不支持。
+# 出门 timing(~1:27 BC 即时压制) + 目标(矿线 worker)由 plan class CannonRush 控制。

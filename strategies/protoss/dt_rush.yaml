@@ -49,18 +49,24 @@ phases:
 steps:
   - "14 build BE"
   - "15 build BG"
-  - "16 build BA x2"
+  - "16 build BA"
+  - "16 build BA"
   - "19 build BY"
   - "20 research 折跃 @chrono"
   - "21 build VT"
   - "21 build BE"
-  - "23 build BG x2"
+  - "23 build BG"
+  - "23 build BG"
   - "24 build VB"
   - "25 build BE"
   - "28 build NX"
-  - "29 warp 暗使 x3 @chrono"
-  - "36 warp 追猎 x2（保家）"
-  - "36 warp 暗使 x2（补充）"
+  - "29 train 暗使 @chrono"
+  - "29 train 暗使 @chrono"
+  - "29 train 暗使 @chrono"
+  - "36 train 追猎"
+  - "36 train 追猎"
+  - "36 train 暗使"
+  - "36 train 暗使"
 
 scout_at: "15 send_probe enemy_natural"
 
@@ -73,10 +79,5 @@ abort_signals:
 default_transitions:
   - midgame_id: iac_2base
     when: "default"
-  - midgame_id: blink_stalker
-    when: "enemy.has_detection"
-
-attack_window:
-  open_at: "4:10"
-  close_at: "6:00"
-  target_priority: [main_base, natural, production]
+# 注：attack_window 是 midgame_stance 字段,opening_build 不支持。
+# 出门 timing(~4:10) + 目标优先级(主基地/扩张)由 plan class DtRush._ready_to_pressure 控制。
