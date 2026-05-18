@@ -61,6 +61,18 @@ class TerranSustain(KnowledgeBot):  # type: ignore[misc]
                         UnitExists(UnitTypeId.COMMANDCENTER, 2),
                         ActUnit(UnitTypeId.SCV, UnitTypeId.COMMANDCENTER, 44),
                     ),
+                    # 三矿/四矿继续造 SCV(cap=64，人族 4 矿饱和约 64)
+                    Step(
+                        UnitExists(UnitTypeId.COMMANDCENTER, 3),
+                        ActUnit(UnitTypeId.SCV, UnitTypeId.COMMANDCENTER, 56),
+                    ),
+                    Step(
+                        UnitExists(UnitTypeId.COMMANDCENTER, 4),
+                        ActUnit(UnitTypeId.SCV, UnitTypeId.COMMANDCENTER, 64),
+                    ),
+                    # 三矿 / 四矿扩张
+                    Step(UnitExists(UnitTypeId.COMMANDCENTER, 2), Expand(3)),
+                    Step(UnitExists(UnitTypeId.COMMANDCENTER, 3), Expand(4)),
                 ),
             ),
             # 家事 + 守家（没有 PlanZoneAttack）

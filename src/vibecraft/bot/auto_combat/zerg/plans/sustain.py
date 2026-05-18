@@ -63,6 +63,18 @@ class ZergSustain(KnowledgeBot):  # type: ignore[misc]
                         UnitReady(UnitTypeId.ROACHWARREN, 1),
                         ZergUnit(UnitTypeId.ROACH, 10),
                     ),
+                    # 三矿/四矿继续造 Drone(probe_cap=80，不停)
+                    Step(
+                        UnitExists(UnitTypeId.HATCHERY, 3),
+                        ActUnit(UnitTypeId.DRONE, UnitTypeId.LARVA, 48),
+                    ),
+                    Step(
+                        UnitExists(UnitTypeId.HATCHERY, 4),
+                        ActUnit(UnitTypeId.DRONE, UnitTypeId.LARVA, 64),
+                    ),
+                    # 三矿 / 四矿扩张
+                    Step(UnitExists(UnitTypeId.HATCHERY, 2), Expand(3)),
+                    Step(UnitExists(UnitTypeId.HATCHERY, 3), Expand(4)),
                 ),
             ),
             # 家事 + 守家（没有 PlanZoneAttack）

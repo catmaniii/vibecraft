@@ -39,11 +39,11 @@ class Sustain(KnowledgeBot):  # type: ignore[misc]
 
     async def create_plan(self) -> BuildOrder:
         return BuildOrder(
-            # macro:探机持续 chrono(到 44 个停,2 矿饱和)
+            # macro:探机持续 chrono(到 80 个停,4 矿饱和)；PersistentMacro 默认 probe_cap=80
             Step(
                 None,
                 ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
-                skip=UnitExists(UnitTypeId.PROBE, 44, include_pending=True),
+                skip=UnitExists(UnitTypeId.PROBE, 80, include_pending=True),
             ),
             # 主线:13 农 BG → 上 BY → 折跃 → 第二矿
             SequentialList(
@@ -64,6 +64,15 @@ class Sustain(KnowledgeBot):  # type: ignore[misc]
                         UnitExists(UnitTypeId.NEXUS, 2),
                         ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44),
                     ),
+                    # 三矿/四矿继续造农(probe_cap=80，不停)
+                    Step(
+                        UnitExists(UnitTypeId.NEXUS, 3),
+                        ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 60),
+                    ),
+                    Step(
+                        UnitExists(UnitTypeId.NEXUS, 4),
+                        ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 80),
+                    ),
                     # 守家用 stalker(够用就行,不暴兵)
                     Step(
                         UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
@@ -74,6 +83,9 @@ class Sustain(KnowledgeBot):  # type: ignore[misc]
                         UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
                         GridBuilding(UnitTypeId.GATEWAY, 4),
                     ),
+                    # 三矿 / 四矿扩张（sustain 持续开矿）
+                    Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
+                    Step(UnitExists(UnitTypeId.NEXUS, 3), Expand(4)),
                 ),
             ),
             # 家事 + 守家(没有 PlanZoneAttack)
