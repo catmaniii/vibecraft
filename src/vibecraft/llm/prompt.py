@@ -128,20 +128,30 @@ verb 消歧规则：
 
 ====== engagement_constraint.stance 白名单（4 个，严格字面值） ======
 
+> **WARNING：优先用 `tactical_objective`。**
+> `engagement_constraint` 只在玩家**明确说"持续保持 / 一直 / 接下来都"**某种姿态时使用。
+> **一次性命令**（"所有部队回家防守"/"撤退"/"守一波"）**一律用**
+> `tactical_objective(verb=defend/retreat, target_area=natural/main)`，
+> done_when=None（A 类 verb）。
+>
+> 判断标准：
+> - "守一波" / "回家防守" / "撤退" → **一次性** → `tactical_objective(verb=defend/retreat)`
+> - "接下来一直守家姿态" / "持续防守到闪烁好" → **持续** → `engagement_constraint(stance=defend)`
+
 **只允许 4 个值,不允许变体。常见错误:**
 - 错:`"hold_position"`(✗) → 对:`"hold"`
 - 错:`"guard"`(✗) → 对:`"defend"`
 - 错:`"守家"`(✗,要用 enum 英文字面值)
 
-| enum 字面值 | 玩家口语常说法 |
+| enum 字面值 | 玩家口语常说法（仅"一直/持续"语境才走这里） |
 |---|---|
-| `defend` | 守家 / 防守 / 防 / 守住自己基地 |
-| `hold` | 原地待命别动 / 别动 / 停下 / 静止 / 按兵不动 / 全员别走 |
-| `retreat` | 撤 / 撤退 / 全部撤回基地 |
-| `free` | 随便打 / 自由发挥 / 自由攻击 |
+| `defend` | 接下来一直守家 / 持续防守 / 保持防守姿态 |
+| `hold` | 持续按兵不动 / 一直别动 / 保持静止 |
+| `retreat` | 保持撤退状态 / 一直撤 |
+| `free` | 随便打 / 自由发挥 / 恢复自由攻击 |
 
 **关键区分**:
-- `engagement_constraint(stance=hold)` 影响**整支军队**的 stance(全局静止)
+- `engagement_constraint(stance=hold)` 影响**整支军队**的 stance(全局静止,**持续**直到玩家解除)
 - `unit_claim(task.verb=hold_position)` 影响 selector 指定的**特定单位**(单位级)
 - 玩家说"所有人原地别动" → engagement_constraint(stance=hold)
 - 玩家说"那个叉子守住别动" → unit_claim(selector={{unit_type:Zealot}}, task.verb=hold_position, persistent=true)
@@ -325,8 +335,15 @@ def build_few_shot() -> str:
 例 3：「先研闪烁」
 → tech_override: upgrade_id=Blink, priority=80
 
-例 4：「守家」
-→ engagement_constraint: stance=defend
+例 4a：「守家」/「所有部队回家防守」/「撤退」/「守一波」（一次性命令）
+→ tactical_objective: verb=defend, target_area="natural", done_when=None, timeout_s=None
+（A 类 verb，一次性命令，done_when 必须 None。PWA 点 × 解除）
+
+例 4b：「全部撤回基地」/「回家」（一次性撤退）
+→ tactical_objective: verb=retreat, target_area="main", done_when=None, timeout_s=None
+
+例 4c：「接下来一直守家姿态」/「持续防守」/「保持防守状态」（持续姿态，明确说一直/持续）
+→ engagement_constraint: stance=defend, done_when=None
 
 例 5：「凤凰举不朽」
 → unit_claim: selector={unit_type:"Phoenix"}, task={primary_action:{verb:"lift_target", target:{kind:"unit_type", unit_type:"Immortal"}}}, persistent=false
