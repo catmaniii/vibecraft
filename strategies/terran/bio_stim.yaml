@@ -1,0 +1,52 @@
+kind: midgame_stance
+id: bio_stim
+display_name_zh: "生化刺激剂中期"
+summary_zh: "双矿生化 + 刺激剂：Marine + Marauder + Medivac 三件套，刺激剂 + 医疗船全力压制，timing 8:00-9:30 出门"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bio_stim:BioStim"
+aliases:
+  - "bio_stim"
+  - "生化刺激"
+  - "MMM"
+  - "bio"
+  - "枪兵掠夺者"
+  - "枪兵流"
+  - "生化流"
+  - "M&M"
+  - "bio push"
+
+enter_when:
+  - "self.tech.stimpack.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [marine_rush, reaper_expand]"
+
+commitments:
+  units:
+    marine: 20
+    marauder: 10
+    medivac: 4
+    ghost: 2
+  tech: [Stimpack, CombatShield, ConcussiveShells]
+  structures:
+    barracks: 3
+    factory: 1
+    starport: 1
+    engineering_bay: 1
+  expansions: 2
+
+attack_window:
+  open_at: "8:00"
+  close_at: "9:30"
+  target_priority: [army, production, natural]
+
+micro_doctrine:
+  - "刺激剂爆发时 Marine 前压，掠夺者打装甲"
+  - "Medivac 跟随 Marine 治疗，血少的 Marine 优先治"
+  - "对方 Colossus / 坦克：Ghost EMP + Marauder 集火"
+  - "Marine 站位 spread，避免 Storm / Fungal 集火"
+  - "Medical kite：Medivac 撤到安全位后继续 heal"
+
+lategame_transitions:
+  - lategame_id: bc_late
+    when: "default"
+  - lategame_id: bc_late
+    when: "game_time >= 13:00"

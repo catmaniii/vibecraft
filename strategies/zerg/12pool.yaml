@@ -1,0 +1,49 @@
+kind: opening_build
+id: 12pool
+display_name_zh: "12 母池快攻"
+summary_zh: "12 农民就开 BS，极速出狗压制：12 农 → BS → 持续出狗 + 补 OL，早期骚扰对方扩张节奏"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.twelve_pool:TwelvePool"
+aliases:
+  - "12pool"
+  - "12Pool"
+  - "十二母池"
+  - "速母池"
+  - "速BS"
+  - "快攻"
+  - "狗rush"
+  - "Zergling Rush"
+  - "12P"
+matchup: [ZvT, ZvZ, ZvP]
+
+phases:
+  - id: opening
+    display: "12 农 开 BS"
+    subtitle: "12 农民就开 SpawningPool，同时造 Overlord"
+    start_at_supply: 12
+  - id: flooding
+    display: "速出狗"
+    subtitle: "BS 完成即出狗，持续刷满幼虫"
+    start_at_supply: 16
+  - id: pressure
+    display: "出门骚扰"
+    subtitle: "6-8 只狗出门，打对方早期扩张"
+    start_at_supply: 22
+    start_at_time: 120
+
+steps:
+  - "9 build Overlord"
+  - "12 build SpawningPool"
+  - "13 build Extractor"
+  - "16 build Queen"
+  - "16 train Zergling"
+  - "16 train Zergling"
+  - "16 train Zergling"
+  - "18 build Hatchery"
+  - "22 train Zergling"
+  - "22 train Zergling"
+
+default_transitions:
+  - midgame_id: roach_hydra
+    when: "default"
+  - midgame_id: mutalisk_harass
+    when: "enemy.macro_opening"

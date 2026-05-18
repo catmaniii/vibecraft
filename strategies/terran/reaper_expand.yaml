@@ -1,0 +1,47 @@
+kind: opening_build
+id: reaper_expand
+display_name_zh: "死神扩张"
+summary_zh: "死神骚扰 + 快扩：1 BB 出死神骚扰对方工人 → 同时开扩张，积累经济优势；稳扎稳打的主流 TvX 开局"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.reaper_expand:ReaperExpand"
+aliases:
+  - "reaper_expand"
+  - "死神扩张"
+  - "死神快扩"
+  - "reaper FE"
+  - "快扩死神"
+  - "RE"
+  - "主流开局"
+matchup: [TvT, TvZ, TvP]
+
+phases:
+  - id: opening
+    display: "速 BB + 死神"
+    subtitle: "12 农 → BB → 出死神骚扰"
+    start_at_supply: 12
+  - id: expand
+    display: "扩张"
+    subtitle: "死神出门同时开第二 CommandCenter"
+    start_at_supply: 16
+  - id: eco
+    display: "双基地经济"
+    subtitle: "双 CC → 升轨道 + 持续造农民 + 出 Marine"
+    start_at_supply: 24
+    start_at_time: 150
+
+steps:
+  - "10 build SupplyDepot"
+  - "12 build Barracks"
+  - "13 build Refinery"
+  - "15 build SupplyDepot"
+  - "16 train Reaper"
+  - "17 build CommandCenter"
+  - "19 train Marine"
+  - "20 build TechLab @Barracks"
+  - "22 build Factory"
+  - "24 research Stimpack"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_armor"
