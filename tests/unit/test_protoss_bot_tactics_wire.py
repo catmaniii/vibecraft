@@ -65,8 +65,7 @@ def test_tick_bot_channel_source_calls_execute_tactics_step() -> None:
     BotClass = _make_bot_class()
     src = inspect.getsource(BotClass._tick_bot_channel)
     assert "execute_tactics_step" in src, (
-        "_tick_bot_channel 源码未找到 execute_tactics_step；"
-        "Task 13 实现未完成。"
+        "_tick_bot_channel 源码未找到 execute_tactics_step；Task 13 实现未完成。"
     )
 
 

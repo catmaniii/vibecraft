@@ -101,6 +101,7 @@ class TestPayloads:
         assert restored.payload.items[0].unit_type == "Immortal"
         assert restored.payload.items[0].count == 2
 
+
 # =========================================================================
 # DirectiveBoard
 # =========================================================================
@@ -442,7 +443,9 @@ class TestDoneWhenSchema:
     # ------------------------------------------------------------------
 
     def test_unit_count_built_since_valid(self) -> None:
-        c = UnitCountBuiltSince(kind="unit_count_built_since", unit_type="Phoenix", op=">=", value=4)
+        c = UnitCountBuiltSince(
+            kind="unit_count_built_since", unit_type="Phoenix", op=">=", value=4
+        )
         assert c.kind == "unit_count_built_since"
         assert c.unit_type == "Phoenix"
         assert c.op == ">="
@@ -599,8 +602,17 @@ class TestTacticalObjectivePayload:
     """TacticalObjectivePayload — L2 战术指令 schema。"""
 
     VALID_VERBS: ClassVar[list[str]] = [
-        "attack", "defend", "scout", "expand", "harass",
-        "drop", "vision", "raze", "retreat", "regroup", "split",
+        "attack",
+        "defend",
+        "scout",
+        "expand",
+        "harass",
+        "drop",
+        "vision",
+        "raze",
+        "retreat",
+        "regroup",
+        "split",
     ]
 
     def test_all_valid_verbs_accepted(self) -> None:
@@ -612,9 +624,18 @@ class TestTacticalObjectivePayload:
     def test_invalid_verb_rejected(self) -> None:
         """非法 verb 拒绝。"""
         invalid_verbs = [
-            "charge", "rush", "turtle", "all_in", "cheese",
-            "build", "gather", "rally", "ambush", "flank",
-            "engage", "disengage",
+            "charge",
+            "rush",
+            "turtle",
+            "all_in",
+            "cheese",
+            "build",
+            "gather",
+            "rally",
+            "ambush",
+            "flank",
+            "engage",
+            "disengage",
         ]
         for verb in invalid_verbs:
             with pytest.raises(ValidationError):
@@ -753,6 +774,7 @@ class TestTacticalObjectivePayloadExtra:
     def test_done_when_on_base_payload_is_optional(self) -> None:
         """_PayloadBase.done_when 对所有 payload 可选（StrategySetPayload 验证）。"""
         from vibecraft.directives import StrategySetPayload
+
         p = StrategySetPayload(stage="opening", strategy_id="1g_robo")
         assert p.done_when is None
         assert p.timeout_s is None

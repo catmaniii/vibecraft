@@ -205,9 +205,7 @@ class TestIntentParserHappyPath:
                         "directives": [
                             {
                                 "type": "production_override",
-                                "payload": {
-                                    "items": [{"unit_type": "Sentry", "count": 2}]
-                                },
+                                "payload": {"items": [{"unit_type": "Sentry", "count": 2}]},
                                 "priority": 70,
                             }
                         ],
@@ -402,9 +400,7 @@ class TestAmbiguous:
                         "directives": [
                             {
                                 "type": "production_override",
-                                "payload": {
-                                    "items": [{"unit_type": "Stalker", "count": 1}]
-                                },
+                                "payload": {"items": [{"unit_type": "Stalker", "count": 1}]},
                             }
                         ],
                     }
@@ -509,13 +505,14 @@ class TestDoneWhenValidate:
         """第 1 次 LLM 返回 invalid done_when → retry 第 2 次正确 → directive OK。"""
         provider = MockLLMProvider(
             scripted=[
-                _provider_response_for(_INVALID_DONE_WHEN_RAW),   # 第 1 次：invalid
+                _provider_response_for(_INVALID_DONE_WHEN_RAW),  # 第 1 次：invalid
                 _provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW),  # 第 2 次：合法
             ]
         )
         # max_validation_retries=1 启用 1 次 retry(默认 0 不 retry,向后兼容旧调用方)
         parser = IntentParser(
-            provider, library,
+            provider,
+            library,
             config=ParserConfig(max_validation_retries=1),
         )
         outcome = await parser.parse("进攻对方自然", default_ctx)
@@ -544,7 +541,8 @@ class TestDoneWhenValidate:
             ]
         )
         parser = IntentParser(
-            provider, library,
+            provider,
+            library,
             config=ParserConfig(max_validation_retries=1),
         )
         outcome = await parser.parse("进攻对方自然", default_ctx)
@@ -595,9 +593,7 @@ class TestDoneWhenValidate:
         self, library: StrategyLibrary, default_ctx: ParseContext
     ) -> None:
         """合法 done_when → 直接通过，不触发 retry。"""
-        provider = MockLLMProvider(
-            scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)]
-        )
+        provider = MockLLMProvider(scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)])
         parser = IntentParser(provider, library)
         outcome = await parser.parse("进攻对方自然", default_ctx)
 
@@ -620,8 +616,17 @@ class TestTacticalObjectivePrompt:
     def test_system_prompt_contains_11_verbs(self, library: StrategyLibrary) -> None:
         sp = build_system_prompt(library.aliases)
         verbs = [
-            "attack", "defend", "scout", "expand", "harass",
-            "drop", "vision", "raze", "retreat", "regroup", "split",
+            "attack",
+            "defend",
+            "scout",
+            "expand",
+            "harass",
+            "drop",
+            "vision",
+            "raze",
+            "retreat",
+            "regroup",
+            "split",
         ]
         for verb in verbs:
             assert verb in sp, f"verb '{verb}' not found in system prompt"
@@ -669,9 +674,7 @@ class TestTacticalObjectivePrompt:
         self, library: StrategyLibrary, default_ctx: ParseContext
     ) -> None:
         """mock LLM 返回合法 TacticalObjective → directive 进结果。"""
-        provider = MockLLMProvider(
-            scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)]
-        )
+        provider = MockLLMProvider(scripted=[_provider_response_for(_VALID_TACTICAL_OBJECTIVE_RAW)])
         parser = IntentParser(provider, library)
         outcome = await parser.parse("打对方自然", default_ctx)
         assert isinstance(outcome, IntentParseResult)

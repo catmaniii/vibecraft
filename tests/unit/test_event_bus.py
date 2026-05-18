@@ -84,7 +84,9 @@ class TestEventBus:
         assert len(a) == 1 and len(b) == 1
 
 
-def _make_mock_unit(tag: int, alliance: int, type_name: str, x: float = 10.0, y: float = 20.0) -> MagicMock:
+def _make_mock_unit(
+    tag: int, alliance: int, type_name: str, x: float = 10.0, y: float = 20.0
+) -> MagicMock:
     """构造 mock sc2 Unit 对象。"""
     unit = MagicMock()
     unit.tag = tag
@@ -127,6 +129,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=100, alliance=1, type_name="PROBE", x=50.0, y=60.0)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_created
+
         _publish_unit_created(bot, unit)
 
         assert len(received) == 1
@@ -145,6 +148,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=200, alliance=4, type_name="ZERGLING", x=5.0, y=5.0)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_created
+
         _publish_unit_created(bot, unit)
 
         assert len(received) == 1
@@ -160,6 +164,7 @@ class TestBotEventWiring:
         bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+
         _publish_unit_destroyed(bot, 200)
 
         assert len(received) == 1
@@ -180,6 +185,7 @@ class TestBotEventWiring:
         bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+
         _publish_unit_destroyed(bot, 999)
 
         assert len(received) == 1
@@ -199,6 +205,7 @@ class TestBotEventWiring:
         bus.subscribe(EventKind.UNIT_DESTROYED, received.append)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_destroyed
+
         _publish_unit_destroyed(bot, 201)
 
         assert len(received) == 1
@@ -218,6 +225,7 @@ class TestBotEventWiring:
         previous_type.__str__ = lambda self: "GATEWAY"
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_type_changed
+
         _publish_unit_type_changed(bot, unit, previous_type)
 
         assert len(received) == 1
@@ -235,6 +243,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=400, alliance=1, type_name="GATEWAY", x=30.0, y=40.0)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_building_started
+
         _publish_building_started(bot, unit)
 
         assert len(received) == 1
@@ -253,6 +262,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=401, alliance=1, type_name="CYBERNETICSCORE")
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_building_complete
+
         _publish_building_complete(bot, unit)
 
         assert len(received) == 1
@@ -270,6 +280,7 @@ class TestBotEventWiring:
         upgrade.name = "BLINKTECH"
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_upgrade_complete
+
         _publish_upgrade_complete(bot, upgrade)
 
         assert len(received) == 1
@@ -286,6 +297,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=500, alliance=1, type_name="STALKER")
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_unit_took_damage
+
         _publish_unit_took_damage(bot, unit, 35.5)
 
         assert len(received) == 1
@@ -303,6 +315,7 @@ class TestBotEventWiring:
         unit = _make_mock_unit(tag=600, alliance=4, type_name="ROACH", x=70.0, y=80.0)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_enemy_unit_entered_vision
+
         _publish_enemy_unit_entered_vision(bot, unit)
 
         assert len(received) == 1
@@ -318,6 +331,7 @@ class TestBotEventWiring:
         bus.subscribe(EventKind.ENEMY_UNIT_LEFT_VISION, received.append)
 
         from vibecraft.bot.auto_combat.protoss.bot import _publish_enemy_unit_left_vision
+
         _publish_enemy_unit_left_vision(bot, 700)
 
         assert len(received) == 1

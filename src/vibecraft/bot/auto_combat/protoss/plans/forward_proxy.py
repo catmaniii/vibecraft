@@ -125,9 +125,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         scored = [(p, self._score_pos(p)) for p in candidates]
         scored = [(p, s) for p, s in scored if s > 0]
         if not scored:
-            logger.info(
-                "ForwardSupport: 0 valid candidates after hard filter → sharpy fallback"
-            )
+            logger.info("ForwardSupport: 0 valid candidates after hard filter → sharpy fallback")
             return self._sharpy_fallback_proxy()
 
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -151,9 +149,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         地图上是合理的中场盲区。
         """
         try:
-            return self.ai.game_info.map_center.towards(
-                self.ai.enemy_start_locations[0], 25
-            )
+            return self.ai.game_info.map_center.towards(self.ai.enemy_start_locations[0], 25)
         except Exception:
             return None
 
@@ -188,9 +184,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                 base_x = own.x + dx * t
                 base_y = own.y + dy * t
                 for offset in (0.0, 15.0, -15.0):
-                    candidates.append(
-                        Point2((base_x + vx * offset, base_y + vy * offset))
-                    )
+                    candidates.append(Point2((base_x + vx * offset, base_y + vy * offset)))
 
         # B. 环形点：敌方主基地外环 30/40/50/55 距离 × 6 方向
         # 30 起点 = 与 _MIN_DIST_TO_ENEMY 配套,贴边走廊可以更靠近敌方
@@ -199,10 +193,12 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             for angle_deg in range(0, 360, 60):
                 angle_rad = math.radians(angle_deg)
                 candidates.append(
-                    Point2((
-                        enemy.x + dist * math.cos(angle_rad),
-                        enemy.y + dist * math.sin(angle_rad),
-                    ))
+                    Point2(
+                        (
+                            enemy.x + dist * math.cos(angle_rad),
+                            enemy.y + dist * math.sin(angle_rad),
+                        )
+                    )
                 )
         return candidates
 
@@ -307,15 +303,12 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         try:
             area = self.ai.game_info.playable_area
             return bool(
-                area.x <= pos.x <= area.x + area.width
-                and area.y <= pos.y <= area.y + area.height
+                area.x <= pos.x <= area.x + area.width and area.y <= pos.y <= area.y + area.height
             )
         except Exception:
             return True  # 不能查 area 时不否决,留给 in_placement_grid 处理
 
-    async def _safe_find_placement(
-        self, unit_type: UnitTypeId, near: Point2
-    ) -> Point2 | None:
+    async def _safe_find_placement(self, unit_type: UnitTypeId, near: Point2) -> Point2 | None:
         """python-sc2 find_placement 包装,handle async + exception 兜底。
 
         find_placement 实际会向 SC2 client query "这里能放吗",所以是 async。
@@ -327,7 +320,10 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         except Exception as exc:
             logger.warning(
                 "ForwardSupport find_placement fail for %s near (%.1f,%.1f): %s",
-                unit_type.name, near.x, near.y, exc,
+                unit_type.name,
+                near.x,
+                near.y,
+                exc,
             )
             return None
 
@@ -525,16 +521,12 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
 
         # D. worker 死太多
         if self._worker_death_count >= _MAX_WORKER_DEATHS:
-            logger.info(
-                "ForwardSupport done (D: %d worker deaths)", self._worker_death_count
-            )
+            logger.info("ForwardSupport done (D: %d worker deaths)", self._worker_death_count)
             return True
 
         # E. 主力已出门 —— 通过 knowledge.vibecraft.combat_intent_override 推断
         try:
-            intent = getattr(
-                self.ai.knowledge.vibecraft, "combat_intent_override", None
-            )
+            intent = getattr(self.ai.knowledge.vibecraft, "combat_intent_override", None)
             if intent == "attack":
                 logger.info("ForwardSupport done (E: main army attacking)")
                 return True
@@ -559,9 +551,7 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             if self.proxy_location is None:
                 # 选不出来，跳过此帧再试
                 return False
-            self.hide_location = self.proxy_location.towards(
-                self.ai.start_location, 8
-            )
+            self.hide_location = self.proxy_location.towards(self.ai.start_location, 8)
 
         # —— 2. 完成判定（5 重 OR）——
         if self._is_done():
@@ -612,13 +602,12 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                     # 历史:直接 worker.build(proxy_location) 在 placement fail 时 sc2
                     # 拒绝,worker.orders 不会有 PROTOSSBUILD_PYLON → 每帧重发都 fail →
                     # 92s timeout 0 个 PYLON。
-                    place = await self._safe_find_placement(
-                        UnitTypeId.PYLON, self.proxy_location
-                    )
+                    place = await self._safe_find_placement(UnitTypeId.PYLON, self.proxy_location)
                     if place is not None:
                         logger.info(
                             "ForwardSupport build PYLON at (%.1f, %.1f)",
-                            place.x, place.y,
+                            place.x,
+                            place.y,
                         )
                         worker.build(UnitTypeId.PYLON, place)
                     elif worker.is_idle:
@@ -633,33 +622,26 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                     # 在 PYLON 附近找位置造 BG（psi matrix 内）
                     py_tag = self._proxy_tags.get(UnitTypeId.PYLON)
                     py_struct = (
-                        self.ai.structures.find_by_tag(py_tag)
-                        if py_tag is not None
-                        else None
+                        self.ai.structures.find_by_tag(py_tag) if py_tag is not None else None
                     )
                     if py_struct is not None:
                         # GATEWAY 放 PYLON 后方(towards 自家)而非前方(towards 敌方),
                         # 让 PYLON 当屏障。前方放法实测(game_20260518_043040)GATEWAY
                         # 修了 ~10s worker 就被敌方探机/zealot 打死。
-                        bg_near = py_struct.position.towards(
-                            self.ai.start_location, 3
-                        )
+                        bg_near = py_struct.position.towards(self.ai.start_location, 3)
                         # find_placement 找 3x3 合法 placement(psi matrix 内 + 不撞)
-                        bg_pos = await self._safe_find_placement(
-                            UnitTypeId.GATEWAY, bg_near
-                        )
+                        bg_pos = await self._safe_find_placement(UnitTypeId.GATEWAY, bg_near)
                         if bg_pos is not None:
                             logger.info(
                                 "ForwardSupport build GATEWAY at (%.1f, %.1f)",
-                                bg_pos.x, bg_pos.y,
+                                bg_pos.x,
+                                bg_pos.y,
                             )
                             worker.build(UnitTypeId.GATEWAY, bg_pos)
                 elif worker.is_idle:
                     py_tag = self._proxy_tags.get(UnitTypeId.PYLON)
                     py_struct = (
-                        self.ai.structures.find_by_tag(py_tag)
-                        if py_tag is not None
-                        else None
+                        self.ai.structures.find_by_tag(py_tag) if py_tag is not None else None
                     )
                     if py_struct is not None:
                         worker.move(py_struct.position)

@@ -92,11 +92,10 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
             ),
-
             # ---------- 早期主线（严守顺序）----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 12),
-                GridBuilding(UnitTypeId.PYLON, 1),          # 14 supply BE
+                GridBuilding(UnitTypeId.PYLON, 1),  # 14 supply BE
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
                 # BF（Forge）：家附近先建（TODO 真前线 proxy 需 forward_cannon_proxy）
                 GridBuilding(UnitTypeId.FORGE, 1),
@@ -105,41 +104,31 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
                 GridBuilding(UnitTypeId.GATEWAY, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 18),
             ),
-
             # ---------- BC（Photon Cannon）× 3 —— BF 完成立刻建 ----------
             # sharpy GridBuilding 会找网格位（默认在家附近；前线 proxy 留 TODO）
             Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.PHOTONCANNON, 3)),
-
             # ---------- 家里补 BG × 2 + BY ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 3)),
-
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-
             # ---------- 护盾电池 × 2（撑炮塔存活）----------
             Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.SHIELDBATTERY, 2)),
-
             # ---------- 后续 BC 扩张（把对方矿线完全锁住）----------
             Step(UnitReady(UnitTypeId.FORGE, 1), GridBuilding(UnitTypeId.PHOTONCANNON, 6)),
-
             # ---------- 二矿延续（炮塔压住后开）----------
             Step(UnitExists(UnitTypeId.PHOTONCANNON, 3), Expand(2)),
-
             # ---------- 二矿气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-
             # ---------- 单位训练 ----------
             # 追猎（折跃好后前出，配合炮塔钳制）
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.STALKER, 12),
             ),
-
             # ---------- 经济 ----------
             AutoPylon(),
             ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -152,8 +141,11 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
                 # 折跃完成 + 3+ BC + 6 Stalker → 出门配合炮塔
                 # 玩家强制 attack 绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(6),  # 6 Stalker 出门配合炮塔
                 ),
                 PlanFinishEnemy(),

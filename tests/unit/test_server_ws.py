@@ -229,9 +229,7 @@ class TestDefaultRealtimeFallback:
         mock_gp.is_running = False
         mock_gp.start = MagicMock()
         mock_gp.status = GameStatus(sc2="launching", bot="idle")
-        conn = WsConnection(
-            ws, registry, game_process=mock_gp, default_realtime=default_realtime
-        )
+        conn = WsConnection(ws, registry, game_process=mock_gp, default_realtime=default_realtime)
         return conn, ws
 
     async def test_pwa_omits_realtime_uses_service_default_true(self) -> None:
@@ -251,9 +249,7 @@ class TestDefaultRealtimeFallback:
     async def test_pwa_explicit_realtime_overrides_service_default(self) -> None:
         """PWA 显式传 realtime=True 时优先使用 PWA 值（即使 service 默认 False）。"""
         conn, _ = self._make_conn(default_realtime=False)
-        await conn._handle_start_game(
-            {"type": "start_game", "config": {"realtime": True}}
-        )
+        await conn._handle_start_game({"type": "start_game", "config": {"realtime": True}})
         passed_config = conn._game_process.start.call_args[0][0]  # type: ignore[attr-defined]
         assert passed_config.realtime is True
 
@@ -343,9 +339,7 @@ class TestRevokeDirectiveFrame:
     async def test_revoke_directive_sent_to_game(self) -> None:
         """有效 revoke_directive 帧 → game_process.send_command 收到完整 dict。"""
         conn, mock_gp = self._make_conn_with_game()
-        await conn._handle_raw(
-            json.dumps({"type": "revoke_directive", "directive_id": "d_abc123"})
-        )
+        await conn._handle_raw(json.dumps({"type": "revoke_directive", "directive_id": "d_abc123"}))
         mock_gp.send_command.assert_called_once_with(
             {"type": "revoke_directive", "directive_id": "d_abc123"}
         )

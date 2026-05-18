@@ -62,9 +62,7 @@ class TestDefaultPath:
 
 
 class TestInitServerLogFile:
-    def test_creates_file_and_writes_print(
-        self, _reset_server_log_module, tmp_path: Path
-    ) -> None:
+    def test_creates_file_and_writes_print(self, _reset_server_log_module, tmp_path: Path) -> None:
         log_path = tmp_path / "server.log"
         _reset_server_log_module.init_server_log_file(log_path)
 
@@ -86,9 +84,7 @@ class TestInitServerLogFile:
         content = log_path.read_text(encoding="utf-8")
         assert "logging-test-message-zxqw" in content
 
-    def test_sets_env_for_subprocess(
-        self, _reset_server_log_module, tmp_path: Path
-    ) -> None:
+    def test_sets_env_for_subprocess(self, _reset_server_log_module, tmp_path: Path) -> None:
         log_path = tmp_path / "server.log"
         _reset_server_log_module.init_server_log_file(log_path)
 
@@ -129,9 +125,7 @@ class TestInitFromEnv:
         os.environ.pop("VIBECRAFT_SERVER_LOG_PATH", None)
         assert _reset_server_log_module.init_from_env() is None
 
-    def test_uses_env_path_when_set(
-        self, _reset_server_log_module, tmp_path: Path
-    ) -> None:
+    def test_uses_env_path_when_set(self, _reset_server_log_module, tmp_path: Path) -> None:
         target = tmp_path / "child.log"
         os.environ["VIBECRAFT_SERVER_LOG_PATH"] = str(target)
 

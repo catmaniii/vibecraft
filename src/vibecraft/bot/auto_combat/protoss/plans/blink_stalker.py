@@ -94,7 +94,6 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
                 ChronoTech(AbilityId.RESEARCH_BLINK, UnitTypeId.TWILIGHTCOUNCIL),
             ),
-
             # ---------- 早期主线 ----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -104,35 +103,31 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 19),
             ),
-
             # ---------- 快速双矿（~1:24）+ BY ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
-
             # ---------- 双矿气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-
             # ---------- 折跃研究 ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-
             # ---------- VT（TwilightCouncil，闪烁前置）----------
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+            ),
             # ---------- VR（Robotics，Observer + Warp Prism）----------
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
+            ),
             # ---------- 闪烁研究（Blink，关键升级 ~3:19）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.BLINKTECH)),
-
             # ---------- 补 4 BG（~3:23-3:39）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
-
             # ---------- 三气（4:30）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
-
             # ---------- 三矿延续（5:28）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), Expand(3)),
-
             # ---------- 单位训练 ----------
             # Observer（VR 一好立刻，反隐必须）
             Step(
@@ -154,11 +149,9 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.STALKER, 14),
             ),
-
             # ---------- 经济 ----------
             AutoPylon(),
             ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 60),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -170,8 +163,11 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
                 PlanZoneGather(),
                 # 闪烁完成 + 10 Stalker → 出门；玩家强制 attack 绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(10),  # 10 Stalker 出门，等闪烁完成
                 ),
                 PlanFinishEnemy(),
@@ -193,9 +189,7 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
         if not blink_done:
             return False
         # 4 BG 就绪
-        gate_count = ai.structures.of_type(
-            {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
-        ).ready.amount
+        gate_count = ai.structures.of_type({UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}).ready.amount
         if gate_count < 4:
             return False
         # 10 Stalker ready

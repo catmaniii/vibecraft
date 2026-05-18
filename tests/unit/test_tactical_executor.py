@@ -38,9 +38,7 @@ def fake_facade() -> FakeFacade:
 def director(library: StrategyLibrary, session: GameSession, fake_facade: FakeFacade) -> Director:
     """最小 Director 实例，直接调内部方法。"""
     provider = MockLLMProvider(
-        scripted=[
-            ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)
-        ]
+        scripted=[ProviderResponse(raw={}, input_tokens=0, output_tokens=0, latency_ms=0.0)]
     )
     parser = IntentParser(provider, library, session=session)
     return Director(facade=fake_facade, parser=parser, session=session)

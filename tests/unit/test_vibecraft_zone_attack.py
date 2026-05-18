@@ -27,9 +27,7 @@ def _fake_env(fake_sharpy_zone_attack_env: Any) -> Any:
 
 def _import_plan():
     """每次从干净的 sys.modules 状态 import VibeCraftZoneAttack。"""
-    mod = importlib.import_module(
-        "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack"
-    )
+    mod = importlib.import_module("vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack")
     return mod.VibeCraftZoneAttack
 
 
@@ -55,8 +53,7 @@ def test_get_target_uses_override_when_set(monkeypatch):
     plan = _make_plan(override_target=(50.0, 100.0))
     # parent _get_target 返回 sentinel；override 应该胜出
     monkeypatch.setattr(
-        "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack."
-        "PlanZoneAttack._get_target",
+        "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack.PlanZoneAttack._get_target",
         lambda self: ("SENTINEL_NATURAL",),
     )
     result = plan._get_target()
@@ -69,8 +66,7 @@ def test_get_target_uses_override_when_set(monkeypatch):
 def test_get_target_falls_back_to_parent_when_no_override(monkeypatch):
     plan = _make_plan(override_target=None)
     monkeypatch.setattr(
-        "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack."
-        "PlanZoneAttack._get_target",
+        "vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack.PlanZoneAttack._get_target",
         lambda self: "DEFAULT",
     )
     assert plan._get_target() == "DEFAULT"

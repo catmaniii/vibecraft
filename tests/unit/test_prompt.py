@@ -76,11 +76,7 @@ def test_prompt_explains_b_verbs_unit_count_hint_required(system_prompt: str) ->
     """B 系列 verb (harass/scout) 必须给 unit_count_hint，否则 ambiguous。"""
     assert "unit_count_hint" in system_prompt
     # 显式提"必填"或"必给"或"required"
-    assert (
-        "必填" in system_prompt
-        or "必给" in system_prompt
-        or "required" in system_prompt.lower()
-    )
+    assert "必填" in system_prompt or "必给" in system_prompt or "required" in system_prompt.lower()
 
 
 # ---------------------------------------------------------------------------

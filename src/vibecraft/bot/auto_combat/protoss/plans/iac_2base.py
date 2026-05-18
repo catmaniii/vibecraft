@@ -91,7 +91,6 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             ),
             # Immortal chrono：VR 一好就持续 chrono 不朽（核心反装甲）
             ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
-
             # ---------- 早期 critical path（严守顺序，到 16 农停）----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 13),
@@ -101,19 +100,21 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
             ),
-
             # ---------- BG 一好的并行触发（NX + BY 同时启动，标准 1:25 NX / 1:35 BY）----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
-
             # ---------- 第二气矿（二矿启动后立刻补；IAC 用气多）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-
             # ---------- BY 一好的并行触发（折跃研究 + VR + VT 三件事同时启动）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1)),
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
+            ),
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+            ),
             # ---------- VT 一好立刻研 Charge（关键，5 分钟必出）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.CHARGE)),
             # Charge 同时 chrono（VT 上面 chrono，把它升完出门 timing 关键）
@@ -121,54 +122,56 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
                 ChronoTech(AbilityId.RESEARCH_CHARGE, UnitTypeId.TWILIGHTCOUNCIL),
             ),
-
             # ---------- BF 在 NX2 一好后造（攻防升级前置）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), GridBuilding(UnitTypeId.FORGE, 1)),
             # +1 攻击（charge 叉 dps 提升显著）
             Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
-
             # ---------- VA + Storm（后期补，HT 增援）----------
-            Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.TEMPLARARCHIVE, 1)),
+            Step(
+                UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.TEMPLARARCHIVE, 1)
+            ),
             Step(UnitReady(UnitTypeId.TEMPLARARCHIVE, 1), Tech(UpgradeId.PSISTORMTECH)),
-
             # ---------- 防身 ----------
             ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
-
             # ---------- 单位训练队列 ----------
             # VR 一好：先 2 不朽 + 1 OB
             [
-                Step(UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                     ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 2, priority=True)),
-                Step(UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                     ActUnit(UnitTypeId.OBSERVER, UnitTypeId.ROBOTICSFACILITY, 1, priority=True)),
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 2, priority=True),
+                ),
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.OBSERVER, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
+                ),
                 # 后期补到 3 不朽
-                Step(UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                     ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 3, priority=True)),
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 3, priority=True),
+                ),
             ],
             # Sentry × 2（力场切阵）
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                 ProtossUnit(UnitTypeId.SENTRY, 2, priority=True)),
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                ProtossUnit(UnitTypeId.SENTRY, 2, priority=True),
+            ),
             # HT × 4（合 2 Archon + 2 Storm 储能）
-            Step(UnitReady(UnitTypeId.TEMPLARARCHIVE, 1),
-                 ProtossUnit(UnitTypeId.HIGHTEMPLAR, 4)),
+            Step(UnitReady(UnitTypeId.TEMPLARARCHIVE, 1), ProtossUnit(UnitTypeId.HIGHTEMPLAR, 4)),
             # Charge Zealot 主力（target 16+）
-            Step(UnitReady(UnitTypeId.GATEWAY, 1),
-                 ProtossUnit(UnitTypeId.ZEALOT, 18)),
-
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 18)),
             # ---------- 经济（sequential pacing）----------
             AutoPylon(),
             [
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 22),
-                Step(UnitExists(UnitTypeId.NEXUS, 2),
-                     ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44)),
+                Step(
+                    UnitExists(UnitTypeId.NEXUS, 2), ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44)
+                ),
                 StepBuildGas(3, skip=Gas(300)),
                 StepBuildGas(4, skip=Gas(400)),
             ],
-
             # ---------- 4 分钟暴 7 BG（IAC 关键产能时机）----------
             # spawningtool: 4:35 / 4:56 BG → 6:15 出门正好满兵
             Step(Time(60 * 4), GridBuilding(UnitTypeId.GATEWAY, 7)),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -181,8 +184,11 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 # **IAC 出门 timing**：Charge 完成 + 7 BG + 主力到位 → 出门压制
                 # 玩家显式 attack 立即绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(12),  # 12 个 supply（叉子主力）就可推
                 ),
                 PlanFinishEnemy(),
@@ -203,9 +209,7 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
         if not charge_done:
             return False
         # 7 BG 暴产能就位
-        bg_count = ai.structures.of_type(
-            {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
-        ).ready.amount
+        bg_count = ai.structures.of_type({UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}).ready.amount
         if bg_count < 7:
             return False
         # 至少 2 不朽 ready

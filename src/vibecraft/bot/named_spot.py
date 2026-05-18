@@ -159,9 +159,7 @@ class NamedSpotRegistry:
         """自方主斜坡 - python-sc2 main_base_ramp.top_center。"""
         ramp = getattr(bot, "main_base_ramp", None)
         if ramp is not None:
-            return getattr(ramp, "top_center", None) or getattr(
-                ramp, "depot_in_middle", None
-            )
+            return getattr(ramp, "top_center", None) or getattr(ramp, "depot_in_middle", None)
         return None
 
     def _natural_ramp(self, bot: Any) -> Any | None:

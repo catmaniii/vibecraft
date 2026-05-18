@@ -52,7 +52,9 @@ class Case:
     name: str
     inject: str
     inject_after: int
-    verify_field: str  # "strategy_changed" | "active_tactics" | "standing_orders" | "production_overrides"
+    verify_field: (
+        str  # "strategy_changed" | "active_tactics" | "standing_orders" | "production_overrides"
+    )
     verify_log_patterns: list[str] = field(default_factory=list)
     """每条 pattern 对 events+snapshots 序列化 JSON 做 regex 搜索；全部命中才算执行层通过。
     空 list 跳过执行层 verify（兼容现有 case，不破坏回归）。
@@ -253,12 +255,18 @@ def _verify_strategy_changed(
     for snap in snapshots:
         pfs = snap.get("pending_force_strategy")
         if pfs:
-            return True, f"pending_force_strategy={pfs.get('strategy_id')!r} (LLM 识别成功,等玩家硬转确认)"
+            return (
+                True,
+                f"pending_force_strategy={pfs.get('strategy_id')!r} (LLM 识别成功,等玩家硬转确认)",
+            )
     # 3. 或 events 流中出现 strategy.set / strategy.phase_change
     for _ts, k, _p in events:
         if k in ("strategy.set", "strategy.phase_change"):
             return True, f"event {k} fired"
-    return False, f"no slot changed, no pending_force_strategy, no strategy.set event (initial={initial_opening})"
+    return (
+        False,
+        f"no slot changed, no pending_force_strategy, no strategy.set event (initial={initial_opening})",
+    )
 
 
 def _verify_field_non_empty(
@@ -330,6 +338,7 @@ def _verify_log_patterns(
 
     # 构建 grep 目标字符串：所有 events payload + snapshots 的 JSON dump
     import contextlib
+
     corpus_parts: list[str] = []
     for _ts, _k, payload in events:
         with contextlib.suppress(Exception):
@@ -378,7 +387,10 @@ async def run_one_case(
     log.info("=" * 70)
     log.info(
         "CASE %s: inject=%r expect=%s difficulty=%s",
-        case.name, case.inject, case.verify_field, difficulty,
+        case.name,
+        case.inject,
+        case.verify_field,
+        difficulty,
     )
     log.info("=" * 70)
 
@@ -413,7 +425,14 @@ async def run_one_case(
                     seen_playing.set()
                 if str(sc2) in ("crashed", "ended") and sc2_ended_at[0] is None:
                     sc2_ended_at[0] = elapsed
-                    log.info("[+%.1fs] sc2=%s bot=%s detail=%s (drain %.1fs)", elapsed, sc2, bot, msg.get("detail", ""), DRAIN_AFTER_END_S)
+                    log.info(
+                        "[+%.1fs] sc2=%s bot=%s detail=%s (drain %.1fs)",
+                        elapsed,
+                        sc2,
+                        bot,
+                        msg.get("detail", ""),
+                        DRAIN_AFTER_END_S,
+                    )
                     bot_crashed.set()
             elif kind == "snapshot":
                 frame = msg.get("frame") or {}
@@ -489,7 +508,14 @@ async def run_one_case(
         events=events[:30],
     )
     status = "PASS" if ok else "FAIL"
-    log.info("[%s] %s — %s (snapshots=%d, %.1fs)", case.name, status, reason, len(snapshots), elapsed_total)
+    log.info(
+        "[%s] %s — %s (snapshots=%d, %.1fs)",
+        case.name,
+        status,
+        reason,
+        len(snapshots),
+        elapsed_total,
+    )
     if events:
         log.info("[%s] events seen:", case.name)
         for ts, k, _p in events[:15]:
@@ -544,7 +570,11 @@ async def main() -> int:
         status = "PASS" if r.passed else "FAIL"
         log.info(
             "  %s %s — %s (snapshots=%d, %.1fs)",
-            status, r.case.name, r.reason, r.snapshots_seen, r.observed_seconds,
+            status,
+            r.case.name,
+            r.reason,
+            r.snapshots_seen,
+            r.observed_seconds,
         )
     log.info("=" * 70)
     log.info("结果: %d/%d 通过", n_pass, len(results))

@@ -150,8 +150,12 @@ class IntentParser:
                 try:
                     response = await asyncio.wait_for(
                         self._call_llm_with_validation_error(
-                            user_text, context, dynamic, system_full,
-                            fail.raw_response, fail.validation_exc,
+                            user_text,
+                            context,
+                            dynamic,
+                            system_full,
+                            fail.raw_response,
+                            fail.validation_exc,
                         ),
                         timeout=self.config.timeout_s,
                     )
@@ -160,7 +164,9 @@ class IntentParser:
                         kind=ParseErrorKind.PROVIDER_ERROR,
                         message=f"validate retry provider 异常：{type(e).__name__}: {e}",
                     )
-                    self._log_call(user_text, context, response, err, latency_ms=response.latency_ms)
+                    self._log_call(
+                        user_text, context, response, err, latency_ms=response.latency_ms
+                    )
                     return err
 
         # 所有 attempt 都没 break 成功(outcome is None) → fallback strip done_when 兜底
@@ -193,8 +199,7 @@ class IntentParser:
         """
         error_text = str(exc)
         retry_few_shot = (
-            self._few_shot
-            + f"\n\n[Retry] 你上次的输出（schema 校验失败,需要修正）：\n"
+            self._few_shot + f"\n\n[Retry] 你上次的输出（schema 校验失败,需要修正）：\n"
             f"{json.dumps(raw_response, ensure_ascii=False)}\n\n"
             f"pydantic 校验错误详情（注意 path 和 enum 字面值约束）：\n{error_text}\n\n"
             "请按 system prompt 里的 enum 白名单严格修正,"
@@ -259,9 +264,7 @@ class IntentParser:
             provider=response.provider,
             extra=response.extra,
         )
-        logger.warning(
-            "done_when validate retry failed twice, stripping done_when: %s", exc
-        )
+        logger.warning("done_when validate retry failed twice, stripping done_when: %s", exc)
         if self.session is not None:
             self.session.log_llm_call(
                 {
@@ -270,7 +273,9 @@ class IntentParser:
                     "error": str(exc),
                 }
             )
-        outcome = self._build_outcome(response_stripped, user_text, context, raise_on_validation=False)
+        outcome = self._build_outcome(
+            response_stripped, user_text, context, raise_on_validation=False
+        )
         # 给 IntentParseResult 追加降级提示
         if isinstance(outcome, IntentParseResult):
             degraded_note = "[完成条件无效已降级为 EPHEMERAL]"

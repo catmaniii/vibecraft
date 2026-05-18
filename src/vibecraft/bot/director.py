@@ -643,7 +643,11 @@ class Director:
             view["selector"] = payload.selector.model_dump(mode="json", exclude_none=True)
             view["task_summary"] = payload.task.primary_action.verb.value
         elif isinstance(payload, ScoutPayload):
-            view["selector"] = payload.selector.model_dump(mode="json", exclude_none=True) if payload.selector else {}
+            view["selector"] = (
+                payload.selector.model_dump(mode="json", exclude_none=True)
+                if payload.selector
+                else {}
+            )
             view["task_summary"] = "scout"
         else:
             view["selector"] = {}
@@ -912,10 +916,7 @@ class Director:
                     "submitted", submitted, now, effective_at=submitted.effective_at
                 )
                 # P1.2: persistent=True 的 unit_claim 进 standing_orders，不进 _in_flight
-                if (
-                    isinstance(submitted.payload, UnitClaimPayload)
-                    and submitted.payload.persistent
-                ):
+                if isinstance(submitted.payload, UnitClaimPayload) and submitted.payload.persistent:
                     self.standing_orders.append(submitted)
                     # P5.E: 立即 resolve selector + 让 sharpy 让位（set_unit_role）
                     self._assign_standing_order_units(submitted)
@@ -1378,9 +1379,7 @@ class Director:
         except (ImportError, KeyError, Exception):
             return (False, required)
 
-    def _set_override_status(
-        self, d: Directive, status: str, reason: str = ""
-    ) -> None:
+    def _set_override_status(self, d: Directive, status: str, reason: str = "") -> None:
         """更新 directive 的 status。**只 status 切换时**才 emit event(防 spam):
         active 阶段 reason 可能高频变化("研究中 2% / 4% / 6%"),不让每次都 emit。
         snapshot 字段照样透传最新 reason(PWA 可看到 progress % 但不被 event 刷屏)。
@@ -1391,16 +1390,18 @@ class Director:
         if prev_status == status:
             return  # status 没变,reason 变化不 emit event
         # status 真切换 → emit event 让 PWA 卡片 update color
-        self._push_event({
-            "type": "event",
-            "kind": "directive.status_changed",
-            "ts": 0,  # PWA 自己用接收时间
-            "payload": {
-                "directive_id": d.id,
-                "status": status,
-                "reason": reason,
-            },
-        })
+        self._push_event(
+            {
+                "type": "event",
+                "kind": "directive.status_changed",
+                "ts": 0,  # PWA 自己用接收时间
+                "payload": {
+                    "directive_id": d.id,
+                    "status": status,
+                    "reason": reason,
+                },
+            }
+        )
 
     def _exec_production_override(self, d: Directive, payload: Any) -> None:
         """L4 unit 出兵: 遍历 items 逐个 bot.train(unit_id)。带 prereq check + per-item status。
@@ -1451,7 +1452,12 @@ class Director:
                 if n_trained > 0:
                     logger.info(
                         "production_override TRAIN %s ×%d (count=%d, done=%d, in_flight=%.0f, id=%s)",
-                        unit_id, n_trained, item.count, already_done, in_flight, d.id[:8],
+                        unit_id,
+                        n_trained,
+                        item.count,
+                        already_done,
+                        in_flight,
+                        d.id[:8],
                     )
                     item_status[item.unit_type] = {"state": "producing", "reason": ""}
                     any_active = True
@@ -1498,9 +1504,7 @@ class Director:
         try:
             success = self._bot.research(upgrade_id)
             if success:
-                logger.info(
-                    "tech_override RESEARCH %s (id=%s)", upgrade_id, d.id[:8]
-                )
+                logger.info("tech_override RESEARCH %s (id=%s)", upgrade_id, d.id[:8])
                 self._set_override_status(d, "active", "")
             else:
                 # 资源不够 / 没 idle research building
@@ -1513,7 +1517,8 @@ class Director:
                 setattr(self, dbg, True)
                 logger.warning(
                     "tech_override BotAI.research(%s) 不可用(sharpy 限制),由 sharpy plan 自带 research 路径接管: %s",
-                    upgrade_id, exc,
+                    upgrade_id,
+                    exc,
                 )
             # 走 fallback:如果 sharpy plan 已经在研究(progress > 0),仍 set active
             try:
@@ -1531,9 +1536,7 @@ class Director:
             from sc2.ids.unit_typeid import UnitTypeId
 
             nexus_id = UnitTypeId.NEXUS
-            current = len(self._bot.townhalls.ready) + int(
-                self._bot.already_pending(nexus_id)
-            )
+            current = len(self._bot.townhalls.ready) + int(self._bot.already_pending(nexus_id))
             target = payload.target_count
         except Exception:
             return
@@ -1543,9 +1546,7 @@ class Director:
         # 资源 / mineral check
         try:
             if self._bot.minerals < 400:  # Nexus 需要 400 mineral
-                self._set_override_status(
-                    d, "on_hold", f"资源不足({self._bot.minerals}/400 矿)"
-                )
+                self._set_override_status(d, "on_hold", f"资源不足({self._bot.minerals}/400 矿)")
                 return
         except Exception:
             pass
@@ -1553,7 +1554,9 @@ class Director:
             await self._bot.expand_now()
             logger.info(
                 "expansion_override EXPAND (target=%d current=%d, id=%s)",
-                target, current, d.id[:8],
+                target,
+                current,
+                d.id[:8],
             )
             self._set_override_status(d, "active", f"{current + 1}/{target}")
         except Exception as exc:
@@ -1581,9 +1584,8 @@ class Director:
                 all_satisfied = False
                 continue
             try:
-                current = (
-                    self._bot.structures(type_id).amount
-                    + int(self._bot.already_pending(type_id))
+                current = self._bot.structures(type_id).amount + int(
+                    self._bot.already_pending(type_id)
                 )
             except Exception:
                 current = 0
@@ -1599,7 +1601,11 @@ class Director:
                 await self._bot.build(type_id, near=pos)
                 logger.info(
                     "structure_override BUILD %s near=%s (current=%d, target=%d, id=%s)",
-                    type_id, pos, current, it.target_count, d.id[:8],
+                    type_id,
+                    pos,
+                    current,
+                    it.target_count,
+                    d.id[:8],
                 )
                 any_active = True
             except Exception as exc:
@@ -1628,7 +1634,11 @@ class Director:
         if hint == "main":
             return zones[0].center_location if zones else None
         if hint == "natural":
-            return zones[1].center_location if len(zones) > 1 else (zones[0].center_location if zones else None)
+            return (
+                zones[1].center_location
+                if len(zones) > 1
+                else (zones[0].center_location if zones else None)
+            )
         if hint == "ramp":
             try:
                 return self._bot.main_base_ramp.top_center
@@ -1753,9 +1763,7 @@ class Director:
         except Exception:
             return 0
 
-    def _remember_command(
-        self, text: str, now: float, outcome: ParseOutcome | None = None
-    ) -> None:
+    def _remember_command(self, text: str, now: float, outcome: ParseOutcome | None = None) -> None:
         summary = self._summarize_outcome(outcome) if outcome is not None else None
         self._recent_commands.append(_RecentCommand(text=text, ts=now, outcome_summary=summary))
         if len(self._recent_commands) > self.config.recent_command_buffer:
@@ -1846,18 +1854,18 @@ class Director:
                     # 但 board.tick() return 已经过去(只含本 tick produced),
                     # board._events 累积要等下次 tick 才被 drain。
                     # 直接 dispatch RELEASED 让 events/directives.jsonl 立即落盘。
-                    self._dispatch_event(BoardEvent(
-                        kind=BoardEventKind.RELEASED,
-                        ts=now,
-                        directive_id=did,
-                        reason="task_monitor_done",
-                    ))
+                    self._dispatch_event(
+                        BoardEvent(
+                            kind=BoardEventKind.RELEASED,
+                            ts=now,
+                            directive_id=did,
+                            reason="task_monitor_done",
+                        )
+                    )
                 self.task_monitor.detach(did)
                 # 从各列表清理
                 self._in_flight.pop(did, None)
-                self.production_overrides = [
-                    d for d in self.production_overrides if d.id != did
-                ]
+                self.production_overrides = [d for d in self.production_overrides if d.id != did]
                 self._override_status.pop(did, None)
                 self._production_item_status.pop(did, None)
                 need_snapshot = True
@@ -2214,9 +2222,7 @@ class Director:
     # L2 tactical_objective executor（P0b Task 12）
     # ------------------------------------------------------------------
 
-    def _exec_tactical_objective(
-        self, d: Directive, payload: TacticalObjectivePayload
-    ) -> None:
+    def _exec_tactical_objective(self, d: Directive, payload: TacticalObjectivePayload) -> None:
         """L2 分流入口：A 类（override flag）/ B 类（squad 抢占）/ 其他（on_hold）。"""
         verb = payload.verb
         if verb in _A_VERBS:
@@ -2227,9 +2233,7 @@ class Director:
             logger.warning("L2 verb %r MVP 未支持 (id=%s)", verb, d.id[:8])
             self._set_override_status(d, "on_hold", f"verb {verb} 未支持")
 
-    def _exec_l2_global(
-        self, d: Directive, payload: TacticalObjectivePayload
-    ) -> None:
+    def _exec_l2_global(self, d: Directive, payload: TacticalObjectivePayload) -> None:
         """A 类：attack/defend/retreat/vision → facade override flag。"""
         # 清前一条 active L2 global；把旧 directive 标 done（被新指令覆盖）
         if self._current_l2_global_id and self._current_l2_global_id != d.id:
@@ -2252,9 +2256,7 @@ class Director:
         target_desc = payload.target_area or ""
         self._set_override_status(d, "active", f"{payload.verb} {target_desc}".strip())
 
-    def _exec_l2_squad(
-        self, d: Directive, payload: TacticalObjectivePayload
-    ) -> None:
+    def _exec_l2_squad(self, d: Directive, payload: TacticalObjectivePayload) -> None:
         """B 类：harass/scout → 抢占 free unit → set_unit_role LLM_CONTROLLED。"""
         if payload.unit_count_hint is None:
             self._set_override_status(d, "on_hold", "缺 unit_count_hint")
@@ -2364,9 +2366,7 @@ class Director:
                 cm.add_units(units)
                 cm.execute(squad.target, squad.move_type)
             except Exception as exc:
-                logger.debug(
-                    "execute_tactics_step squad %s fail: %s", squad.directive_id[:8], exc
-                )
+                logger.debug("execute_tactics_step squad %s fail: %s", squad.directive_id[:8], exc)
 
     # ------------------------------------------------------------------
     # ParseContext 构造（从 facade.get_state + board 当前快照）
@@ -2396,9 +2396,7 @@ class Director:
             enemy_summary=dict(state.enemy_summary),
             standing_orders=standing_orders,
             recent_commands=[c.text for c in self._recent_commands],
-            recent_outcomes=[
-                c.outcome_summary or "(未解析)" for c in self._recent_commands
-            ],
+            recent_outcomes=[c.outcome_summary or "(未解析)" for c in self._recent_commands],
         )
 
     # ------------------------------------------------------------------

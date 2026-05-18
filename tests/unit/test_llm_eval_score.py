@@ -95,9 +95,7 @@ def _unit_claim_directive(verb: Verb = Verb.MOVE_TO) -> Directive:
 
 
 def test_score_parse_error_fails() -> None:
-    spec = ExpectedSpec(
-        name="any", inject="x", expect_type=DirectiveType.STRATEGY_SET
-    )
+    spec = ExpectedSpec(name="any", inject="x", expect_type=DirectiveType.STRATEGY_SET)
     outcome = ParseError(kind=ParseErrorKind.PROVIDER_ERROR, message="boom")
     score = score_outcome(outcome, spec)
     assert not score.passed
@@ -105,9 +103,7 @@ def test_score_parse_error_fails() -> None:
 
 
 def test_score_ambiguous_fails() -> None:
-    spec = ExpectedSpec(
-        name="any", inject="x", expect_type=DirectiveType.STRATEGY_SET
-    )
+    spec = ExpectedSpec(name="any", inject="x", expect_type=DirectiveType.STRATEGY_SET)
     inner = IntentParseResult(interpretation_zh="哪个?", confidence=0.3, directives=[])
     outcome = AmbiguousParse(result=inner, interpretations=["哪个?", "另一个?"])
     score = score_outcome(outcome, spec)
@@ -146,7 +142,9 @@ def test_score_wrong_type_fails() -> None:
         confidence=0.9,
         directives=[
             Directive(
-                payload=ProductionOverridePayload(items=[ProductionItem(unit_type="Sentry", count=2)]),
+                payload=ProductionOverridePayload(
+                    items=[ProductionItem(unit_type="Sentry", count=2)]
+                ),
                 issued_at=1.0,
             )
         ],
@@ -170,7 +168,8 @@ def test_score_forbidden_path_fails() -> None:
     )
     # 拼一个 verb=HARASS_WORKERS 的 directive(假装 LLM 出错给了 forbidden 之外的)
     outcome_ok = IntentParseResult(
-        interpretation_zh="x", confidence=0.9,
+        interpretation_zh="x",
+        confidence=0.9,
         directives=[_unit_claim_directive(verb=Verb.MOVE_TO)],
     )
     assert score_outcome(outcome_ok, spec).passed
@@ -180,7 +179,8 @@ def test_score_forbidden_path_fails() -> None:
     # 实际场景是 LLM 返回了非法字符串通不过 pydantic 校验。
     # 这里用 gather 验证(enum 里有 GATHER):
     outcome_bad = IntentParseResult(
-        interpretation_zh="x", confidence=0.9,
+        interpretation_zh="x",
+        confidence=0.9,
         directives=[_unit_claim_directive(verb=Verb.GATHER)],
     )
     score = score_outcome(outcome_bad, spec)
@@ -197,7 +197,8 @@ def test_score_allow_extra_directives_default_true() -> None:
         must_have_paths={"payload.strategy_id": "iac_2base"},
     )
     outcome = IntentParseResult(
-        interpretation_zh="x", confidence=0.9,
+        interpretation_zh="x",
+        confidence=0.9,
         directives=[
             _strategy_directive(),
             _unit_claim_directive(),  # 额外的 unit_claim
@@ -215,7 +216,8 @@ def test_score_disallow_extra_directives() -> None:
         allow_extra_directives=False,
     )
     outcome = IntentParseResult(
-        interpretation_zh="x", confidence=0.9,
+        interpretation_zh="x",
+        confidence=0.9,
         directives=[_strategy_directive(), _unit_claim_directive()],
     )
     score = score_outcome(outcome, spec)

@@ -67,7 +67,6 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
             ),
             # Immortal chrono：ROBO 一好就持续 chrono 不朽（核心 DPS）
             ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
-
             # ---------- 早期 critical path（严守顺序，到 20 农停）----------
             # 后续 CC / Expand / Robo / TC 全 parallel 触发，避免 SequentialList 阻塞
             SequentialList(
@@ -78,25 +77,25 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                 GridBuilding(UnitTypeId.GATEWAY, 1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 20),
             ),
-
             # ---------- BG 一好的并行触发（CC + Expand 同时启动，不互等）----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
-
             # ---------- CC 一好的并行触发（折跃 + ROBO + TC 三件事同时启动）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1)),
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
-
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
+            ),
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
+            ),
             # ---------- 第二气矿（二矿启动后立刻补）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-
             # ---------- TC 一好就研 Charge ----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.CHARGE)),
-
             # ---------- 防身 ----------
             ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
-
             # ---------- ROBO 一好的训练队列（sequential：1 不朽抢节奏 → OB → 20 不朽）----------
             [
                 Step(
@@ -112,10 +111,8 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                     ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 20, priority=True),
                 ),
             ],
-
             # ---------- Zealot 持续训练（Charge 完后 sharpy 自动出 Charge Zealot）----------
             ProtossUnit(UnitTypeId.ZEALOT, 100),
-
             # ---------- 经济持续（sequential pacing）----------
             AutoPylon(),
             [
@@ -131,14 +128,11 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                 ),
                 StepBuildGas(5, skip=Gas(200)),
             ],
-
             # ---------- 5 分钟开三矿（vibecraft 中期切剧本时通常已转走，留兜底）----------
             Step(Time(60 * 5), Expand(3)),
-
             # ---------- 后期暴产能（vibecraft 中期切走前通常用不到）----------
             Step(Time(60 * 6), GridBuilding(UnitTypeId.GATEWAY, 4)),
             Step(Time(60 * 7), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 2)),
-
             # ---------- 战术 / 维护 / 攻击触发（全是 sharpy 自带 Manager）----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -151,8 +145,11 @@ class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
                 PlanZoneGather(),
                 # 3 不朽 ready → VibeCraftZoneAttack(4)；玩家显式 attack 立即绕过
                 Step(
-                    lambda ai: self._ready_to_pressure(ai)
-                    or getattr(ai.knowledge.vibecraft, "combat_intent_override", None) == "attack",
+                    lambda ai: (
+                        self._ready_to_pressure(ai)
+                        or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
+                        == "attack"
+                    ),
                     VibeCraftZoneAttack(4),
                 ),
                 PlanFinishEnemy(),

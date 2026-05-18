@@ -15,9 +15,7 @@ def test_structure_override_payload_validates():
     d = Directive(
         payload={
             "type": "structure_override",
-            "items": [
-                {"structure_type": "Gateway", "target_count": 8, "location_hint": "main"}
-            ],
+            "items": [{"structure_type": "Gateway", "target_count": 8, "location_hint": "main"}],
         },
         issued_at=10.0,
     )
