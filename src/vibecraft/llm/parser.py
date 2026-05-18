@@ -105,26 +105,63 @@ class IntentParser:
         }
 
         t0 = time.monotonic()
-        try:
-            response = await asyncio.wait_for(
-                self.provider.parse(
-                    system=system_full,
-                    few_shot=self._few_shot,
-                    dynamic_context=dynamic,
-                    user_text=user_text,
-                    tool_schema=self._tool_schema,
-                    timeout_s=self.config.timeout_s,
-                ),
-                timeout=self.config.timeout_s,
+        # 初次 LLM call + empty response retry(DeepSeek v4-flash 偶发 stop_reason=
+        # tool_use 但 content={} 空响应,实测 2/4 失败率。修复:空响应自动 retry 2 次)
+        response = None
+        last_exc: Exception | None = None
+        for empty_attempt in range(3):  # 共最多 3 次(1 原 + 2 retry)
+            try:
+                response = await asyncio.wait_for(
+                    self.provider.parse(
+                        system=system_full,
+                        few_shot=self._few_shot,
+                        dynamic_context=dynamic,
+                        user_text=user_text,
+                        tool_schema=self._tool_schema,
+                        timeout_s=self.config.timeout_s,
+                    ),
+                    timeout=self.config.timeout_s,
+                )
+            except TimeoutError:
+                if empty_attempt < 2:
+                    last_exc = TimeoutError("LLM 响应超时")
+                    continue
+                err = ParseError(kind=ParseErrorKind.TIMEOUT, message="LLM 响应超时(已 retry 2 次)")
+                self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
+                return err
+            except Exception as e:
+                if empty_attempt < 2:
+                    last_exc = e
+                    continue
+                err = ParseError(
+                    kind=ParseErrorKind.PROVIDER_ERROR,
+                    message=f"provider 异常(已 retry 2 次)：{type(e).__name__}: {e}",
+                )
+                self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
+                return err
+
+            # 检查 response.raw 是否空 / 缺关键字段 → retry
+            raw = response.raw if response else {}
+            is_empty = (
+                not isinstance(raw, dict)
+                or not raw
+                or "directives" not in raw
             )
-        except TimeoutError:
-            err = ParseError(kind=ParseErrorKind.TIMEOUT, message="LLM 响应超时")
-            self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
-            return err
-        except Exception as e:
+            if not is_empty:
+                break  # 拿到合法响应,跳出 retry loop
+            if empty_attempt < 2:
+                logger.warning(
+                    "empty LLM response, retrying (%d/2): raw=%s",
+                    empty_attempt + 1, str(raw)[:100],
+                )
+                continue
+            # 3 次都空 → fall through 走原有 _build_outcome 报 schema_mismatch
+
+        # 兜底:理论不可达(except 已 return),为 mypy
+        if response is None:
             err = ParseError(
                 kind=ParseErrorKind.PROVIDER_ERROR,
-                message=f"provider 异常：{type(e).__name__}: {e}",
+                message=f"LLM 无响应：{last_exc}",
             )
             self._log_call(user_text, context, None, err, latency_ms=(time.monotonic() - t0) * 1000)
             return err
