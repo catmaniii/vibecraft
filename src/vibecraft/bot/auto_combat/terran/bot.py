@@ -86,7 +86,12 @@ def make_terran_bot_class(
             import importlib
             import inspect
 
-            from vibecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+            from vibecraft.strategy.models import (
+                LategameDoctrine,
+                MidgameStance,
+                OpeningBuild,
+                PersistentDoctrine,
+            )
 
             if strategy_library is None:
                 logger.warning("create_plan: no strategy_library, returning empty BuildOrder")
@@ -94,8 +99,12 @@ def make_terran_bot_class(
 
             candidates: list[tuple[str, str]] = []
             for s in strategy_library.all_strategies():
+                # 2026-05-20 bug fix:同 protoss/bot.py — PersistentDoctrine 也要进
+                # IfElse 候选,否则 set_build 切持续策略时落到 sustain_plan。
                 if (
-                    isinstance(s, (OpeningBuild, MidgameStance, LategameDoctrine))
+                    isinstance(
+                        s, (OpeningBuild, MidgameStance, LategameDoctrine, PersistentDoctrine)
+                    )
                     and s.sharpy_dummy_class
                 ):
                     candidates.append((s.id, s.sharpy_dummy_class))

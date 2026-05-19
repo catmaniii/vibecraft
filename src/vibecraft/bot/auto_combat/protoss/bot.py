@@ -105,7 +105,12 @@ def make_protoss_bot_class(
             import importlib
             import inspect
 
-            from vibecraft.strategy.models import LategameDoctrine, MidgameStance, OpeningBuild
+            from vibecraft.strategy.models import (
+                LategameDoctrine,
+                MidgameStance,
+                OpeningBuild,
+                PersistentDoctrine,
+            )
 
             if strategy_library is None:
                 logger.warning("create_plan: no strategy_library, returning empty BuildOrder")
@@ -113,8 +118,15 @@ def make_protoss_bot_class(
 
             candidates: list[tuple[str, str]] = []
             for s in strategy_library.all_strategies():
+                # 2026-05-20 bug fix:之前漏了 PersistentDoctrine,导致 set_build 切到
+                # persistent_skytoss 等持续策略时 IfElse 没分支,落到 sustain_plan(裸
+                # ActUnit(PROBE, 14)),运营/防守/进攻全停 — 用户反馈"换策略以后追猎
+                # 不进攻,运营也停了"。Skytoss plan 自身就有 DistributeWorkers /
+                # VibeCraftZoneAttack 等完整逻辑,路由进来即可。
                 if (
-                    isinstance(s, (OpeningBuild, MidgameStance, LategameDoctrine))
+                    isinstance(
+                        s, (OpeningBuild, MidgameStance, LategameDoctrine, PersistentDoctrine)
+                    )
                     and s.sharpy_dummy_class
                 ):
                     candidates.append((s.id, s.sharpy_dummy_class))
