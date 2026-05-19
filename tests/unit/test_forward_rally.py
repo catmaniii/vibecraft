@@ -70,9 +70,10 @@ def _make_inst(home=(127, 119), enemy=(48, 28), pylons=()):
     ai.structures = MagicMock(side_effect=_structures)
     inst.ai = ai
 
-    # knowledge.gather_point_solver mock
+    # sharpy `Knowledge.get_required_manager(IGatherPointSolver)` 路径
     inst.knowledge = MagicMock()
-    inst.knowledge.gather_point_solver = MagicMock()
+    inst._solver_mock = MagicMock()
+    inst.knowledge.get_required_manager = MagicMock(return_value=inst._solver_mock)
     return inst
 
 
@@ -81,7 +82,7 @@ class TestForwardRallyStalker:
         """没 forward PYLON → return True 让 sharpy 默认 home gather。"""
         inst = _make_inst(pylons=[])
         assert await inst.execute() is True
-        inst.knowledge.gather_point_solver.set_gather_point.assert_not_called()
+        inst._solver_mock.set_gather_point.assert_not_called()
 
     async def test_sets_gather_point_to_forward_pylon(self):
         """forward PYLON 在 → set_gather_point(forward_pylon.position)。
@@ -93,7 +94,7 @@ class TestForwardRallyStalker:
 
         result = await inst.execute()
         assert result is True
-        inst.knowledge.gather_point_solver.set_gather_point.assert_called_once_with(
+        inst._solver_mock.set_gather_point.assert_called_once_with(
             forward_py.position
         )
 
@@ -103,7 +104,7 @@ class TestForwardRallyStalker:
         inst = _make_inst(pylons=[home_py])
 
         assert await inst.execute() is True
-        inst.knowledge.gather_point_solver.set_gather_point.assert_not_called()
+        inst._solver_mock.set_gather_point.assert_not_called()
 
     async def test_calls_set_gather_point_every_tick(self):
         """每 tick 都要 set_gather_point(sharpy update 每帧重置 _gather_point_set
@@ -114,14 +115,13 @@ class TestForwardRallyStalker:
         await inst.execute()
         await inst.execute()
         await inst.execute()
-        assert inst.knowledge.gather_point_solver.set_gather_point.call_count == 3
+        assert inst._solver_mock.set_gather_point.call_count == 3
 
     async def test_returns_true_when_no_solver(self):
-        """knowledge.gather_point_solver 缺失(老旧 mock / 部分集成测试) → 优雅退出。"""
+        """get_required_manager 抛异常(集成测试时 manager 未注册) → 优雅退出。"""
         forward_py = _make_pylon((83, 28))
         inst = _make_inst(pylons=[forward_py])
-        # 删 solver 模拟非完整 knowledge
-        del inst.knowledge.gather_point_solver
-        # 触发 AttributeError → return True
+        # 模拟 get_required_manager 抛 KeyError(sharpy 真实行为)
+        inst.knowledge.get_required_manager = MagicMock(side_effect=KeyError("not registered"))
         result = await inst.execute()
         assert result is True

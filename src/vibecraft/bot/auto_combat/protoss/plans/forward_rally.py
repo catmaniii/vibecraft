@@ -54,6 +54,7 @@ from typing import Any
 
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
+from sharpy.interfaces import IGatherPointSolver
 from sharpy.plans.acts import ActBase
 
 logger = logging.getLogger(__name__)
@@ -87,18 +88,23 @@ class ForwardRallyStalker(ActBase):  # type: ignore[misc]
 
         target = forward_pylon.position
 
-        # 直接 set sharpy 全局 gather_point。
-        # `knowledge.gather_point_solver` 来自 sharpy KnowledgeBot (knowledge_bot.py:38)。
+        # 2026-05-20 用户反馈"刷兵又走回家堵门口"找出的根因:
+        # sharpy `Knowledge` 类(self.knowledge)**没有** `gather_point_solver` 属性
+        # —— 它只在 KnowledgeBot 实例上(`knowledge_bot.py:38`)。正确访问是
+        # `knowledge.get_required_manager(IGatherPointSolver)`。之前直接访问
+        # `self.knowledge.gather_point_solver` 抛 AttributeError,被 except 吞掉,
+        # gather_point 永远不被覆盖,新刷兵继续走默认 home rally,反复横跳。
         try:
-            solver = self.knowledge.gather_point_solver
-        except AttributeError:
+            solver = self.knowledge.get_required_manager(IGatherPointSolver)
+        except Exception as exc:
+            logger.warning("forward_rally get IGatherPointSolver fail: %s", exc)
             return True
 
         try:
             solver.set_gather_point(target)
         except Exception as exc:
             logger.warning("forward_rally set_gather_point fail: %s", exc)
-            return False
+            return True
 
         # log 节流:gather_point 没变就不刷屏
         current = (target.x, target.y)

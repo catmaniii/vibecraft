@@ -109,9 +109,12 @@ class Gate4StateLogger(ActBase):  # type: ignore[misc]
         except Exception:
             warp_progress = 0.0
 
-        # gather_point
+        # gather_point — 通过 IGatherPointSolver interface 拿(直接访问
+        # `self.knowledge.gather_point_solver` 不存在,只有 KnowledgeBot 实例上有)
         try:
-            gp = self.knowledge.gather_point_solver.gather_point
+            from sharpy.interfaces import IGatherPointSolver
+
+            gp = self.knowledge.get_required_manager(IGatherPointSolver).gather_point
             gp_str = f"({gp.x:.1f},{gp.y:.1f})"
         except Exception:
             gp_str = "?"
@@ -137,21 +140,15 @@ class Gate4StateLogger(ActBase):  # type: ignore[misc]
             UnitTask.Scouting: "Scouting",
         }
         for s in stalkers:
-            # 查任务(逐一 is_in_role)
+            # 查任务(逐一 is_in_role)。sharpy `Knowledge.roles` 是 UnitRoleManager。
             task_str = "?"
             try:
                 for task_id, name in task_names.items():
-                    if self.knowledge.roles_manager.is_in_role(task_id, s):
+                    if self.knowledge.roles.is_in_role(task_id, s):
                         task_str = name
                         break
             except Exception:
-                try:
-                    for task_id, name in task_names.items():
-                        if self.roles.is_in_role(task_id, s):
-                            task_str = name
-                            break
-                except Exception:
-                    pass
+                pass
 
             ready = "ready" if s.is_ready else f"warp={s.build_progress:.0%}"
             # orders 摘要
