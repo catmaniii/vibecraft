@@ -406,6 +406,40 @@ class TestIsDone:
 
         assert not inst._is_done()
 
+    def test_done_when_pylon_ready_and_gateway_in_progress(self):
+        """2026-05-20 用户修正:PYLON ready + GATEWAY 已落地(in_progress) → 完成。
+
+        神族建筑放下后自建,worker 不需要继续在场;早 35-40s 撤离降低暴露概率。
+        """
+        from sc2.position import Point2
+        from sc2.ids.unit_typeid import UnitTypeId
+
+        py = MagicMock()
+        py.is_ready = True
+        py.tag = 100
+        py.type_id = UnitTypeId.PYLON
+        py.position = Point2((120, 50))
+        py.distance_to = lambda other: py.position.distance_to(
+            other.position if hasattr(other, "position") else other
+        )
+        bg = MagicMock()
+        bg.is_ready = False  # 还在自建
+        bg.tag = 101
+        bg.type_id = UnitTypeId.GATEWAY
+        bg.position = Point2((122, 52))
+        bg.distance_to = lambda other: bg.position.distance_to(
+            other.position if hasattr(other, "position") else other
+        )
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai(structures_by_tag={100: py, 101: bg})
+        inst.proxy_location = Point2((120, 50))
+        inst._start_time = 0.0
+        inst.ai.time = 10.0
+        inst._proxy_tags = {UnitTypeId.PYLON: 100, UnitTypeId.GATEWAY: 101}
+
+        assert inst._is_done()
+
 
 # ============================================================================
 # Tests: forward building 识别 (_is_forward_building)

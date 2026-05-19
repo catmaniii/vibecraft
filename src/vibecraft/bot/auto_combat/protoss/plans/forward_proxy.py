@@ -533,14 +533,20 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         py_state = self._building_state(UnitTypeId.PYLON)
         bg_state = self._building_state(UnitTypeId.GATEWAY)
 
-        # A. 双 ready
-        if py_state == "ready" and bg_state == "ready":
-            logger.info("ForwardSupport done (A: both ready)")
+        # A. PYLON ready + GATEWAY 已落地(神族建筑放下后自建,worker 不需要继续在场)
+        # 2026-05-20 用户修正:以前等"双 ready",worker 卡 35-40s 在原地暴露;
+        # 现在只要 PYLON+GATEWAY 都已放下(in_progress 或 ready)就放走 worker。
+        if py_state == "ready" and bg_state in ("in_progress", "ready"):
+            logger.info("ForwardSupport done (A: PYLON ready + GATEWAY placed=%s)", bg_state)
             return True
 
         # B. 都曾 ready（destroyed 也算 —— 不重建被拆的）
-        if py_state in ("ready", "destroyed") and bg_state in ("ready", "destroyed"):
-            logger.info("ForwardSupport done (B: both ever ready)")
+        if py_state in ("ready", "destroyed") and bg_state in (
+            "in_progress",
+            "ready",
+            "destroyed",
+        ):
+            logger.info("ForwardSupport done (B: both ever placed)")
             return True
 
         # C. 超时

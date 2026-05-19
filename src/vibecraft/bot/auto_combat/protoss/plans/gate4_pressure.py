@@ -155,13 +155,15 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                     Step(
                         UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)
                     ),
-                    # 2026-05-19 用户修正：家里 3 BG，加上前线 1 野 BG = 总 4 BG
-                    # 原来家里 4 BG 是过度，前线野 BG 折跃也用得上但浪费产能
-                    # 折跃研究期间补到 3 BG（家里）:等 BY 好 + 攒够 300 矿(2 BG 同时下),
-                    # 保证它们同时修好同时升折跃。前线那 1 个由 ForwardSupportPylonGateway 出
+                    # 2026-05-20 用户修正:GridBuilding(GATEWAY, N) 中 N 是**总数**目标
+                    # (含前线野 BG)。之前传 3 → 1 家里 + 1 前线 = 2 → 再补 1 家里 =
+                    # 2 家里 + 1 前线 = 3 总 = 用户反馈"家里才 2 BG 就开门了"。
+                    # 改 4 → 总数 4 = 3 家里 + 1 前线,符合原意"家 3 + 野 1 = 4"。
+                    # 这同时修复下游 Issue:之前 3 BG < _all_4bg_warpgate_ready 阈值
+                    # 4 → ForwardWarpStalker 永不启动 → 折跃完成后无兵刷。
                     Step(
                         self._three_bg_at_once,
-                        GridBuilding(UnitTypeId.GATEWAY, 3),
+                        GridBuilding(UnitTypeId.GATEWAY, 4),
                     ),
                     # 2026-05-19 用户修正：折跃完成前**只出 1 追猎**做探路 + 防守
                     # 原本 cap=100 = 暴兵浪费产能；用户要"折跃好了才在前线集中刷兵"
@@ -251,27 +253,30 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _can_train_stalker(ai: Any) -> bool:
-        """sharpy ProtossUnit(STALKER) **只在折跃没完成前**训练(GATEWAY mode)。
+        """sharpy ProtossUnit(STALKER) 的训练门:
 
-        折跃完成后(WARPGATE mode)由 ForwardWarpStalker 完全接管 — 它会把所有
-        ready WARPGATE 都 warp 到 forward PYLON 附近。sharpy ProtossUnit 不再
-        触发,避免与 ForwardWarpStalker 同帧 race condition 让兵 spawn 在家
-        (用户反馈:"前面几个条件都满足的情况下,要杜绝从家里刷兵")。
-
-        BY 未好 / 折跃未完成阶段 → 仍由 sharpy ProtossUnit GATEWAY mode train
-        (此阶段没 warpgate,ForwardWarpStalker 直接 return True 让出)。
+        - 折跃未完成 → True,GATEWAY mode 出 1 个 stalker(防守 + 探路)
+        - 折跃完成 + 4 BG 全 ready → False,完全交 ForwardWarpStalker
+          (防同帧 race 让兵 spawn 在家;用户反馈"杜绝从家里刷兵")
+        - **折跃完成但 4 BG 没集齐** → True,sharpy 兜底继续训练防"哑火"
+          (用户反馈 2026-05-20:"BG 折跃变形后没有刷兵"=没法走 forward warp
+          就连家里也不训了 → 全卡死;cap=1 保证不暴兵)
 
         防 Gateway 不 morph:sharpy ProtossUnit train 持续触发会让 Gateway 不空闲
-        → 不 morph。所以折跃 ready 后立即停 sharpy train,留空闲 Gateway 给
-        WarpGate morph(MORPH 后由 ForwardWarpStalker warp)。
+        → 不 morph。所以 4 BG 都 ready 后(意味着 morph 已经完成)立即停 sharpy
+        train,留产线给 ForwardWarpStalker warp。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
         if not ai.structures(_U.CYBERNETICSCORE).ready.exists:
             return False
         warpgate_done = UpgradeId.WARPGATERESEARCH in ai.state.upgrades
-        # 折跃完成后 sharpy 不再 train — 把 stalker warp 完全交给 ForwardWarpStalker
-        return not warpgate_done
+        if not warpgate_done:
+            return True  # 折跃没完成 → GATEWAY mode 训 1 个
+        # 折跃完成,看 4 BG 是否集齐
+        bg_ready = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
+        # < 4 → sharpy 兜底继续 train(cap=1 防过度);≥ 4 → 让 ForwardWarpStalker 接管
+        return bool(bg_ready < 4)
 
     @staticmethod
     def _three_bg_at_once(ai: Any) -> bool:
