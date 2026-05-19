@@ -621,7 +621,31 @@ def _make_vibecraft_bot_base_class(
                 attack_target_override=None,
                 combat_intent_override=None,
                 stance_override=None,
+                # 2026-05-19: DT 受伤事件记录（VibeCraftMicroDarkTemplar 读这个判断
+                # "最近 2 秒被攻击 → 撤退"）。tag -> last damage timestamp。
+                damaged_dts={},
+                # 累计训练 DT 数（on_unit_created 递增，永不减）。≥8 时 macro attack ready
+                # latched —— DT 死了也不会回退，剧本里 plan 训练 replacement 也算累加。
+                dt_trained_count=0,
             )
+
+            # 2026-05-19: 替换 DT 默认 micro（sharpy 用 MicroZerglings 兜底，无 DT
+            # 特化）为 vibecraft 智能版：检测到 detector / 重防御时主动撤回棱镜
+            # 或回家。仅对神族 bot 注入（其他 race 没 DT，dict 操作无害但浪费）。
+            try:
+                from sc2.ids.unit_typeid import UnitTypeId as _UTI
+
+                if hasattr(self, "race") and str(self.race).endswith("Protoss"):
+                    from vibecraft.bot.auto_combat.protoss.vibecraft_micro_dt import (
+                        VibeCraftMicroDarkTemplar,
+                    )
+
+                    self.combat.rules.unit_micros[_UTI.DARKTEMPLAR] = (
+                        VibeCraftMicroDarkTemplar()
+                    )
+                    logger.info("VibeCraftMicroDarkTemplar 注入成功 (DT 智能微操)")
+            except Exception as exc:
+                logger.warning("VibeCraftMicroDarkTemplar 注入失败: %s", exc)
 
             self.facade = SharpyFacadeClass(self)
             self.director = director_factory(self.facade)
@@ -875,6 +899,14 @@ def _make_vibecraft_bot_base_class(
                 self._own_units_dict[unit.tag] = unit
             else:
                 self._enemy_units_dict[unit.tag] = unit
+            # 2026-05-19: 累加 DT 训练计数（latch，只增不减），macro_attack_ready 用
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                from sc2.ids.unit_typeid import UnitTypeId as _UTI3
+
+                if unit.type_id == _UTI3.DARKTEMPLAR and getattr(unit, "alliance", 0) == 1:
+                    self.knowledge.vibecraft.dt_trained_count += 1
             if hasattr(super(), "on_unit_created"):
                 await super().on_unit_created(unit)
 
@@ -888,6 +920,11 @@ def _make_vibecraft_bot_base_class(
                 self._own_units_dict.pop(unit_tag, None)
             if hasattr(self, "_enemy_units_dict"):
                 self._enemy_units_dict.pop(unit_tag, None)
+            # 2026-05-19: 清理 damaged_dts 防 dict 泄漏
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                self.knowledge.vibecraft.damaged_dts.pop(unit_tag, None)
             await super().on_unit_destroyed(unit_tag)
 
         async def on_unit_type_changed(self, unit: Any, previous_type: Any) -> None:
@@ -912,6 +949,14 @@ def _make_vibecraft_bot_base_class(
 
         async def on_unit_took_damage(self, unit: Any, amount_damage_taken: Any) -> None:
             _publish_unit_took_damage(self, unit, amount_damage_taken)
+            # 2026-05-19: 记 DT 受伤 timestamp 供 VibeCraftMicroDarkTemplar 决策撤退
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                from sc2.ids.unit_typeid import UnitTypeId as _UTI2
+
+                if unit.type_id == _UTI2.DARKTEMPLAR and amount_damage_taken > 0:
+                    self.knowledge.vibecraft.damaged_dts[unit.tag] = self.time
             if hasattr(super(), "on_unit_took_damage"):
                 await super().on_unit_took_damage(unit, amount_damage_taken)
 
