@@ -13,14 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 沟通约定
 
 - **中文沟通**。代码注释、commit message、log 字段名仍可英文（业界惯例），但所有面向用户的解释、设计讨论、PR 描述用中文。
-- **建筑用 hotkey 简称**，不写全名。**默认就要这样写**，不需要用户提醒：
+- **建筑用 hotkey 简称**，不写全名。**默认就要这样写**，不需要用户提醒。
+  **以下表格全部按 SC2 Standard layout 真实键位**（[Liquipedia 权威](https://liquipedia.net/starcraft2/Hotkeys_per_Race)），
+  Workers 先按 B（基础）或 V（高级）开 build 菜单，再按建筑首字母。
 
   #### 神族建筑 hotkey
 
-  - **B 系列（基础建筑）—— 按 SC2 默认 grid 键位**:
+  - **B 系列（基础建筑）**:
     - **BG** = Gateway / 兵营 / 折跃门（B+G）
     - **BE** = Pylon / 水晶 / 房子（B+E；**不要**写 PY）
-    - **BA** = Assimilator / 气矿（B+A；**不要**写 VC，VC 是 Terran 概念混淆）
+    - **BA** = Assimilator / 气矿（B+A；**不要**写 VC，VC 是议会）
     - **BN** = Nexus / 基地 / 主基地（B+N；**不要**写 NX）
     - **BF** = Forge / 锻炉（B+F）
     - **BY** = Cybernetics Core / 控制核心（B+Y；**不是 BC**！）
@@ -29,11 +31,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - **V 系列（科技建筑）**:
     - **VR** = Robotics Facility / 机械工厂（仅指建筑；虚空辉光舰不叫 VR，叫"虚空 / 辉光舰"）
     - **VS** = Stargate / 星门
-    - **VT** = Twilight Council / 议会
-    - **VX** = Fleet Beacon / 舰队信标
-    - **VA** = Templar Archives / 圣堂档案
-    - **VB** = Dark Shrine / 黑暗神殿
-    - **VD** = Robotics Bay / 机械槽 / 球塔
+    - **VC** = Twilight Council / 议会 / 暮光议会（V+C；**不是 VT**！）
+    - **VT** = Templar Archives / 圣堂档案 / 高塔（V+T；**不是 VA**！）
+    - **VF** = Fleet Beacon / 舰队信标（V+F；**不是 VX**）
+    - **VB** = Robotics Bay / 球塔 / 巨像塔（V+B；**不是 VD**！）
+    - **VD** = Dark Shrine / 黑暗神殿 / 隐刀塔（V+D；**不是 VB**！）
 
   #### 虫族建筑 hotkey
 
@@ -45,36 +47,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     - **BR** = Roach Warren / 蟑螂窝（B+R）
     - **BB** = Baneling Nest / 妖虫巢（B+B）
     - **BC** = Spine Crawler / 刺蛇匍匐者（B+C；防御建筑）
-    - **BP** = Spore Crawler / 孢子匍匐者（B+P；防空）
+    - **BA** = Spore Crawler / 孢子匍匐者（B+A；防空；**不是 BP**！）
   - **V 系列（科技建筑）**:
     - **VH** = Hydralisk Den / 刺蛇巢（V+H）
-    - **VL** = Lurker Den / 潜伏者巢（V+L）
+    - **VD** = Lurker Den / 潜伏者巢（V+D；**不是 VL**！）
     - **VI** = Infestation Pit / 感染坑（V+I）
     - **VS** = Spire / 刺翼（V+S）
     - **VN** = Nydus Network / 尼德斯网络（V+N）
     - **VU** = Ultralisk Cavern / 雷兽洞（V+U）
-    - **VG** = Greater Spire / 大刺翼（V+G；原刺翼升级）
+    - Greater Spire / 大刺翼：刺翼原地升级，没独立 build hotkey
 
   #### 人族建筑 hotkey
 
   - **B 系列（基础建筑）**:
-    - **BN** = Command Center / 指挥中心（B+N）
+    - **BC** = Command Center / 指挥中心（B+C；**不是 BN**！）
     - **BS** = Supply Depot / 补给站（B+S）
     - **BR** = Refinery / 精炼厂（B+R）
     - **BB** = Barracks / 兵营（B+B）
     - **BE** = Engineering Bay / 工程湾（B+E）
     - **BU** = Bunker / 碉堡（B+U）
     - **BT** = Missile Turret / 导弹炮塔（B+T）
-    - **BF** = Factory / 工厂（B+F）
-    - **BP** = Starport / 星港（B+P）
-    - **BA** = Armory / 军火库（B+A）
-    - **BG** = Ghost Academy / 幽灵学院（B+G）
-    - **BC** = Fusion Core / 聚变芯（B+C；**人族 BC = 聚变芯，不是神族 BC = 光子炮**）
-    - **BW** = Sensor Tower / 传感器塔（B+W）
+    - **BN** = Sensor Tower / 传感器塔（B+N；**不是 BW**！）
+  - **V 系列（高级建筑）**:
+    - **VF** = Factory / 工厂（V+F；**不是 BF**！）
+    - **VS** = Starport / 星港（V+S；**不是 BP**！）
+    - **VA** = Armory / 军火库（V+A；**不是 BA**！）
+    - **VG** = Ghost Academy / 幽灵学院（V+G；**不是 BG**！）
+    - **VC** = Fusion Core / 聚变芯（V+C；**不是 BC**！）
 
 - 单位用中文（叉子 / 不朽 / 追猎 / 闪追 / 凤凰 / 航母 / DT / HT / 母舰 / 高坦 / 暗使 / 探机 / 小狗 / 妖虫 / 蟑螂 / 刺蛇 / 飞龙 / BL / 枪兵 / 坦克 / 医疗船 / 船长）。
 - 战术黑话保留：4BG / IAC / Skytoss / 12D / 两矿凤凰 / 闪追 timing / MMM / 12pool 等。
-- **跨族 hotkey 歧义**：BC 在神族是光子炮，在人族是聚变芯。同一 session 按当前 `--my-race` 种族的 alias 表解析，不会混淆。
+- **跨族 hotkey 歧义**（同字母不同族不同建筑）：
+  - **BC**：神族=光子炮 / 虫族=刺蛇匍匐者（Spine） / 人族=指挥中心
+  - **VC**：神族=议会 / 人族=聚变芯
+  - **VS**：神族=星门 / 虫族=刺翼 / 人族=星港
+  - **VD**：神族=黑暗神殿 / 虫族=潜伏者巢
+  - **BE**：神族=水晶 / 虫族=气矿 / 人族=工程湾
+  
+  同一 session 按当前 `--my-race` 种族的 alias 表解析，不会混淆。
+- **历史遗留**（2026-05 修正前的"旧约定"，PR 之前的代码注释 / 老 yaml 可能还在用，看到时一起修）：
+  - 神族 V 系列曾错为：VT=议会 / VA=圣堂档案 / VX=信标 / VB=黑暗神殿 / VD=球塔（**全错**）
+  - 人族曾把 Factory/Starport/Armory/Ghost/Fusion Core 错归到 B 系列：BF/BP/BA/BG/BC
+  - 真实键位见上面真值表 + Liquipedia
 
 ---
 
