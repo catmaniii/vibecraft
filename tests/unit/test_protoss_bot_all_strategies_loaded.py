@@ -60,7 +60,7 @@ def _setup_sharpy_path():
         sys.path.remove(sharpy_path_str)
 
 
-# 期望被加载的 8 个神族策略 id（必须跟 strategies/protoss/*.yaml 完全对齐）
+# 期望被加载的 9 个神族策略 id（必须跟 strategies/protoss/*.yaml 完全对齐）
 _EXPECTED_STRATEGY_IDS: set[str] = {
     "4bg",
     "1g_robo_immortal",
@@ -69,12 +69,13 @@ _EXPECTED_STRATEGY_IDS: set[str] = {
     "blink_stalker",
     "cannon_rush",
     "iac_2base",
+    "dt_drop_iac",
     "skytoss",
 }
 
 
 def _load_real_library():
-    """加载 strategies/protoss/ 下真实 8 个 yaml。"""
+    """加载 strategies/protoss/ 下真实 9 个 yaml。"""
     from vibecraft.strategy.library import StrategyLibrary
 
     return StrategyLibrary.from_directories(
@@ -83,8 +84,8 @@ def _load_real_library():
     )
 
 
-def test_strategy_library_loads_all_8_strategies() -> None:
-    """前置条件：strategy library 能加载 8 个神族策略且 id 集合精准匹配。"""
+def test_strategy_library_loads_all_9_strategies() -> None:
+    """前置条件：strategy library 能加载 9 个神族策略且 id 集合精准匹配。"""
     lib = _load_real_library()
     loaded_ids = {s.id for s in lib.all_strategies()}
     assert loaded_ids == _EXPECTED_STRATEGY_IDS, (
@@ -92,8 +93,8 @@ def test_strategy_library_loads_all_8_strategies() -> None:
     )
 
 
-def test_all_8_strategies_have_sharpy_dummy_class() -> None:
-    """8 个策略都必须有 sharpy_dummy_class 字段，否则 bot.create_plan 会 silent skip。"""
+def test_all_9_strategies_have_sharpy_dummy_class() -> None:
+    """9 个策略都必须有 sharpy_dummy_class 字段，否则 bot.create_plan 会 silent skip。"""
     lib = _load_real_library()
     missing: list[str] = []
     for s in lib.all_strategies():
@@ -102,8 +103,8 @@ def test_all_8_strategies_have_sharpy_dummy_class() -> None:
     assert not missing, f"以下策略缺 sharpy_dummy_class（bot 不会路由它们）: {missing}"
 
 
-def test_bot_create_plan_loads_all_8_strategies_into_ifelse_tree() -> None:
-    """bot.create_plan() 完整链路：8 个策略 import + instantiate + 拼 IfElse 都成功。
+def test_bot_create_plan_loads_all_9_strategies_into_ifelse_tree() -> None:
+    """bot.create_plan() 完整链路：9 个策略 import + instantiate + 拼 IfElse 都成功。
 
     这是接入完整性的真理源 — 失败说明：
     - yaml 的 sharpy_dummy_class 路径打错（"a:B" 找不到 module a 或 class B）

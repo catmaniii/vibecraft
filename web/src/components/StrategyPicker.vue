@@ -32,6 +32,7 @@ const ALL_STRATEGIES: StrategyChip[] = [
   { id: 'blink_stalker',      display: '闪追压制',         race: 'protoss', stage: 'opening' },
   { id: 'cannon_rush',        display: '炮塔速攻',         race: 'protoss', stage: 'opening' },
   { id: 'iac_2base',          display: '叉球一波',         race: 'protoss', stage: 'midgame' },
+  { id: 'dt_drop_iac',        display: '空投隐刀转叉球',   race: 'protoss', stage: 'midgame' },
   { id: 'skytoss',            display: '后期空军',         race: 'protoss', stage: 'lategame' },
   // 虫族 5
   { id: '12pool',             display: '12 池 rush',       race: 'zerg', stage: 'opening' },

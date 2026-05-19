@@ -91,7 +91,13 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 skip_until=UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
             ),
             # Immortal chrono：VR 一好就持续 chrono 不朽（核心反装甲）
-            ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
+            # ★ Bug fix：原来没 cap → Nexus 能量全喂 Robo，会暴 9+ 个不朽，
+            # gas 全烧在不朽上，叉子缺资源。spec target 3 不朽即停 chrono。
+            Step(
+                None,
+                ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
+                skip=UnitExists(UnitTypeId.IMMORTAL, 3, include_pending=True),
+            ),
             # ---------- 早期 critical path（严守顺序，到 16 农停）----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 13),
@@ -168,7 +174,9 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             # Charge Zealot 主力（target 18，叉球一波的主体）
             # VA / HT / Psi Storm 移除：IAC 2-base all-in 是 6:15 出门，
             # Storm 研究需要 VA+TA 各 60s 共 120s，来不及完成，只会分散资源
-            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 18)),
+            # ★ Bug fix：必须 priority=True，否则被其它 priority 单位（Stalker/Sentry/
+            # Adept/Immortal/Observer 全 priority）抢光资源，整局只造 1 个 zealot。
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 18, priority=True)),
             # ---------- 经济（sequential pacing）----------
             AutoPylon(),
             [
@@ -207,9 +215,13 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
-        """IAC 出门 timing：Charge 完成 + 7 BG + 2 不朽 + 12+ 叉子 ready。
+        """IAC 出门 timing：Charge 完成 + 2 不朽 + 兵力/时间任一阈值满足。
 
-        spawningtool 标准 6:15 出门；本判定不写硬 timer，按状态触发更稳。
+        ★ Bug fix：原版要求 `zealots >= 12`，但 zealot 经常被其它生产线挤占造不足，
+        触发条件永远 False，依赖 sharpy 内置 power-based 兜底才出门。
+        改成"army_supply >= 30 OR time >= 6:30"双兜底：
+        - army_supply 路径：兵力够就推（不强求 zealot 数）
+        - time 路径：6:30 timer 兜底（spec 6:15，给 15s 容错），避免无限等
         """
         # Charge 必完成（IAC 的灵魂，没 charge 等于送菜）
         charge_done = (
@@ -218,14 +230,19 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
         )
         if not charge_done:
             return False
-        # 7 BG 暴产能就位
-        bg_count = ai.structures.of_type({UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}).ready.amount
-        if bg_count < 7:
-            return False
-        # 至少 2 不朽 ready
+        # 至少 2 不朽 ready（反装甲核心）
         immortals = ai.units(UnitTypeId.IMMORTAL).ready.amount
         if immortals < 2:
             return False
-        # 至少 12 叉子 ready（主力肉盾）
-        zealots = ai.units(UnitTypeId.ZEALOT).ready.amount
-        return bool(zealots >= 12)
+        # 兵力够（army_supply 用神族单位 supply 常量算，避免依赖 ai.calculate_supply_cost）
+        unit_supply = {
+            UnitTypeId.ZEALOT: 2, UnitTypeId.STALKER: 2, UnitTypeId.SENTRY: 2,
+            UnitTypeId.ADEPT: 2, UnitTypeId.IMMORTAL: 4, UnitTypeId.ARCHON: 4,
+        }
+        army_supply = sum(
+            ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items()
+        )
+        if army_supply >= 30:
+            return True
+        # 时间兜底：6:30 game time 推（spec 6:15 + 15s 容错）
+        return bool(ai.time >= 60 * 6.5)
