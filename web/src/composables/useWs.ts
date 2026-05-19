@@ -65,6 +65,9 @@ export function useWs() {
 
   // P1：event ring buffer（最近 30 条，响应式）
   const events = ref<EventFrame[]>([])
+  // 两层架构（2026-05-19 P3 Step 11）：最新一次 strategy.auto_switch 事件
+  // CockpitView 监听 ts 变化触发 toast 显示
+  const lastAutoSwitch = ref<EventFrame | null>(null)
 
   // P1.5：L3 standing orders（snapshot 透传）
   const standingOrders = ref<StandingOrderView[]>([])
@@ -144,6 +147,10 @@ export function useWs() {
             // P1：push 进 ring buffer（最多 30 条）
             const f = frame as EventFrame
             events.value = [f, ...events.value].slice(0, 30)
+            // 两层架构 P3 Step 11：strategy.auto_switch 事件单独提出来给 toast 用
+            if (f.kind === 'strategy.auto_switch') {
+              lastAutoSwitch.value = f
+            }
             break
           }
           case 'command_echo': {
@@ -259,6 +266,7 @@ export function useWs() {
     snapshotStrategy: readonly(snapshotStrategy),
     recentCommands: readonly(recentCommands),
     events: readonly(events),
+    lastAutoSwitch: readonly(lastAutoSwitch),
     lastEcho: readonly(lastEcho),
     minimap: readonly(minimap),
     recommendation: readonly(recommendation),

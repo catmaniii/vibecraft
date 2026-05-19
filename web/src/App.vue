@@ -6,6 +6,7 @@
 // - 无 room token 时显示引导提示
 import { computed } from 'vue'
 import StatusChain from '@/components/StatusChain.vue'
+import AutoSwitchToast from '@/components/AutoSwitchToast.vue'
 import LaunchView from '@/views/LaunchView.vue'
 import CockpitView from '@/views/CockpitView.vue'
 import { useWs } from '@/composables/useWs'
@@ -17,7 +18,7 @@ const {
   recommendation, tactics, confirmRecommendation, dismissRecommendation,
   pendingForceStrategy, confirmForceStrategy, cancelForceStrategy,
   standingOrders, productionOverrides, activeTactics, commandCards, revokeDirective,
-  sendTacticalAction, sendStrategyAction,
+  sendTacticalAction, sendStrategyAction, lastAutoSwitch,
 } = useWs()
 
 // 游戏是否可发指令（WS 已连 + SC2 playing 阶段）
@@ -70,6 +71,9 @@ const sc2Label = computed(() => {
       <span class="font-bold tracking-wide text-accent">VibeCraft</span>
       <StatusChain :status="status" />
     </header>
+
+    <!-- 两层架构（2026-05-19 P3 Step 11）：bot 自动切策略时的 toast -->
+    <AutoSwitchToast :switch-event="lastAutoSwitch as any" />
 
     <!-- 无 token 引导提示 -->
     <div v-if="!token" class="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">

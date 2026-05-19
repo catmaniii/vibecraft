@@ -1399,21 +1399,22 @@ class Director:
         alternatives = [
             {"id": sid, "cost": round(c, 1)} for sid, c in sorted_costs[1:4]
         ]
-        self.session.log_event(
-            Event(
-                ts=now,
-                kind=EventKind.STRATEGY_AUTO_SWITCH,
-                payload={
-                    "reason": reason,
-                    "chosen_id": chosen,
-                    "cost": round(cost, 1),
-                    "alternatives": alternatives,
-                    "enemy_tags_hit": sorted(enemy_tags),
-                },
-                priority="medium",
-                caused_by=caused_by,
-            )
+        evt = Event(
+            ts=now,
+            kind=EventKind.STRATEGY_AUTO_SWITCH,
+            payload={
+                "reason": reason,
+                "chosen_id": chosen,
+                "cost": round(cost, 1),
+                "alternatives": alternatives,
+                "enemy_tags_hit": sorted(enemy_tags),
+            },
+            priority="medium",
+            caused_by=caused_by,
         )
+        self.session.log_event(evt)
+        # PWA push（toast 显示）
+        self._push_event(evt.model_dump(mode="json"))
         logger.info(
             "auto_persistent_switch[%s]: chose %s (cost=%.1f, race=%s, enemy_tags=%d)",
             reason, chosen, cost, my_race, len(enemy_tags),
