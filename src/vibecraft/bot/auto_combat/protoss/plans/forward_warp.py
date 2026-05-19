@@ -91,6 +91,9 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         # Grid 不变(PYLON tag 没变),只 cache 网格本身;valid 由每 tick batch 查。
         self._candidate_grid: list[Point2] | None = None
         self._candidate_grid_pylon_tag: int | None = None
+        # 周期性"warp check"状态日志(每 1s 一次),用户反馈"有CD有钱不刷"想确认
+        # act 真的在每 tick 跑 + 看到 skip 原因。
+        self._last_periodic_log_t: float = -1000.0
 
     async def execute(self) -> bool:
         try:
@@ -99,9 +102,12 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         except (IndexError, AttributeError):
             return True
 
-        # 找 forward PYLON。没有 → 不一波,让 sharpy 默认 WarpUnit 接管
-        forward_pylon = self._find_forward_pylon(home, enemy)
-        if forward_pylon is None:
+        # 用户反馈(2026-05-20)"有野水晶和bg(没有就刷家里)":
+        # 优先 forward PYLON;forward 没有(没建/被打掉)→ fallback 到家里 PYLON。
+        # 保证 WG ready 任何时刻都有地方 warp,不浪费 CD。
+        warp_pylon, is_forward = self._pick_warp_pylon(home, enemy)
+        if warp_pylon is None:
+            # 0 个 PYLON ready,没法 warp(应该极少发生)
             return True
 
         # 遍历所有 ready WARPGATE
@@ -135,10 +141,10 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         except Exception:
             avail_min, avail_gas, avail_supply = 0, 0, 0
 
-        # 2026-05-20 用户设计:预计算 forward PYLON 周围 candidate grid + 每帧
+        # 2026-05-20 用户设计:预计算 PYLON 周围 candidate grid + 每帧
         # batch can_place 拿当前 valid spots。给每个 WG 分配**唯一** spot,避免
         # 多 WG warp 到同坐标导致 SC2 只接受第一个 → 没刷满。
-        valid_spots = await self._query_valid_placements(forward_pylon)
+        valid_spots = await self._query_valid_placements(warp_pylon)
         # 随机打乱,避免每帧选同样位置 → bot 行为可预测/被针对
         import random
 
@@ -202,26 +208,37 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
                 self.knowledge.cooldown_manager.used_ability(wg.tag, AbilityId.WARPGATETRAIN_ZEALOT)
             warped_count += 1
 
+        pylon_kind = "forward" if is_forward else "home(fallback)"
         if warped_count > 0:
             logger.info(
-                "ForwardWarpStalker warped %d %s to forward PYLON (%.1f, %.1f) game_t=%.1f",
+                "ForwardWarpStalker warped %d %s @ %s PYLON (%.1f, %.1f) game_t=%.1f",
                 warped_count,
                 self.unit_type.name,
-                forward_pylon.position.x,
-                forward_pylon.position.y,
+                pylon_kind,
+                warp_pylon.position.x,
+                warp_pylon.position.y,
                 now,
             )
-        elif warpgates:
-            # 有 WG 但没 warp:dump 原因,debug 用
-            # 节流:每 ~3s 最多 log 一次
-            if now - getattr(self, "_last_skip_log_t", -1000.0) > 3.0:
-                logger.debug(
-                    "ForwardWarpStalker no warps t=%.1f WG=%d money=%d supply=%d my_cd=%d placement=%d warp_fail=%d (M%d G%d S%d)",
-                    now, len(warpgates), skip_money, skip_supply, skip_my_cd,
-                    skip_placement, skip_warp_fail,
-                    avail_min, avail_gas, avail_supply,
-                )
-                self._last_skip_log_t = now
+
+        # 周期性 1s "warp_check" 状态日志(用户反馈"有CD有钱不刷",想验证 act 真的
+        # 每 tick 在跑 + 看 skip 原因)。warped_count > 0 时也打,便于追踪。
+        if now - self._last_periodic_log_t >= 1.0:
+            cd_ready_count = sum(
+                1
+                for wg in warpgates
+                if (now - self._last_warp_ts.get(wg.tag, -1000.0)) >= _WARP_COOLDOWN_S
+            )
+            logger.info(
+                "warp_check t=%.1f pylon=%s WG=%d/%d-cd-ready M=%d G=%d S=%d valid_spots=%d "
+                "skip[money=%d supply=%d cd=%d placement=%d warpfail=%d] warped_this_tick=%d",
+                now, pylon_kind,
+                cd_ready_count, len(warpgates),
+                avail_min, avail_gas, avail_supply,
+                len(valid_spots),
+                skip_money, skip_supply, skip_my_cd, skip_placement, skip_warp_fail,
+                warped_count,
+            )
+            self._last_periodic_log_t = now
         return False
 
     def _build_candidate_grid(self, forward_pylon: Any) -> list[Point2]:
@@ -275,6 +292,37 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
             logger.warning("ForwardWarpStalker can_place batch query fail: %s", exc)
             return []
         return [grid[i] for i, ok in enumerate(results) if ok]
+
+    def _pick_warp_pylon(self, home: Point2, enemy: Point2) -> tuple[Any, bool]:
+        """挑 warp 用的 PYLON。
+
+        2026-05-20 用户反馈"有野水晶和bg(没有就刷家里)":
+        1. 优先返回 forward PYLON(距敌方 < 距家 * 0.7)
+        2. 没 forward PYLON → fallback 返回最靠近家的 ready PYLON
+        3. 都没有 → (None, False)
+
+        Returns: (pylon, is_forward)
+        """
+        try:
+            pylons = list(self.ai.structures(UnitTypeId.PYLON).ready)
+        except Exception:
+            return None, False
+        if not pylons:
+            return None, False
+
+        # 先找 forward
+        for py in pylons:
+            d_home = py.distance_to(home)
+            d_enemy = py.distance_to(enemy)
+            if d_enemy < d_home * _FORWARD_RATIO:
+                return py, True
+
+        # Fallback: 离家最近的 PYLON
+        try:
+            home_pylon = min(pylons, key=lambda p: p.distance_to(home))
+        except Exception:
+            home_pylon = pylons[0]
+        return home_pylon, False
 
     def _find_forward_warpgate(self, home: Point2, enemy: Point2) -> Any:
         """找一个 ready 的 forward WARPGATE。"""

@@ -406,6 +406,29 @@ class TestMultiWarpResourceTracking:
             f"expected 4 unique spots, got {len(unique_spots)}: {warped_spots}"
         )
 
+    async def test_falls_back_to_home_pylon_when_no_forward(self):
+        """没 forward PYLON → fallback warp 到家里 PYLON(用户 2026-05-20:
+        "有野水晶和bg,没有就刷家里")。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+
+        # 只有 home PYLON,没 forward PYLON
+        home_py = _make_struct((127, 119), UnitTypeId.PYLON)  # 家里
+        wg = _make_struct((125, 115), UnitTypeId.WARPGATE, tag=600)
+        inst = _make_instance(warpgates=[wg], pylons=[home_py])
+        inst.ai.time = 100.0
+
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        result = await inst.execute()
+        assert result is False
+        # warp 命令应该被发出,落点在 home PYLON 附近
+        wg.warp_in.assert_called_once()
+        placement = wg.warp_in.call_args[0][1]
+        d = placement.distance_to(home_py.position)
+        assert d <= 6.5, f"home-fallback placement {placement} too far from home pylon (d={d})"
+
     async def test_no_warps_when_can_place_returns_all_false(self):
         """所有 candidate spot 都被占/不合法 → 不发 warp 命令。"""
         from sc2.ids.unit_typeid import UnitTypeId
