@@ -33,6 +33,20 @@ _FORWARD_RATIO: float = 0.7
 # 实际 cooldown ~28s,留 1s 容差给重复调用。
 _WARP_COOLDOWN_S: float = 28.0
 
+# 单位成本表(minerals, vespene, supply)。同 tick 内多次调用 wg.warp_in 时
+# python-sc2 BotAI.minerals/vespene/supply_left 不会立刻反映"已发出但还没结算"
+# 的命令(它们是 game-state 快照,只在 step 末由 sc2 服务端确认后更新)。
+# 不预扣 → 本帧 4 个 warp_in 全发出,sc2 只处理头一个有钱的,其余 silent reject
+# → 单刷(用户反馈 2026-05-20)。预扣后能正确连发到耗尽资源 / supply / CD。
+_UNIT_COST: dict[UnitTypeId, tuple[int, int, int]] = {
+    UnitTypeId.STALKER: (125, 50, 2),
+    UnitTypeId.ZEALOT: (100, 0, 2),
+    UnitTypeId.DARKTEMPLAR: (125, 125, 2),
+    UnitTypeId.SENTRY: (50, 100, 2),
+    UnitTypeId.HIGHTEMPLAR: (50, 150, 2),
+    UnitTypeId.ADEPT: (100, 25, 2),
+}
+
 
 class ForwardWarpStalker(ActBase):  # type: ignore[misc]
     """**一波流模式**:所有 ready WARPGATE(家里+forward)都 warp 兵到 forward PYLON。
@@ -77,27 +91,37 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         if not warpgates:
             return True  # 折跃没研完 / 还没 morph
 
-        # supply 满 → warp_in 会被 sc2 reject(不开 cooldown,但我们若 mark
-        # _last_warp_ts 会浪费 28s 窗口)。每帧顶层先 check supply,等 AutoPylon 补。
-        # stalker 占 2 supply。
+        # 取该单位成本。表里没有的 → STALKER 兜底
+        cost_min, cost_gas, cost_supply = _UNIT_COST.get(
+            self.unit_type, _UNIT_COST[UnitTypeId.STALKER]
+        )
+
+        # 顶层 supply check:1 单位都放不下 → 等 AutoPylon 补人口
         try:
-            if self.ai.supply_left < 2:
+            if self.ai.supply_left < cost_supply:
                 return False
         except Exception:
             pass
 
+        # —— 关键:本地预扣资源/supply ——
+        # python-sc2 的 ai.minerals/vespene/supply_left 是 game-state 快照,
+        # 同 tick 内多次 wg.warp_in 不会让它们立刻变化。不预扣 → 4 个 warp_in
+        # 都看到同一个数字全发出,sc2 实际只处理头一个 → 用户反馈"每次只刷一个"。
+        try:
+            avail_min = int(self.ai.minerals)
+            avail_gas = int(self.ai.vespene)
+            avail_supply = int(self.ai.supply_left)
+        except Exception:
+            avail_min, avail_gas, avail_supply = 0, 0, 0
+
         now = self.ai.time
         warped_count = 0
         for wg in warpgates:
-            if not self.ai.can_afford(self.unit_type):
-                break  # 攒钱中,下帧再试
-
-            # 每个 wg 单独检查 supply(循环内造的兵会 consume supply)
-            try:
-                if self.ai.supply_left < 2:
-                    break
-            except Exception:
-                pass
+            # 本地账户能不能再 warp 一个
+            if avail_min < cost_min or avail_gas < cost_gas:
+                break  # 钱不够,下帧再试
+            if avail_supply < cost_supply:
+                break  # supply 不够
 
             # 自家追踪 cooldown 兜底(sharpy cd_manager 偶尔不准)
             last = self._last_warp_ts.get(wg.tag, -1000.0)
@@ -128,6 +152,10 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
                 continue
 
             wg.warp_in(self.unit_type, placement)
+            # 本地预扣 — 下次循环用扣后的余额判断
+            avail_min -= cost_min
+            avail_gas -= cost_gas
+            avail_supply -= cost_supply
             self._last_warp_ts[wg.tag] = now
             try:
                 self.knowledge.cooldown_manager.used_ability(wg.tag, AbilityId.WARPGATETRAIN_ZEALOT)

@@ -27,6 +27,8 @@ build order(supply / 动作):
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from typing import Any
 
 from sc2.ids.ability_id import AbilityId
@@ -34,7 +36,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 from sharpy.knowledges import KnowledgeBot
 from sharpy.plans import BuildOrder, SequentialList, Step
-from sharpy.plans.acts import ActUnit, BuildGas, GridBuilding, MineOpenBlockedBase, Tech
+from sharpy.plans.acts import ActBase, ActUnit, BuildGas, GridBuilding, MineOpenBlockedBase, Tech
 from sharpy.plans.acts.protoss import (
     AutoPylon,
     ChronoTech,
@@ -53,10 +55,56 @@ from sharpy.plans.tactics import (
 from vibecraft.bot.auto_combat.protoss.plans.forward_proxy import (
     ForwardSupportPylonGateway,
 )
+from vibecraft.bot.auto_combat.protoss.plans.forward_rally import (
+    ForwardRallyStalker,
+)
 from vibecraft.bot.auto_combat.protoss.plans.forward_warp import (
     ForwardWarpStalker,
 )
 from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCraftZoneAttack
+
+logger = logging.getLogger(__name__)
+
+
+class EmitOpeningCompleteAct(ActBase):  # type: ignore[misc]
+    """开局完成条件首次满足时,通知 Director 自动切持续策略 — 一次性。
+
+    用户反馈(2026-05-20):"4bg 的条件都满足后,除了开启进攻压制模式以外,
+    宏观策略可以自动切换到一个持续策略"。逻辑:每 tick 调 completion_check(ai),
+    True → ai.director.notify_opening_completed(now);之后 act 自身 latch _signaled
+    永远 return True 不再 check。Director 端也有自己的 _opening_completed_signaled
+    防双重保险。
+
+    Director 不存在(集成测试 / 单元测试)时,silent skip。
+    """
+
+    def __init__(self, completion_check: Callable[[Any], bool]) -> None:
+        super().__init__()
+        self._completion_check = completion_check
+        self._signaled = False
+
+    async def execute(self) -> bool:
+        if self._signaled:
+            return True  # 本 act 任务完成,sharpy 后续 skip
+        try:
+            done = bool(self._completion_check(self.ai))
+        except Exception:
+            return False
+        if not done:
+            return False  # 还没达成,下 tick 再 check
+        director = getattr(self.ai, "director", None)
+        if director is not None:
+            try:
+                now = float(self.ai.time)
+                triggered = director.notify_opening_completed(now)
+                if triggered:
+                    logger.info(
+                        "opening_completed signaled to director (game_t=%.1f)", now
+                    )
+            except Exception as exc:
+                logger.warning("notify_opening_completed fail: %s", exc)
+        self._signaled = True
+        return True
 
 
 class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,KnowledgeBot=Any
@@ -83,6 +131,10 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 self._all_4bg_warpgate_ready,
                 ForwardWarpStalker(UnitTypeId.STALKER),
             ),
+            # 2026-05-20 用户修正:4bg 完成条件(`_ready_to_pressure`)首次满足时,
+            # 除了触发 VibeCraftZoneAttack 进攻,还通知 Director 切持续策略 —
+            # 取代 4bg 开局期的宏观角色,让 LLM 后续围绕持续 doctrine 推荐辅助 directive。
+            EmitOpeningCompleteAct(self._ready_to_pressure),
             # build order 主线
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -138,6 +190,13 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
                 PlanZoneGather(),
+                # 2026-05-20 用户修正:warp 出来的 stalker 在前线野 BG 集结,不要被
+                # PlanZoneGather 拽回家。Step gate 跟 ForwardWarpStalker 同步:
+                # 折跃完成 + 4 BG 全 ready 才启用前线集结(之前 ProtossUnit 阶段的
+                # 1 个 stalker 仍走默认 ZoneGather → 当家里防守用)。
+                # 放在 PlanZoneGather 之后 → 后发先至覆盖 home rally;放在
+                # VibeCraftZoneAttack 之前 → attack 命令再次覆盖本 act 的 move。
+                Step(self._all_4bg_warpgate_ready, ForwardRallyStalker()),
                 # 4 BG 全部就绪 + 折跃完成 + 4 个 Stalker → 第一波立即压制(火力侦察)
                 # VibeCraftZoneAttack(4):4 个就够了,等更多会错过 timing;
                 # 出门后会顺便侦察敌方走向科技/造兵情况;

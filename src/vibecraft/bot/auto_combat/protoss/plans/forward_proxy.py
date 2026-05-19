@@ -641,10 +641,10 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                             place.y,
                         )
                         worker.build(UnitTypeId.PYLON, place)
-                    elif worker.is_idle:
-                        worker.move(self.proxy_location)
-                elif worker.is_idle:
-                    worker.move(self.proxy_location)  # 走过去等钱
+                        return False
+                # 没钱 或 placement 失败 → 留在 proxy_location 待命(不依赖 is_idle,
+                # 见下方 _redirect_worker_to_anchor 说明)
+                self._redirect_worker_to_anchor(worker, self.proxy_location)
                 return False
 
             # PYLON ready 但 GATEWAY none → 造 GATEWAY
@@ -669,19 +669,58 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
                                 bg_pos.y,
                             )
                             worker.build(UnitTypeId.GATEWAY, bg_pos)
-                elif worker.is_idle:
-                    py_tag = self._proxy_tags.get(UnitTypeId.PYLON)
-                    py_struct = (
-                        self.ai.structures.find_by_tag(py_tag) if py_tag is not None else None
-                    )
-                    if py_struct is not None:
-                        worker.move(py_struct.position)
+                            return False
+                # 没钱 或 placement 失败 → 留 PYLON 旁待命
+                self._redirect_worker_to_anchor(worker, self._anchor_position())
                 return False
 
             # PYLON ordering / in_progress 中或 GATEWAY ordering / in_progress 中 → 等着
-            if worker.is_idle and self.proxy_location is not None:
-                worker.move(self.proxy_location)
+            # 用户反馈(2026-05-20):水晶造好之前不要回基地。SC2 默认 idle worker 自动
+            # auto-mining,worker.is_idle 会返回 False(有 gather 订单)→ 老的 is_idle
+            # check 触发不了,worker 默默走回家挖矿暴露 proxy 位置。改用距离检查:
+            # 只要 worker 不在 build forward 建筑且偏离 anchor > 4 就拉回。
+            self._redirect_worker_to_anchor(worker, self._anchor_position())
         except Exception as exc:
             logger.warning("ForwardSupport execute failed: %s", exc)
 
         return False
+
+    # ------------------------------------------------------------------
+    # worker 锚定(防 auto-mining 走回家)
+    # ------------------------------------------------------------------
+
+    def _anchor_position(self) -> Point2 | None:
+        """worker 应该锚定的位置:已有 PYLON 时贴 PYLON,否则用 proxy_location。"""
+        py_tag = self._proxy_tags.get(UnitTypeId.PYLON)
+        py_struct = self.ai.structures.find_by_tag(py_tag) if py_tag is not None else None
+        if py_struct is not None:
+            return py_struct.position  # type: ignore[no-any-return]
+        return self.proxy_location
+
+    def _worker_busy_with_forward_build(self, worker: Any) -> bool:
+        """worker.orders 含 PROTOSSBUILD_PYLON/GATEWAY → 正在 build,别打断。"""
+        for order in getattr(worker, "orders", None) or []:
+            ability = getattr(order, "ability", None)
+            ability_id = getattr(ability, "id", None)
+            if ability_id in (
+                AbilityId.PROTOSSBUILD_PYLON,
+                AbilityId.PROTOSSBUILD_GATEWAY,
+            ):
+                return True
+        return False
+
+    def _redirect_worker_to_anchor(self, worker: Any, anchor: Point2 | None) -> None:
+        """如果 worker 没在 build forward 建筑 且 距 anchor 偏远,就 issue move 拉回。
+
+        关键:不依赖 `worker.is_idle` —— SC2 默认 idle worker 会进入 auto-mining 状态,
+        worker.orders 含 HARVEST_GATHER → is_idle=False 但本质上是在走回家挖矿。
+        旧 fallback `if worker.is_idle: worker.move(anchor)` 因此从不触发,worker
+        默默走回家,沿路被敌方 scout 发现 → 用户反馈"水晶造好之前不要回基地"。
+        """
+        if anchor is None:
+            return
+        if self._worker_busy_with_forward_build(worker):
+            return  # 在 build forward 建筑,别打断
+        if worker.distance_to(anchor) <= 4:
+            return  # 已在 anchor 附近,不重复发命令
+        worker.move(anchor)

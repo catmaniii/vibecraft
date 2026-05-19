@@ -199,6 +199,10 @@ class Director:
         self._tactics: Tactics | None = None
         # 玩家 voice 切剧本但时机已过 → 拦下来等"硬转"确认;(directive, reasons)
         self._pending_force_strategy: tuple[Directive, list[str]] | None = None
+        # 2026-05-20: opening 完成信号已触发(bot 推),防重复 switch。
+        # 一旦 4bg 等开局达到完成条件,触发一次 _apply_auto_persistent_switch
+        # ("opening_completed") 后置位,后续不再切。
+        self._opening_completed_signaled: bool = False
         # P0b Task 12: L2 tactical_objective 状态
         self._tactical_squads: dict[str, TacticalSquad] = {}
         self._tactical_overrides: dict[str, str] = {}
@@ -1346,6 +1350,34 @@ class Director:
             enemy_race=None,
             enemy_upgrades=set(),
         )
+
+    def notify_opening_completed(self, now: float, caused_by: str = "bot:opening_done") -> bool:
+        """bot 调用:当前开局策略达到完成条件 → 自动切持续策略。
+
+        典型触发点:4bg 的 `_ready_to_pressure` 条件全满足(折跃完成 + 4 BG ready +
+        4 stalker)时,gate4_pressure 的 EmitOpeningCompleteAct 调用本方法。
+        本方法一次性 — 之后无论 bot 调多少次都不再触发(`_opening_completed_signaled`
+        latch),避免重复 switch / 重复推 toast。
+
+        Args:
+            now: 当前 game_time(秒)
+            caused_by: 事件链路追踪,默认 "bot:opening_done"
+
+        Returns:
+            True = 本次触发了 switch;False = 之前已触发过 / library 没 persistent
+            doctrine,等价无操作。
+        """
+        if self._opening_completed_signaled:
+            return False
+        chosen = self._apply_auto_persistent_switch(
+            now, reason="opening_completed", caused_by=caused_by
+        )
+        if chosen is None:
+            # pick_best_persistent 失败(race 没注册 persistent / library 空),
+            # 不 latch,允许将来重试。
+            return False
+        self._opening_completed_signaled = True
+        return True
 
     def _apply_auto_persistent_switch(
         self,

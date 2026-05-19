@@ -51,8 +51,20 @@ class _MockUnits:
         return len(self._units)
 
 
-def _make_instance(home=(127.5, 119.5), enemy=(48.5, 28.5), warpgates=(), pylons=()):
-    """构造 ForwardWarpStalker 实例 + 注入 mock state。"""
+def _make_instance(
+    home=(127.5, 119.5),
+    enemy=(48.5, 28.5),
+    warpgates=(),
+    pylons=(),
+    minerals=500,
+    vespene=200,
+    supply_left=8,
+):
+    """构造 ForwardWarpStalker 实例 + 注入 mock state。
+
+    默认资源足够 warp 4 个 stalker(500 矿 / 200 气 / 8 supply)。
+    要测"钱不够"等场景显式传 minerals/vespene/supply_left。
+    """
     from sc2.ids.unit_typeid import UnitTypeId
     from sc2.position import Point2
     from vibecraft.bot.auto_combat.protoss.plans import forward_warp
@@ -61,6 +73,9 @@ def _make_instance(home=(127.5, 119.5), enemy=(48.5, 28.5), warpgates=(), pylons
     ai = MagicMock()
     ai.start_location = Point2(home)
     ai.enemy_start_locations = [Point2(enemy)]
+    ai.minerals = minerals
+    ai.vespene = vespene
+    ai.supply_left = supply_left
 
     def _structures_call(type_id):
         if type_id == UnitTypeId.WARPGATE:
@@ -138,18 +153,22 @@ class TestFindForwardPylon:
 
 
 class TestExecuteShortCircuits:
-    async def test_returns_true_when_cannot_afford(self):
-        """can_afford 失败时 return False(资源不够，等下帧 — 不是 done)。"""
+    async def test_returns_false_when_minerals_zero(self):
+        """钱为 0 时 return False(等下帧再 try),不调 warp_in。
+
+        2026-05-20 重写:旧版用 can_afford False 短路,新版本地预扣资源 — 直接
+        让 ai.minerals=0 走资源不足分支。
+        """
         from sc2.ids.unit_typeid import UnitTypeId
 
         forward_wg = _make_struct((89.3, 29.7), UnitTypeId.WARPGATE)
         forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
-        inst = _make_instance(warpgates=[forward_wg], pylons=[forward_py])
-        inst.ai.can_afford = MagicMock(return_value=False)
+        inst = _make_instance(
+            warpgates=[forward_wg], pylons=[forward_py], minerals=0, vespene=0
+        )
 
         result = await inst.execute()
         assert result is False  # 等下帧再 try
-        # 没 warp_in 调用
         forward_wg.warp_in.assert_not_called()
 
     async def test_returns_true_when_no_forward_pylon(self):
@@ -163,7 +182,6 @@ class TestExecuteShortCircuits:
         # 有 warpgate 但没 forward pylon → fallback
         home_wg = _make_struct((125, 115), UnitTypeId.WARPGATE)
         inst = _make_instance(warpgates=[home_wg], pylons=[])
-        inst.ai.can_afford = MagicMock(return_value=True)
 
         result = await inst.execute()
         assert result is True
@@ -192,14 +210,12 @@ class TestExecuteShortCircuits:
 
     async def test_uses_home_warpgate_when_forward_pylon_exists(self):
         """有 forward PYLON 时,家里 warpgate 也 warp 到 forward PYLON(全员一波)。"""
-        import asyncio
         from sc2.ids.unit_typeid import UnitTypeId
         from sc2.position import Point2
 
         home_wg = _make_struct((125, 115), UnitTypeId.WARPGATE, tag=200)
         forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
         inst = _make_instance(warpgates=[home_wg], pylons=[forward_py])
-        inst.ai.can_afford = MagicMock(return_value=True)
         inst.ai.time = 100.0
 
         async def _mock_find(*a, **kw):
@@ -251,7 +267,6 @@ class TestHardCooldownTracking:
         forward_wg = _make_struct((89.3, 29.7), UnitTypeId.WARPGATE, tag=999)
         forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
         inst = _make_instance(warpgates=[forward_wg], pylons=[forward_py])
-        inst.ai.can_afford = MagicMock(return_value=True)
         inst.ai.time = 130.0
         inst._last_warp_ts[999] = 100.0  # 30s 前 — cooldown 已过
 
@@ -270,3 +285,106 @@ class TestHardCooldownTracking:
         forward_wg.warp_in.assert_called_once()
         # _last_warp_ts 被更新
         assert inst._last_warp_ts[999] == 130.0
+
+
+# ============================================================================
+# Tests: 一次刷 4 个(2026-05-20 用户反馈)
+# ============================================================================
+
+
+class TestMultiWarpResourceTracking:
+    """新行为:循环里本地预扣 minerals/vespene/supply,免得同 tick 多次 warp_in 时
+    sc2 server 只接受头一个。用户反馈"每次只刷一个"= 旧 ai.minerals 快照 bug。
+    """
+
+    async def test_warps_four_when_all_resources_sufficient(self):
+        """500 矿 / 200 气 / 8 supply + 4 warpgate → 一次性 warp 4 个 stalker。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+        from sc2.position import Point2
+
+        wgs = [
+            _make_struct((89, 30), UnitTypeId.WARPGATE, tag=i + 100) for i in range(4)
+        ]
+        forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
+        inst = _make_instance(
+            warpgates=wgs,
+            pylons=[forward_py],
+            minerals=500,
+            vespene=200,
+            supply_left=8,
+        )
+        inst.ai.time = 100.0
+
+        async def _mock_find(*a, **kw):
+            return Point2((84, 30))
+
+        inst.ai.find_placement = _mock_find
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        result = await inst.execute()
+        assert result is False
+        # 4 个 wg 都 warp_in 一次
+        for wg in wgs:
+            wg.warp_in.assert_called_once()
+
+    async def test_warps_two_when_only_money_for_two(self):
+        """250 矿 / 100 气 → 只够 2 stalker(各 125 矿 / 50 气);剩 2 个 wg 不发 warp。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+        from sc2.position import Point2
+
+        wgs = [
+            _make_struct((89, 30), UnitTypeId.WARPGATE, tag=i + 200) for i in range(4)
+        ]
+        forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
+        inst = _make_instance(
+            warpgates=wgs,
+            pylons=[forward_py],
+            minerals=250,
+            vespene=100,
+            supply_left=8,
+        )
+        inst.ai.time = 100.0
+
+        async def _mock_find(*a, **kw):
+            return Point2((84, 30))
+
+        inst.ai.find_placement = _mock_find
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        await inst.execute()
+        called = sum(1 for wg in wgs if wg.warp_in.called)
+        assert called == 2, f"expected 2 warps, got {called}"
+
+    async def test_warps_three_when_supply_blocks_fourth(self):
+        """500 矿 / 200 气 但 supply_left=7 → 只能 warp 3 个(每个占 2 supply,4 个要 8)。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+        from sc2.position import Point2
+
+        wgs = [
+            _make_struct((89, 30), UnitTypeId.WARPGATE, tag=i + 300) for i in range(4)
+        ]
+        forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
+        inst = _make_instance(
+            warpgates=wgs,
+            pylons=[forward_py],
+            minerals=500,
+            vespene=200,
+            supply_left=7,
+        )
+        inst.ai.time = 100.0
+
+        async def _mock_find(*a, **kw):
+            return Point2((84, 30))
+
+        inst.ai.find_placement = _mock_find
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        await inst.execute()
+        called = sum(1 for wg in wgs if wg.warp_in.called)
+        assert called == 3, f"expected 3 warps (supply gated), got {called}"
