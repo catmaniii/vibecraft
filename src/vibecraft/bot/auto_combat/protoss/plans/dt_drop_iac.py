@@ -91,11 +91,12 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
                 skip_until=UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
             ),
-            # Immortal chrono：VR 一好就持续 chrono 不朽,但 cap 4 防爆产
+            # 2026-05-19 修正：VR 不出不朽,只出 Warp Prism（用户要求）
+            # Warp Prism chrono：VR 一好就 chrono Warp Prism，越快出越好（飞前线开棱镜空投）
             Step(
                 None,
-                ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
-                skip=UnitExists(UnitTypeId.IMMORTAL, 4, include_pending=True),
+                ChronoUnit(UnitTypeId.WARPPRISM, UnitTypeId.ROBOTICSFACILITY),
+                skip=UnitExists(UnitTypeId.WARPPRISM, 1, include_pending=True),
             ),
             # DT chrono：VD 一好后 chrono DT 出门,够 8 个停
             Step(
@@ -139,21 +140,23 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 GridBuilding(UnitTypeId.DARKSHRINE, 1),
             ),
 
-            # ---------- 防身 ----------
+            # ---------- 防身（2026-05-19 修正：仅 2 追猎防御，去掉 Adept）----------
+            # 用户要求："前期随便出一两个追猎"，资源留给 DT + WarpPrism + Chargelot
             ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
-            Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                ProtossUnit(UnitTypeId.ADEPT, 1, priority=True),
-            ),
 
-            # ---------- VR 一好：起 2 Immortal（spec 4:04 + 4:51 各一个）----------
+            # ---------- VR 一好：★ 出 1 个 Warp Prism（不出 Immortal）----------
+            # 2026-05-19 修正：用户要求 VR 早出折跃棱镜，飞对方基地附近展开做空投点
+            # sharpy MicroWarpPrism 自动处理：transport mode → phasing → 安全位 →
+            # 警告位返回 transport。配合 ProtossUnit(DT) 让 DT 从 prism phasing 处 warp-in
             Step(
                 UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 4, priority=True),
+                ActUnit(UnitTypeId.WARPPRISM, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
             ),
 
-            # ---------- VD 一好：出 8 个 DT（2 批 ×4，5:26 完）----------
-            # Stats 关键：4:38 第 1 批，5:26 第 2 批，残的合 Archon
+            # ---------- VD 一好：出 8 个 DT（2 批 ×4，~4:38 第 1 批，~5:26 第 2 批）----------
+            # 折跃门 warp-in：sharpy 会选最近 power source；如果 Warp Prism 已 phasing
+            # 在敌前线，DT 直接在敌方矿区 warp 出来杀农民。否则 fallback warp 在家。
+            # 残 DT 回家合 Archon。
             Step(
                 UnitReady(UnitTypeId.DARKSHRINE, 1),
                 ProtossUnit(UnitTypeId.DARKTEMPLAR, 8, priority=True),
@@ -245,29 +248,30 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
 
     @staticmethod
     def _iac_ready_to_pressure(ai: Any) -> bool:
-        """IAC 大军 timing：Charge done + 2 Immortal + 2 Archon + 兵力/时间双兜底."""
+        """大军一波 timing（2026-05-19 修正：不要求 Immortal，因为本路线不出不朽）.
+
+        触发条件（任一）：
+        - Charge done + 2 Archon ready + army_supply >= 30
+        - 8:30 game time 兜底（DT 双波结束 + 残合 archon + chargelot 暴 → 集合反推）
+        """
         charge_done = (
             ai.already_pending_upgrade(UpgradeId.CHARGE) >= 1.0
             or UpgradeId.CHARGE in ai.state.upgrades
         )
         if not charge_done:
             return False
-        immortals = ai.units(UnitTypeId.IMMORTAL).ready.amount
         archons = ai.units(UnitTypeId.ARCHON).ready.amount
-        if immortals < 2:
-            return False
         if archons < 2:
             return False
-        # 兵力够：army_supply >= 40（Stats spec ~140 supply 主力，扣 worker 后 ~40+）
+        # 兵力够：army_supply >= 30（chargelot 主力 + 2-4 archon + 残 DT，没不朽路线 supply 更低）
         unit_supply = {
             UnitTypeId.ZEALOT: 2, UnitTypeId.STALKER: 2, UnitTypeId.SENTRY: 2,
-            UnitTypeId.ADEPT: 2, UnitTypeId.IMMORTAL: 4, UnitTypeId.ARCHON: 4,
-            UnitTypeId.DARKTEMPLAR: 2,
+            UnitTypeId.ARCHON: 4, UnitTypeId.DARKTEMPLAR: 2,
         }
         army_supply = sum(
             ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items()
         )
-        if army_supply >= 40:
+        if army_supply >= 30:
             return True
-        # 时间兜底：8:00 game time（Stats spec timing）
-        return bool(ai.time >= 60 * 8)
+        # 时间兜底：8:30 game time（DT 双波 + archon 合 + chargelot 集结）
+        return bool(ai.time >= 60 * 8.5)

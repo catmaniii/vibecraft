@@ -1,41 +1,46 @@
-"""vibecraft 叉球一波（IAC 2-base all-in）plan。
+"""vibecraft 叉球一波（pure Chargelot + Archon timing push）plan。
 
-战术核心
-========
-双矿 6:15 timing all-in：
-  - 主力：Charge Zealot（叉子）× 14-18 — 切入对方后排
-  - 反装甲：Immortal × 2-3
-  - 溅伤：Archon × 2-4（HT 自动合）
-  - 防空 + 增援：Stalker × 2-4
-  - 力场切阵：Sentry × 2
-  总 supply ~110-130
+战术核心（2026-05-19 用户重新定义）
+==================================
+**最终主力只有 2 个兵种：Chargelot + Archon**（白球用 DT 合，不用 HT）。
+追猎仅 1-2 只用于火力侦查 + 防早期偷袭；其它资源全压 DT + Charge + 攻防升级 + 暴叉子。
 
-关键升级
-========
+  - 主力：Charge Zealot × 18-24（叉子主力，切入对方阵地）
+  - 溅伤：Archon × 4-6（由 DT 合，每 2 DT = 1 Archon；8 DT 合 4 Archon）
+  - 火力侦查：Stalker × 1-2（不当主力，前压试探用）
+  - 力场切阵：Sentry × 2（前压时切对方部队 / 守家时挡冲锋）
+
+参考: Stats PvZ 5:34 4HT/6:05 出门 build（但本变体改用 DT 合而非 HT，
+所以出门 timing 比 Stats 晚 ~50s，约 7:00；DarkShrine 71s 比 Templar Archive 36s 慢）
+
+关键升级（全部跑完才出门）
+==========================
 1. WarpgateResearch（必，BY 一好立刻研，~140s）
-2. Charge（必，VT 一好立刻研，~100s，5 分钟必出）
-3. ProtossGroundWeapons +1（强烈推荐，BF 研，charge 叉 +1 攻提升显著）
+2. Charge（必，VC 一好立刻研，~100s）
+3. ProtossGroundWeaponsLevel1（+1 攻；charge 叉 dps 提升显著；Forge）
+4. ProtossGroundArmorsLevel1（+1 防；硬度提升，扛住对面集火）
 
-Build 节奏（spawningtool.com 标准 IAC 2-base all-in）
-=====================================================
+Build 节奏
+==========
   1:25  二矿（natural NX）
   1:35  BY（CyberneticsCore）
-  2:10  Warpgate research + Adept x1（保家侦察）
-  2:22  VR（Robotics）
-  2:25  BB（Shield Battery，防早期骚扰）
-  3:25 / 4:05  Immortal × 2
-  3:40  VT（TwilightCouncil，**3:40 时机，不在 BY ready 时**）
-  4:27  Charge research
-  4:35 / 4:56  暴 7 BG（总数）
-  **6:15 出门**  Charge 完 + +1 武器研究中
+  2:10  Warpgate research
+  2:38  VC (TwilightCouncil)
+  3:00  Charge research（VC 一好立刻研）+ BF (Forge)
+  3:14  VD (Dark Shrine)
+  3:30  +1 攻 + +1 防（Forge 一好双研）
+  4:00  暴 6 BG
+  4:38  第一批 DT × 4 出门
+  5:26  第二批 DT × 4 出门
+  5:30  Archon 开始合（2 → 4 → 6）
+  ~7:00 出门 attack（Charge 完 + +1/+1 完 + 4+ Archon + 12+ Chargelot）
 
-注：IAC 2-base all-in 是短平快，**不用 VA / HT / Storm**（来不及 + 分散资源）
-
-设计差异 vs sharpy macro_stalkers dummy
-========================================
-之前 yaml 用 sharpy `dummies/protoss/macro_stalkers:MacroStalkers` —— 那个 dummy
-是"暴追猎"，跟 IAC（叉光不朽）核心组合完全不同。本 plan 是 vibecraft 自家写的，
-按真实 IAC 2-base all-in build 节奏 + vibecraft hook（combat_intent_override / VibeCraftZoneAttack）。
+设计取舍
+========
+- 不出 Immortal（不要 VR，所有 gas 都给 DT 和升级）
+- 不出 HT 不研 Storm（DT 合 Archon 不需要 HT/TA）
+- 不出 Adept / Observer（资源紧缺；对面没隐形单位时 OB 不必要）
+- 多 1 个建筑（VD 71s vs HT 路线 36s TA）→ timing 比 Stats 晚 ~50s
 """
 
 from __future__ import annotations
@@ -49,6 +54,7 @@ from sharpy.knowledges import KnowledgeBot
 from sharpy.plans import BuildOrder, SequentialList, Step, StepBuildGas
 from sharpy.plans.acts import ActUnit, BuildGas, Expand, GridBuilding, MineOpenBlockedBase, Tech
 from sharpy.plans.acts.protoss import (
+    Archon,
     AutoPylon,
     ChronoTech,
     ChronoUnit,
@@ -69,7 +75,7 @@ from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCr
 
 
 class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
-    """叉球一波（双矿 IAC all-in）— 6:15 timing 出门，Charge Zealot + Immortal + Archon。"""
+    """叉球一波（pure Chargelot + Archon）— DT 合 Archon，~7:00 timing 出门"""
 
     def __init__(self) -> None:
         super().__init__("VibeCraft IAC 2-base")
@@ -77,7 +83,7 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
     async def create_plan(self) -> BuildOrder:
         return BuildOrder(
             # ---------- chrono（永久后台）----------
-            # 农民 chrono：早期持续 chrono PROBE，直到 44 农或开始造 gas2
+            # 农民 chrono：早期持续 chrono PROBE，到 ASSIMILATOR 起就停
             Step(
                 None,
                 ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
@@ -90,13 +96,11 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
                 skip_until=UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
             ),
-            # Immortal chrono：VR 一好就持续 chrono 不朽（核心反装甲）
-            # ★ Bug fix：原来没 cap → Nexus 能量全喂 Robo，会暴 9+ 个不朽，
-            # gas 全烧在不朽上，叉子缺资源。spec target 3 不朽即停 chrono。
+            # DT chrono：VD 一好后持续 chrono DT，够 8 个停（DT 是 Archon 池子）
             Step(
-                None,
-                ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
-                skip=UnitExists(UnitTypeId.IMMORTAL, 3, include_pending=True),
+                UnitReady(UnitTypeId.DARKSHRINE, 1),
+                ChronoUnit(UnitTypeId.DARKTEMPLAR, UnitTypeId.GATEWAY),
+                skip=UnitExists(UnitTypeId.DARKTEMPLAR, 8, include_pending=True),
             ),
             # ---------- 早期 critical path（严守顺序，到 16 农停）----------
             SequentialList(
@@ -107,76 +111,52 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
             ),
-            # ---------- BG 一好的并行触发（NX + BY 同时启动，标准 1:25 NX / 1:35 BY）----------
+            # ---------- BG 一好的并行触发（NX + BY 同时启动）----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
-            # ---------- 第二气矿（二矿启动后立刻补；IAC 用气多）----------
+            # ---------- 第二气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-            # ---------- BY 一好的并行触发（折跃研究 + VR 同时启动）----------
-            # VT 不在 BY ready 时建（标准 3:40，过早建 VT 会抢占给 VR 的矿资源）
+            # ---------- BY 一好：研折跃 + 起 VC ----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
-            ),
-            # ---------- BB（Shield Battery，VR ready 后建，防早期骚扰）----------
-            # 标准 build 2:25 建 BB，比 VR ready（2:22）稍后，跟 VR ready 触发合理
-            Step(
-                UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                GridBuilding(UnitTypeId.SHIELDBATTERY, 1),
-            ),
-            # ---------- VT 在 3 分钟建（标准 3:40，不过早抢 VR 矿资源）----------
-            # 原版在 BY ready（~2:10）就并行建 VT，150 矿本该给 VR（200 矿）优先
-            Step(
-                Time(60 * 3),
                 GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
             ),
-            # ---------- VT 一好立刻研 Charge（关键，5 分钟必出）----------
+            # ---------- VC 一好：立刻研 Charge + chrono + 起 VD + BF ----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.CHARGE)),
-            # Charge 同时 chrono（VT 上面 chrono，把它升完出门 timing 关键）
             Step(
                 UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
                 ChronoTech(AbilityId.RESEARCH_CHARGE, UnitTypeId.TWILIGHTCOUNCIL),
             ),
-            # ---------- BF 在 NX2 一好后造（攻防升级前置）----------
-            Step(UnitExists(UnitTypeId.NEXUS, 2), GridBuilding(UnitTypeId.FORGE, 1)),
-            # +1 攻击（charge 叉 dps 提升显著）
-            Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
-            # ---------- 防身 + 保家 ----------
-            ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
-            # Adept x1（BY ready 后出，保家侦察；标准 2:10）
+            # 黑暗神殿 VD：DT 前置（71s 造时，比 TemplarArchive 36s 慢 → 出门 timing 晚 ~50s）
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                ProtossUnit(UnitTypeId.ADEPT, 1, priority=True),
+                UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
+                GridBuilding(UnitTypeId.DARKSHRINE, 1),
             ),
-            # ---------- 单位训练队列 ----------
-            # VR 一好：先 2 不朽 + 1 OB + 后续补到 3 不朽
-            [
-                Step(
-                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 2, priority=True),
-                ),
-                Step(
-                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                    ActUnit(UnitTypeId.OBSERVER, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
-                ),
-                # 后期补到 3 不朽
-                Step(
-                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
-                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 3, priority=True),
-                ),
-            ],
-            # Sentry × 2（力场切阵，标准 build 有 1 个，2 个合理）
+            # Forge：用户明确要 BF 升攻防
+            Step(UnitExists(UnitTypeId.NEXUS, 2), GridBuilding(UnitTypeId.FORGE, 1)),
+            # +1 攻 + +1 防（Forge 一好同时双研）
+            Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
+            Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDARMORSLEVEL1)),
+            # ---------- 防身（少量 Stalker 火力侦查 + 切阵 Sentry，没 Adept / Immortal / Observer）----------
+            ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.SENTRY, 2, priority=True),
             ),
-            # Charge Zealot 主力（target 18，叉球一波的主体）
-            # VA / HT / Psi Storm 移除：IAC 2-base all-in 是 6:15 出门，
-            # Storm 研究需要 VA+TA 各 60s 共 120s，来不及完成，只会分散资源
-            # ★ Bug fix：必须 priority=True，否则被其它 priority 单位（Stalker/Sentry/
-            # Adept/Immortal/Observer 全 priority）抢光资源，整局只造 1 个 zealot。
-            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 18, priority=True)),
+            # ---------- VD 一好：出 8 个 DT（2 批 ×4，全部进 Archon 池）----------
+            Step(
+                UnitReady(UnitTypeId.DARKSHRINE, 1),
+                ProtossUnit(UnitTypeId.DARKTEMPLAR, 8, priority=True),
+            ),
+            # ---------- ★ DT 合 Archon（核心！sharpy Archon([DARKTEMPLAR]) 自动）----------
+            # 2 DT → 1 Archon；8 DT → 4 Archon。
+            Step(
+                UnitExists(UnitTypeId.DARKTEMPLAR, 2),
+                Archon([UnitTypeId.DARKTEMPLAR]),
+            ),
+            # ---------- Charge Zealot 主力（target 24，叉球一波的主体）----------
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 24, priority=True)),
             # ---------- 经济（sequential pacing）----------
             AutoPylon(),
             [
@@ -187,9 +167,9 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 StepBuildGas(3, skip=Gas(300)),
                 StepBuildGas(4, skip=Gas(400)),
             ],
-            # ---------- 4 分钟暴 7 BG（IAC 关键产能时机）----------
-            # spawningtool: 4:35 / 4:56 BG → 6:15 出门正好满兵
-            Step(Time(60 * 4), GridBuilding(UnitTypeId.GATEWAY, 7)),
+            # ---------- 4 分钟暴 6 BG（叉球一波关键产能时机）----------
+            # 不需要 7 BG，因为没 Immortal/不朽，产能瓶颈在 gas（DT/charge 烧气），mineral 给叉子够 6 BG 出
+            Step(Time(60 * 4), GridBuilding(UnitTypeId.GATEWAY, 6)),
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -199,15 +179,14 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
                 PlanZoneGather(),
-                # **IAC 出门 timing**：Charge 完成 + 7 BG + 主力到位 → 出门压制
-                # 玩家显式 attack 立即绕过
+                # ★ 出门 timing：Charge 完 + +1/+1 攻防完 + 4+ Archon + 兵力 / 时间双兜底
                 Step(
                     lambda ai: (
                         self._ready_to_pressure(ai)
                         or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
                         == "attack"
                     ),
-                    VibeCraftZoneAttack(12),  # 12 个 supply（叉子主力）就可推
+                    VibeCraftZoneAttack(20),  # 20 supply（chargelot + archon 主力）
                 ),
                 PlanFinishEnemy(),
             ),
@@ -215,34 +194,40 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
-        """IAC 出门 timing：Charge 完成 + 2 不朽 + 兵力/时间任一阈值满足。
+        """叉球一波 timing：Charge + +1 攻 + +1 防 + 2+ Archon + 兵力/时间双兜底。
 
-        ★ Bug fix：原版要求 `zealots >= 12`，但 zealot 经常被其它生产线挤占造不足，
-        触发条件永远 False，依赖 sharpy 内置 power-based 兜底才出门。
-        改成"army_supply >= 30 OR time >= 6:30"双兜底：
-        - army_supply 路径：兵力够就推（不强求 zealot 数）
-        - time 路径：6:30 timer 兜底（spec 6:15，给 15s 容错），避免无限等
+        2026-05-19 重写：用户要求最终组合只有 Chargelot + Archon；攻防升级好了才推。
+        - Charge 必完成（chargelot 没 charge = 送菜）
+        - +1 ground weapon 完成（叉子 dps 提升显著）
+        - +1 ground armor 完成（扛住对面集火）
+        - 至少 2 Archon ready（白球溅伤是 IAC 的核心 anti-bio/light）
+        - army_supply >= 30 兵力够 OR time >= 7:30 timer 兜底
         """
-        # Charge 必完成（IAC 的灵魂，没 charge 等于送菜）
-        charge_done = (
-            ai.already_pending_upgrade(UpgradeId.CHARGE) >= 1.0
-            or UpgradeId.CHARGE in ai.state.upgrades
-        )
-        if not charge_done:
+        # 升级三件套
+        upgrades_required = [
+            UpgradeId.CHARGE,
+            UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1,
+            UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
+        ]
+        for upg in upgrades_required:
+            done = (
+                ai.already_pending_upgrade(upg) >= 1.0 or upg in ai.state.upgrades
+            )
+            if not done:
+                return False
+        # 至少 2 Archon ready（DT 合，溅伤主力）
+        archons = ai.units(UnitTypeId.ARCHON).ready.amount
+        if archons < 2:
             return False
-        # 至少 2 不朽 ready（反装甲核心）
-        immortals = ai.units(UnitTypeId.IMMORTAL).ready.amount
-        if immortals < 2:
-            return False
-        # 兵力够（army_supply 用神族单位 supply 常量算，避免依赖 ai.calculate_supply_cost）
+        # 兵力 / 时间双兜底
         unit_supply = {
             UnitTypeId.ZEALOT: 2, UnitTypeId.STALKER: 2, UnitTypeId.SENTRY: 2,
-            UnitTypeId.ADEPT: 2, UnitTypeId.IMMORTAL: 4, UnitTypeId.ARCHON: 4,
+            UnitTypeId.ARCHON: 4, UnitTypeId.DARKTEMPLAR: 2,
         }
         army_supply = sum(
             ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items()
         )
         if army_supply >= 30:
             return True
-        # 时间兜底：6:30 game time 推（spec 6:15 + 15s 容错）
-        return bool(ai.time >= 60 * 6.5)
+        # 时间兜底：7:30（DarkShrine 71s 比 TA 36s 慢 → Stats 6:05 + ~50s + 容错）
+        return bool(ai.time >= 60 * 7.5)

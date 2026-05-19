@@ -1,7 +1,7 @@
 kind: opening_build
 id: dt_drop_iac
 display_name_zh: "空投隐刀转叉球一波"
-summary_zh: "Stats 经典：3:14 VD 起 DT 骚扰，残 DT 合 Archon，5:38 Charge+1 攻，6:11 暴 4 BG，~8:00 不朽+Archon+叉子大军一波"
+summary_zh: "VR 早出折跃棱镜飞前线，棱镜处空投 2 波 DT × 4 杀农民；残 DT 回家合 Archon，家里持续暴 Chargelot；最后大军汇合一波 attack"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.dt_drop_iac:DtDropIac"
 aliases:
   - "空投隐刀转叉球一波"

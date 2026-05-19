@@ -1,7 +1,7 @@
 kind: opening_build
 id: iac_2base
 display_name_zh: "叉球一波"
-summary_zh: "vanilla IAC：双矿冲锋叉+不朽一波 timing,6:30 出门 all-in。核心 chargelot 主力 + 3 不朽针对装甲 + 7 BG 暴兵。不出 archon（要 archon 走 dt_drop_iac）"
+summary_zh: "纯叉子+白球一波（白球用 DT 合）：1-2 追猎火力侦查 + 8 DT 合 4 Archon + 24 Chargelot + 一攻一防升级，~7:30 出门 all-in。不出不朽，气矿全压 DT/Charge/攻防升级"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.iac_2base:IacTwoBase"
 aliases:
   - "叉球一波"
@@ -25,29 +25,32 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [1g_robo_immortal, 4_gateway_pressure]"
 
-# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
-# 按 spawningtool 时间节点切阶段；PhaseTracker 用 start_at_time 推断 current_phase_id
+# Phase stepper（2026-05-19 重写：纯 Chargelot+Archon 路线，DT 合 Archon）
 phases:
   - id: economic_open
     display: "双矿 + BY"
     subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
     start_at_time: 0
-  - id: tech_up
-    display: "升科技 (VR + VT)"
-    subtitle: "2:22 机械工厂 / 3:40 议会，准备 Charge"
-    start_at_time: 130    # ~2:10
-  - id: immortal_charge
-    display: "暴不朽 + Charge"
-    subtitle: "3:25/4:05 出不朽 ×2，4:27 启动 Charge 研究"
-    start_at_time: 205    # ~3:25
+  - id: tech_tree
+    display: "VC + VD + BF"
+    subtitle: "2:38 议会 / 3:14 黑暗神殿 / 3:00 锻炉 → Charge + DT + +1/+1"
+    start_at_time: 158    # ~2:38
+  - id: dt_pool
+    display: "8 DT 进 Archon 池"
+    subtitle: "4:38 第一批 DT × 4 / 5:26 第二批 DT × 4，全部合白球"
+    start_at_time: 278    # ~4:38
   - id: gateway_mass
-    display: "7 BG 暴兵"
-    subtitle: "4:35-4:56 暴产能（gateway 7），chargelot 主力刷"
-    start_at_time: 275    # ~4:35
+    display: "6 BG 暴叉子 + 升攻防"
+    subtitle: "4:00-5:00 6 BG 暴 chargelot，Forge +1 攻 + +1 防研究中"
+    start_at_time: 240    # ~4:00
+  - id: archon_form
+    display: "Archon 合体"
+    subtitle: "5:30+ Archon 由 DT 配对合，2 DT → 1 Archon，最终 4-6 Archon"
+    start_at_time: 330    # ~5:30
   - id: attack_timing
-    display: "6:15 出门一波"
-    subtitle: "Charge 完 + +1 武器中 → 主力 attack 对方分矿"
-    start_at_time: 375    # ~6:15
+    display: "7:30 一攻一防完出门"
+    subtitle: "Charge + +1 攻 + +1 防 + 4 Archon + 12+ Chargelot → 主力 attack"
+    start_at_time: 450    # ~7:30
 
 # 数据来源:https://lotv.spawningtool.com/build/196674/ (2 Base PvX IAC all-in)
 # 关键 build 节点:
@@ -61,20 +64,22 @@ phases:
 # - 4:35 / 4:56 Gateway 暴兵 (7 BG 总数)
 # - 5:01 Templar Archives
 # - 6:15 出门 attack(Charge 完 + +1 武器中)
+# 2026-05-19 重写：纯 Chargelot + Archon 路线，DT 合 Archon
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data 查表对齐
 commitments:
   units:
-    zealot: 16        # 主力(charge zealot)
-    immortal: 3       # 针对装甲(spawning tool 至少 2)
-    # archon 移除：vanilla IAC 2-base 6:15 timing 来不及上 VA+TA+HT，不出 archon。
-    # 想要"DT 合 archon 转 IAC"的变体 → 切剧本 `dt_drop_iac`（空投隐刀转叉球一波）
-    stalker: 4        # 防空 / 增援
-    sentry: 2         # 力场切阵
-  tech: [WarpGateResearch, Charge, ProtossGroundWeapons]
+    Zealot: 24        # 主力 charge zealot（target 24，叉球一波主体）
+    Archon: 4         # ★ DT 合，2 DT → 1 Archon，8 DT → 4 Archon
+    DarkTemplar: 8    # transient（全部合 archon，最终 army 不含 DT）
+    Stalker: 2        # 火力侦查 + 早期防身
+    Sentry: 2         # 力场切阵
+  tech: [WarpGateResearch, Charge, ProtossGroundWeaponsLevel1, ProtossGroundArmorsLevel1]
   structures:
-    gateway: 7        # spawning tool 4:35+4:56 暴 7 BG
-    robo: 1
-    twilight: 1
-    forge: 1
+    Gateway: 6        # 不需要 7 BG（没不朽吃 gas，mineral 6 BG 够暴叉子）
+    TwilightCouncil: 1
+    DarkShrine: 1     # ★ DT 必备，取代 Robo
+    Forge: 1
+    # 不需要 Robo（不出不朽 / observer）
   expansions: 2
 
 # 一波 timing(spawning tool 6:15 出门;留窗口到 7:30 接 follow-up)
