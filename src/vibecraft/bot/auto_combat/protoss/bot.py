@@ -154,15 +154,10 @@ def make_protoss_bot_class(
                     )
                     plans[recipe_id] = _make_fallback_plan()
 
-            try:
-                from vibecraft.bot.auto_combat.protoss.plans.sustain import Sustain
-
-                sustain_inst = Sustain()
-                sustain_plan = await sustain_inst.create_plan()
-                logger.info("create_plan: Sustain 兜底 plan 装载成功")
-            except Exception as exc:
-                logger.warning("create_plan: Sustain 装载失败,用空 BuildOrder 兜底: %s", exc)
-                sustain_plan = _make_fallback_plan()
+            # 两层架构（2026-05-19）：删除 Sustain 兜底。state_machine 不变量保证
+            # active_recipe 永不为 sustain；IfElse 默认分支理论不可达，但 sharpy
+            # 仍需要 result 起点，用 _make_fallback_plan（最小可跑 BuildOrder）。
+            sustain_plan = _make_fallback_plan()
 
             scout_act: Any = None
             try:

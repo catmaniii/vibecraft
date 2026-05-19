@@ -136,15 +136,9 @@ def make_zerg_bot_class(
                     )
                     plans[recipe_id] = _make_fallback_plan()
 
-            try:
-                from vibecraft.bot.auto_combat.zerg.plans.sustain import ZergSustain
-
-                sustain_inst = ZergSustain()
-                sustain_plan = await sustain_inst.create_plan()
-                logger.info("create_plan: ZergSustain 兜底 plan 装载成功")
-            except Exception as exc:
-                logger.warning("create_plan: ZergSustain 装载失败，用空 BuildOrder 兜底: %s", exc)
-                sustain_plan = _make_fallback_plan()
+            # 两层架构（2026-05-19）：删除 ZergSustain 兜底。state_machine 不变量保证
+            # active_recipe 永不为 sustain；IfElse 默认分支理论不可达。
+            sustain_plan = _make_fallback_plan()
 
             scout_act: Any = None
             try:
