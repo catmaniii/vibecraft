@@ -8,17 +8,18 @@ sharpy `dummies/protoss/gate4.py` 的 Stalkers4Gate 实际是 4 BG 闪追
 
 build order(supply / 动作):
    9  Pylon
-  13  Gateway
+  13  Gateway (家里 #1)
   15  Assimilator
   16  CyberneticsCore
   17  Pylon
   20  Assimilator #2(为持续 Stalker 出兵的气)
   21  WarpGateResearch (chrono)
-  22  Gateway #2
-  23  Gateway #3
-  24  Gateway #4 + Pylon
-  持续:Stalker × N(所有 BG)
-  WarpGate 完成 → 一次折跃 4 Stalker → VibeCraftZoneAttack 出门
+  22  Gateway (家里 #2)
+  23  Gateway (家里 #3) —— 2026-05-19 用户修正：家里到 3 BG 即可
+  ~3:00 ForwardSupportPylonGateway 启动 → 前线野 BE + 1 野 BG
+  持续:Stalker × N(所有 BG，含前线)
+  WarpGate 完成 → 一次折跃 4 Stalker(家 3 + 前线 1) → VibeCraftZoneAttack 出门
+  总 BG = 4（家 3 + 野 1）
 
 不写战斗逻辑:VibeCraftZoneAttack / PlanZoneDefense / DistributeWorkers
 全是 sharpy 自带 Manager,我们只是组装 BuildOrder 触发它们。
@@ -107,11 +108,13 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                     Step(
                         UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)
                     ),
-                    # 折跃研究期间补到 4 BG:等 BY 好 + 攒够 450 矿(3 BG 同时下,
-                    # 保证它们同时修好同时升折跃)。攒够后 GridBuilding 一个 step 内尽量下满。
+                    # 2026-05-19 用户修正：家里 3 BG，加上前线 1 野 BG = 总 4 BG
+                    # 原来家里 4 BG 是过度，前线野 BG 折跃也用得上但浪费产能
+                    # 折跃研究期间补到 3 BG（家里）:等 BY 好 + 攒够 300 矿(2 BG 同时下),
+                    # 保证它们同时修好同时升折跃。前线那 1 个由 ForwardSupportPylonGateway 出
                     Step(
                         self._three_bg_at_once,
-                        GridBuilding(UnitTypeId.GATEWAY, 4),
+                        GridBuilding(UnitTypeId.GATEWAY, 3),
                     ),
                     # 持续 Stalker:折跃完成后若仍有 BG 未 morph 成 WarpGate,
                     # 暂停训练让它们 morph(WarpGate 训练效率更高,且压制 timing 关键)
@@ -200,13 +203,16 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _three_bg_at_once(ai: Any) -> bool:
-        """补 3 BG 的触发条件:折跃研究 >= 50% + 矿 ≥ 450(或已开造)。
+        """补 BG 的触发条件:折跃研究 >= 50% + 矿 ≥ 300(或已开造)。
+
+        2026-05-19 用户修正：家里目标 3 BG（之前 4），前线 1 野 BG 由
+        ForwardSupportPylonGateway 出，总数仍是 4。
 
         推迟到折跃过半:前期能量都给 chrono BY,矿用来多补 PYLON,
-        折跃过半后矿够 → 一次性下 3 BG,保证它们同时修好同时转 WarpGate,
+        折跃过半后矿够 → 一次性下 2 BG,保证它们同时修好同时转 WarpGate,
         刚好和折跃完成 timing 对齐。
 
-        已造 + pending 的 BG ≥ 2 时返回 True,让 GridBuilding 继续推到 4。
+        已造 + pending 的 BG ≥ 2 时返回 True,让 GridBuilding 继续推到 3。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
@@ -214,14 +220,15 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
             return False
         current_bg = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).amount
         pending_bg = ai.already_pending(_U.GATEWAY)
-        # 已开始三连下 → 让 GridBuilding 继续推
+        # 已开始连下 → 让 GridBuilding 继续推到 3
         if current_bg + pending_bg >= 2:
             return True
-        # 折跃过半才允许下 3 BG(否则前期补 PYLON)
+        # 折跃过半才允许下 BG(否则前期补 PYLON)
         warp_progress = ai.already_pending_upgrade(UpgradeId.WARPGATERESEARCH)
         if warp_progress < 0.5:
             return False
-        return bool(ai.minerals >= 450)
+        # 300 矿 = 2 BG × 150 (一次性下 2 同时修好)
+        return bool(ai.minerals >= 300)
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
