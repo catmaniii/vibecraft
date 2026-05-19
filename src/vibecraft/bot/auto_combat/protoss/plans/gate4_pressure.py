@@ -253,30 +253,23 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _can_train_stalker(ai: Any) -> bool:
-        """sharpy ProtossUnit(STALKER) 的训练门:
+        """sharpy ProtossUnit(STALKER) **只在折跃没完成前**训练(GATEWAY mode)。
 
-        - 折跃未完成 → True,GATEWAY mode 出 1 个 stalker(防守 + 探路)
-        - 折跃完成 + 4 BG 全 ready → False,完全交 ForwardWarpStalker
-          (防同帧 race 让兵 spawn 在家;用户反馈"杜绝从家里刷兵")
-        - **折跃完成但 4 BG 没集齐** → True,sharpy 兜底继续训练防"哑火"
-          (用户反馈 2026-05-20:"BG 折跃变形后没有刷兵"=没法走 forward warp
-          就连家里也不训了 → 全卡死;cap=1 保证不暴兵)
-
-        防 Gateway 不 morph:sharpy ProtossUnit train 持续触发会让 Gateway 不空闲
-        → 不 morph。所以 4 BG 都 ready 后(意味着 morph 已经完成)立即停 sharpy
-        train,留产线给 ForwardWarpStalker warp。
+        折跃完成后(WARPGATE mode)由 ForwardWarpStalker 完全接管,sharpy ProtossUnit
+        不再触发。原因(2026-05-20 用户反馈"家里一直有几个追猎没出门"):
+        - sharpy WarpUnit 硬重置 target 到最近 NEXUS(`warp_unit.py:68-73`),所以
+          一旦 ProtossUnit 走 WarpUnit 分支,兵就 spawn 在家而不是 gather_point
+        - 之前曾加 `bg_ready < 4 → True` 兜底,但攻击中 stalker 阵亡 +
+          BG 偶尔被打到 → 触发 sharpy WarpUnit → 在家累积"卡家"兵
+        - 折跃完成后,即使 4 BG 没集齐,也宁可不刷(等 ForwardWarpStalker 在
+          forward 刷),也不要在家 spawn。
         """
         from sc2.ids.unit_typeid import UnitTypeId as _U
 
         if not ai.structures(_U.CYBERNETICSCORE).ready.exists:
             return False
         warpgate_done = UpgradeId.WARPGATERESEARCH in ai.state.upgrades
-        if not warpgate_done:
-            return True  # 折跃没完成 → GATEWAY mode 训 1 个
-        # 折跃完成,看 4 BG 是否集齐
-        bg_ready = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
-        # < 4 → sharpy 兜底继续 train(cap=1 防过度);≥ 4 → 让 ForwardWarpStalker 接管
-        return bool(bg_ready < 4)
+        return not warpgate_done
 
     @staticmethod
     def _three_bg_at_once(ai: Any) -> bool:
@@ -309,7 +302,12 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
-        """触发出门压制:折跃完成 + 至少 4 BG 就绪 + 至少 6 个 Stalker。
+        """触发出门压制:折跃完成 + 至少 4 BG 就绪 + 至少 4 个**完成 warp** 的 Stalker。
+
+        2026-05-20:`.ready` filter 排除还在 warp 动画(build_progress < 1.0)的兵。
+        之前数 `ai.units(STALKER).amount` 包括 warp 中的,导致 4 个兵 warp_in 同帧
+        就 trigger attack 但兵还不能动 → 攻击开始时主力没就位,部分 stalker
+        warp 完才追上去,看起来"分批出门"不集结。
 
         Step 把第一个参数当作 Callable[ai]->bool 用,等价 RequireCustom。
         """
@@ -324,5 +322,6 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
         ).ready.amount
         if gate_count < 4:
             return False
-        stalker_count: int = ai.units(UnitTypeId.STALKER).amount
-        return bool(stalker_count >= 4)  # 第一波 4 个就出门 + 火力侦察
+        # .ready 过滤掉 warp 动画中的 stalker,等 4 个真正可战斗才触发
+        stalker_count: int = ai.units(UnitTypeId.STALKER).ready.amount
+        return bool(stalker_count >= 4)
