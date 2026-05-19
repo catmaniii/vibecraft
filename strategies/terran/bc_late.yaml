@@ -1,14 +1,18 @@
-kind: lategame_doctrine
-id: bc_late
-display_name_zh: "战列巡洋舰后期"
+kind: persistent_doctrine
+id: persistent_skyterran
+display_name_zh: "战巡空军"
 summary_zh: "后期战巡 + 老鸦控场：4-6 BC + Raven 干扰 + Ghost EMP，靠 BC 超级武器 + Raven 干扰拿下后期资源战"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bc_late:BcLate"
+gas_intensity: high
+ramp_up_time_s: 240.0
 aliases:
   - "bc_late"
   - "战巡后期"
   - "战列巡洋舰"
   - "BC流"
   - "船长流"
+  - "战巡空军"
+  - "skyterran"
   - "Battlecruiser"
   - "BC"
   - "空军人族"
@@ -27,24 +31,27 @@ phases:
     subtitle: "4+ BC + 制空 → 收割对方经济基地"
     start_at_time: 360
 
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
 target_composition:
-  battlecruiser: 6
-  raven: 3
-  ghost: 4
-  viking: 4
-  marine: 8
+  Battlecruiser: 6
+  Raven: 3
+  Ghost: 4
+  Viking: 4
+  Marine: 8
 
 required_tech:
-  - FusionCore
-  - YamatoGun
-  - TacticalJump
-  - TerranShipWeapons
+  - WeaponRefit
+  - TerranShipWeaponsLevel1
 
 required_structures:
-  fusion_core: 1
-  starport: 2
-  ghost_academy: 1
-  engineering_bay: 1
+  FusionCore: 1
+  Starport: 2
+  GhostAcademy: 1
+  EngineeringBay: 1
+  Factory: 1
+  Barracks: 2
+  Armory: 1
+  CommandCenter: 3
 
 engagement_doctrine:
   - "BC Tactical Jump 瞬移到对方矿区 + Yamato 打对方大型单位"
@@ -61,13 +68,14 @@ win_condition:
     - "self.tech.tactical_jump.done"
     - "enemy.expansion_count >= 3"
 
+# enemy_tags.py canonical tag
 counters_against:
-  - roach_hydra
-  - mech_ground
-  - bio_ground
+  - zerg_roach_hydra
+  - terran_mech_tank
+  - protoss_ground_mech
+  - mass_ground
 
 weak_against:
   - mass_corruptor
-  - mass_phoenix
   - mass_viking
-  - ghost_emp_mirror
+  - protoss_phoenix_storm

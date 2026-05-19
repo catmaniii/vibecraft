@@ -1,4 +1,4 @@
-kind: midgame_stance
+kind: opening_build
 id: mutalisk_harass
 display_name_zh: "飞龙骚扰中期"
 summary_zh: "双矿飞龙骚扰：快出尖塔 → 12+ 飞龙持续骚扰，干扰对方生产 + 拖延经济；配合地面部队形成多线威胁"
@@ -43,10 +43,10 @@ micro_doctrine:
   - "飞龙血量低时及时回家回血"
 
 expire_action:
-  - "transition: brood_corruptor"
+  - "transition: persistent_brood_corruptor"
 
 lategame_transitions:
-  - lategame_id: brood_corruptor
+  - lategame_id: persistent_brood_corruptor
     when: "default"
-  - lategame_id: brood_corruptor
+  - lategame_id: persistent_brood_corruptor
     when: "enemy.mass_anti_air"

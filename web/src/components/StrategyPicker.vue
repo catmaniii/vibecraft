@@ -33,19 +33,19 @@ const ALL_STRATEGIES: StrategyChip[] = [
   { id: 'cannon_rush',        display: '炮塔速攻',         race: 'protoss', stage: 'opening' },
   { id: 'iac_2base',          display: '叉球一波',         race: 'protoss', stage: 'midgame' },
   { id: 'dt_drop_iac',        display: '空投隐刀转叉球',   race: 'protoss', stage: 'midgame' },
-  { id: 'skytoss',            display: '后期空军',         race: 'protoss', stage: 'lategame' },
+  { id: 'persistent_skytoss', display: '天空神族',         race: 'protoss', stage: 'lategame' },
   // 虫族 5
   { id: '12pool',             display: '12 池 rush',       race: 'zerg', stage: 'opening' },
   { id: 'macro_hatch',        display: '三矿 macro',       race: 'zerg', stage: 'opening' },
   { id: 'roach_hydra',        display: '蟑螂刺蛇',         race: 'zerg', stage: 'midgame' },
   { id: 'mutalisk_harass',    display: '飞龙骚扰',         race: 'zerg', stage: 'midgame' },
-  { id: 'brood_corruptor',    display: '巢虫 + 腐化',      race: 'zerg', stage: 'lategame' },
+  { id: 'persistent_brood_corruptor', display: '巢虫腐化运营', race: 'zerg', stage: 'lategame' },
   // 人族 5
   { id: 'marine_rush',        display: '双兵营 rush',      race: 'terran', stage: 'opening' },
   { id: 'reaper_expand',      display: '死神扩张',         race: 'terran', stage: 'opening' },
   { id: 'bio_stim',           display: 'bio 推进',         race: 'terran', stage: 'midgame' },
   { id: 'two_base_tanks',     display: '双矿坦克',         race: 'terran', stage: 'midgame' },
-  { id: 'bc_late',            display: '战巡终结',         race: 'terran', stage: 'lategame' },
+  { id: 'persistent_skyterran', display: '战巡空军',       race: 'terran', stage: 'lategame' },
 ]
 
 const STAGE_LABELS: Record<string, string> = {

@@ -29,52 +29,47 @@ class TestTerranStrategyLoad:
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
         assert lib is not None
 
-    def test_has_two_openings(self) -> None:
-        """有 2 个 opening（marine_rush / reaper_expand）。"""
+    def test_has_four_openings(self) -> None:
+        """两层架构(2026-05-19)：有 4 opening（marine_rush / reaper_expand / bio_stim / two_base_tanks 全是 opening）"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        assert len(lib.openings) == 2
+        assert len(lib.openings) == 4
 
-    def test_has_two_midgames(self) -> None:
-        """有 2 个 midgame（bio_stim / two_base_tanks）。"""
+    def test_midgames_empty(self) -> None:
+        """两层架构：midgame_stance kind 已废弃；老 yaml 全迁到 opening"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        assert len(lib.midgames) == 2
+        assert len(lib.midgames) == 0
 
-    def test_has_one_lategame(self) -> None:
-        """有 1 个 lategame（bc_late）。"""
+    def test_has_one_persistent(self) -> None:
+        """两层架构：bc_late 已改名 persistent_skyterran 且 kind=persistent_doctrine"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        assert len(lib.lategames) == 1
+        assert len(lib.lategames) == 0  # 旧 kind 也空了
+        assert len(lib.persistents) == 1
+        assert lib.persistents[0].id == "persistent_skyterran"
 
     def test_opening_ids_correct(self) -> None:
-        """两个 opening 的 id 分别是 marine_rush 和 reaper_expand。"""
+        """4 个 opening 的 id（旧 midgame yaml 已迁到 opening kind）"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
         ids = {s.id for s in lib.openings}
         assert "marine_rush" in ids
         assert "reaper_expand" in ids
-
-    def test_midgame_ids_correct(self) -> None:
-        """两个 midgame 的 id 分别是 bio_stim 和 two_base_tanks。"""
-        from vibecraft.strategy.library import StrategyLibrary
-
-        lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        ids = {s.id for s in lib.midgames}
         assert "bio_stim" in ids
         assert "two_base_tanks" in ids
 
-    def test_lategame_id_correct(self) -> None:
-        """lategame 的 id 是 bc_late。"""
+    def test_persistent_id_correct(self) -> None:
+        """persistent 的 id 是 persistent_skyterran（旧 bc_late 改名）"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        ids = {s.id for s in lib.lategames}
-        assert "bc_late" in ids
+        ids = {s.id for s in lib.persistents}
+        assert "persistent_skyterran" in ids
 
 
 class TestTerranStrategyTransitions:
@@ -86,26 +81,28 @@ class TestTerranStrategyTransitions:
 
         return StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
 
-    def test_opening_transitions_reference_valid_midgame(self, terran_lib: any) -> None:
-        """每个 opening 的 default_transitions 引用的 midgame_id 在 lib.midgames 中存在。"""
-        midgame_ids = {s.id for s in terran_lib.midgames}
+    def test_opening_transitions_reference_known_id(self, terran_lib: any) -> None:
+        """两层架构(2026-05-19)：default_transitions 改为 informational 字段，
+        指向的 id 只要在 library 任一表（含 persistents）存在即可。"""
+        all_ids = set(terran_lib.all_ids())
         for opening in terran_lib.openings:
             for trans in getattr(opening, "default_transitions", []) or []:
                 mid_id = getattr(trans, "midgame_id", None)
                 if mid_id:
-                    assert mid_id in midgame_ids, (
-                        f"opening {opening.id!r} 引用了不存在的 midgame {mid_id!r}"
+                    assert mid_id in all_ids, (
+                        f"opening {opening.id!r} 引用了不存在的 transition {mid_id!r}"
                     )
 
-    def test_midgame_lategame_transitions_valid(self, terran_lib: any) -> None:
-        """midgame 的 lategame_transitions 引用的 lategame_id 在 lib.lategames 中存在。"""
-        lategame_ids = {s.id for s in terran_lib.lategames}
-        for midgame in terran_lib.midgames:
-            for trans in getattr(midgame, "lategame_transitions", []) or []:
+    def test_opening_lategame_transitions_valid(self, terran_lib: any) -> None:
+        """两层架构：lategame_transitions 现在挂在 opening（从 midgame 迁来），
+        指向 persistent doctrine 即可。"""
+        all_ids = set(terran_lib.all_ids())
+        for opening in terran_lib.openings:
+            for trans in getattr(opening, "lategame_transitions", []) or []:
                 lg_id = getattr(trans, "lategame_id", None)
                 if lg_id:
-                    assert lg_id in lategame_ids, (
-                        f"midgame {midgame.id!r} 引用了不存在的 lategame {lg_id!r}"
+                    assert lg_id in all_ids, (
+                        f"opening {opening.id!r} 引用了不存在的 lategame {lg_id!r}"
                     )
 
 
@@ -117,7 +114,7 @@ class TestTerranSharopyDummyClassSyntax:
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _TERRAN_YAML)
-        return list(lib.openings) + list(lib.midgames) + list(lib.lategames)
+        return list(lib.openings) + list(lib.midgames) + list(lib.lategames) + list(lib.persistents)
 
     def test_sharpy_dummy_class_syntax(self, all_strategies: list) -> None:
         """所有有 sharpy_dummy_class 的策略，格式为 module.path:ClassName。"""

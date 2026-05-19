@@ -159,8 +159,19 @@ class OpeningBuild(BaseModel):
     summary_zh: str = ""
     aliases: list[str] = Field(default_factory=list)
     matchup: list[str] = Field(default_factory=list)
-    phases: list[Phase]
-    steps: list[str]  # 原文保留，需要时 BuildStep.parse() 解析
+    # 2026-05-19 两层架构：phases / steps 改 optional（从 midgame 迁过来的 yaml
+    # 没这俩字段，commitments / attack_window 已表达内容；PWA 只用 phases 显示进度，
+    # 没 phases 时 stepper 留空也 OK）。
+    phases: list[Phase] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)  # 原文保留，需要时 BuildStep.parse() 解析
+    # 从 midgame_stance 迁过来的字段（可选，新 opening 不强制写）
+    commitments: dict[str, dict[str, int] | int | list[str]] = Field(default_factory=dict)
+    attack_window: AttackWindow | None = None
+    micro_doctrine: list[str] = Field(default_factory=list)
+    enter_when: list[str] = Field(default_factory=list)  # midgame 的进入条件
+    expire_action: list[str] = Field(default_factory=list)  # midgame 的过期动作
+    # midgame 迁过来的 transition 链；新 opening_completion 字段是替代品（不强制）
+    lategame_transitions: list[LategameTransition] = Field(default_factory=list)
     scout_at: str | None = None
     abort_signals: list[AbortSignal] = Field(default_factory=list)
     default_transitions: list[DefaultTransition] = Field(default_factory=list)

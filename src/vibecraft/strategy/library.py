@@ -224,17 +224,29 @@ class StrategyLibrary:
     # ------------------------------------------------------------------
 
     def _validate_cross_references(self) -> None:
+        """两层架构（2026-05-19）后 default_transitions / lategame_transitions
+        改为"informational"字段（不再驱动状态机；状态机走 pick_best_persistent）。
+
+        放宽校验：transition id 只要在 library 任一表（含 persistents）里存在即 OK，
+        旧 midgame 已迁到 openings 的 yaml 还能跑。
+        """
+        all_known: set[str] = (
+            set(self._openings)
+            | set(self._midgames)
+            | set(self._lategames)
+            | set(self._persistents)
+        )
         for op in self._openings.values():
             for opening_tr in op.default_transitions:
-                if opening_tr.midgame_id not in self._midgames:
+                if opening_tr.midgame_id not in all_known:
                     raise StrategyValidationError(
-                        f"opening {op.id!r} 引用了未注册的 midgame {opening_tr.midgame_id!r}"
+                        f"opening {op.id!r} 引用了未注册的 transition {opening_tr.midgame_id!r}"
                     )
         for mid in self._midgames.values():
             for lategame_tr in mid.lategame_transitions:
-                if lategame_tr.lategame_id not in self._lategames:
+                if lategame_tr.lategame_id not in all_known:
                     raise StrategyValidationError(
-                        f"midgame {mid.id!r} 引用了未注册的 lategame {lategame_tr.lategame_id!r}"
+                        f"midgame {mid.id!r} 引用了未注册的 transition {lategame_tr.lategame_id!r}"
                     )
 
 

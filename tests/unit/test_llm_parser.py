@@ -87,7 +87,7 @@ class TestPromptBuilders:
         cat = build_strategy_catalog(library)
         assert "1g_robo_immortal" in cat
         assert "iac_2base" in cat
-        assert "skytoss" in cat
+        assert "persistent_skytoss" in cat  # 两层架构改名
         assert "opening_build" in cat
         assert "midgame_stance" in cat
         assert "lategame_doctrine" in cat

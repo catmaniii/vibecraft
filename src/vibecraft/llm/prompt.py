@@ -22,6 +22,7 @@ from vibecraft.strategy.models import (
     LategameDoctrine,
     MidgameStance,
     OpeningBuild,
+    PersistentDoctrine,
 )
 
 # =========================================================================
@@ -314,6 +315,14 @@ def build_strategy_catalog(library: StrategyLibrary, my_race: str | None = None)
     parts.append("\n### lategame_doctrine")
     for s in library.all_strategies():
         if not isinstance(s, LategameDoctrine) or not _keep(s.id):
+            continue
+        aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
+        parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
+
+    # 两层架构（2026-05-19）：持续运营策略（取代 lategame_doctrine + midgame_stance）
+    parts.append("\n### persistent_doctrine (持续运营策略 - 开局完成后切入)")
+    for s in library.all_strategies():
+        if not isinstance(s, PersistentDoctrine) or not _keep(s.id):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
         parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")

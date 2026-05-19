@@ -1,4 +1,4 @@
-kind: midgame_stance
+kind: opening_build
 id: roach_hydra
 display_name_zh: "蟑螂刺蛇中期"
 summary_zh: "双矿蟑螂 + 刺蛇中期：蟑螂开路 + 刺蛇跟进，蟑螂速 + 刺蛇射程升级，timing 7:30-8:30 出门压制"
@@ -42,7 +42,7 @@ micro_doctrine:
   - "对 bio：蟑螂 surround，刺蛇跟进"
 
 lategame_transitions:
-  - lategame_id: brood_corruptor
+  - lategame_id: persistent_brood_corruptor
     when: "default"
-  - lategame_id: brood_corruptor
+  - lategame_id: persistent_brood_corruptor
     when: "game_time >= 12:00"

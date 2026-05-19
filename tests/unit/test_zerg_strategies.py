@@ -29,52 +29,47 @@ class TestZergStrategyLoad:
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
         assert lib is not None
 
-    def test_has_two_openings(self) -> None:
-        """有 2 个 opening（12pool / macro_hatch）。"""
+    def test_has_four_openings(self) -> None:
+        """两层架构(2026-05-19)：有 4 opening（12pool/macro_hatch/roach_hydra/mutalisk_harass 全是 opening）"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        assert len(lib.openings) == 2
+        assert len(lib.openings) == 4
 
-    def test_has_two_midgames(self) -> None:
-        """有 2 个 midgame（roach_hydra / mutalisk_harass）。"""
+    def test_midgames_empty(self) -> None:
+        """两层架构：midgame_stance kind 已废弃；老 yaml 全迁到 opening"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        assert len(lib.midgames) == 2
+        assert len(lib.midgames) == 0
 
-    def test_has_one_lategame(self) -> None:
-        """有 1 个 lategame（brood_corruptor）。"""
+    def test_has_one_persistent(self) -> None:
+        """两层架构：brood_corruptor 改名 persistent_brood_corruptor 且 kind=persistent_doctrine"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        assert len(lib.lategames) == 1
+        assert len(lib.lategames) == 0
+        assert len(lib.persistents) == 1
+        assert lib.persistents[0].id == "persistent_brood_corruptor"
 
     def test_opening_ids_correct(self) -> None:
-        """两个 opening 的 id 分别是 12pool 和 macro_hatch。"""
+        """4 个 opening 的 id（旧 midgame yaml 已迁到 opening kind）"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
         ids = {s.id for s in lib.openings}
         assert "12pool" in ids
         assert "macro_hatch" in ids
-
-    def test_midgame_ids_correct(self) -> None:
-        """两个 midgame 的 id 分别是 roach_hydra 和 mutalisk_harass。"""
-        from vibecraft.strategy.library import StrategyLibrary
-
-        lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        ids = {s.id for s in lib.midgames}
         assert "roach_hydra" in ids
         assert "mutalisk_harass" in ids
 
-    def test_lategame_id_correct(self) -> None:
-        """lategame 的 id 是 brood_corruptor。"""
+    def test_persistent_id_correct(self) -> None:
+        """persistent 的 id 是 persistent_brood_corruptor"""
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        ids = {s.id for s in lib.lategames}
-        assert "brood_corruptor" in ids
+        ids = {s.id for s in lib.persistents}
+        assert "persistent_brood_corruptor" in ids
 
 
 class TestZergStrategyTransitions:
@@ -86,26 +81,26 @@ class TestZergStrategyTransitions:
 
         return StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
 
-    def test_opening_transitions_reference_valid_midgame(self, zerg_lib: any) -> None:
-        """每个 opening 的 default_transitions 引用的 midgame_id 在 lib.midgames 中存在。"""
-        midgame_ids = {s.id for s in zerg_lib.midgames}
+    def test_opening_transitions_reference_known_id(self, zerg_lib: any) -> None:
+        """两层架构：transition 指向的 id 在 library 任一表存在即可"""
+        all_ids = set(zerg_lib.all_ids())
         for opening in zerg_lib.openings:
             for trans in getattr(opening, "default_transitions", []) or []:
                 mid_id = getattr(trans, "midgame_id", None)
                 if mid_id:
-                    assert mid_id in midgame_ids, (
-                        f"opening {opening.id!r} 引用了不存在的 midgame {mid_id!r}"
+                    assert mid_id in all_ids, (
+                        f"opening {opening.id!r} 引用了不存在的 transition {mid_id!r}"
                     )
 
-    def test_midgame_lategame_transitions_valid(self, zerg_lib: any) -> None:
-        """midgame 的 lategame_transitions 引用的 lategame_id 在 lib.lategames 中存在。"""
-        lategame_ids = {s.id for s in zerg_lib.lategames}
-        for midgame in zerg_lib.midgames:
-            for trans in getattr(midgame, "lategame_transitions", []) or []:
+    def test_opening_lategame_transitions_valid(self, zerg_lib: any) -> None:
+        """两层架构：lategame_transitions 挂在 opening 上（midgame 已迁），指向 persistent"""
+        all_ids = set(zerg_lib.all_ids())
+        for opening in zerg_lib.openings:
+            for trans in getattr(opening, "lategame_transitions", []) or []:
                 lg_id = getattr(trans, "lategame_id", None)
                 if lg_id:
-                    assert lg_id in lategame_ids, (
-                        f"midgame {midgame.id!r} 引用了不存在的 lategame {lg_id!r}"
+                    assert lg_id in all_ids, (
+                        f"opening {opening.id!r} 引用了不存在的 lategame {lg_id!r}"
                     )
 
 
@@ -117,7 +112,7 @@ class TestZergSharopyDummyClassSyntax:
         from vibecraft.strategy.library import StrategyLibrary
 
         lib = StrategyLibrary.from_directories(_STRATS_DIR, _ZERG_YAML)
-        return list(lib.openings) + list(lib.midgames) + list(lib.lategames)
+        return list(lib.openings) + list(lib.midgames) + list(lib.lategames) + list(lib.persistents)
 
     def test_sharpy_dummy_class_syntax(self, all_strategies: list) -> None:
         """所有有 sharpy_dummy_class 的策略，格式为 module.path:ClassName。"""

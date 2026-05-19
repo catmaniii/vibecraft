@@ -1,8 +1,10 @@
-kind: lategame_doctrine
-id: skytoss
-display_name_zh: "Skytoss 航母流"
+kind: persistent_doctrine
+id: persistent_skytoss
+display_name_zh: "天空神族"
 summary_zh: "后期航母为核心的空军体系：4 VS + Carrier ×12 + Tempest ×3 + HT/Archon + Mothership，靠空军远程 DPS 慢推；对手过不了 5 矿经济就赢"
 sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.skytoss:Skytoss"
+gas_intensity: high
+ramp_up_time_s: 180.0
 aliases:
   - "Skytoss"
   - "skytoss"
@@ -40,31 +42,35 @@ phases:
     subtitle: "8+ Carrier + 3 Tempest + Mothership + 风暴 + 母舰罩"
     start_at_time: 240     # 切入 4 分钟后通常已 6-8 Carrier
 
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+# 跟 unit_data.py 的 STRUCT_COSTS / UNIT_COSTS / TECH_COSTS key 对齐，transition_cost 才能正确算
 target_composition:
-  carrier: 12
-  tempest: 3
-  high_templar: 5
-  archon: 4         # 5 HT 自动合 ~2 Archon，sharpy 配 ProtossUnit 兜底加
-  mothership: 1
-  observer: 2
-  # 不写 zealot/stalker：后期航母为主，剩下的 supply 让 sharpy 自决策
+  Carrier: 12
+  Tempest: 3
+  HighTemplar: 5
+  Archon: 4         # 5 HT 自动合 ~2 Archon，sharpy 配 ProtossUnit 兜底加
+  Mothership: 1
+  Observer: 2
+  # 不写 Zealot/Stalker：后期航母为主，剩下的 supply 让 sharpy 自决策
 
 required_tech:
-  - FleetBeacon
   - ProtossAirWeaponsLevel1
   - ProtossAirWeaponsLevel2
   - ProtossAirWeaponsLevel3
-  - ProtossAirArmorLevel1
-  - ProtossAirArmorLevel2
-  - ProtossAirArmorLevel3
+  - ProtossAirArmorsLevel1
+  - ProtossAirArmorsLevel2
+  - ProtossAirArmorsLevel3
   - PsiStorm
-  - TempestGroundAttackUpgrade
+  - GravitonCatapult
 
 required_structures:
-  stargate: 4
-  fleet_beacon: 1
-  templar_archives: 1
-  twilight_council: 1
+  Stargate: 4
+  FleetBeacon: 1
+  TemplarArchives: 1
+  TwilightCouncil: 1
+  RoboticsFacility: 1   # Observer 前置
+  Forge: 1
+  Nexus: 4
 
 # 交战教条（自由文本给 LLM 参考；MVP 不接 DSL 解析器，bot 内 sharpy 自己微操）
 engagement_doctrine:
@@ -83,19 +89,21 @@ win_condition:
     - "enemy.expansion_count < 5"
     - "enemy.units.air_attacker.amount < 8"   # 对方没大量 Viking/Corruptor 反空
 
-# 优势对位（lategame 强势克制）
+# 优势对位（用 enemy_tags.py canonical tag）
 counters_against:
-  - bio                   # T 生化部队，航母拉开距离风筝
-  - roach_hydra           # Z 蟑螂飞龙，航母 + Tempest 高地
-  - broodlord_infestor    # Z 后期组合，Tempest 点 Brood，HT feedback 感染
-  - mech_ground           # T 机械地面，航母不怕坦克
+  - terran_bio             # 航母拉开距离风筝
+  - zerg_roach_hydra       # 航母 + Tempest 高地
+  - zerg_brood             # Tempest 点 Brood，HT feedback
+  - zerg_ultra_brood       # 同上 + Tempest 远点 Ultra
+  - terran_mech_tank       # 航母不怕坦克
+  - mass_ground            # 通用：地面军被空军吊打
 
-# 劣势对位（需玩家手动 micro 或转兵种）
+# 劣势对位
 weak_against:
-  - mass_viking           # T 大量 Viking，航母被反空秒
-  - mass_corruptor        # Z 大量 Corruptor，同上
-  - ghost_emp             # T Ghost EMP 清盾，HT 攒不出能量
-  - skytoss_mirror        # PP 后期镜像，比谁 micro 好（feedback 互甩、母舰互大招）
+  - mass_viking            # 航母被反空秒
+  - mass_corruptor         # 同上
+  - terran_ghost           # EMP 清盾，HT 攒不出能量
+  - protoss_skytoss        # 后期镜像，比谁 micro 好
 
 # 后期"什么时候撑不住"信号（玩家可用 abort_signals 类似机制硬转，但 lategame
 # 通常没下一手，更多是"该投降的时候投降"）

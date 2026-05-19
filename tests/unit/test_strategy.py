@@ -213,9 +213,10 @@ class TestStrategyLibrary:
             strategies_dir=PROJECT_ROOT / "strategies",
             aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
+        # 两层架构（2026-05-19）：iac_2base 是 opening；skytoss 改名 persistent_skytoss 且 kind=persistent
         assert "1g_robo_immortal" in lib.all_ids(StrategyKind.OPENING)
-        assert "iac_2base" in lib.all_ids(StrategyKind.MIDGAME)
-        assert "skytoss" in lib.all_ids(StrategyKind.LATEGAME)
+        assert "iac_2base" in lib.all_ids(StrategyKind.OPENING)
+        assert "persistent_skytoss" in lib.all_ids(StrategyKind.PERSISTENT)
 
     def test_loaded_opening_has_correct_shape(self) -> None:
         lib = StrategyLibrary.from_directories(
@@ -232,25 +233,30 @@ class TestStrategyLibrary:
         assert steps[0].verb == "build"
         assert steps[0].obj == "BE"
 
-    def test_loaded_midgame(self) -> None:
+    def test_loaded_iac_2base_as_opening(self) -> None:
+        """两层架构（2026-05-19）：iac_2base 从 midgame 迁到 opening，attack_window 仍在"""
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
             aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
-        mg = lib.get_midgame("iac_2base")
-        assert isinstance(mg, MidgameStance)
-        assert mg.attack_window is not None
+        ob = lib.get_opening("iac_2base")
+        assert isinstance(ob, OpeningBuild)
+        assert ob.attack_window is not None
         # iac_2base attack_window 在 commit d03654e 改为「叉球一波」6:15 timing
-        assert mg.attack_window.open_at == "6:15"
+        assert ob.attack_window.open_at == "6:15"
 
-    def test_loaded_lategame(self) -> None:
+    def test_loaded_persistent_skytoss(self) -> None:
+        """两层架构（2026-05-19）：skytoss 改名 persistent_skytoss，kind=persistent_doctrine"""
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",
             aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
         )
-        lg = lib.get_lategame("skytoss")
-        assert isinstance(lg, LategameDoctrine)
-        assert lg.target_composition["carrier"] == 12
+        pd = lib.get_persistent("persistent_skytoss")
+        from vibecraft.strategy import PersistentDoctrine
+
+        assert isinstance(pd, PersistentDoctrine)
+        assert pd.target_composition["Carrier"] == 12  # PascalCase key
+        assert pd.gas_intensity == "high"
 
     def test_race_inferred_from_directory(self) -> None:
         """from_directories 应按 strategies/<race>/foo.yaml 推断种族。"""

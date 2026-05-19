@@ -1,4 +1,4 @@
-kind: midgame_stance
+kind: opening_build
 id: two_base_tanks
 display_name_zh: "双基地坦克压制"
 summary_zh: "双矿坦克 + 枪兵阵地战：坦克展开防守线 + Marine 保护坦克，逐步推进对方；对付蟑螂 / 不朽的核心手段"
@@ -45,7 +45,7 @@ micro_doctrine:
   - "对方 Colossus：Viking 点名"
 
 lategame_transitions:
-  - lategame_id: bc_late
+  - lategame_id: persistent_skyterran
     when: "default"
-  - lategame_id: bc_late
+  - lategame_id: persistent_skyterran
     when: "game_time >= 14:00"

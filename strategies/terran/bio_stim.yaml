@@ -1,4 +1,4 @@
-kind: midgame_stance
+kind: opening_build
 id: bio_stim
 display_name_zh: "生化刺激剂中期"
 summary_zh: "双矿生化 + 刺激剂：Marine + Marauder + Medivac 三件套，刺激剂 + 医疗船全力压制，timing 8:00-9:30 出门"
@@ -46,7 +46,7 @@ micro_doctrine:
   - "Medical kite：Medivac 撤到安全位后继续 heal"
 
 lategame_transitions:
-  - lategame_id: bc_late
+  - lategame_id: persistent_skyterran
     when: "default"
-  - lategame_id: bc_late
+  - lategame_id: persistent_skyterran
     when: "game_time >= 13:00"

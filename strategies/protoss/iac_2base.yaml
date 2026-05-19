@@ -1,4 +1,4 @@
-kind: midgame_stance
+kind: opening_build
 id: iac_2base
 display_name_zh: "叉球一波"
 summary_zh: "vanilla IAC：双矿冲锋叉+不朽一波 timing,6:30 出门 all-in。核心 chargelot 主力 + 3 不朽针对装甲 + 7 BG 暴兵。不出 archon（要 archon 走 dt_drop_iac）"
@@ -67,10 +67,10 @@ micro_doctrine:
   - "warp prism 1-2 个增援 / pickup low_hp 单位"
 
 expire_action:
-  - "transition: skytoss"
+  - "transition: persistent_skytoss"
 
 lategame_transitions:
-  - lategame_id: skytoss
+  - lategame_id: persistent_skytoss
     when: "default"
-  - lategame_id: skytoss
+  - lategame_id: persistent_skytoss
     when: "enemy.lategame_composition"

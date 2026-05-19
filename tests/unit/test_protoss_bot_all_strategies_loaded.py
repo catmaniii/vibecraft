@@ -60,7 +60,7 @@ def _setup_sharpy_path():
         sys.path.remove(sharpy_path_str)
 
 
-# 期望被加载的 9 个神族策略 id（必须跟 strategies/protoss/*.yaml 完全对齐）
+# 期望被加载的 9 个神族策略 id（两层架构 2026-05-19：skytoss → persistent_skytoss 改名）
 _EXPECTED_STRATEGY_IDS: set[str] = {
     "4bg",
     "1g_robo_immortal",
@@ -70,7 +70,7 @@ _EXPECTED_STRATEGY_IDS: set[str] = {
     "cannon_rush",
     "iac_2base",
     "dt_drop_iac",
-    "skytoss",
+    "persistent_skytoss",
 }
 
 

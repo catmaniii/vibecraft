@@ -67,7 +67,7 @@ scout_at: "13 send_probe enemy_natural"
 
 abort_signals:
   - sees: "enemy.units.muta.count >= 4"
-    then: "transition:skytoss"
+    then: "transition:persistent_skytoss"
   - sees: "enemy.units.lurker.count >= 2"
     then: "transition:iac_2base"
 
