@@ -33,6 +33,8 @@ const props = defineProps<{
       cost: number
       alternatives: Array<{ id: string; cost: number }>
       enemy_tags_hit: string[]
+      // 2026-05-20: True = bot 已真换 plan;False = 仅推荐,玩家自己挑时机切
+      swap_plan?: boolean
     }
   } | null
 }>()
@@ -66,6 +68,14 @@ const alternativesDisplay = computed(() => {
   const alts = props.switchEvent?.payload.alternatives ?? []
   return alts.slice(0, 2).map((a) => STRATEGY_DISPLAY[a.id] ?? a.id).join(' / ')
 })
+
+// swap_plan=true → "已切换";false → "推荐切换"。
+// 2026-05-20: opening_completed reason 走推荐模式(plan 不动,让 gate4 攻击继续),
+// cancel_redirected 仍是真换 plan。
+const titleDisplay = computed(() => {
+  const swap = props.switchEvent?.payload.swap_plan
+  return swap === false ? 'ⓘ 建议切换持续策略' : 'ⓘ 已自动切换策略'
+})
 </script>
 
 <template>
@@ -84,7 +94,7 @@ const alternativesDisplay = computed(() => {
              rounded-lg bg-accent/15 border border-accent/50
              backdrop-blur px-4 py-3 shadow-lg pointer-events-auto"
     >
-      <p class="text-xs text-muted uppercase tracking-wider">ⓘ 已自动切换策略</p>
+      <p class="text-xs text-muted uppercase tracking-wider">{{ titleDisplay }}</p>
       <p class="text-base font-bold text-accent mt-1">{{ chosenDisplay }}</p>
       <p class="text-xs text-white/80 mt-1">
         原因: {{ reasonDisplay }}

@@ -1352,25 +1352,33 @@ class Director:
         )
 
     def notify_opening_completed(self, now: float, caused_by: str = "bot:opening_done") -> bool:
-        """bot 调用:当前开局策略达到完成条件 → 自动切持续策略。
+        """bot 调用:当前开局策略达到完成条件 → **推荐**切持续策略(发 toast 但不换 plan)。
 
         典型触发点:4bg 的 `_ready_to_pressure` 条件全满足(折跃完成 + 4 BG ready +
         4 stalker)时,gate4_pressure 的 EmitOpeningCompleteAct 调用本方法。
+
+        关键设计(2026-05-20 用户反馈修正):
+        与 cancel 不同 — opening_completed **只推荐不真换 plan**(swap_plan=False)。
+        原因:`_ready_to_pressure` 触发于 4 stalker 刚 warp 完即将出门那一刻,
+        此时换 plan 会把 gate4 的 ForwardWarpStalker + VibeCraftZoneAttack 整个
+        撤掉,后续不再 warp + 4 stalker 没人指挥停在原地。Toast 让玩家看到推荐,
+        自己挑时机切(攻击打完之后)。
+
         本方法一次性 — 之后无论 bot 调多少次都不再触发(`_opening_completed_signaled`
-        latch),避免重复 switch / 重复推 toast。
+        latch),避免重复推 toast。
 
         Args:
             now: 当前 game_time(秒)
             caused_by: 事件链路追踪,默认 "bot:opening_done"
 
         Returns:
-            True = 本次触发了 switch;False = 之前已触发过 / library 没 persistent
+            True = 本次触发了 toast;False = 之前已触发过 / library 没 persistent
             doctrine,等价无操作。
         """
         if self._opening_completed_signaled:
             return False
         chosen = self._apply_auto_persistent_switch(
-            now, reason="opening_completed", caused_by=caused_by
+            now, reason="opening_completed", caused_by=caused_by, swap_plan=False
         )
         if chosen is None:
             # pick_best_persistent 失败(race 没注册 persistent / library 空),
@@ -1384,6 +1392,7 @@ class Director:
         now: float,
         reason: str,
         caused_by: str | None = None,
+        swap_plan: bool = True,
     ) -> str | None:
         """调 pick_best_persistent 算成本，切到最低成本 doctrine + 推送 PWA。
 
@@ -1391,6 +1400,11 @@ class Director:
             now: 当前 game_time（秒）
             reason: "cancel_redirected" / "opening_completed" / "parse_fail_redirected"
             caused_by: 事件链路追踪
+            swap_plan: 是否真换 bot plan(调 facade.set_build)。
+                - True(默认):cancel 等场景,立即换 plan
+                - False:opening_completed 等场景,只发 toast 推荐,plan 不动
+                  (gate4 的 attack 逻辑要继续跑;否则 4 stalker 一 warp 完 plan 就被
+                  替换 → 没人指挥 + 不再 warp,见 2026-05-20 用户反馈)
 
         Returns:
             chosen doctrine id；如 my_race 没 persistent doctrine 注册或 library 为 None
@@ -1423,8 +1437,9 @@ class Director:
             return None
 
         # facade.set_build（即时生效）
-        with contextlib.suppress(Exception):
-            self.facade.set_build(chosen)
+        if swap_plan:
+            with contextlib.suppress(Exception):
+                self.facade.set_build(chosen)
 
         # log auto_switch 事件（PWA 据此显示 toast）
         sorted_costs = sorted(all_costs.items(), key=lambda kv: kv[1])
@@ -1440,6 +1455,8 @@ class Director:
                 "cost": round(cost, 1),
                 "alternatives": alternatives,
                 "enemy_tags_hit": sorted(enemy_tags),
+                # swap_plan=True → bot 已切;False → 仅推荐,玩家自己确认才切
+                "swap_plan": swap_plan,
             },
             priority="medium",
             caused_by=caused_by,
@@ -1448,8 +1465,8 @@ class Director:
         # PWA push（toast 显示）
         self._push_event(evt.model_dump(mode="json"))
         logger.info(
-            "auto_persistent_switch[%s]: chose %s (cost=%.1f, race=%s, enemy_tags=%d)",
-            reason, chosen, cost, my_race, len(enemy_tags),
+            "auto_persistent_switch[%s]: chose %s (cost=%.1f, race=%s, enemy_tags=%d, swap=%s)",
+            reason, chosen, cost, my_race, len(enemy_tags), swap_plan,
         )
         return chosen
 
