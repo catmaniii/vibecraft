@@ -25,6 +25,30 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [1g_robo_immortal, 4_gateway_pressure]"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+# 按 spawningtool 时间节点切阶段；PhaseTracker 用 start_at_time 推断 current_phase_id
+phases:
+  - id: economic_open
+    display: "双矿 + BY"
+    subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
+    start_at_time: 0
+  - id: tech_up
+    display: "升科技 (VR + VT)"
+    subtitle: "2:22 机械工厂 / 3:40 议会，准备 Charge"
+    start_at_time: 130    # ~2:10
+  - id: immortal_charge
+    display: "暴不朽 + Charge"
+    subtitle: "3:25/4:05 出不朽 ×2，4:27 启动 Charge 研究"
+    start_at_time: 205    # ~3:25
+  - id: gateway_mass
+    display: "7 BG 暴兵"
+    subtitle: "4:35-4:56 暴产能（gateway 7），chargelot 主力刷"
+    start_at_time: 275    # ~4:35
+  - id: attack_timing
+    display: "6:15 出门一波"
+    subtitle: "Charge 完 + +1 武器中 → 主力 attack 对方分矿"
+    start_at_time: 375    # ~6:15
+
 # 数据来源:https://lotv.spawningtool.com/build/196674/ (2 Base PvX IAC all-in)
 # 关键 build 节点:
 # - 1:25 Natural (2nd Base)

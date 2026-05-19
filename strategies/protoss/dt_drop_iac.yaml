@@ -24,6 +24,33 @@ enter_when:
   - "self.tech.warpgate.done"
   - "self.expansion_count >= 2"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + BY"
+    subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
+    start_at_time: 0
+  - id: dt_tech
+    display: "VC + VR + VD"
+    subtitle: "2:38 议会 / 3:05 机械工厂 / 3:14 黑暗神殿"
+    start_at_time: 158    # ~2:38
+  - id: dt_harass
+    display: "DT 双波骚扰"
+    subtitle: "4:38 第一批 DT × 4 / 5:26 第二批 DT × 4"
+    start_at_time: 278    # ~4:38
+  - id: archon_merge
+    display: "残 DT 合 Archon"
+    subtitle: "5:29 起合 archon ×2，到 6 个；5:38 启 Charge 研究"
+    start_at_time: 329    # ~5:29
+  - id: gateway_mass
+    display: "暴 4 BG"
+    subtitle: "6:04-6:11 4 BG 暴 chargelot 主力"
+    start_at_time: 364    # ~6:04
+  - id: attack_timing
+    display: "8:00 大军一波"
+    subtitle: "3-4 不朽 + 6 archon + 满 chargelot → 推进"
+    start_at_time: 480    # ~8:00
+
 # 数据来源:https://lotv.spawningtool.com/build/68902/ (Stats' Double DT/Archon drop into IAC push)
 # 关键 build 节点（Stats 韩国职业 PvP/PvT 通用变体）:
 # - 2:38 Twilight Council  (supply 31)

@@ -17,6 +17,29 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [12pool, macro_hatch]"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + 速率升级"
+    subtitle: "二矿 / Spawning Pool / RoachWarren / Glial Reconstitution"
+    start_at_time: 0
+  - id: roach_mass
+    display: "暴蟑螂"
+    subtitle: "~4:30 蟑螂主力到位 8-10 只"
+    start_at_time: 270
+  - id: hydra_tech
+    display: "上刺蛇 + 升射程"
+    subtitle: "~5:30 Hydralisk Den + Grooved Spines"
+    start_at_time: 330
+  - id: combined_arms
+    display: "蟑刺合流"
+    subtitle: "~6:30 16 蟑 + 6+ 刺蛇组合就位"
+    start_at_time: 390
+  - id: attack_timing
+    display: "7:30 出门压制"
+    subtitle: "蟑刺 + Queen 推对方分矿"
+    start_at_time: 450
+
 commitments:
   units:
     roach: 16

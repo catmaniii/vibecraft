@@ -18,6 +18,29 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [12pool, macro_hatch]"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿运营 + 升 Lair"
+    subtitle: "二矿 / 气矿 / Spawning Pool / Lair"
+    start_at_time: 0
+  - id: spire_up
+    display: "起尖塔 Spire"
+    subtitle: "~3:30 Spire 开工，准备出飞龙"
+    start_at_time: 210
+  - id: mutalisk_burst
+    display: "暴飞龙"
+    subtitle: "~5:30 第一波 6-9 飞龙，启动多线骚扰"
+    start_at_time: 330
+  - id: harass_phase
+    display: "持续双线骚扰"
+    subtitle: "飞龙骚 + 小狗压门，干扰对方经济节奏"
+    start_at_time: 420
+  - id: attack_timing
+    display: "6:30 整合攻势"
+    subtitle: "飞龙 + 小狗 + Queen 一并推上"
+    start_at_time: 390
+
 commitments:
   units:
     mutalisk: 12

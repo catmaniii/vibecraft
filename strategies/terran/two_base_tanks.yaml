@@ -18,6 +18,29 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [marine_rush, reaper_expand]"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + 双 Factory"
+    subtitle: "二矿 / Refinery×2 / Factory×2"
+    start_at_time: 0
+  - id: tank_tech
+    display: "起 SiegeTech"
+    subtitle: "~4:00 TechLab + SiegeTech 研究"
+    start_at_time: 240
+  - id: tank_mass
+    display: "暴坦克 + 维京"
+    subtitle: "~6:00 4 坦克 + 2 维京 + 12 兵到位"
+    start_at_time: 360
+  - id: combined_arms
+    display: "MMM + 坦克阵地"
+    subtitle: "~7:30 6 坦克 + 12 兵 + 2 医疗船就位"
+    start_at_time: 450
+  - id: attack_timing
+    display: "9:00 推进"
+    subtitle: "坦克展开慢推，配合维京制空、医疗船救援"
+    start_at_time: 540
+
 commitments:
   units:
     marine: 12

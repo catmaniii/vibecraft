@@ -19,6 +19,29 @@ enter_when:
   - "self.expansion_count >= 2"
   - "from_opening in [marine_rush, reaper_expand]"
 
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + Factory"
+    subtitle: "二矿 / Refinery×2 / Factory（医疗船前置）"
+    start_at_time: 0
+  - id: tech_lab_stim
+    display: "TechLab + 刺激剂"
+    subtitle: "~3:30 TechLab，启动 Stimpack 研究"
+    start_at_time: 210
+  - id: marauder_medivac
+    display: "Marauder + Medivac"
+    subtitle: "~5:00 第一波医疗船 + Marauder 到位"
+    start_at_time: 300
+  - id: bio_mass
+    display: "MMM 三件套就位"
+    subtitle: "~6:30 20 兵 + 6 强袭兵 + 3 医疗船"
+    start_at_time: 390
+  - id: attack_timing
+    display: "8:00 stim 一波"
+    subtitle: "全军 stim 压向对方分矿，配合 drop 多线"
+    start_at_time: 480
+
 commitments:
   units:
     marine: 20
