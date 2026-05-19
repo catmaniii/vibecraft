@@ -66,6 +66,115 @@ from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCr
 logger = logging.getLogger(__name__)
 
 
+class Gate4StateLogger(ActBase):  # type: ignore[misc]
+    """每 N 秒 dump 一次 4bg 关键状态到 log,debug 用。
+
+    输出每个 stalker 的 tag/position/role/orders,以及 BG/WG count + warpgate
+    research 进度。用户反馈"神秘力量把追猎引回家"时,从 log 能直接看到 stalker
+    的 role 从 Idle/Moving 变成 Defending 的瞬间 + 谁拉的(zone position)。
+    """
+
+    def __init__(self, interval_s: float = 5.0) -> None:
+        super().__init__()
+        self.interval_s = interval_s
+        self._last_log_t: float = -1000.0
+
+    async def execute(self) -> bool:
+        from sharpy.managers.core.roles import UnitTask
+
+        try:
+            now = float(self.ai.time)
+        except Exception:
+            return True
+        if now - self._last_log_t < self.interval_s:
+            return True
+        self._last_log_t = now
+
+        try:
+            stalkers = list(self.ai.units(UnitTypeId.STALKER))
+        except Exception:
+            stalkers = []
+
+        # BG/WG state
+        try:
+            bg_total = self.ai.structures.of_type({UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}).amount
+            bg_ready = self.ai.structures.of_type(
+                {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
+            ).ready.amount
+        except Exception:
+            bg_total = bg_ready = 0
+        warpgate_done = UpgradeId.WARPGATERESEARCH in self.ai.state.upgrades
+        try:
+            warp_progress = float(self.ai.already_pending_upgrade(UpgradeId.WARPGATERESEARCH))
+        except Exception:
+            warp_progress = 0.0
+
+        # gather_point
+        try:
+            gp = self.knowledge.gather_point_solver.gather_point
+            gp_str = f"({gp.x:.1f},{gp.y:.1f})"
+        except Exception:
+            gp_str = "?"
+
+        # supply / 资源
+        try:
+            res_str = f"M{self.ai.minerals} G{self.ai.vespene} S{self.ai.supply_used}/{self.ai.supply_cap}"
+        except Exception:
+            res_str = "?"
+
+        logger.info(
+            "4bg-state t=%.1f %s BG=%d/%d WG-research=%.0f%%/%s gather=%s stalkers=%d",
+            now, res_str, bg_ready, bg_total,
+            warp_progress * 100, "done" if warpgate_done else "pending",
+            gp_str, len(stalkers),
+        )
+
+        # 每只 stalker 的 role + position + order
+        task_names = {
+            UnitTask.Idle: "Idle", UnitTask.Moving: "Moving",
+            UnitTask.Fighting: "Fighting", UnitTask.Defending: "Defending",
+            UnitTask.Attacking: "Attacking", UnitTask.Reserved: "Reserved",
+            UnitTask.Scouting: "Scouting",
+        }
+        for s in stalkers:
+            # 查任务(逐一 is_in_role)
+            task_str = "?"
+            try:
+                for task_id, name in task_names.items():
+                    if self.knowledge.roles_manager.is_in_role(task_id, s):
+                        task_str = name
+                        break
+            except Exception:
+                try:
+                    for task_id, name in task_names.items():
+                        if self.roles.is_in_role(task_id, s):
+                            task_str = name
+                            break
+                except Exception:
+                    pass
+
+            ready = "ready" if s.is_ready else f"warp={s.build_progress:.0%}"
+            # orders 摘要
+            order_str = "idle"
+            try:
+                orders = list(getattr(s, "orders", []) or [])
+                if orders:
+                    o = orders[0]
+                    aid = getattr(getattr(o, "ability", None), "id", None)
+                    target = getattr(o, "target", None)
+                    if hasattr(target, "x") and hasattr(target, "y"):
+                        order_str = f"{aid}→({target.x:.0f},{target.y:.0f})"
+                    else:
+                        order_str = f"{aid}→{target}"
+            except Exception:
+                pass
+            logger.info(
+                "  stalker tag=%d pos=(%.1f,%.1f) %s task=%s order=%s",
+                s.tag, s.position.x, s.position.y, ready, task_str, order_str,
+            )
+        return True
+
+
 class EmitOpeningCompleteAct(ActBase):  # type: ignore[misc]
     """开局完成条件首次满足时,通知 Director 自动切持续策略 — 一次性。
 
@@ -188,10 +297,25 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 self._forward_ready,
                 ForwardSupportPylonGateway(),
             ),
+            # 2026-05-20 用户反馈"神秘力量把追猎引回家":根因 = PlanZoneDefense
+            # 的 get_defenders 会从 Idle/Moving/Fighting/**Attacking** 各任务拉
+            # 最近的兵当 defender(unit_role_manager.py:142-150),包括正在前往
+            # forward / 正在攻击中的 stalker。enemy 1 个 probe scout 在家附近就
+            # 触发 → 拉 1-2 个 stalker 回家 → 标 Defending → 不在 free_units →
+            # VibeCraftZoneAttack 看不见 → 卡家。
+            # 修:前线 PYLON 建好(= 进入 4bg 推进阶段)后 skip PlanZoneDefense,
+            # 不再让它抽兵。前期(forward PYLON 没建好之前)正常防守 — 那时还没
+            # 攻击意图,enemy 1-2 个 scout 拉 1 个 stalker 守家 OK。
+            # ALSO Bot 状态日志:每 5s dump 一次 stalker 角色/位置/订单,debug 用。
+            Gate4StateLogger(interval_s=5.0),
             # 战术 / 维护 / 攻击触发(全是 sharpy 自带 Manager)
             SequentialList(
                 MineOpenBlockedBase(),
-                PlanZoneDefense(),
+                Step(
+                    None,
+                    PlanZoneDefense(),
+                    skip=lambda ai: Gate4Pressure._forward_pylon_exists(ai),
+                ),
                 RestorePower(),
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
@@ -242,6 +366,30 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
         ready_bg = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
         return bool(ready_bg >= 1)
+
+    @staticmethod
+    def _forward_pylon_exists(ai: Any) -> bool:
+        """前线 proxy PYLON 是否 ready(距敌方 < 距家 * 0.7 视为 forward)。
+
+        与 forward_warp / forward_rally 用同一个判定逻辑,保持一致。
+        用于 PlanZoneDefense 的 skip 条件:forward PYLON ready → 进入 4bg 推进
+        阶段,defense 关闭防止抽兵。
+        """
+        try:
+            home = ai.start_location
+            enemy = ai.enemy_start_locations[0]
+        except (IndexError, AttributeError):
+            return False
+        try:
+            pylons = ai.structures(UnitTypeId.PYLON).ready
+        except Exception:
+            return False
+        for py in pylons:
+            d_home = py.distance_to(home)
+            d_enemy = py.distance_to(enemy)
+            if d_enemy < d_home * 0.7:
+                return True
+        return False
 
     @staticmethod
     def _all_4bg_warpgate_ready(ai: Any) -> bool:
