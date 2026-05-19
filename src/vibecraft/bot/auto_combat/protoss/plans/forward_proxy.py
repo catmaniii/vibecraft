@@ -55,6 +55,12 @@ _MIN_HOME_DIST: float = 25.0
 _MIN_DIST_TO_ENEMY: float = 30.0
 # 距离敌方主基地的硬上限（太远没折跃 timing 价值）
 _MAX_DIST_TO_ENEMY: float = 60.0
+# 距离敌方 natural(二基地)的硬下限。
+# 历史(2026-05-19 用户反馈):"野BG 时不时选在对手二基地，太容易被发现和打断"。
+# 仅看 _MIN_DIST_TO_ENEMY=30(距 main)不够 — 敌方 natural 通常距 main 30~40,
+# 所以 ring 30 候选 / 中线 0.6-0.75 进度候选可能正好落在 natural 脚下。
+# natural footprint ~10 + 守家 probe/scv 视野 ~8 + buffer 4 = 22 起步安全。
+_MIN_DIST_TO_ENEMY_NATURAL: float = 22.0
 # 任务超时（秒，游戏内）
 # 历史:90 - 走路 ~30s + PYLON 18s + GATEWAY 35s = 83s,余量 7s,placement 一次失败
 # 就崩。提到 150:走路 + 双建造 + 失败重试余量充足。
@@ -222,6 +228,10 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
             return -1.0  # 太近，敌方主基地必看到
         if dist > _MAX_DIST_TO_ENEMY:
             return -1.0  # 太远没意义
+        # 距敌方 natural 太近：守家 probe/scv + 守家防御建筑必发现 → 整个 proxy 暴露
+        nat = self._enemy_natural()
+        if nat is not None and pos.distance_to(nat) < _MIN_DIST_TO_ENEMY_NATURAL:
+            return -1.0
         if self._in_enemy_vision(pos):
             return -1.0  # 当前被敌方单位/建筑看到
         try:
@@ -359,6 +369,27 @@ class ForwardSupportPylonGateway(ActBase):  # type: ignore[misc]
         except Exception:
             pass
         return False
+
+    def _enemy_natural(self) -> Point2 | None:
+        """敌方 natural（二基地）位置：离敌方主基地最近的非主基地扩张点。
+
+        python-sc2 `expansion_locations_list` 包含所有扩张点（含双方主基地）。
+        按到 enemy_start 的距离排序，跳过距离 ~0 的主基地本身，取第一个 = natural。
+        某些非对称地图理论上可能有多个"次近"扩张距离接近，但 SC2 ladder 标准
+        地图都只有一个明确 natural，按最近原则取就够。
+        """
+        try:
+            enemy_main = self.ai.enemy_start_locations[0]
+            expansions = list(self.ai.expansion_locations_list)
+            if not expansions:
+                return None
+            sorted_exp = sorted(expansions, key=lambda p: p.distance_to(enemy_main))
+            for p in sorted_exp:
+                if p.distance_to(enemy_main) > 1.0:
+                    return p
+            return None
+        except Exception:
+            return None
 
     def _off_main_path(self, pos: Point2) -> float:
         """pos 到 enemy_main→map_center 直线的垂直距离。越大越偏路。"""

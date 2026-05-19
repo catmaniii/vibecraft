@@ -46,6 +46,7 @@ def _make_mock_ai(
     structures_by_tag=None,
     workers_positions=None,
     game_time=10.0,
+    expansion_locations=None,
 ):
     """构造一个 mock ai 对象，提供 forward_proxy 需要的最小接口。"""
     from sc2.position import Point2
@@ -55,6 +56,11 @@ def _make_mock_ai(
     ai.start_location = Point2(own_main)
     ai.game_info.map_center = Point2(map_center)
     ai.time = game_time
+    # expansion_locations_list：默认只放 enemy_main + own_main（最少两点，无 natural）
+    # 让现有不关心 natural 的测试保持原有行为；要测 natural 时显式传入。
+    if expansion_locations is None:
+        expansion_locations = [enemy_main, own_main]
+    ai.expansion_locations_list = [Point2(p) for p in expansion_locations]
 
     # townhalls
     townhalls = []
@@ -232,6 +238,39 @@ class TestScorePos:
         assert inst._score_pos(edge_pos) > inst._score_pos(middle_pos), (
             f"edge={inst._score_pos(edge_pos)} should > middle={inst._score_pos(middle_pos)}"
         )
+
+    def test_too_close_to_enemy_natural_returns_negative(self):
+        """2026-05-19 用户反馈:野BG 时不时选在对手二基地。
+
+        敌方 natural 位置 (95, 50)：proxy (96, 51) 距 natural ~1.4 应硬过滤。
+        距敌方主 (120, 30) ~33 满足 _MIN_DIST_TO_ENEMY，但距 natural 太近。
+        """
+        from sc2.position import Point2
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai(
+            enemy_main=(120, 30),
+            expansion_locations=[(120, 30), (95, 50), (20, 130)],
+        )
+        # 距 natural 1.4 << 22 阈值
+        pos = Point2((96, 51))
+        # 先确认距敌方主 ≥ 30（不被旧约束打否）
+        assert pos.distance_to(Point2((120, 30))) >= 30
+        assert inst._score_pos(pos) < 0
+
+    def test_safe_distance_from_enemy_natural_scores_positive(self):
+        """距敌方 natural 充分远(≥ 22)的 proxy 点不应被新约束误杀。"""
+        from sc2.position import Point2
+
+        inst = _make_proxy_instance()
+        inst.ai = _make_mock_ai(
+            enemy_main=(120, 30),
+            expansion_locations=[(120, 30), (95, 50), (20, 130)],
+        )
+        # (78, 30): 距 enemy_main 42, 距 natural ~26 → 都满足
+        pos = Point2((78, 30))
+        assert pos.distance_to(Point2((95, 50))) > 22
+        assert inst._score_pos(pos) > 0
 
     def test_out_of_map_bounds_returns_negative(self):
         """Regression: ring 在地图边界外的点必须被过滤(实战 log:proxy (28.5, -6.14))。"""
