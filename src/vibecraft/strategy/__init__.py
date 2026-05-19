@@ -20,6 +20,8 @@ from vibecraft.strategy.models import (
     LategameTransition,
     MidgameStance,
     OpeningBuild,
+    OpeningCompletion,
+    PersistentDoctrine,
     Phase,
     StrategyKind,
 )
@@ -35,6 +37,8 @@ __all__ = [
     "LategameTransition",
     "MidgameStance",
     "OpeningBuild",
+    "OpeningCompletion",
+    "PersistentDoctrine",
     "Phase",
     "StrategyError",
     "StrategyKind",

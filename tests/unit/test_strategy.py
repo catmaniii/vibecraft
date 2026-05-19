@@ -21,6 +21,7 @@ from vibecraft.strategy import (
     LategameDoctrine,
     MidgameStance,
     OpeningBuild,
+    PersistentDoctrine,
     StrategyKind,
     StrategyLibrary,
     StrategyNotFoundError,
@@ -327,6 +328,218 @@ class TestStrategyLibrary:
         canonical, group = lib.aliases.resolve("虚空", verb=VerbHint.TRAIN)
         assert canonical == "VoidRay"
         assert group == "unit"
+
+
+# =========================================================================
+# 2026-05-19 两层架构：OpeningCompletion / PersistentDoctrine schema
+# =========================================================================
+
+
+class TestOpeningCompletion:
+    """OpeningCompletion model 校验"""
+
+    def test_valid_with_timeout_only(self) -> None:
+        from vibecraft.strategy import OpeningCompletion
+
+        oc = OpeningCompletion(timeout_s=420)
+        assert oc.timeout_s == 420
+        assert oc.goal_when is None
+
+    def test_valid_with_goal_when(self) -> None:
+        from vibecraft.strategy import OpeningCompletion
+
+        oc = OpeningCompletion(
+            timeout_s=420,
+            goal_when={
+                "kind": "all_of",
+                "conditions": [
+                    {"kind": "structure_count", "structure_type": "Gateway", "op": ">=", "value": 4},
+                    {"kind": "time_elapsed_since", "seconds": 360, "ref": "game_start"},
+                ],
+            },
+        )
+        assert oc.goal_when["kind"] == "all_of"  # type: ignore[index]
+
+    def test_timeout_must_be_positive(self) -> None:
+        from pydantic import ValidationError
+
+        from vibecraft.strategy import OpeningCompletion
+
+        with pytest.raises(ValidationError):
+            OpeningCompletion(timeout_s=0)
+        with pytest.raises(ValidationError):
+            OpeningCompletion(timeout_s=-1)
+
+    def test_extra_field_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from vibecraft.strategy import OpeningCompletion
+
+        with pytest.raises(ValidationError):
+            OpeningCompletion(timeout_s=300, extra_field="nope")  # type: ignore[call-arg]
+
+
+class TestOpeningBuildWithCompletion:
+    """OpeningBuild 的 completion 字段（None 或 OpeningCompletion）"""
+
+    def test_completion_field_optional(self) -> None:
+        """现有 yaml 不带 completion 字段时仍能加载"""
+        from vibecraft.strategy import OpeningBuild
+
+        ob = OpeningBuild.model_validate(
+            {
+                "kind": "opening_build",
+                "id": "test",
+                "display_name_zh": "测试",
+                "phases": [],
+                "steps": ["13 build Pylon"],
+            }
+        )
+        assert ob.completion is None
+
+    def test_completion_field_loads(self) -> None:
+        from vibecraft.strategy import OpeningBuild
+
+        ob = OpeningBuild.model_validate(
+            {
+                "kind": "opening_build",
+                "id": "test",
+                "display_name_zh": "测试",
+                "phases": [],
+                "steps": ["13 build Pylon"],
+                "completion": {
+                    "timeout_s": 420,
+                    "goal_when": {
+                        "kind": "structure_count",
+                        "structure_type": "Gateway",
+                        "op": ">=",
+                        "value": 4,
+                    },
+                },
+            }
+        )
+        assert ob.completion is not None
+        assert ob.completion.timeout_s == 420
+
+
+class TestPersistentDoctrine:
+    """PersistentDoctrine schema（新 kind）"""
+
+    def _minimal_doctrine(self, **overrides) -> dict:
+        base = {
+            "kind": "persistent_doctrine",
+            "id": "test_persistent",
+            "display_name_zh": "测试 doctrine",
+            "target_composition": {"Stalker": 20, "Sentry": 3},
+        }
+        base.update(overrides)
+        return base
+
+    def test_minimal_loads(self) -> None:
+        from vibecraft.strategy import PersistentDoctrine
+
+        d = PersistentDoctrine.model_validate(self._minimal_doctrine())
+        assert d.id == "test_persistent"
+        assert d.gas_intensity == "medium"  # 默认值
+        assert d.ramp_up_time_s == 90.0  # 默认值
+        assert d.counters_against == []
+
+    def test_gas_intensity_validation(self) -> None:
+        from pydantic import ValidationError
+
+        from vibecraft.strategy import PersistentDoctrine
+
+        # 合法
+        for valid in ("low", "medium", "high"):
+            d = PersistentDoctrine.model_validate(
+                self._minimal_doctrine(gas_intensity=valid)
+            )
+            assert d.gas_intensity == valid
+        # 非法
+        with pytest.raises(ValidationError):
+            PersistentDoctrine.model_validate(self._minimal_doctrine(gas_intensity="extreme"))
+
+    def test_ramp_up_must_be_positive(self) -> None:
+        from pydantic import ValidationError
+
+        from vibecraft.strategy import PersistentDoctrine
+
+        with pytest.raises(ValidationError):
+            PersistentDoctrine.model_validate(self._minimal_doctrine(ramp_up_time_s=0))
+
+    def test_counters_against_list(self) -> None:
+        from vibecraft.strategy import PersistentDoctrine
+
+        d = PersistentDoctrine.model_validate(
+            self._minimal_doctrine(
+                counters_against=["zerg_ling_bane", "terran_bio"],
+                weak_against=["mass_air"],
+            )
+        )
+        assert "zerg_ling_bane" in d.counters_against
+        assert "mass_air" in d.weak_against
+
+
+class TestStrategyLibraryPersistent:
+    """StrategyLibrary 对 PersistentDoctrine 的 CRUD / 查询"""
+
+    def _make_persistent(self, sid: str) -> PersistentDoctrine:
+        return PersistentDoctrine.model_validate(
+            {
+                "kind": "persistent_doctrine",
+                "id": sid,
+                "display_name_zh": sid,
+                "target_composition": {"Stalker": 10},
+            }
+        )
+
+    def test_constructor_accepts_persistents(self) -> None:
+        d1 = self._make_persistent("persistent_a")
+        d2 = self._make_persistent("persistent_b")
+        lib = StrategyLibrary(persistents=[d1, d2])
+        assert lib.get_persistent("persistent_a").id == "persistent_a"
+        assert {d.id for d in lib.persistents} == {"persistent_a", "persistent_b"}
+
+    def test_all_ids_includes_persistents(self) -> None:
+        d = self._make_persistent("persistent_x")
+        lib = StrategyLibrary(persistents=[d])
+        assert "persistent_x" in lib.all_ids()
+        assert lib.all_ids(StrategyKind.PERSISTENT) == ["persistent_x"]
+
+    def test_get_dispatches_to_persistent(self) -> None:
+        d = self._make_persistent("persistent_y")
+        lib = StrategyLibrary(persistents=[d])
+        got = lib.get("persistent_y")
+        assert got.id == "persistent_y"
+        assert got.kind == StrategyKind.PERSISTENT
+
+    def test_persistent_doctrines_filter_by_race(self) -> None:
+        d_proto = self._make_persistent("persistent_proto")
+        d_zerg = self._make_persistent("persistent_zerg")
+        lib = StrategyLibrary(
+            persistents=[d_proto, d_zerg],
+            races={"persistent_proto": "protoss", "persistent_zerg": "zerg"},
+        )
+        proto_doctrines = lib.persistent_doctrines("protoss")
+        assert [d.id for d in proto_doctrines] == ["persistent_proto"]
+        # 无 race 限制
+        assert len(lib.persistent_doctrines()) == 2
+
+    def test_kind_of_returns_correct_kind(self) -> None:
+        d = self._make_persistent("persistent_a")
+        ob = OpeningBuild.model_validate(
+            {
+                "kind": "opening_build",
+                "id": "open_a",
+                "display_name_zh": "open",
+                "phases": [],
+                "steps": ["13 build Pylon"],
+            }
+        )
+        lib = StrategyLibrary(openings=[ob], persistents=[d])
+        assert lib.kind_of("open_a") == StrategyKind.OPENING
+        assert lib.kind_of("persistent_a") == StrategyKind.PERSISTENT
+        assert lib.kind_of("nope") is None
 
     def test_hotkey_aliases(self) -> None:
         lib = StrategyLibrary.from_directories(

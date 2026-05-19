@@ -21,6 +21,7 @@ from vibecraft.strategy.models import (
     LategameTransition,
     MidgameStance,
     OpeningBuild,
+    PersistentDoctrine,
     Strategy,
     StrategyKind,
 )
@@ -34,12 +35,17 @@ class StrategyLibrary:
         openings: list[OpeningBuild] | None = None,
         midgames: list[MidgameStance] | None = None,
         lategames: list[LategameDoctrine] | None = None,
+        persistents: list[PersistentDoctrine] | None = None,
         aliases: AliasTable | None = None,
         races: dict[str, str] | None = None,
     ) -> None:
         self._openings: dict[str, OpeningBuild] = {s.id: s for s in (openings or [])}
         self._midgames: dict[str, MidgameStance] = {s.id: s for s in (midgames or [])}
         self._lategames: dict[str, LategameDoctrine] = {s.id: s for s in (lategames or [])}
+        # 2026-05-19 两层架构新增
+        self._persistents: dict[str, PersistentDoctrine] = {
+            s.id: s for s in (persistents or [])
+        }
         self.aliases: AliasTable = aliases or AliasTable(buildings=[], units=[], upgrades=[])
         # id → 'protoss' / 'zerg' / 'terran'。from_directories 自动按 YAML 父目录推断；
         # 直接调用构造器（旧测试用法）时为空 dict，race_of 返回 None 表示"未知种族"。
@@ -63,6 +69,7 @@ class StrategyLibrary:
         openings: list[OpeningBuild] = []
         midgames: list[MidgameStance] = []
         lategames: list[LategameDoctrine] = []
+        persistents: list[PersistentDoctrine] = []
         races: dict[str, str] = {}
 
         for path in sorted(strategies_dir.rglob("*.yaml")):
@@ -74,6 +81,8 @@ class StrategyLibrary:
                 midgames.append(obj)
             elif isinstance(obj, LategameDoctrine):
                 lategames.append(obj)
+            elif isinstance(obj, PersistentDoctrine):
+                persistents.append(obj)
             # 种族 = 文件所在直接父目录名（strategies/protoss/foo.yaml → protoss）
             # 仅当父目录名为已知种族时才记录；其它结构留空（race_of 返回 None = 不限种族）
             parent = path.parent.name.lower()
@@ -83,7 +92,7 @@ class StrategyLibrary:
         aliases = AliasTable.from_yaml(aliases_path)
         return cls(
             openings=openings, midgames=midgames, lategames=lategames,
-            aliases=aliases, races=races,
+            persistents=persistents, aliases=aliases, races=races,
         )
 
     # ------------------------------------------------------------------
@@ -92,7 +101,7 @@ class StrategyLibrary:
 
     def get(self, strategy_id: str) -> Strategy:
         """统一 id 查询（不区分 kind）。"""
-        for table in (self._openings, self._midgames, self._lategames):
+        for table in (self._openings, self._midgames, self._lategames, self._persistents):
             if strategy_id in table:
                 return table[strategy_id]
         raise StrategyNotFoundError(f"未注册的剧本 id: {strategy_id!r}")
@@ -112,6 +121,12 @@ class StrategyLibrary:
             raise StrategyNotFoundError(f"未注册的 lategame: {strategy_id!r}")
         return self._lategames[strategy_id]
 
+    def get_persistent(self, strategy_id: str) -> PersistentDoctrine:
+        """2026-05-19 两层架构：取 persistent_doctrine。"""
+        if strategy_id not in self._persistents:
+            raise StrategyNotFoundError(f"未注册的 persistent: {strategy_id!r}")
+        return self._persistents[strategy_id]
+
     @property
     def openings(self) -> list[OpeningBuild]:
         return list(self._openings.values())
@@ -124,6 +139,40 @@ class StrategyLibrary:
     def lategames(self) -> list[LategameDoctrine]:
         return list(self._lategames.values())
 
+    @property
+    def persistents(self) -> list[PersistentDoctrine]:
+        return list(self._persistents.values())
+
+    def persistent_doctrines(self, race: str | None = None) -> list[PersistentDoctrine]:
+        """返回 persistent_doctrine 列表，可按种族过滤。
+
+        用于 pick_best_persistent 算 transition_cost 时遍历候选 doctrine。
+        race 给定时仅返回该种族的 doctrine（神族玩家不会被推荐 12pool 这种）。
+        """
+        if race is None:
+            return list(self._persistents.values())
+        race_l = race.lower()
+        return [
+            d for d in self._persistents.values()
+            if self._race_of.get(d.id) == race_l
+        ]
+
+    def kind_of(self, strategy_id: str) -> StrategyKind | None:
+        """返回剧本的 kind；未注册返回 None。
+
+        用于 Director 状态机不变量检查：phase=opening 时 set 的 id 必须是 OPENING；
+        phase=persistent 时必须是 PERSISTENT。
+        """
+        if strategy_id in self._openings:
+            return StrategyKind.OPENING
+        if strategy_id in self._midgames:
+            return StrategyKind.MIDGAME
+        if strategy_id in self._lategames:
+            return StrategyKind.LATEGAME
+        if strategy_id in self._persistents:
+            return StrategyKind.PERSISTENT
+        return None
+
     def all_ids(self, kind: StrategyKind | None = None) -> list[str]:
         if kind == StrategyKind.OPENING:
             return list(self._openings)
@@ -131,7 +180,9 @@ class StrategyLibrary:
             return list(self._midgames)
         if kind == StrategyKind.LATEGAME:
             return list(self._lategames)
-        return [*self._openings, *self._midgames, *self._lategames]
+        if kind == StrategyKind.PERSISTENT:
+            return list(self._persistents)
+        return [*self._openings, *self._midgames, *self._lategames, *self._persistents]
 
     def race_of(self, strategy_id: str) -> str | None:
         """返回该剧本的种族（protoss/zerg/terran），未登记返回 None。"""
@@ -154,6 +205,7 @@ class StrategyLibrary:
         yield from self._openings.values()
         yield from self._midgames.values()
         yield from self._lategames.values()
+        yield from self._persistents.values()
 
     # ------------------------------------------------------------------
     # 转移图
@@ -207,4 +259,6 @@ def _build_strategy(data: dict[str, Any], source: Path) -> Strategy:
         return MidgameStance.model_validate(data)
     if kind == StrategyKind.LATEGAME.value:
         return LategameDoctrine.model_validate(data)
+    if kind == StrategyKind.PERSISTENT.value:
+        return PersistentDoctrine.model_validate(data)
     raise StrategyValidationError(f"{source}: 未知 kind {kind!r}")
