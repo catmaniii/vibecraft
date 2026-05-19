@@ -1,14 +1,23 @@
 """vibecraft 空投隐刀转叉球一波（Stats DT/Archon drop into IAC push）plan。
 
-Stats 韩国职业打法,spawningtool /68902。本质是 IAC 的强化变体:
-  DT 早期骚扰 → 残 DT 合 Archon → ~8:00 Immortal + Archon + 叉子一波
+战术意图（2026-05-19 用户重新定义）
+====================================
+  VR 早出 Warp Prism 飞前线 → 8 DT 全员从棱镜处 warp-in 骚扰对方矿区 →
+  尽量保 DT 活着 → 棱镜接回主力区 → DT 全合 Archon (2 DT = 1 archon → 4 archon) →
+  跟家里持续暴的 chargelot 汇合 → 一波 attack
 
-vs vanilla IAC 关键差异:
-  - 提早 VC (2:38 vs 3:00),为 VD 让路
-  - ★ Dark Shrine 3:14 起,DT 4:38 第一批出门
-  - Archon 不靠 HT,靠 DT 合(2 DT → 1 Archon),5:29 第一对 Archon
-  - 出门 timing ~8:00（vs vanilla 6:30）,因为 archon 暴需要时间
-  - 主力 4 BG（vs vanilla 7 BG）,archon 顶单位伤害
+vs vanilla iac_2base 关键差异
+==============================
+  - **多了 WarpPrism**（VR 唯一产品，不出不朽）
+  - DT 用法不同：iac_2base 全 DT 在家 warp + 立刻合 archon；
+    本路线 DT 全员去敌方矿区 warp-in 骚扰，活下来再合 Archon
+  - 出门 timing 晚 ~30s（要等 DT 撤回 + archon 合）
+
+vs Stats 原版 (spawningtool /68902)
+====================================
+  - Stats 原版有不朽：4:04/4:51 出 2 不朽 + Archon。本变体**完全不出不朽**
+  - Stats 原版 DT 分两波（4 + 4）按 timing 出。本变体 DT 同样 2 波但全去骚扰
+  - 出门 timing ~8:00（同 Stats）
 
 Build 节奏（Stats spawningtool 完整）
 =====================================
@@ -162,11 +171,12 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 ProtossUnit(UnitTypeId.DARKTEMPLAR, 8, priority=True),
             ),
 
-            # ---------- ★ DT 合 Archon（核心！）----------
-            # sharpy Archon([DARKTEMPLAR]) act 自动找 idle DT 2 个一对一对合
-            # 5:29 第一对 → 后续 4 对 / 8 DT → 4 Archon
+            # ---------- ★ DT 合 Archon（用户 2026-05-19 spec：延迟合，先全员骚扰）----------
+            # 用户要求：8 DT 全部去骚扰，棱镜把残 DT 接回来跟主力汇合后再合 Archon
+            # 实现：Archon([DARKTEMPLAR]) 用 Time gate 卡到 7:00，DT 全员保留 ~2 分钟做骚扰
+            # 之前是 UnitExists(DT, 2) 立刻合 → 4:40 第一波 DT 出生就被合，骚扰不了
             Step(
-                UnitExists(UnitTypeId.DARKTEMPLAR, 2),
+                Time(60 * 7),
                 Archon([UnitTypeId.DARKTEMPLAR]),
             ),
 

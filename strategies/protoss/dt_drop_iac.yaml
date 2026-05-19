@@ -24,31 +24,31 @@ enter_when:
   - "self.tech.warpgate.done"
   - "self.expansion_count >= 2"
 
-# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+# Phase stepper（2026-05-19 重写：8 DT 全员骚扰 → 棱镜接回 → 合 archon → 一波）
 phases:
   - id: economic_open
     display: "双矿 + BY"
     subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
     start_at_time: 0
-  - id: dt_tech
-    display: "VC + VR + VD"
-    subtitle: "2:38 议会 / 3:05 机械工厂 / 3:14 黑暗神殿"
+  - id: prism_dt_tech
+    display: "VR (棱镜) + VD"
+    subtitle: "VR 一好出 Warp Prism 飞前线 + 3:14 黑暗神殿"
     start_at_time: 158    # ~2:38
-  - id: dt_harass
-    display: "DT 双波骚扰"
-    subtitle: "4:38 第一批 DT × 4 / 5:26 第二批 DT × 4"
+  - id: dt_harass_all
+    display: "8 DT 棱镜空投骚扰"
+    subtitle: "4:38 + 5:26 两批 DT × 4 全部从棱镜处 warp 骚扰，尽量保活"
     start_at_time: 278    # ~4:38
+  - id: prism_evac
+    display: "棱镜接 DT 回家"
+    subtitle: "活下来的 DT 棱镜运回主力区，准备合 Archon"
+    start_at_time: 390    # ~6:30
   - id: archon_merge
-    display: "残 DT 合 Archon"
-    subtitle: "5:29 起合 archon ×2，到 6 个；5:38 启 Charge 研究"
-    start_at_time: 329    # ~5:29
-  - id: gateway_mass
-    display: "暴 4 BG"
-    subtitle: "6:04-6:11 4 BG 暴 chargelot 主力"
-    start_at_time: 364    # ~6:04
+    display: "DT 全合 Archon"
+    subtitle: "~7:00 起 2 DT → 1 Archon，最多合 4 Archon"
+    start_at_time: 420    # ~7:00
   - id: attack_timing
     display: "8:00 大军一波"
-    subtitle: "3-4 不朽 + 6 archon + 满 chargelot → 推进"
+    subtitle: "Archon + 满 Chargelot 主力一波（无不朽路线）"
     start_at_time: 480    # ~8:00
 
 # 数据来源:https://lotv.spawningtool.com/build/68902/ (Stats' Double DT/Archon drop into IAC push)
@@ -64,21 +64,24 @@ phases:
 # - 6:04 Gateway ×3        (supply 76)
 # - 6:11 Gateway ×4 (共4)  (supply 76)
 # - ~8:00 出门 attack: 3-4 Immortal + 6 Archon + Sentry + 满 Zealot
+# 2026-05-19 重写：用户要求 VR 只出 Warp Prism，不出不朽。
+# DT 全员先骚扰再合 Archon。最终主力：Chargelot + Archon。
+# target_composition / required_* 用 sc2 SDK 名（PascalCase）跟 unit_data 查表对齐
 commitments:
   units:
-    zealot: 14        # Charge 叉主力(IAC 主体)
-    immortal: 4       # 反装甲核心
-    archon: 6         # ★ DT 合,2:1 → 4 DT 合 2 archon,8 DT 合 4 archon,后续补到 6
-    dark_templar: 8   # 总 DT 产量(2 批 ×4),骚扰 + 合 archon 池子
-    stalker: 2        # 早期防身
-    sentry: 2         # 力场切阵
-  tech: [WarpGateResearch, Charge, ProtossGroundWeapons]
+    Zealot: 18              # Charge 叉主力
+    Archon: 4               # ★ DT 合(2:1)，8 DT → 4 Archon
+    DarkTemplar: 8          # transient（骚扰后全合 archon，最终不含 DT）
+    WarpPrism: 1            # ★ 关键：VR 出棱镜飞前线做空投点 / 接残 DT 回家
+    Stalker: 2              # 早期防身
+    Sentry: 2               # 力场切阵
+  tech: [WarpGateResearch, Charge, ProtossGroundWeaponsLevel1]
   structures:
-    gateway: 4        # Stats 主线 4 BG（archon 顶伤害,不暴 7 BG）
-    robo: 1
-    twilight: 1
-    dark_shrine: 1    # ★ DT 必备
-    forge: 1
+    Gateway: 4              # 4 BG 暴叉子够（archon 顶伤害）
+    RoboticsFacility: 1     # 仅产 WarpPrism（不出不朽）
+    TwilightCouncil: 1
+    DarkShrine: 1           # ★ DT 必备
+    Forge: 1
   expansions: 2
 
 # 一波 timing(Stats spawningtool ~8:00 出门;留窗口到 9:30 接 follow-up)
