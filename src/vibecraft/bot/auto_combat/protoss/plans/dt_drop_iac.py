@@ -75,6 +75,7 @@ from sharpy.plans.tactics import (
     SpeedMining,
 )
 
+from vibecraft.bot.auto_combat.protoss.plans.prism_harass import PrismHarassAct
 from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCraftZoneAttack
 
 
@@ -179,6 +180,11 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 Time(60 * 7),
                 Archon([UnitTypeId.DARKTEMPLAR]),
             ),
+
+            # ---------- ★ 棱镜精准骚扰行为（PrismHarassAct）----------
+            # 自定义状态机控制：IDLE → 飞前线 → phase → 检测威胁 → 撤 → 回家
+            # 详见 prism_harass.py 顶部 docstring。
+            PrismHarassAct(),
 
             # ---------- 5:30 起 Forge + 研 Charge + +1 攻 ----------
             # 注意：Charge 走 Twilight Council 不是 Forge,但 +1 攻走 Forge
