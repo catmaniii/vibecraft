@@ -28,6 +28,23 @@ sharpy `GatherPointSolver.update` 是一次性 flag(_gather_point_set),只持续
 就被下一帧 update 重算成 home,所以本 act 每 tick 都要重新 set。
 
 VibeCraftZoneAttack 触发时,attack 命令自然覆盖 rally + combat-move,顺利出门。
+
+为什么必须 return True (2026-05-20 用户反馈)
+============================================
+sharpy `SequentialList.execute` 是"任一 act 返回 False 就停止后续 acts":
+```python
+for order in self.orders:
+    result = await order.execute()
+    if not result:
+        return result  # ← 停在 False 处!
+```
+本 act 在 tactics SequentialList 中位于 PlanZoneGather 之后、VibeCraftZoneAttack
+之前。如果 return False(按"我还在持续工作"的语义),会让 ZoneAttack /
+PlanFinishEnemy 整个 SequentialList 后半段**永远不运行** → 攻击不触发、新刷
+追猎没人指挥停在 forward 等死。
+
+本 act 只做 side-effect(set gather_point),没有"工作中"状态,**始终 return
+True**(=本 step done,SequentialList 继续下一个)。
 """
 
 from __future__ import annotations
@@ -93,7 +110,7 @@ class ForwardRallyStalker(ActBase):  # type: ignore[misc]
             )
             self._last_logged = current
 
-        return False
+        return True  # 始终 True — 见上方"为什么必须 return True"注释
 
     def _find_forward_pylon(self, home: Point2, enemy: Point2) -> Any:
         try:

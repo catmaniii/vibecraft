@@ -84,12 +84,15 @@ class TestForwardRallyStalker:
         inst.knowledge.gather_point_solver.set_gather_point.assert_not_called()
 
     async def test_sets_gather_point_to_forward_pylon(self):
-        """forward PYLON 在 → set_gather_point(forward_pylon.position)。"""
+        """forward PYLON 在 → set_gather_point(forward_pylon.position)。
+
+        2026-05-20:always return True(side-effect setter,不阻断 SequentialList)。
+        """
         forward_py = _make_pylon((83, 28))
         inst = _make_inst(pylons=[forward_py])
 
         result = await inst.execute()
-        assert result is False
+        assert result is True
         inst.knowledge.gather_point_solver.set_gather_point.assert_called_once_with(
             forward_py.position
         )

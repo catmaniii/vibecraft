@@ -165,13 +165,17 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                         self._three_bg_at_once,
                         GridBuilding(UnitTypeId.GATEWAY, 4),
                     ),
-                    # 2026-05-19 用户修正：折跃完成前**只出 1 追猎**做探路 + 防守
-                    # 原本 cap=100 = 暴兵浪费产能；用户要"折跃好了才在前线集中刷兵"
-                    # 折跃 ready 后 _can_train_stalker 返回 False，stop home train，
-                    # 改由 ForwardWarpStalker 接管在前线 warp（条件：4 BG 全 ready）
+                    # 2026-05-20 用户反馈"钱和人口都有,刷兵频率不够":pre-warpgate
+                    # cap 从 1 提到 3。1 home GATEWAY 32s/stalker × 3 = ~96s 充分
+                    # 利用单 GATEWAY 产能 + 双气矿气量,3 个 stalker 等 ForwardRally
+                    # 把它们带到 forward 集结,折跃完成后立即与 ForwardWarpStalker
+                    # 刷的 4 个汇合 → 7 个 stalker 出门远比 4 个稳。
+                    # 折跃完成后 _can_train_stalker 仍然 False,sharpy ProtossUnit
+                    # 走 WarpUnit 分支会硬重置到 home nexus(已踩过坑),完全交
+                    # ForwardWarpStalker 在 forward 刷。
                     Step(
                         self._can_train_stalker,
-                        ProtossUnit(UnitTypeId.STALKER, 1),
+                        ProtossUnit(UnitTypeId.STALKER, 3),
                     ),
                 ),
             ),
@@ -192,13 +196,17 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
                 PlanZoneGather(),
-                # 2026-05-20 用户修正:warp 出来的 stalker 在前线野 BG 集结,不要被
-                # PlanZoneGather 拽回家。Step gate 跟 ForwardWarpStalker 同步:
-                # 折跃完成 + 4 BG 全 ready 才启用前线集结(之前 ProtossUnit 阶段的
-                # 1 个 stalker 仍走默认 ZoneGather → 当家里防守用)。
-                # 放在 PlanZoneGather 之后 → 后发先至覆盖 home rally;放在
-                # VibeCraftZoneAttack 之前 → attack 命令再次覆盖本 act 的 move。
-                Step(self._all_4bg_warpgate_ready, ForwardRallyStalker()),
+                # 2026-05-20 用户反馈"野BG 刷的兵还是回家集结点":根因 = 之前
+                # Step gate 让 forward_rally 在 _all_4bg_warpgate_ready False 时返
+                # False,SequentialList 停在这,VibeCraftZoneAttack 永远不运行。
+                # 而 forward_rally 成功 set 时也曾返 False,同样卡死。
+                # 现在 ForwardRallyStalker 内部检测 forward PYLON,有就 set
+                # gather_point=forward,没有就 noop;**始终 return True**,
+                # 不阻断 SequentialList。直接放,不需要 Step 包装。
+                # 这样 pre-warpgate 的 1-3 个 home stalker 也会通过 sharpy
+                # PlanZoneGather + gather_point=forward 走到 forward 集结 / 防守
+                # (用户反馈"第一个追猎也可以到野bg待命也起防守作用")。
+                ForwardRallyStalker(),
                 # 4 BG 全部就绪 + 折跃完成 + 4 个 Stalker → 第一波立即压制(火力侦察)
                 # VibeCraftZoneAttack(4):4 个就够了,等更多会错过 timing;
                 # 出门后会顺便侦察敌方走向科技/造兵情况;
@@ -302,14 +310,15 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
-        """触发出门压制:折跃完成 + 至少 4 BG 就绪 + 至少 4 个**完成 warp** 的 Stalker。
+        """触发出门压制:折跃完成 + 至少 3 BG 就绪 + 至少 4 个**完成 warp** 的 Stalker。
 
-        2026-05-20:`.ready` filter 排除还在 warp 动画(build_progress < 1.0)的兵。
-        之前数 `ai.units(STALKER).amount` 包括 warp 中的,导致 4 个兵 warp_in 同帧
-        就 trigger attack 但兵还不能动 → 攻击开始时主力没就位,部分 stalker
-        warp 完才追上去,看起来"分批出门"不集结。
-
-        Step 把第一个参数当作 Callable[ai]->bool 用,等价 RequireCustom。
+        2026-05-20 用户反馈"出门时间可以更早":
+        - BG ≥ 3(而不是 4):前 3 个 BG 在 warpgate 完成时已经 morph 好,第 4 个野 BG
+          可能 ~5s 后才 morph。等齐 4 BG 才出门会推后 timing。3 BG ready 时
+          ForwardWarpStalker 已经能刷 3 个 warp,加上 pre-warpgate cap=3 的 home
+          stalker 走到 forward,总数远超 4。
+        - Stalker ≥ 4 仍然保留:首波要够分量。`.ready` filter 排除 warp 动画中
+          (build_progress < 1.0)的兵,等真正可战斗才触发。
         """
         warpgate_done: bool = (
             ai.already_pending_upgrade(UpgradeId.WARPGATERESEARCH) >= 1.0
@@ -320,8 +329,8 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
         gate_count: int = ai.structures.of_type(
             {UnitTypeId.GATEWAY, UnitTypeId.WARPGATE}
         ).ready.amount
-        if gate_count < 4:
+        if gate_count < 3:
             return False
-        # .ready 过滤掉 warp 动画中的 stalker,等 4 个真正可战斗才触发
+        # .ready 过滤掉 warp 动画中的 stalker
         stalker_count: int = ai.units(UnitTypeId.STALKER).ready.amount
         return bool(stalker_count >= 4)
