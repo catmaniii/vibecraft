@@ -35,11 +35,15 @@ class StrategyLibrary:
         midgames: list[MidgameStance] | None = None,
         lategames: list[LategameDoctrine] | None = None,
         aliases: AliasTable | None = None,
+        races: dict[str, str] | None = None,
     ) -> None:
         self._openings: dict[str, OpeningBuild] = {s.id: s for s in (openings or [])}
         self._midgames: dict[str, MidgameStance] = {s.id: s for s in (midgames or [])}
         self._lategames: dict[str, LategameDoctrine] = {s.id: s for s in (lategames or [])}
         self.aliases: AliasTable = aliases or AliasTable(buildings=[], units=[], upgrades=[])
+        # id → 'protoss' / 'zerg' / 'terran'。from_directories 自动按 YAML 父目录推断；
+        # 直接调用构造器（旧测试用法）时为空 dict，race_of 返回 None 表示"未知种族"。
+        self._race_of: dict[str, str] = dict(races or {})
         self._validate_cross_references()
 
     # ------------------------------------------------------------------
@@ -59,6 +63,7 @@ class StrategyLibrary:
         openings: list[OpeningBuild] = []
         midgames: list[MidgameStance] = []
         lategames: list[LategameDoctrine] = []
+        races: dict[str, str] = {}
 
         for path in sorted(strategies_dir.rglob("*.yaml")):
             data = _load_yaml(path)
@@ -69,9 +74,17 @@ class StrategyLibrary:
                 midgames.append(obj)
             elif isinstance(obj, LategameDoctrine):
                 lategames.append(obj)
+            # 种族 = 文件所在直接父目录名（strategies/protoss/foo.yaml → protoss）
+            # 仅当父目录名为已知种族时才记录；其它结构留空（race_of 返回 None = 不限种族）
+            parent = path.parent.name.lower()
+            if parent in {"protoss", "zerg", "terran"}:
+                races[obj.id] = parent
 
         aliases = AliasTable.from_yaml(aliases_path)
-        return cls(openings=openings, midgames=midgames, lategames=lategames, aliases=aliases)
+        return cls(
+            openings=openings, midgames=midgames, lategames=lategames,
+            aliases=aliases, races=races,
+        )
 
     # ------------------------------------------------------------------
     # 查询
@@ -119,6 +132,23 @@ class StrategyLibrary:
         if kind == StrategyKind.LATEGAME:
             return list(self._lategames)
         return [*self._openings, *self._midgames, *self._lategames]
+
+    def race_of(self, strategy_id: str) -> str | None:
+        """返回该剧本的种族（protoss/zerg/terran），未登记返回 None。"""
+        return self._race_of.get(strategy_id)
+
+    def all_ids_for_race(self, race: str) -> list[str]:
+        """仅返回属于指定种族（protoss/zerg/terran）的剧本 id。
+
+        用于 IntentParser 跨种族校验：神族玩家说"切 12pool"，LLM emit
+        `strategy_set(12pool)` 时应被拒绝，因 12pool 是 zerg 剧本。
+
+        未登记种族的 id 不包含在结果里 —— 直接构造 StrategyLibrary 的
+        旧测试不传 races，所以 race_of 全是 None，本方法返回空 list。
+        这种用法下应继续使用 `all_ids()` 不限种族。
+        """
+        race = race.lower()
+        return [sid for sid in self.all_ids() if self._race_of.get(sid) == race]
 
     def all_strategies(self) -> Iterable[Strategy]:
         yield from self._openings.values()

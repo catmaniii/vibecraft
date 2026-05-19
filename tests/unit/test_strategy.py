@@ -251,6 +251,39 @@ class TestStrategyLibrary:
         assert isinstance(lg, LategameDoctrine)
         assert lg.target_composition["carrier"] == 12
 
+    def test_race_inferred_from_directory(self) -> None:
+        """from_directories 应按 strategies/<race>/foo.yaml 推断种族。"""
+        lib = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+        )
+        assert lib.race_of("4bg") == "protoss"
+        assert lib.race_of("iac_2base") == "protoss"
+        assert lib.race_of("12pool") == "zerg"
+        assert lib.race_of("macro_hatch") == "zerg"
+        assert lib.race_of("marine_rush") == "terran"
+        assert lib.race_of("not_a_strategy") is None
+
+    def test_all_ids_for_race_filters(self) -> None:
+        lib = StrategyLibrary.from_directories(
+            strategies_dir=PROJECT_ROOT / "strategies",
+            aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+        )
+        protoss_ids = set(lib.all_ids_for_race("protoss"))
+        zerg_ids = set(lib.all_ids_for_race("zerg"))
+        terran_ids = set(lib.all_ids_for_race("terran"))
+        # 各种族不重叠
+        assert protoss_ids.isdisjoint(zerg_ids)
+        assert protoss_ids.isdisjoint(terran_ids)
+        assert zerg_ids.isdisjoint(terran_ids)
+        # 已知样例
+        assert "4bg" in protoss_ids
+        assert "iac_2base" in protoss_ids
+        assert "12pool" in zerg_ids
+        assert "marine_rush" in terran_ids
+        # 大小写不敏感
+        assert lib.all_ids_for_race("Protoss") == lib.all_ids_for_race("protoss")
+
     def test_get_unknown_raises(self) -> None:
         lib = StrategyLibrary.from_directories(
             strategies_dir=PROJECT_ROOT / "strategies",

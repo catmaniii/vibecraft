@@ -281,27 +281,39 @@ L4 产能调整 (改造兵 / 升科技 / 开矿 / 补建筑):
 """
 
 
-def build_strategy_catalog(library: StrategyLibrary) -> str:
-    """第 2 段：Strategy Catalog（剧本目录一览）。"""
+def build_strategy_catalog(library: StrategyLibrary, my_race: str | None = None) -> str:
+    """第 2 段：Strategy Catalog（剧本目录一览）。
+
+    my_race 给定时（"protoss" / "zerg" / "terran"），仅列出属于当前种族的剧本，
+    避免 LLM 把跨种族 id 当作合法选择 emit 出来。未登记种族的剧本（race_of=None）
+    保留显示，保持向后兼容（旧 fixture 直接构造 StrategyLibrary 时）。
+    """
     parts: list[str] = ["可用剧本目录（仅可用以下 id）：\n"]
+    race = my_race.lower() if my_race else None
+
+    def _keep(sid: str) -> bool:
+        if race is None:
+            return True
+        r = library.race_of(sid)
+        return r is None or r == race
 
     parts.append("### opening_build")
     for s in library.all_strategies():
-        if not isinstance(s, OpeningBuild):
+        if not isinstance(s, OpeningBuild) or not _keep(s.id):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
         parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
 
     parts.append("\n### midgame_stance")
     for s in library.all_strategies():
-        if not isinstance(s, MidgameStance):
+        if not isinstance(s, MidgameStance) or not _keep(s.id):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
         parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")
 
     parts.append("\n### lategame_doctrine")
     for s in library.all_strategies():
-        if not isinstance(s, LategameDoctrine):
+        if not isinstance(s, LategameDoctrine) or not _keep(s.id):
             continue
         aliases = ", ".join(f'"{a}"' for a in s.aliases) or "(无)"
         parts.append(f"- `{s.id}` —— {s.display_name_zh}：{s.summary_zh} (aliases: {aliases})")

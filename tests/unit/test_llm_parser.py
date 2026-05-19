@@ -330,6 +330,82 @@ class TestIntentParserErrors:
         assert "iac_2base" in outcome.candidates
 
     @pytest.mark.asyncio
+    async def test_cross_race_strategy_rejected(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """神族 parser 拒绝虫族 strategy_id（LLM hallucinate / 误选）→ 不切策略。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切到 12pool",
+                        "confidence": 0.9,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "opening",
+                                    "strategy_id": "12pool",  # zerg 剧本
+                                },
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library, my_race="protoss")
+        outcome = await parser.parse("切 12pool", default_ctx)
+        assert isinstance(outcome, ParseError)
+        assert outcome.kind == ParseErrorKind.UNKNOWN_STRATEGY
+        # 错误消息明确指出种族不匹配
+        assert "zerg" in outcome.message
+        assert "protoss" in outcome.message
+        assert "12pool" in outcome.message
+
+    @pytest.mark.asyncio
+    async def test_same_race_strategy_accepted(
+        self, library: StrategyLibrary, default_ctx: ParseContext
+    ) -> None:
+        """my_race=protoss 时神族剧本 id 正常通过。"""
+        provider = MockLLMProvider(
+            scripted=[
+                _provider_response_for(
+                    {
+                        "interpretation_zh": "切到 IAC",
+                        "confidence": 0.95,
+                        "directives": [
+                            {
+                                "type": "strategy_set",
+                                "payload": {
+                                    "stage": "midgame",
+                                    "strategy_id": "iac_2base",
+                                },
+                            }
+                        ],
+                    }
+                )
+            ]
+        )
+        parser = IntentParser(provider, library, my_race="protoss")
+        outcome = await parser.parse("切到 IAC", default_ctx)
+        assert isinstance(outcome, IntentParseResult)
+        assert outcome.directives[0].payload.strategy_id == "iac_2base"  # type: ignore[union-attr]
+
+    def test_catalog_filtered_by_race(self, library: StrategyLibrary) -> None:
+        """my_race=protoss 时 Strategy Catalog 不出现其它种族的剧本 id。"""
+        from vibecraft.llm import MockLLMProvider as _MP
+        protoss_parser = IntentParser(_MP(), library, my_race="protoss")
+        assert "4bg" in protoss_parser._strategy_catalog
+        assert "iac_2base" in protoss_parser._strategy_catalog
+        assert "12pool" not in protoss_parser._strategy_catalog
+        assert "macro_hatch" not in protoss_parser._strategy_catalog
+        assert "marine_rush" not in protoss_parser._strategy_catalog
+
+        zerg_parser = IntentParser(_MP(), library, my_race="zerg")
+        assert "12pool" in zerg_parser._strategy_catalog
+        assert "4bg" not in zerg_parser._strategy_catalog
+
+    @pytest.mark.asyncio
     async def test_invalid_directive_payload(
         self, library: StrategyLibrary, default_ctx: ParseContext
     ) -> None:

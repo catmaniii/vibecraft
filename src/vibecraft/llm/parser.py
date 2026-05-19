@@ -79,16 +79,21 @@ class IntentParser:
         aliases: AliasTable | None = None,
         config: ParserConfig | None = None,
         session: GameSession | None = None,
+        my_race: str | None = None,
     ) -> None:
         self.provider = provider
         self.library = library
         self.aliases = aliases or library.aliases
         self.config = config or ParserConfig()
         self.session = session
+        # 我方种族（"protoss" / "zerg" / "terran"）。给定时：
+        # 1) Strategy Catalog 只列当前种族剧本，LLM 看不到跨种族选项
+        # 2) strategy_set 校验拒绝其它种族 id（防 LLM 仍 hallucinate）
+        self.my_race: str | None = my_race.lower() if my_race else None
 
         # 静态 prompt 段（cache 友好）
         self._system_prompt = build_system_prompt(self.aliases)
-        self._strategy_catalog = build_strategy_catalog(self.library)
+        self._strategy_catalog = build_strategy_catalog(self.library, self.my_race)
         self._few_shot = build_few_shot()
         self._tool_schema = build_tool_schema()
 
@@ -382,15 +387,31 @@ class IntentParser:
                     message=f"第 {i + 1} 条 directive 非法：{e}",
                 )
 
-        # 检查 strategy_set 引用的 id 在 library 里存在
+        # 检查 strategy_set 引用的 id 在 library 里存在 + 属于当前种族。
+        # my_race 给定时：跨种族 id（如神族玩家说"切 12pool"，12pool 是 zerg）
+        # 也算 UNKNOWN_STRATEGY，directive 整批拒绝 → bot 不切策略，PWA 显示失败。
+        allowed_ids = (
+            self.library.all_ids_for_race(self.my_race)
+            if self.my_race
+            else self.library.all_ids()
+        )
+        allowed_set = set(allowed_ids)
         for d in directives:
             if d.type == DirectiveType.STRATEGY_SET:
                 sid = d.payload.strategy_id  # type: ignore[union-attr]
-                if sid not in self.library.all_ids():
+                if sid not in allowed_set:
                     candidates = self._fuzzy_match_strategy(sid, user_text)
+                    other_race = self.library.race_of(sid)
+                    if self.my_race and other_race and other_race != self.my_race:
+                        msg = (
+                            f"剧本 id {sid!r} 属于 {other_race}，当前种族是 "
+                            f"{self.my_race}；不切策略"
+                        )
+                    else:
+                        msg = f"未注册的剧本 id: {sid}"
                     return ParseError(
                         kind=ParseErrorKind.UNKNOWN_STRATEGY,
-                        message=f"未注册的剧本 id: {sid}",
+                        message=msg,
                         candidates=candidates,
                     )
 
@@ -459,8 +480,13 @@ class IntentParser:
         return env
 
     def _fuzzy_match_strategy(self, sid: str, _user_text: str) -> list[str]:
-        all_ids = self.library.all_ids()
-        return difflib.get_close_matches(sid, all_ids, n=3, cutoff=0.5)
+        # 跨种族 fuzzy 没有意义（神族玩家看到"建议你切 12pool"会更困惑）
+        pool = (
+            self.library.all_ids_for_race(self.my_race)
+            if self.my_race
+            else self.library.all_ids()
+        )
+        return difflib.get_close_matches(sid, pool, n=3, cutoff=0.5)
 
     # ------------------------------------------------------------------
 

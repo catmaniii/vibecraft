@@ -411,7 +411,11 @@ def _build_bot_class(
     provider = llm_config.build_provider()
 
     # --- IntentParser ---
-    parser = IntentParser(provider=provider, library=strategy_library, session=session)
+    # my_race 传进 parser：(1) Strategy Catalog 只列当前种族剧本，
+    # (2) strategy_set 校验拒绝跨种族 id（神族玩家说"切 12pool"会被拦下不切）
+    parser = IntentParser(
+        provider=provider, library=strategy_library, session=session, my_race=my_race
+    )
 
     # --- director_factory（在 on_start 时拿到真实 facade 再构造）---
     def director_factory(facade: Any) -> Director:
