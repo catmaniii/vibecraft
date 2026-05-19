@@ -116,51 +116,69 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
 
         now = self.ai.time
         warped_count = 0
+        # 诊断:统计每只 WG 的 skip 原因(用户反馈"有钱有CD不刷兵")
+        skip_money = skip_supply = skip_my_cd = skip_placement = skip_warp_fail = 0
         for wg in warpgates:
             # 本地账户能不能再 warp 一个
             if avail_min < cost_min or avail_gas < cost_gas:
+                skip_money += 1
                 break  # 钱不够,下帧再试
             if avail_supply < cost_supply:
+                skip_supply += 1
                 break  # supply 不够
 
-            # 自家追踪 cooldown 兜底(sharpy cd_manager 偶尔不准)
+            # 自家追踪 cooldown — 唯一的 CD 判定。
+            # 2026-05-20 用户反馈"有钱有CD时不刷兵":之前还检查 sharpy
+            # `cooldown_manager.is_ready(wg.tag, WARPGATETRAIN_ZEALOT)` 作为附加
+            # gate。但 sharpy 的 available_dict 通过 SC2 `get_available_abilities`
+            # 查询填充,**对 forward WARPGATE 经常不准/未填充** → is_ready 返 False
+            # → 我们 continue 跳过那只 WG → "CD 到了不刷"。
+            # 现在只信本地 `_last_warp_ts`(精确到我们自己上次 warp_in 的 game-time),
+            # 完全跳过 sharpy CD 检查。
             last = self._last_warp_ts.get(wg.tag, -1000.0)
             if now - last < _WARP_COOLDOWN_S:
+                skip_my_cd += 1
                 continue
 
-            # sharpy cd_manager 检查
-            try:
-                if not self.knowledge.cooldown_manager.is_ready(
-                    wg.tag, AbilityId.WARPGATETRAIN_ZEALOT
-                ):
-                    continue
-            except Exception:
-                pass
-
-            # find_placement near forward PYLON
+            # find_placement near forward PYLON(max_distance 8 → 12,给 4 个并发 warp
+            # 更宽松的落点;forward PYLON 周围 8 格容量有时不够 4 个 stalker placement)
             try:
                 placement = await self.ai.find_placement(
                     AbilityId.WARPGATETRAIN_STALKER,
                     forward_pylon.position,
                     placement_step=1,
-                    max_distance=8,
+                    max_distance=12,
                 )
             except Exception as exc:
                 logger.warning("ForwardWarpStalker find_placement fail: %s", exc)
+                skip_placement += 1
                 continue
             if placement is None:
+                skip_placement += 1
                 continue
 
-            wg.warp_in(self.unit_type, placement)
+            # can_afford_check=True:python-sc2 do() 内部 affordability check,
+            # 不够时返 False 且不扣钱。我们才能正确不 mark _last_warp_ts。
+            try:
+                result = wg.warp_in(self.unit_type, placement, can_afford_check=True)
+            except TypeError:
+                # 老版本 python-sc2 没 can_afford_check kwarg → fallback
+                result = wg.warp_in(self.unit_type, placement)
+            if result is False:
+                # 实际未发出(钱算不准 / 服务端拒绝) → 别 mark CD
+                skip_warp_fail += 1
+                continue
+
             # 本地预扣 — 下次循环用扣后的余额判断
             avail_min -= cost_min
             avail_gas -= cost_gas
             avail_supply -= cost_supply
             self._last_warp_ts[wg.tag] = now
-            try:
+            # mark sharpy cd_manager 给 sharpy 内部其它 act 看(虽然我们不再读它)
+            import contextlib
+
+            with contextlib.suppress(Exception):
                 self.knowledge.cooldown_manager.used_ability(wg.tag, AbilityId.WARPGATETRAIN_ZEALOT)
-            except Exception:
-                pass
             warped_count += 1
 
         if warped_count > 0:
@@ -172,6 +190,17 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
                 forward_pylon.position.y,
                 now,
             )
+        elif warpgates:
+            # 有 WG 但没 warp:dump 原因,debug 用
+            # 节流:每 ~3s 最多 log 一次
+            if now - getattr(self, "_last_skip_log_t", -1000.0) > 3.0:
+                logger.debug(
+                    "ForwardWarpStalker no warps t=%.1f WG=%d money=%d supply=%d my_cd=%d placement=%d warp_fail=%d (M%d G%d S%d)",
+                    now, len(warpgates), skip_money, skip_supply, skip_my_cd,
+                    skip_placement, skip_warp_fail,
+                    avail_min, avail_gas, avail_supply,
+                )
+                self._last_skip_log_t = now
         return False
 
     def _find_forward_warpgate(self, home: Point2, enemy: Point2) -> Any:

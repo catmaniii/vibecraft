@@ -233,13 +233,12 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
                 skip=TechReady(UpgradeId.WARPGATERESEARCH, 0.99),
             ),
-            # 2026-05-19 用户修正：ForwardWarpStalker 只在折跃完成 + 4 BG 全部 ready 后启用
-            # 原因：折跃没好时 forward warpgate 还没 morph 完，提前激活无用且
-            # 可能让兵在不对的位置 spawn。等齐了再开门集中刷
-            Step(
-                self._all_4bg_warpgate_ready,
-                ForwardWarpStalker(UnitTypeId.STALKER),
-            ),
+            # 2026-05-20 用户反馈"有钱有CD不刷兵":去掉 Step gate(原来要求 4 BG
+            # 全 ready)。ForwardWarpStalker 内部自检 forward PYLON 存在 + WG 列表
+            # 非空,任一不满足就 noop 返回 True。直接每 tick 跑,只要 1 个 WG ready
+            # 就 warp 1 个,不浪费产能。也消除"前 7s morph 窗口 + 后续 BG 阵亡降至
+            # 3 时 gate False 永不 warp" 的死锁。
+            ForwardWarpStalker(UnitTypeId.STALKER),
             # 2026-05-20 用户修正:4bg 完成条件(`_ready_to_pressure`)首次满足时,
             # 除了触发 VibeCraftZoneAttack 进攻,还通知 Director 切持续策略 —
             # 取代 4bg 开局期的宏观角色,让 LLM 后续围绕持续 doctrine 推荐辅助 directive。

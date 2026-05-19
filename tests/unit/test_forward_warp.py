@@ -76,6 +76,9 @@ def _make_instance(
     ai.minerals = minerals
     ai.vespene = vespene
     ai.supply_left = supply_left
+    # 默认 game_time 100s,部分测试会显式覆盖。不设的话会是 MagicMock,
+    # 诊断日志 `now - _last_skip_log_t` 算术挂掉。
+    ai.time = 100.0
 
     def _structures_call(type_id):
         if type_id == UnitTypeId.WARPGATE:
