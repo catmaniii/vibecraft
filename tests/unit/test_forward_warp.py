@@ -88,6 +88,14 @@ def _make_instance(
         return _MockUnits([])
 
     ai.structures = MagicMock(side_effect=_structures_call)
+
+    # 默认 can_place batch query 返回全 True(grid 上所有 spot 都合法)。
+    # 测试要测 "no placement" 时显式覆盖。
+    async def _mock_can_place(_ability, positions):
+        return [True for _ in positions]
+
+    ai.can_place = _mock_can_place
+
     inst.ai = ai
     return inst
 
@@ -212,30 +220,30 @@ class TestExecuteShortCircuits:
         assert 42 not in inst._last_warp_ts
 
     async def test_uses_home_warpgate_when_forward_pylon_exists(self):
-        """有 forward PYLON 时,家里 warpgate 也 warp 到 forward PYLON(全员一波)。"""
+        """有 forward PYLON 时,家里 warpgate 也 warp 到 forward PYLON(全员一波)。
+
+        2026-05-20:placement 改 batch can_place 池,实际 spot 是 PYLON 周围
+        网格中随机一个。验证 warp_in 被调用 + spot 在 forward 附近(距 PYLON < 6.5)。
+        """
         from sc2.ids.unit_typeid import UnitTypeId
-        from sc2.position import Point2
 
         home_wg = _make_struct((125, 115), UnitTypeId.WARPGATE, tag=200)
         forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
         inst = _make_instance(warpgates=[home_wg], pylons=[forward_py])
         inst.ai.time = 100.0
 
-        async def _mock_find(*a, **kw):
-            return Point2((84, 30))
-
-        inst.ai.find_placement = _mock_find
         inst.knowledge = MagicMock()
         inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
         inst.knowledge.cooldown_manager.used_ability = MagicMock()
 
         result = await inst.execute()
         assert result is False
-        # 家里 warpgate 被命令 warp 到 forward pylon 附近
         home_wg.warp_in.assert_called_once()
         call_args = home_wg.warp_in.call_args
-        # target placement 是 forward pylon 附近 (84, 30)
-        assert call_args[0][1] == Point2((84, 30))
+        # 落点应在 forward PYLON 周围 power radius(6.5)内
+        placement = call_args[0][1]
+        d = placement.distance_to(forward_py.position)
+        assert d <= 6.5, f"placement {placement} too far from pylon (d={d})"
 
 
 class TestHardCooldownTracking:
@@ -361,6 +369,73 @@ class TestMultiWarpResourceTracking:
         await inst.execute()
         called = sum(1 for wg in wgs if wg.warp_in.called)
         assert called == 2, f"expected 2 warps, got {called}"
+
+    async def test_each_warpgate_gets_unique_spot(self):
+        """4 个 WG 同 tick warp,每个 WG 拿到**不同**的 placement spot
+        (避免之前 4 个打到同点 SC2 只接受 1 个的 bug)。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+
+        wgs = [
+            _make_struct((89, 30), UnitTypeId.WARPGATE, tag=i + 400) for i in range(4)
+        ]
+        forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
+        inst = _make_instance(
+            warpgates=wgs,
+            pylons=[forward_py],
+            minerals=500,
+            vespene=200,
+            supply_left=8,
+        )
+        inst.ai.time = 100.0
+
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        await inst.execute()
+
+        # 4 个 WG 各被调用 warp_in 一次
+        warped_spots = []
+        for wg in wgs:
+            wg.warp_in.assert_called_once()
+            warped_spots.append(wg.warp_in.call_args[0][1])
+
+        # 4 个 spot 互不相同
+        unique_spots = {(s.x, s.y) for s in warped_spots}
+        assert len(unique_spots) == 4, (
+            f"expected 4 unique spots, got {len(unique_spots)}: {warped_spots}"
+        )
+
+    async def test_no_warps_when_can_place_returns_all_false(self):
+        """所有 candidate spot 都被占/不合法 → 不发 warp 命令。"""
+        from sc2.ids.unit_typeid import UnitTypeId
+
+        wgs = [
+            _make_struct((89, 30), UnitTypeId.WARPGATE, tag=i + 500) for i in range(2)
+        ]
+        forward_py = _make_struct((83.5, 28.5), UnitTypeId.PYLON)
+        inst = _make_instance(
+            warpgates=wgs,
+            pylons=[forward_py],
+            minerals=500,
+            vespene=200,
+            supply_left=8,
+        )
+        inst.ai.time = 100.0
+
+        # 覆盖 can_place 返回全 False(模拟所有 spot 都被占)
+        async def _all_false(_ability, positions):
+            return [False] * len(positions)
+
+        inst.ai.can_place = _all_false
+
+        inst.knowledge = MagicMock()
+        inst.knowledge.cooldown_manager.is_ready = MagicMock(return_value=True)
+        inst.knowledge.cooldown_manager.used_ability = MagicMock()
+
+        await inst.execute()
+        for wg in wgs:
+            wg.warp_in.assert_not_called()
 
     async def test_warps_three_when_supply_blocks_fourth(self):
         """500 矿 / 200 气 但 supply_left=7 → 只能 warp 3 个(每个占 2 supply,4 个要 8)。"""

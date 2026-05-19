@@ -10,6 +10,21 @@ PYLON+GATEWAY 修好了但 0 个 stalker 从 forward warpgate 出。
 
 这个 act 专门绕过 sharpy 限制：扫描所有 WARPGATE 找位置偏敌方一侧的（"forward"），
 直接 warp_in 到 forward PYLON 附近，与 sharpy 自带的 ProtossUnit warp 流并行。
+
+Placement 池策略(2026-05-20 用户设计)
+=====================================
+之前每只 WG 单独 `find_placement(forward_pylon, max_distance=12)`,问题:
+- 4 个 WG 同 tick 4 次 find_placement,可能返回**同一坐标**(`random_alternative`
+  从有限合法 spot 池随机,样本小 → 撞同点)
+- 4 个 wg.warp_in 都打到同点 → SC2 server 只接受第一个 → 没刷满
+
+新策略:
+1. PYLON ready 后 `_build_candidate_grid` 一次性生成 PYLON power radius(6.5)
+   内的 grid spot 列表(~80 个候选)
+2. 每 tick `_query_valid_placements` 调 `ai.can_place(STALKER, grid)` **一次批量
+   query**,拿当前 valid spot 子集(被占用/被挡的过滤掉)
+3. 给每只 WG **唯一坐标**(`used_spot_idx`),保证 N 个 WG 4 个不同 spot
+4. 每 tick `random.shuffle` valid spots,避免位置可预测被对手针对
 """
 
 from __future__ import annotations
@@ -70,6 +85,12 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         self.unit_type = unit_type
         # 每个 warpgate tag 上次成功 warp 的 game.time,兜底 cd_manager 不准时的硬限速
         self._last_warp_ts: dict[int, float] = {}
+        # 2026-05-20 用户设计:预计算 forward PYLON 周围 candidate grid,然后批量 batch
+        # validate 拿到当前 valid spots,**给每个 WG 分配唯一 spot**,避免 4 个 warp_in
+        # 全打到同一坐标导致 SC2 server 只接受第一个 → 没刷满。
+        # Grid 不变(PYLON tag 没变),只 cache 网格本身;valid 由每 tick batch 查。
+        self._candidate_grid: list[Point2] | None = None
+        self._candidate_grid_pylon_tag: int | None = None
 
     async def execute(self) -> bool:
         try:
@@ -114,8 +135,18 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
         except Exception:
             avail_min, avail_gas, avail_supply = 0, 0, 0
 
+        # 2026-05-20 用户设计:预计算 forward PYLON 周围 candidate grid + 每帧
+        # batch can_place 拿当前 valid spots。给每个 WG 分配**唯一** spot,避免
+        # 多 WG warp 到同坐标导致 SC2 只接受第一个 → 没刷满。
+        valid_spots = await self._query_valid_placements(forward_pylon)
+        # 随机打乱,避免每帧选同样位置 → bot 行为可预测/被针对
+        import random
+
+        random.shuffle(valid_spots)
+
         now = self.ai.time
         warped_count = 0
+        used_spot_idx: set[int] = set()
         # 诊断:统计每只 WG 的 skip 原因(用户反馈"有钱有CD不刷兵")
         skip_money = skip_supply = skip_my_cd = skip_placement = skip_warp_fail = 0
         for wg in warpgates:
@@ -128,44 +159,35 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
                 break  # supply 不够
 
             # 自家追踪 cooldown — 唯一的 CD 判定。
-            # 2026-05-20 用户反馈"有钱有CD时不刷兵":之前还检查 sharpy
-            # `cooldown_manager.is_ready(wg.tag, WARPGATETRAIN_ZEALOT)` 作为附加
-            # gate。但 sharpy 的 available_dict 通过 SC2 `get_available_abilities`
-            # 查询填充,**对 forward WARPGATE 经常不准/未填充** → is_ready 返 False
-            # → 我们 continue 跳过那只 WG → "CD 到了不刷"。
-            # 现在只信本地 `_last_warp_ts`(精确到我们自己上次 warp_in 的 game-time),
-            # 完全跳过 sharpy CD 检查。
+            # 2026-05-20:之前还检查 sharpy `cooldown_manager.is_ready` 作为附加 gate,
+            # 但 sharpy `available_dict` 对 forward WARPGATE 经常不准 → False 误报。
+            # 现在只信本地 `_last_warp_ts`(精确到我们自己上次 wg.warp_in 的 game-time)。
             last = self._last_warp_ts.get(wg.tag, -1000.0)
             if now - last < _WARP_COOLDOWN_S:
                 skip_my_cd += 1
                 continue
 
-            # find_placement near forward PYLON(max_distance 8 → 12,给 4 个并发 warp
-            # 更宽松的落点;forward PYLON 周围 8 格容量有时不够 4 个 stalker placement)
-            try:
-                placement = await self.ai.find_placement(
-                    AbilityId.WARPGATETRAIN_STALKER,
-                    forward_pylon.position,
-                    placement_step=1,
-                    max_distance=12,
-                )
-            except Exception as exc:
-                logger.warning("ForwardWarpStalker find_placement fail: %s", exc)
-                skip_placement += 1
-                continue
+            # 从 valid_spots 池选一个还没用的(给每个 WG 唯一坐标)
+            placement: Point2 | None = None
+            for i, cand in enumerate(valid_spots):
+                if i in used_spot_idx:
+                    continue
+                placement = cand
+                used_spot_idx.add(i)
+                break
             if placement is None:
+                # 池子用光了(WG 数 > valid spot 数,或 spot 全被占)
                 skip_placement += 1
                 continue
 
-            # can_afford_check=True:python-sc2 do() 内部 affordability check,
-            # 不够时返 False 且不扣钱。我们才能正确不 mark _last_warp_ts。
+            # Issue warp。pre-validated 过,不该 fail,但仍 defensive 处理。
             try:
                 result = wg.warp_in(self.unit_type, placement, can_afford_check=True)
             except TypeError:
                 # 老版本 python-sc2 没 can_afford_check kwarg → fallback
                 result = wg.warp_in(self.unit_type, placement)
             if result is False:
-                # 实际未发出(钱算不准 / 服务端拒绝) → 别 mark CD
+                # python-sc2 do() 钱不够返 False(can_afford_check=True)
                 skip_warp_fail += 1
                 continue
 
@@ -174,7 +196,6 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
             avail_gas -= cost_gas
             avail_supply -= cost_supply
             self._last_warp_ts[wg.tag] = now
-            # mark sharpy cd_manager 给 sharpy 内部其它 act 看(虽然我们不再读它)
             import contextlib
 
             with contextlib.suppress(Exception):
@@ -202,6 +223,58 @@ class ForwardWarpStalker(ActBase):  # type: ignore[misc]
                 )
                 self._last_skip_log_t = now
         return False
+
+    def _build_candidate_grid(self, forward_pylon: Any) -> list[Point2]:
+        """生成 forward PYLON 周围 power radius 内的候选 spot 网格。
+
+        PYLON power radius 6.5(LotV)。grid 步长 1.0,扣掉 PYLON 占地 ±2 的
+        中心区(否则跟 PYLON 本身重叠)。
+        Cache 按 PYLON tag — PYLON 不会动,网格只算 1 次。
+        """
+        if (
+            self._candidate_grid is not None
+            and self._candidate_grid_pylon_tag == forward_pylon.tag
+        ):
+            return self._candidate_grid
+
+        grid: list[Point2] = []
+        cx, cy = forward_pylon.position.x, forward_pylon.position.y
+        for dx_int in range(-6, 7):
+            for dy_int in range(-6, 7):
+                if dx_int == 0 and dy_int == 0:
+                    continue
+                spot = Point2((cx + dx_int, cy + dy_int))
+                d = spot.distance_to(forward_pylon.position)
+                if d > 6.0:  # 留 0.5 buffer 离 power 边缘
+                    continue
+                if d < 2.0:  # PYLON 自己占 2x2
+                    continue
+                grid.append(spot)
+        self._candidate_grid = grid
+        self._candidate_grid_pylon_tag = forward_pylon.tag
+        logger.info(
+            "ForwardWarpStalker built candidate grid: %d spots near pylon (%.1f, %.1f)",
+            len(grid), cx, cy,
+        )
+        return grid
+
+    async def _query_valid_placements(self, forward_pylon: Any) -> list[Point2]:
+        """批量 can_place 查 forward PYLON 周围当前哪些 spot 可以 warp 兵。
+
+        一次 SC2 round-trip 查所有 candidate(`can_place(positions: list[Point2])`),
+        比每只 WG 单独 `find_placement` 快很多 + 结果更准(SC2 server 实时判断
+        terrain/unit 占用/power)。
+        """
+        grid = self._build_candidate_grid(forward_pylon)
+        if not grid:
+            return []
+        try:
+            ability = AbilityId.WARPGATETRAIN_STALKER
+            results = await self.ai.can_place(ability, grid)
+        except Exception as exc:
+            logger.warning("ForwardWarpStalker can_place batch query fail: %s", exc)
+            return []
+        return [grid[i] for i, ok in enumerate(results) if ok]
 
     def _find_forward_warpgate(self, home: Point2, enemy: Point2) -> Any:
         """找一个 ready 的 forward WARPGATE。"""
