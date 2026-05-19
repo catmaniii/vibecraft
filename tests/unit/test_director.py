@@ -52,6 +52,7 @@ def _make_director(
     session: GameSession,
     facade: FakeFacade,
     provider_response: dict,
+    my_race: str = "protoss",
 ) -> Director:
     provider = MockLLMProvider(
         scripted=[
@@ -63,8 +64,9 @@ def _make_director(
             )
         ]
     )
-    parser = IntentParser(provider, library, session=session)
-    return Director(facade=facade, parser=parser, session=session)
+    parser = IntentParser(provider, library, session=session, my_race=my_race)
+    # 两层架构（2026-05-19）：Director 也传 library 才能调 pick_best_persistent
+    return Director(facade=facade, parser=parser, session=session, library=library)
 
 
 # =========================================================================
@@ -1111,14 +1113,16 @@ class TestStrategyCancelViaBoard:
         assert "sustain" not in facade.builds
 
     def test_strategy_cancel_applied_after_commit_delay(self, director: Director) -> None:
-        """到 effective_at 后 on_tick：facade.set_build('sustain') 被调用。"""
+        """两层架构（2026-05-19）：cancel 不再切 sustain，改为 _apply_auto_persistent_switch。
+        测试 library 没 persistent doctrine → 无操作；facade.builds 不含 sustain。"""
         facade = director.facade
         assert isinstance(facade, FakeFacade)
         d = _make_strategy_cancel_directive(stage="all")
         director._submit_directives([d], now=10.0)
         # 推过 effective_at (10 + 1.5 = 11.5)
         director.on_tick(now=12.0)
-        assert "sustain" in facade.builds
+        # 旧行为已废弃：sustain 不再被调
+        assert "sustain" not in facade.builds
 
     def test_strategy_cancel_clears_board_slot(self, director: Director) -> None:
         """commit 后 board.slots 对应 stage 被清 None。"""
@@ -1147,6 +1151,85 @@ class TestStrategyCancelViaBoard:
         records = session.get_null_records(LogStream.DIRECTIVES)
         types = [r["type"] for r in records]
         assert "strategy_cancel" in types
+
+
+# =========================================================================
+# 两层架构（2026-05-19 P3 Step 10）：auto_persistent_switch
+# =========================================================================
+
+
+class TestAutoPersistentSwitch:
+    """Director._apply_auto_persistent_switch + 集成测试。
+
+    覆盖：
+    - cancel 触发 set_build(persistent_id)，不再 set_build("sustain")
+    - revoke_strategy 同上
+    - no library / no my_race 时安全降级（warning log，no crash）
+    - 选 cost 最低 doctrine（worked example 单测在 test_transition_cost.py）
+    - STRATEGY_AUTO_SWITCH 事件被 log
+    """
+
+    def test_apply_auto_switch_picks_persistent_doctrine(self, session: GameSession) -> None:
+        """直接调 _apply_auto_persistent_switch → facade.set_build(persistent_skytoss)"""
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+            my_race="protoss",
+        )
+        chosen = director._apply_auto_persistent_switch(
+            now=300.0, reason="cancel_redirected", caused_by="test"
+        )
+        assert chosen == "persistent_skytoss"  # 仅有的 protoss persistent doctrine
+        assert "persistent_skytoss" in facade.builds
+
+    def test_apply_auto_switch_no_library_no_crash(self, session: GameSession) -> None:
+        """library / persistent doctrine 都空时不挂"""
+        facade = FakeFacade()
+        empty_lib = StrategyLibrary()  # 完全空 library
+        director = _make_director(
+            empty_lib, session, facade, {}, my_race="protoss"
+        )
+        chosen = director._apply_auto_persistent_switch(
+            now=300.0, reason="cancel_redirected"
+        )
+        assert chosen is None  # 无 doctrine 可选
+        assert "sustain" not in facade.builds  # 也不退到 sustain
+
+    def test_cancel_triggers_auto_switch_event(self, session: GameSession) -> None:
+        """完整流程：cancel directive commit → STRATEGY_AUTO_SWITCH 事件被 log"""
+        from vibecraft.directives.models import Directive, StrategyCancelPayload
+
+        facade = FakeFacade()
+        director = _make_director(
+            StrategyLibrary.from_directories(
+                strategies_dir=PROJECT_ROOT / "strategies",
+                aliases_path=PROJECT_ROOT / "docs" / "aliases" / "protoss.yaml",
+            ),
+            session,
+            facade,
+            {},
+            my_race="protoss",
+        )
+        d = Directive(payload=StrategyCancelPayload(stage="all"), issued_at=10.0)  # type: ignore[arg-type]
+        director._submit_directives([d], now=10.0)
+        director.on_tick(now=12.0)  # 推过 effective_at
+        # auto_switch 事件被 log
+        from vibecraft.logging_ import LogStream
+
+        events = session.get_null_records(LogStream.EVENTS)
+        kinds = [e.get("kind") for e in events]
+        assert "strategy.auto_switch" in kinds
+        # 事件 payload 含 chosen_id + cost + alternatives
+        auto_switch_evt = next(e for e in events if e.get("kind") == "strategy.auto_switch")
+        assert auto_switch_evt["payload"]["chosen_id"] == "persistent_skytoss"
+        assert auto_switch_evt["payload"]["reason"] == "cancel_redirected"
+        assert "cost" in auto_switch_evt["payload"]
 
 
 # =========================================================================
@@ -1265,7 +1348,10 @@ class TestRevokeDirectiveExtended:
     # ------------------------------------------------------------------
 
     def test_revoke_l1_strategy_clears_board_slot(self, session: GameSession) -> None:
-        """revoke_strategy('l1_midgame', now) 清 board.slots[MIDGAME] + facade.set_build('sustain')。"""
+        """两层架构（2026-05-19）：revoke_strategy 清 board slot + 调
+        _apply_auto_persistent_switch（不再 set_build 'sustain'）。
+
+        真实 protoss library 有 persistent_skytoss，所以会切到它（cost 最低且唯一）。"""
         from vibecraft.directives.types import StageKind
 
         facade = FakeFacade()
@@ -1286,8 +1372,10 @@ class TestRevokeDirectiveExtended:
 
         assert result is True
         assert director.board.slots[StageKind.MIDGAME] is None
-        # facade.set_build("sustain") 被调
-        assert "sustain" in facade.builds
+        # 新行为：facade.set_build 被调，且参数是 persistent doctrine id（不是 sustain）
+        assert "sustain" not in facade.builds
+        # 真实 library 有 persistent_skytoss
+        assert "persistent_skytoss" in facade.builds
 
     def test_revoke_l1_strategy_empty_slot_returns_false(self, session: GameSession) -> None:
         """revoke_strategy 对 None slot 返 False。"""

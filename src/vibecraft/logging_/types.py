@@ -35,6 +35,8 @@ class EventKind(str, Enum):
     STRATEGY_PHASE_CHANGE = "strategy.phase_change"
     STRATEGY_ABORTED = "strategy.aborted"
     STRATEGY_TRANSITIONED = "strategy.transitioned"
+    # 两层架构（2026-05-19）：cancel 触发的自动 persistent 切换 / 开局完成自动切
+    STRATEGY_AUTO_SWITCH = "strategy.auto_switch"
 
     # 建造 / 科技
     BUILD_STARTED = "build.started"

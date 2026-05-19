@@ -1181,14 +1181,12 @@ class Director:
         return cleared
 
     def revoke_strategy(self, directive_id: str, now: float) -> bool:
-        """L1 撤销：清 board.slots[stage] + facade.set_build("sustain")。
+        """L1 撤销：清 board.slots[stage] + 自动切 persistent doctrine（两层架构）。
 
         接受两种 directive_id 形式：
         - "l1_{stage.value}" 占位 id（Task 10 约定），如 "l1_midgame"
         - 无前缀时尝试按 slot 匹配（当前 StrategySlot 无 directive_id 字段，不支持）
         """
-        import contextlib
-
         target_stage: StageKind | None = None
 
         if directive_id.startswith("l1_"):
@@ -1208,8 +1206,10 @@ class Director:
         strategy_id = slot.strategy_id if slot is not None else None
         self.board.slots[target_stage] = None
 
-        with contextlib.suppress(Exception):
-            self.facade.set_build("sustain")
+        # 两层架构：cancel 触发自动 persistent 切换（不再降级 sustain）
+        self._apply_auto_persistent_switch(
+            now, reason="cancel_redirected", caused_by=f"revoke:{directive_id}"
+        )
 
         self.session.log_event(
             Event(
@@ -1258,12 +1258,12 @@ class Director:
     def _apply_strategy_cancel(
         self, payload: StrategyCancelPayload, now: float, directive_id: str
     ) -> None:
-        """STRATEGY_CANCEL commit 后执行：清 board slot + 切 sustain + log + push snapshot。
+        """STRATEGY_CANCEL commit 后执行：清 board slot + 自动切 persistent doctrine
+        （两层架构 2026-05-19）+ log + push snapshot。
 
         由 _apply_to_facade 调用（board.submit → commit → 这里），不再是旁路直调。
+        Cancel 不再降级 sustain；改为 pick_best_persistent + facade.set_build(chosen)。
         """
-        import contextlib
-
         cleared_stages: list[StageKind] = []
         targets: list[StageKind] = (
             list(StageKind) if payload.stage == "all" else [StageKind(payload.stage)]
@@ -1274,12 +1274,15 @@ class Director:
                 cleared_stages.append(stage)
         # commit 后把 STRATEGY_CANCEL directive 从 board.overlays 移出（它已执行，不需持续活跃）
         self.board.overlays = [d for d in self.board.overlays if d.id != directive_id]
-        # 切 sustain plan（facade.set_build 即时生效）
-        with contextlib.suppress(Exception):
-            self.facade.set_build("sustain")
+
+        # 两层架构：自动切 persistent doctrine（取代旧的 set_build("sustain")）
+        self._apply_auto_persistent_switch(
+            now, reason="cancel_redirected", caused_by=f"voice:cancel:{directive_id}"
+        )
+
         # 清掉推荐
         self._pending_recommendation = None
-        # log 事件，触发 snapshot 刷新
+        # log cancel 事件
         self.session.log_event(
             Event(
                 ts=now,
@@ -1294,6 +1297,128 @@ class Director:
             )
         )
         self._push_snapshot(now)
+
+    # ------------------------------------------------------------------
+    # 两层架构（2026-05-19）：自动选 persistent doctrine 切换
+    # ------------------------------------------------------------------
+
+    def _build_game_snapshot_for_cost(self) -> Any:
+        """从 facade 构造 transition_cost.GameSnapshot。
+
+        缺信息（如 gas_income / upgrades）用合理默认。Step 10 MVP；
+        后续可扩 facade 暴露更多 telemetry。
+        """
+        from vibecraft.strategy.transition_cost import GameSnapshot
+
+        try:
+            state = self.facade.get_state()
+        except Exception:
+            state = None
+
+        if state is None:
+            return GameSnapshot()
+
+        # structures_built 是 UnitTypeId.name set，转 count dict（每个名字至少出现 1 次）
+        structures = dict.fromkeys(state.structures_built, 1)
+        # gas_income 没有直接 telemetry，用 gas 值 / 30 估算（粗略）
+        gas_income_est = float(state.gas) / 30.0 if state.gas > 0 else 50.0
+
+        return GameSnapshot(
+            structures=structures,
+            units=dict(state.army_summary),
+            upgrades=set(),  # 暂无；P3+ 扩 facade 后补
+            researching=set(),
+            gas_income_per_minute=gas_income_est,
+        )
+
+    def _compute_enemy_tags(self) -> set[str]:
+        """从 facade 拉敌情，推断 enemy composition tag 集合。"""
+        from vibecraft.strategy.enemy_tags import compute_enemy_composition_tags
+
+        try:
+            state = self.facade.get_state()
+        except Exception:
+            return set()
+
+        # enemy_race 暂未暴露（facade 没字段），暂 None；P3+ 加 facade.enemy_race 后补
+        return compute_enemy_composition_tags(
+            enemy_summary=dict(state.enemy_summary),
+            enemy_race=None,
+            enemy_upgrades=set(),
+        )
+
+    def _apply_auto_persistent_switch(
+        self,
+        now: float,
+        reason: str,
+        caused_by: str | None = None,
+    ) -> str | None:
+        """调 pick_best_persistent 算成本，切到最低成本 doctrine + 推送 PWA。
+
+        Args:
+            now: 当前 game_time（秒）
+            reason: "cancel_redirected" / "opening_completed" / "parse_fail_redirected"
+            caused_by: 事件链路追踪
+
+        Returns:
+            chosen doctrine id；如 my_race 没 persistent doctrine 注册或 library 为 None
+            则返回 None（无操作）。
+        """
+        import contextlib
+
+        # library 优先用 self.library；fallback 到 parser.library（parser 必有）
+        library = self.library if self.library is not None else self.parser.library
+        if library is None:
+            logger.warning("auto_persistent_switch: no library, skip")
+            return None
+        my_race = (self.parser.my_race or "").lower()
+        if not my_race:
+            logger.warning("auto_persistent_switch: no my_race, skip")
+            return None
+
+        from vibecraft.strategy.transition_cost import pick_best_persistent
+
+        snapshot = self._build_game_snapshot_for_cost()
+        enemy_tags = self._compute_enemy_tags()
+
+        try:
+            chosen, cost, all_costs = pick_best_persistent(
+                snapshot, enemy_tags, library, my_race
+            )
+        except ValueError as exc:
+            # race 没注册 persistent doctrine（如未跑过 Step 5 迁移 / 仅 1g_robo 测试库）
+            logger.warning("auto_persistent_switch: pick_best failed (%s)", exc)
+            return None
+
+        # facade.set_build（即时生效）
+        with contextlib.suppress(Exception):
+            self.facade.set_build(chosen)
+
+        # log auto_switch 事件（PWA 据此显示 toast）
+        sorted_costs = sorted(all_costs.items(), key=lambda kv: kv[1])
+        alternatives = [
+            {"id": sid, "cost": round(c, 1)} for sid, c in sorted_costs[1:4]
+        ]
+        self.session.log_event(
+            Event(
+                ts=now,
+                kind=EventKind.STRATEGY_AUTO_SWITCH,
+                payload={
+                    "reason": reason,
+                    "chosen_id": chosen,
+                    "cost": round(cost, 1),
+                    "alternatives": alternatives,
+                    "enemy_tags_hit": sorted(enemy_tags),
+                },
+                priority="medium",
+                caused_by=caused_by,
+            )
+        )
+        logger.info(
+            "auto_persistent_switch[%s]: chose %s (cost=%.1f, race=%s, enemy_tags=%d)",
+            reason, chosen, cost, my_race, len(enemy_tags),
+        )
+        return chosen
 
     # ------------------------------------------------------------------
     # M3 L4 sharpy 真出兵 wire (production_override → bot.train)
