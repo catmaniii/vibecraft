@@ -38,7 +38,6 @@ from sharpy.plans.acts import ActUnit, BuildGas, GridBuilding, MineOpenBlockedBa
 from sharpy.plans.acts.protoss import (
     AutoPylon,
     ChronoTech,
-    ChronoUnit,
     ProtossUnit,
     RestorePower,
 )
@@ -68,26 +67,22 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
     async def create_plan(self) -> BuildOrder:
         return BuildOrder(
-            # 探机 chrono:仅在 BY 还没造之前用,BY 一出现就停 → 留所有能量给折跃 chrono
-            Step(
-                None,
-                ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
-                skip=UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
-                skip_until=UnitExists(UnitTypeId.ASSIMILATOR, 1),
-            ),
+            # 2026-05-19 用户修正：删除探机 chrono，所有能量留给折跃研究
+            # 原因：探机 chrono ~1 次 = 多 1 个探机 ~50 矿，但折跃研究多 1 次
+            # chrono = 早 15s 出门 timing，对 4BG 一波价值更高
             # 折跃研究 chrono:BY 出现后所有 chrono 持续给 BY,直到折跃 99% 完成
             Step(
                 UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
                 skip=TechReady(UpgradeId.WARPGATERESEARCH, 0.99),
             ),
-            # 前线 warp:**抢在主线 ProtossUnit(STALKER) 之前 execute** —
-            # sharpy BuildOrder.execute 是顺序遍历 orders,sharpy 自带 ProtossUnit
-            # 会用所有 ready WARPGATE(含 forward)warp 兵但 target=家 NEXUS。
-            # 把 ForwardWarpStalker 放在主线 SequentialList 之前 → 每 step 先抢
-            # forward warpgate + mark cooldown_manager.used_ability,sharpy 后续
-            # 看到 forward wg in cooldown 就跳过 → 兵真在 forward 区域出生。
-            ForwardWarpStalker(UnitTypeId.STALKER),
+            # 2026-05-19 用户修正：ForwardWarpStalker 只在折跃完成 + 4 BG 全部 ready 后启用
+            # 原因：折跃没好时 forward warpgate 还没 morph 完，提前激活无用且
+            # 可能让兵在不对的位置 spawn。等齐了再开门集中刷
+            Step(
+                self._all_4bg_warpgate_ready,
+                ForwardWarpStalker(UnitTypeId.STALKER),
+            ),
             # build order 主线
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
@@ -116,11 +111,13 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
                         self._three_bg_at_once,
                         GridBuilding(UnitTypeId.GATEWAY, 3),
                     ),
-                    # 持续 Stalker:折跃完成后若仍有 BG 未 morph 成 WarpGate,
-                    # 暂停训练让它们 morph(WarpGate 训练效率更高,且压制 timing 关键)
+                    # 2026-05-19 用户修正：折跃完成前**只出 1 追猎**做探路 + 防守
+                    # 原本 cap=100 = 暴兵浪费产能；用户要"折跃好了才在前线集中刷兵"
+                    # 折跃 ready 后 _can_train_stalker 返回 False，stop home train，
+                    # 改由 ForwardWarpStalker 接管在前线 warp（条件：4 BG 全 ready）
                     Step(
                         self._can_train_stalker,
-                        ProtossUnit(UnitTypeId.STALKER, 100),
+                        ProtossUnit(UnitTypeId.STALKER, 1),
                     ),
                 ),
             ),
@@ -176,6 +173,22 @@ class Gate4Pressure(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型,Kno
 
         ready_bg = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
         return bool(ready_bg >= 1)
+
+    @staticmethod
+    def _all_4bg_warpgate_ready(ai: Any) -> bool:
+        """ForwardWarpStalker 触发条件（2026-05-19 用户修正）:
+        折跃研究完成 + 4 BG 全部 ready（含前线野 BG）→ 集中前线刷兵。
+
+        前线 warp 之前 ProtossUnit(STALKER, 1) 已出过 1 追猎；之后所有兵都
+        在前线 spawn，避免兵从家走过去浪费时间。
+        """
+        from sc2.ids.unit_typeid import UnitTypeId as _U
+
+        warpgate_done = UpgradeId.WARPGATERESEARCH in ai.state.upgrades
+        if not warpgate_done:
+            return False
+        bg_count = ai.structures.of_type({_U.GATEWAY, _U.WARPGATE}).ready.amount
+        return bool(bg_count >= 4)
 
     @staticmethod
     def _can_train_stalker(ai: Any) -> bool:

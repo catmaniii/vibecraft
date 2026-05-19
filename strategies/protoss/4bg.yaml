@@ -26,8 +26,8 @@ phases:
     subtitle: "13 农 → BG + 1 气"
     start_at_supply: 13
   - id: tech
-    display: "BY + 持续 chrono 折跃"
-    subtitle: "BY 一好就停农 chrono,所有能量给折跃"
+    display: "BY + 全力 chrono 折跃"
+    subtitle: "不 chrono 探机；BY 一好所有 chrono 全给折跃研究；同时只出 1 追猎探路/防守"
     start_at_supply: 18
   - id: massing
     display: "家里补到 3 BG"
@@ -38,8 +38,8 @@ phases:
     subtitle: "家里 BG 在造的同时 → 派 1 农民到前线修 BE + 1 BG（总 4 BG）"
     start_at_supply: 28
   - id: pressuring
-    display: "首波出门压制"
-    subtitle: "4 追猎集齐 → 出门 + 火力侦察"
+    display: "前线集中刷兵 + 首波压制"
+    subtitle: "折跃完成 + 4 BG 全 ready → 所有 wg 都在前线 warp，集结即出门"
     start_at_supply: 32
     start_at_time: 300
 
