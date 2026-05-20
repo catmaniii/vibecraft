@@ -22,6 +22,7 @@ class LogStream(str, Enum):
     METRICS = "metrics"
     ERRORS = "errors"
     WS_TRAFFIC = "ws_traffic"
+    TELEMETRY = "telemetry"
 
 
 class EventKind(str, Enum):
