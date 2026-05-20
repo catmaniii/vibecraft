@@ -1,0 +1,159 @@
+strategy_id: iac_2base
+my_race: Protoss
+# research 来源:
+#   - https://lotv.spawningtool.com/build/196674/
+#     (2 Base Chargelot+Immortal+Archon PvX all-in: Core@1:35, WGR@2:10, Robo@2:22,
+#      TC@3:40, Forge@3:42, Charge@4:27, 7BG@4:35-4:56, attack@6:15)
+#   - https://lotv.spawningtool.com/build/164221/
+#     (Probe Beginner 2 Base CIA: Core@1:33, WGR@2:10, Robo@2:23, TC+Forge@3:40,
+#      Charge@4:27, 7BG@4:35, attack movout implied ~6:15-6:30)
+#   - https://lotv.spawningtool.com/build/152749/
+#     (PvT DT Drop → 2-Base Archon/Chargelot: DarkShrine complete ~3:20,
+#      Charge research @4:07, first DT batch @4:34, Archon merge @5:57, attack @6:02)
+#   - https://lotv.spawningtool.com/build/68902/
+#     (Stats' Double DT/Archon drop into IAC: Core@1:33, WGR@2:10, TC@2:38, DarkShrine@3:14,
+#      first DT×4 @4:38, second DT×4 @5:26, Charge@5:37, Forge@5:38, Archon merge@5:29+)
+#
+# 本项目变体说明: iac_2base 是纯 Chargelot+Archon（DT 合），不出 Immortal，
+# 不建 Robo。DarkShrine(71s) 比 TemplarArchive(36s) 慢 ~35s，出门 timing 约 7:00-7:30。
+# spec 数值基于 research 标准(特别是 spawningtool 68902 和 152749 的 DT 路线)，
+# 而非照抄 plan 代码 —— spec 是"应该达到的标准"。
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:35"
+    # supply 14 下 Pylon；两条参考来源均 0:14-0:19 开始建 Pylon
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:20"
+    tol: 20
+    # supply 16 开建，完成约 1:00-1:30；项目 plan: 13 探机→BE→14→BG，约 1:15-1:25
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:40"
+    # 第 1 气矿，supply 17 建；两条参考来源均 0:47-0:52 开建，约 1:20-1:35 完成
+
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    at: "2:05"
+    tol: 25
+    # 二矿 natural；参考来源 1:23-1:25 开建，约 1:55-2:10 完成
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:20"
+    # 第 2 气矿；两条参考来源 1:39-1:41 开建，约 2:05-2:15 完成
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:15"
+    tol: 20
+    # supply 20，参考来源均 1:33-1:35 开建，完成约 2:05-2:15；项目 plan BG 一好触发
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:00"
+    # 参考来源 WGR start @2:10，研究 ~110s(chrono)，完成约 3:50-4:00
+
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "3:30"
+    tol: 25
+    # BY 一好后立刻触发 VC；参考来源 Stats build: 2:38 开建 TC，约 3:10-3:30 完成
+    # 项目 plan: "2:38 VC"，建造 52s → 完成约 3:30
+
+  - id: dark_shrine
+    type: building_complete
+    unit: DARKSHRINE
+    at: "4:30"
+    tol: 30
+    # VD 在 VC 一好后触发；参考 Stats build: 3:14 开建 DarkShrine(71s)→ 完成 ~4:25
+    # 项目 plan: "3:14 VD"，71s 建造时间 → 完成约 4:25-4:30
+
+  - id: forge
+    type: building_complete
+    unit: FORGE
+    at: "4:10"
+    tol: 30
+    # Forge(BF)；参考 Stats: Forge 5:38 开（比 Probe build 的 3:42 晚）
+    # 项目 plan: "3:00 BF"，建造 ~60s → 完成约 4:00-4:15；取 plan 节奏为准
+
+  - id: charge_research
+    type: upgrade_complete
+    upgrade: CHARGE
+    by: "5:30"
+    # VC 一好立刻研 Charge(~100s)；VC 完成约 3:30 → Charge 完成约 5:10
+    # 参考 DT路线：Charge research start @4:07-5:37（两条参考值域宽），给 by 5:30 容错
+
+  - id: ground_weapons_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDWEAPONSLEVEL1
+    by: "6:30"
+    # Forge 完成后立刻研 +1 攻；Forge 完成约 4:00-4:15，研究 ~170s → 完成约 6:55
+    # 项目 plan 要求 +1 攻完才出门，给 by 6:30 作为验收上界（略偏紧，对应较优执行）
+
+  - id: ground_armor_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDARMORSLEVEL1
+    by: "6:45"
+    # Forge 一好同时双研 +1 防（与 +1 攻同步开启），+1 防也是 ~170s；给略宽松上界
+
+  - id: worker_count_2base
+    type: worker_count
+    at: "4:30"
+    tol: 30
+    min: 38
+    # 双矿饱和目标 44 探机；4:30 时应达 ≥38（双矿满员前）
+    # 项目 plan: ActUnit PROBE 44，二矿后继续补农
+
+  - id: six_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "4:30"
+    tol: 30
+    min: 6
+    # 项目 plan: Time(60*4) 触发 6 BG；参考来源 Probe build 4:35 暴 7BG
+    # verifier 自动合并 GATEWAY+WARPGATE 计数
+
+  - id: dt_count_first_batch
+    type: unit_count
+    unit: DARKTEMPLAR
+    at: "5:10"
+    tol: 30
+    min: 4
+    # 项目 plan: VD 一好→出 8 DT，第一批 ×4；Stats build: 4:38 第一批 DT
+    # VD 完成约 4:25-4:30，出 DT ~32s(chrono) → 第一批 4 DT 约 4:57-5:10
+
+  - id: archon_count
+    type: unit_count
+    unit: ARCHON
+    at: "6:00"
+    tol: 30
+    min: 2
+    # 2 DT→1 Archon；第一批 4 DT 合 2 Archon；
+    # 参考 152749: Archon merge @5:57，给 at 6:00 ±30s
+
+  - id: army_gather
+    type: army_gather
+    by: "7:10"
+    # 出门前集结；Charge + +1/+1 + 2+ Archon 触发 → 集结时间约 6:30-7:00
+    # 项目 plan _ready_to_pressure: army_supply≥30 OR time≥7:30，给 by 7:10
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "7:30"
+    # 项目 plan timer 兜底 7:30；正常路径（升级全好 + 2+ Archon + supply≥30）约 7:00
+    # 参考最接近来源 152749: attack @6:02（无 Charge/+1+1 要求，比本 build 快）
+    # 本 build 多 DarkShrine(71s) + Charge + 攻防双升，给到 7:30 上界
