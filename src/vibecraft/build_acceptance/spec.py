@@ -27,7 +27,7 @@ class Check(BaseModel):
     id: str
     type: Literal[
         "building_started", "building_complete", "upgrade_complete",
-        "worker_count", "unit_count", "key_unit_at", "army_gather", "attack_moveout",
+        "worker_count", "unit_count", "building_count", "key_unit_at", "army_gather", "attack_moveout",
     ]
     # 时间:at(窗口中心)或 by(上界),至少一个
     at: str | None = None

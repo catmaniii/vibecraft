@@ -869,6 +869,7 @@ def _make_vibecraft_bot_base_class(
 
             from vibecraft.bot.telemetry import (
                 _KEY_UNIT_TYPES,
+                _SNAPSHOT_BUILDING_TYPES,
                 _SNAPSHOT_UNIT_TYPES,
                 build_snapshot_record,
             )
@@ -878,6 +879,12 @@ def _make_vibecraft_bot_base_class(
             for name in _SNAPSHOT_UNIT_TYPES:
                 ut = getattr(UnitTypeId, name, None)
                 units_count[name] = self.units(ut).amount if ut is not None else 0
+            buildings_count: dict[str, int] = {}
+            for name in _SNAPSHOT_BUILDING_TYPES:
+                bt = getattr(UnitTypeId, name, None)
+                buildings_count[name] = (
+                    self.structures(bt).ready.amount if bt is not None else 0
+                )
             key_units: dict[str, list] = {}
             for name in _KEY_UNIT_TYPES:
                 ut = getattr(UnitTypeId, name, None)
@@ -895,7 +902,7 @@ def _make_vibecraft_bot_base_class(
                 workers=int(self.supply_workers), army_supply=army_supply,
                 minerals=int(self.minerals), vespene=int(self.vespene),
                 bases=int(self.townhalls.amount), army_center=army_center,
-                units=units_count, key_units=key_units,
+                units=units_count, buildings=buildings_count, key_units=key_units,
                 active_recipe=str(getattr(self, "active_recipe", "")),
             )
             self._telemetry.maybe_write_snapshot(now, rec)

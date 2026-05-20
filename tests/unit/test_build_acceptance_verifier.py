@@ -79,3 +79,22 @@ def test_attack_moveout_detects_army_leaving_home():
            {"kind": "snapshot", "t": 500.0, "army_center": [70.0, 70.0]}]
     spec = _spec([{"id": "out", "type": "attack_moveout", "by": "9:00"}])
     assert verify(tel, spec, opponent="veryeasy").passed
+
+
+def test_building_count_merges_gateway_warpgate():
+    """building_count 验 GATEWAY 时自动合并 WARPGATE(折跃后 morph)。"""
+    tel = [_GAME_START,
+           {"kind": "snapshot", "t": 240.0,
+            "buildings": {"GATEWAY": 1, "WARPGATE": 2}}]
+    spec = _spec([{"id": "bg", "type": "building_count", "unit": "GATEWAY",
+                   "at": "4:00", "min": 3}])
+    assert verify(tel, spec, opponent="veryeasy").passed
+
+
+def test_building_count_fail_not_enough():
+    tel = [_GAME_START,
+           {"kind": "snapshot", "t": 240.0,
+            "buildings": {"GATEWAY": 1, "WARPGATE": 0}}]
+    spec = _spec([{"id": "bg", "type": "building_count", "unit": "GATEWAY",
+                   "at": "4:00", "min": 3}])
+    assert not verify(tel, spec, opponent="veryeasy").passed

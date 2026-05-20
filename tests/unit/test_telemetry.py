@@ -46,12 +46,14 @@ def test_snapshot_record():
         t=120.0, supply_used=24, supply_cap=39, workers=22, army_supply=4,
         minerals=150, vespene=80, bases=2, army_center=_pt(100, 110),
         units={"STALKER": 2, "ZEALOT": 0},
+        buildings={"GATEWAY": 3, "WARPGATE": 1},
         key_units={"WARPPRISM": [_pt(114, 115)]},
         active_recipe="dt_drop_iac",
     )
     assert rec["kind"] == "snapshot"
     assert rec["army_center"] == [100.0, 110.0]
     assert rec["units"] == {"STALKER": 2, "ZEALOT": 0}
+    assert rec["buildings"] == {"GATEWAY": 3, "WARPGATE": 1}
     assert rec["key_units"] == {"WARPPRISM": [[114.0, 115.0]]}
 
 

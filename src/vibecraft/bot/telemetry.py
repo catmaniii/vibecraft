@@ -60,7 +60,7 @@ def build_game_start_record(
 def build_snapshot_record(
     t: float, supply_used: int, supply_cap: int, workers: int, army_supply: int,
     minerals: int, vespene: int, bases: int, army_center: Any | None,
-    units: dict[str, int], key_units: dict[str, list[Any]],
+    units: dict[str, int], buildings: dict[str, int], key_units: dict[str, list[Any]],
     active_recipe: str,
 ) -> dict[str, Any]:
     """周期快照 record。"""
@@ -76,6 +76,7 @@ def build_snapshot_record(
         "bases": int(bases),
         "army_center": _xy(army_center) if army_center is not None else None,
         "units": {k: int(v) for k, v in units.items()},
+        "buildings": {k: int(v) for k, v in buildings.items()},
         "key_units": {k: [_xy(p) for p in v] for k, v in key_units.items()},
         "active_recipe": active_recipe,
     }
@@ -95,6 +96,12 @@ _SNAPSHOT_UNIT_TYPES: tuple[str, ...] = (
     "PROBE", "ZEALOT", "STALKER", "SENTRY", "ADEPT", "DARKTEMPLAR",
     "HIGHTEMPLAR", "ARCHON", "IMMORTAL", "COLOSSUS", "WARPPRISM",
     "OBSERVER", "VOIDRAY", "PHOENIX", "CARRIER", "TEMPEST", "MOTHERSHIP",
+)
+# 快照里建筑计数的固定建筑集（神族为主，含三族常见。verifier building_count 用）
+_SNAPSHOT_BUILDING_TYPES: tuple[str, ...] = (
+    "NEXUS", "PYLON", "GATEWAY", "WARPGATE", "CYBERNETICSCORE", "ASSIMILATOR",
+    "FORGE", "TWILIGHTCOUNCIL", "ROBOTICSFACILITY", "STARGATE", "DARKSHRINE",
+    "TEMPLARARCHIVE", "ROBOTICSBAY", "FLEETBEACON", "PHOTONCANNON", "SHIELDBATTERY",
 )
 # 快照里要记坐标的关键单位
 _KEY_UNIT_TYPES: tuple[str, ...] = ("WARPPRISM", "WARPPRISMPHASING")

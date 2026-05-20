@@ -15,6 +15,10 @@ from vibecraft.build_acceptance.spec import AcceptanceSpec, Check
 _MOVEOUT_HOME_DIST: float = 60.0
 # 位置类 check(CheatMoney 跳过)
 _POSITION_TYPES = frozenset({"key_unit_at", "army_gather"})
+# 建筑别名:某些建筑会 morph(GATEWAY→WARPGATE),验收"有几个 BG"时合并计数
+_BUILDING_ALIASES: dict[str, list[str]] = {
+    "GATEWAY": ["GATEWAY", "WARPGATE"],
+}
 
 
 @dataclass
@@ -107,6 +111,21 @@ def _check_one(
         ok = actual >= (check.min or 0)
         return CheckResult(check.id, ok,
                            detail=f"actual={actual} need>={check.min} @ {t:.0f}s")
+
+    if ctype == "building_count":
+        t = check.at_s if check.at_s is not None else check.by_s
+        snap = _snapshot_at(telemetry, t)
+        if snap is None:
+            return CheckResult(check.id, False, detail="无 snapshot")
+        bdict = snap.get("buildings", {})
+        names = _BUILDING_ALIASES.get(check.unit, [check.unit])
+        actual = sum(int(bdict.get(n, 0)) for n in names)
+        ok = actual >= (check.min or 0)
+        merged = "+".join(names) if len(names) > 1 else check.unit
+        return CheckResult(
+            check.id, ok,
+            detail=f"actual={actual} ({merged}) need>={check.min} @ {t:.0f}s",
+        )
 
     if ctype == "key_unit_at":
         t = check.at_s
