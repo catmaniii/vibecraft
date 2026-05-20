@@ -107,11 +107,12 @@ checks:
   - id: gateway_count_4
     type: building_count
     unit: GATEWAY
-    at: "4:00"
+    at: "5:00"
     tol: 30
     min: 4
-    # plan: GridBuilding(GATEWAY, 4)；源 47308: 3:08 补 2 BG → 共 4 BG；
-    # 源 82515: 3:20 补 2 BG；4:00 ±30s 窗口；
+    # plan 2026-05-20 修：4 BG 改 DARKSHRINE exists 触发（VB 开建后才补，
+    # 不抢 VT/VB 科技建筑的矿）。VB ~3:00 开建 → 4 BG ~4:30-5:00 逐个补齐。
+    # （原 spec at 4:00 是按旧的"BY 一好就补 4 BG"写的，与修复后行为矛盾）
     # verifier 自动合并 WARPGATE (morph 后)
 
   - id: dt_first_warp
