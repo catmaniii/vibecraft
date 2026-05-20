@@ -230,8 +230,15 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 StepBuildGas(3, skip=Gas(300)),
                 StepBuildGas(4, skip=Gas(400)),
             ],
-            # ---------- 6:04 暴 4 BG（Stats spec）----------
-            Step(Time(60 * 6), GridBuilding(UnitTypeId.GATEWAY, 4)),
+            # ---------- 暴 4 BG（VD 一开建就补，撑 DT 两波 warp 产能）----------
+            # 2026-05-20 修 DT 产能瓶颈：原来 `Time(6:00)` 才补 4 BG，但 DT 首波
+            # ~4:40 就要 warp，全程只有 1 个 warpgate → 8 DT 只能涓流出，验收
+            # first_dt_wave / second_dt_wave / four_gateways 全 FAIL。
+            # 改 DARKSHRINE exists 触发（对齐 dt_rush 的 4 BG 补法）：VD 一开建
+            # （DT 科技已下，不抢科技建筑的矿）就连补 gateway，~4:00-4:40 陆续
+            # 修好 morph 成 warpgate，DT 两波能多门并发快速 warp。
+            # 代价：分流 ~450 矿，VD / prism 科技略晚（用户 2026-05-20 确认接受）。
+            Step(UnitExists(UnitTypeId.DARKSHRINE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
