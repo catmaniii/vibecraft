@@ -1,0 +1,147 @@
+strategy_id: blink_stalker
+my_race: Protoss
+# research 来源:
+#   - https://lotv.spawningtool.com/build/178931/
+#     (Harstem's 4 Gate Blink PvT — 项目 plan 直接引用的权威来源)
+#     精确时序: Pylon@0:17/14, Gateway@0:35/15, Gas1@0:47/16, BY@1:24/20,
+#     NX@1:35/20, Gas2@1:49/21, Adept+WGR@2:00/21, VC@2:32/28, VR@2:59/34,
+#     Blink@3:19/37, BG x2@3:23/38, BG x3@3:39/40, Observer@3:47/40,
+#     WP@4:08/46, Gas3@4:30/55, 出门5:07@68supply(11S+1A+1WP+1OB)
+#   - https://liquipedia.net/starcraft2/Blink_Stalker_Push
+#     (双矿4BG标准, Blink研究~5:58-6:00, 出门8:00-8:20, 11-13 Stalker;
+#      本 plan 为 PvT 激进版，时序比 Liquipedia PvZ 参考快约 2-3min)
+#   - https://lotv.spawningtool.com/build/62763/
+#     (herO's 3gate blink all-in: VC@28/2:15, Blink@3:07/32, 3BG, 9-10 Stalker出门)
+#
+# 注意: 本项目 plan 是 PvT 双矿4BG版本(含 Warp Prism + Observer),
+# 比 Liquipedia PvZ blink stalker push 快很多, 与 spawningtool 178931 完全对齐。
+# spec 数值基于 spawningtool 178931 标准时序, 宽松 ±20s。
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:30"
+    # supply 14 下水晶；178931 参考 0:17，项目实现略晚，给到 0:30
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:35"
+    tol: 20
+    # supply 15 开建 @0:35，完成约 1:35；178931 参考 BG 完成约 1:25-1:40
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:50"
+    # supply 16 建第 1 气矿 @0:47，完成约 1:42；宽松给到 1:50
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:20"
+    tol: 20
+    # supply 20 建 BY @1:24，完成约 2:14-2:24；178931 参考 BY@1:24
+
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    at: "2:30"
+    tol: 20
+    # BY 建后 11s 下 NX（178931: NX@1:35），NX 完成约 2:20-2:40（完成时间~65s建设）
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:50"
+    # supply 21 建第 2 气矿 @1:49，完成约 2:44；宽松给到 2:50
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:10"
+    # WGR @2:00 开始（supply 21），研究约 ~104s（chrono 加速）；
+    # 178931 WGR start@2:00 → 预计完成 ~3:40-4:00，宽松给到 4:10
+
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "3:20"
+    tol: 20
+    # supply 28 建 VC @2:32，完成约 3:12-3:22；178931 VC@2:32
+
+  - id: robotics_facility
+    type: building_complete
+    unit: ROBOTICSFACILITY
+    at: "3:50"
+    tol: 20
+    # supply 34 建 VR @2:59，完成约 3:39-3:59；178931 VR@2:59
+
+  - id: blink_research
+    type: upgrade_complete
+    upgrade: BLINKTECH
+    by: "5:30"
+    # Blink @3:19 开始（supply 37），研究约 ~121s（chrono 加速约 81s）；
+    # 178931 Blink start@3:19 + chrono → 预计完成 ~4:40-5:10，宽松给到 5:30
+
+  - id: four_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "4:30"
+    tol: 30
+    min: 4
+    # BG x2@3:23, BG x3@3:39（178931），4BG 建完约 3:39+75s=~4:54；
+    # building_count 自动合并 GATEWAY + WARPGATE（折跃后 morph）；
+    # 目标 at:4:30 tol:30 → 验证 4:00-5:00 窗口内拥有 4 BG
+
+  - id: worker_count_mid
+    type: worker_count
+    at: "3:30"
+    tol: 20
+    min: 22
+    # 双矿铺开，NX@~2:30完成后继续探机；178931 约 3:30 达到 ~22-24 农民
+
+  - id: stalker_count_early
+    type: unit_count
+    unit: STALKER
+    at: "4:30"
+    tol: 20
+    min: 5
+    # 178931: BY完成→追猎开始产出，到 3:52 已有 2-3 stalker；
+    # 4:30 附近 4BG折跃暴兵，应有 ≥5 Stalker
+
+  - id: observer_ready
+    type: unit_count
+    unit: OBSERVER
+    by: "5:00"
+    min: 1
+    # VR@3:47 出 Observer（178931），OB 完成约 4:17-4:30；宽松给到 5:00
+
+  - id: warp_prism_ready
+    type: unit_count
+    unit: WARPPRISM
+    by: "5:30"
+    min: 1
+    # WP @4:08（178931 chrono 加速），完成约 4:48-5:00；宽松给到 5:30
+
+  - id: stalker_count_moveout
+    type: unit_count
+    unit: STALKER
+    at: "5:10"
+    tol: 20
+    min: 10
+    # 178931 出门 benchmark 5:07 = 11 Stalker；
+    # 判定10个（plan 出门触发条件也是 ≥10 Stalker + Blink完成 + 4BG ready）
+
+  - id: army_gather
+    type: army_gather
+    by: "5:30"
+    # 部队在出门前集结到出发点（home 端 ramp 或 natural 出口）
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "6:00"
+    # plan _ready_to_pressure: Blink完成 + 4BG ready + ≥10 Stalker → 出门；
+    # 178931 标准 5:07，宽松给到 6:00（Blink chrono 加速不一致时有浮动）

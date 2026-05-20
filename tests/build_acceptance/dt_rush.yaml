@@ -1,0 +1,148 @@
+strategy_id: dt_rush
+my_race: Protoss
+# research 来源（交叉验证 3 源）:
+#   - https://lotv.spawningtool.com/build/47308/
+#     (标准 DT Rush：14 BE / 15 BG / 16 双气 / 19 BY / 2:10 VT / 2:43 VB /
+#      4:09 首 3 DT warp-in，~4:10-4:20 DT 到达敌方）
+#   - https://lotv.spawningtool.com/build/82515/
+#     (DT Rush w/ 4Gate：BY@1:22 / VT@2:00 / VB@2:36 / 首波 2 DT@3:50 /
+#      第二波 2 DT@4:14，配 Warp Prism 送达，出门约 5:00 前造成伤害)
+#   - https://liquipedia.net/starcraft2/3-Gate_Dark_Templar_(PvT)
+#     (供给顺序：9 BE → 12 BG → 14 BA → 18 BY → 21 折跃 → 24 VT → 29 VB →
+#      33 supply 时 warp 2-3 DT @ proxy；无精确时间戳，仅供 supply 参考)
+#
+# 本项目 dt_rush plan 引用来源：spawningtool 47308（文件头 docstring 明注）
+# plan docstring 约定节奏：
+#   0:14 BE / 0:35 BG / 0:47 双气 / 1:22 BY / 1:58 折跃 / 2:00 VT /
+#   2:36 VB / 2:48 BE+二矿 / 3:50 warp 3 DT / 4:10 DT 抵达
+# 与 spawningtool 47308 源数据比对：
+#   - VT: plan=2:00, 源=2:10 (Delta -10s，plan 略早，可接受)
+#   - VB: plan=2:36, 源=2:43 (Delta -7s，plan 略早，可接受)
+#   - 首 DT warp: plan=3:50, 源=4:09 (Delta -19s，plan 设计更激进；chrono 加速后可能做到)
+#   - 首 DT 到达: plan=4:10, 源=4:10-4:25 (一致)
+#   - 二矿: plan=2:48(VB 建造期间), 源=3:44 (plan 明显更早，激进但合理)
+# → 差异见汇报，本 spec 数值以 spawningtool 47308 实测为基准，加宽松容差兼容 plan
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:40"
+    # plan: 0:14 下 BE；spawningtool 47308: 0:19 @14supply；宽松到 0:40
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:35"
+    tol: 25
+    # plan: 0:35 开建，完成约 1:20-1:40；源 0:38 开建，完成约 1:23；取中间 1:35 ±25s
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:50"
+    # plan: 0:47 双气；源: 0:49+0:55；完成约 1:24-1:30；宽松给 1:50
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:05"
+    # 第二个气矿；源: 0:55 开建，~1:30 完成；宽松给 2:05
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:10"
+    tol: 20
+    # plan: 1:22 BY；源 47308: 1:29 开建，~2:04 完成；取 2:10 ±20s
+
+  - id: warpgate_research_done
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:00"
+    # plan: 1:58 开研 + 全 chrono；源 47308: 1:51 研究（BY完成即开）；
+    # 折跃研究时长约 104s，chrono 加速约 70s；预计完成 ~3:20-3:50；给到 4:00
+
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "2:50"
+    tol: 25
+    # plan docstring: 2:00 VT；源 47308: 2:10 开建，~2:45 完成；
+    # 源 82515: 2:00 开建，~2:35 完成；取 2:50 ±25s 覆盖两源
+
+  - id: dark_shrine_started
+    type: building_started
+    unit: DARKSHRINE
+    by: "3:00"
+    # plan docstring: 2:36 VB；源 47308: 2:43 开建；源 82515: 2:36 开建；
+    # VT 完成后立刻开 VB，by 3:00 是合理上界
+
+  - id: dark_shrine_complete
+    type: building_complete
+    unit: DARKSHRINE
+    at: "3:30"
+    tol: 30
+    # DT Rush 核心节点：VB 建造时长约 71s；
+    # 2:36 开建 → ~3:47；2:43 开建 → ~3:54；
+    # plan 目标 DT @3:50 warp-in，需 VB 完成在 3:50 前；
+    # 取 3:30 ±30s = 3:00-4:00 窗口
+
+  - id: nexus_2
+    type: building_started
+    unit: NEXUS
+    by: "4:15"
+    # plan: VB 建造期间开二矿（激进，约 2:48）；源 47308: 3:44 @28supply；
+    # 两版本差距大，用 by 4:15 宽容覆盖
+
+  - id: worker_22
+    type: worker_count
+    by: "4:30"
+    min: 22
+    # plan: ActUnit(PROBE, NEXUS, 44)；DT Rush 前期节省矿全投科技，
+    # 源 47308 约 30 探机计划，早期约 22-24；
+    # 4:30 时单矿约 22 农民是合理下界
+
+  - id: gateway_count_4
+    type: building_count
+    unit: GATEWAY
+    at: "4:00"
+    tol: 30
+    min: 4
+    # plan: GridBuilding(GATEWAY, 4)；源 47308: 3:08 补 2 BG → 共 4 BG；
+    # 源 82515: 3:20 补 2 BG；4:00 ±30s 窗口；
+    # verifier 自动合并 WARPGATE (morph 后)
+
+  - id: dt_first_warp
+    type: unit_count
+    unit: DARKTEMPLAR
+    at: "4:20"
+    tol: 30
+    min: 2
+    # 首波 DT warp-in；plan 目标 3:50 warp 3 DT；
+    # 源 47308: 4:09 warp 3 DT；源 82515: 3:50 warp 2 DT；
+    # 取 4:20 ±30s = 3:50-4:50，min=2（至少 2 DT 存在）
+
+  - id: dt_wave_count
+    type: unit_count
+    unit: DARKTEMPLAR
+    by: "5:00"
+    min: 3
+    # plan 目标首波 3 DT；by 5:00 至少 3 个 DT warp 出来
+
+  - id: dt_at_enemy
+    type: key_unit_at
+    unit: DARKTEMPLAR
+    by: "4:40"
+    near: enemy_main
+    within: 20.0
+    # DT Rush 最终目标：DT 到达对方主基地偷家；
+    # plan: 4:10 DT 抵达；源 47308: 4:09 warp + 步行约 10-20s → ~4:20-4:30 到达；
+    # 给宽松 by 4:40（行军路程因地图不同）
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "5:00"
+    # _ready_to_pressure: VB ready + ≥3 DT ready → 出门；
+    # plan 目标 4:10 出门；源 3:50-4:15 首波出动；宽松给 by 5:00

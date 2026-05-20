@@ -1,0 +1,137 @@
+strategy_id: cannon_rush
+my_race: Protoss
+# research 来源:
+#   - https://lotv.spawningtool.com/build/111586/
+#     (PvZ Cannon Rush / Proxy Stalkers — 本项目 plan docstring 标注的参考)
+#     精确时序: BF@16/0:38, Proxy BE@18/1:07, BC×2@18/1:27, 第3 BC@19/1:53
+#   - https://lotv.spawningtool.com/30901/
+#     (PvZ Photon Rush — Zuka's replay，交叉验证)
+#     精确时序: BF@16/0:38, 第1 BC完成@17/1:18, 第2 BC完成@18/1:37
+#   - https://liquipedia.net/starcraft2/Photon_Cannon_Rush
+#     (Liquipedia 概述，供给/顺序验证: 14 BE → 16 BF → 18 proxy BE → BC)
+#
+# plan 实现参考: cannon_rush.py docstring + ForwardCannonProxy
+# 标准节奏摘要:
+#   BF 开建  0:38（16 supply），BF 完成约 1:05-1:10
+#   前线 BE  1:07（18 supply，proxy pylon，须在 BF 完成前或同时完好）
+#   BC × 2  开建 1:27，完成约 1:55-2:00（BC 建造时间 ~29s）
+#   第 3 BC  开建 1:53，完成约 2:25
+#   2+ BC 形成压制: ~2:00-2:10
+#   追猎后手出门 (WGR + 3 BC + 6 Stalker): 约 5:00（与 plan _ready_to_pressure 对齐）
+#
+# 注意:
+#   - 光子炮位置 (近敌方矿线) 无法通过 telemetry key_units 验证 (key_units 仅记 WARPPRISM)
+#     → 用 building_complete timing + building_count 作为替代验证
+#   - plan 的 BF 在前线由 ForwardCannonProxy 建，不在家里
+#   - plan 在炮塔速攻阶段不建 BA (气矿)，build order 无 Assimilator 直到二矿
+
+checks:
+  # --- 家里 BE (Pylon) ---
+  - id: home_pylon
+    type: building_started
+    unit: PYLON
+    by: "0:40"
+    # 14 supply 下家里 BE，plan SequentialList: ActUnit(PROBE,12) → GridBuilding(PYLON,1)
+    # spawningtool 111586: BE@14/0:17；plan 先出探机到 14 再下 Pylon，约 0:30-0:40
+
+  # --- BF (Forge) 开建 ---
+  # cannon rush 核心时序：BF 越早完成，BC 越早能建。标准 16 supply / ~0:38
+  # plan 由 ForwardCannonProxy 在前线建 BF，此处验 BF 是否足够早开建
+  - id: forge_started
+    type: building_started
+    unit: FORGE
+    by: "1:30"
+    # 标准: BF 开建 ~0:38（spawningtool 111586 & 30901 均为 0:38）
+    # plan 的 ForwardCannonProxy 须派 probe 前出再建，路途时间约 30-50s
+    # 含运动时间宽松给到 1:30（超过则前线炮塔延误严重）
+
+  # --- BF (Forge) 完成 ---
+  - id: forge_complete
+    type: building_complete
+    unit: FORGE
+    by: "2:15"
+    # BF 建造时间 ~45s；标准 BF 完成约 1:05-1:10
+    # plan 考虑 probe 前出运动时间（~30-50s）+ BF 建造（~45s），预计 1:40-2:10
+    # BF 完成是 BC 能建的前提（photon cannon 需 Forge）
+
+  # --- 前线 BE (Proxy Pylon) 完成 ---
+  # BF 或 BC 都需要 Pylon 供电；proxy pylon 须在 BC 开建前到位
+  - id: proxy_pylon_complete
+    type: building_complete
+    unit: PYLON
+    at: "1:30"
+    tol: 30
+    # 标准: proxy BE@18/1:07 完成约 1:30（BE 建造 ~22s）
+    # plan SequentialList 里 14 supply BE 已算在内，proxy BE 由 ForwardCannonProxy 独立建
+    # 此条验 Pylon 总数≥2（含家里那个），并在 BC 开建前就绪
+
+  # --- 第 1 个 BC (Photon Cannon) 完成 ---
+  # cannon rush 的核心压制节点：第 1 个炮塔完成才开始威胁对方 worker
+  - id: first_cannon_complete
+    type: building_complete
+    unit: PHOTONCANNON
+    by: "2:30"
+    # 标准: BC 开建 1:27，建造时间 ~29s → 完成约 1:56
+    # plan 含 probe 前出运动时间，预计第 1 BC 完成约 2:10-2:30
+    # 超过 2:30 则炮塔速攻失去突然性
+
+  # --- 2 个 BC 形成基础压制 ---
+  - id: two_cannons_by_250
+    type: building_count
+    unit: PHOTONCANNON
+    by: "2:50"
+    min: 2
+    # 标准: BC × 2 开建 1:27，两个同时完成约 1:56
+    # plan 2 个 BC 同时建（ForwardCannonProxy 目标 2+ BC），含运动时间给到 2:50
+    # 2 BC 是最低限度的矿线压制（1 BC 可能被单矿 worker 拆掉）
+
+  # --- 3 个 BC 封锁矿线 ---
+  - id: three_cannons_by_330
+    type: building_count
+    unit: PHOTONCANNON
+    by: "3:30"
+    min: 3
+    # 标准: 第 3 BC 开建 1:53，完成约 2:22
+    # plan _ready_to_pressure 要求 cannon_count ≥ 3 才触发出门
+    # 3 BC 是 plan 定义的"压制成型"阈值，给宽到 3:30
+
+  # --- 家里 BG (Gateway) 完成 ---
+  - id: gateway_complete
+    type: building_complete
+    unit: GATEWAY
+    by: "3:00"
+    # plan SequentialList: ActUnit(PROBE,14) → GridBuilding(GATEWAY,1)（在 BF 之后）
+    # spawningtool 111586: Gateway@18/1:32；plan 约 1:30-2:00 建，完成约 2:30-3:00
+
+  # --- BY (Cybernetics Core) 完成 ---
+  - id: cyber_core_complete
+    type: building_complete
+    unit: CYBERNETICSCORE
+    by: "3:45"
+    # plan: Step(UnitReady(GATEWAY,1), GridBuilding(CYBERNETICSCORE,1))
+    # BY 在 BG 完成后下，BG 完成约 2:30-3:00 → BY 完成约 3:15-3:45
+
+  # --- 折跃研究完成 ---
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "5:00"
+    # plan: Step(UnitReady(CYBERNETICSCORE,1), Tech(WARPGATERESEARCH)) + chrono
+    # BY 完成约 3:15-3:45，WGR 研究 ~104s（chrono 加速约 ~65s）
+    # 预计 WGR 完成约 4:20-5:00
+
+  # --- 追猎出现（BY 出来后第一批）---
+  - id: first_stalker
+    type: unit_count
+    unit: STALKER
+    by: "5:00"
+    min: 1
+    # plan: Step(UnitReady(CYBERNETICSCORE,1), ProtossUnit(STALKER,12))
+    # 第 1 个追猎在 BY 完成后训练，约 4:00-5:00
+
+  # --- 出门 timing（炮塔速攻后手配合）---
+  - id: attack_moveout
+    type: attack_moveout
+    by: "6:00"
+    # plan _ready_to_pressure: WGR完成 + cannon≥3 + Stalker≥6 → 出门
+    # 追猎 6 只需要额外时间；出门约 5:00-6:00（比标准 4gate 晚，因炮塔速攻消耗矿）
