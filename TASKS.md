@@ -8,60 +8,67 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-20，分支 `m4-l2-l4-executor`，HEAD = `9cc508b`）
+## 当前状态（最近更新：2026-05-20，分支 `m4-l2-l4-executor`，HEAD = `41a405e`）
 
 - **里程碑**：M6 三族 bot 完成后，本阶段建成 **build acceptance 验收框架**并完成
   神族 8 策略验收 + 修复。
-- **build acceptance 框架**（已建成，2026-05-20）：
+- **build acceptance 框架**（2026-05-20 建成 + 加固）：
   - `telemetry.jsonl`（游戏内状态采集）+ acceptance spec（pydantic）+ verifier + runner
-  - 跑法：`uv run python scripts/build_acceptance.py <strategy_id>`（默认 VeryEasy 档）
-  - 流程文档 `docs/process/new-opening-strategy.md` —— 引入/审计开局策略的 7 步标准流程
-  - 设计 `docs/plans/2026-05-20-build-acceptance-testing-design.md`
-- **神族 8 策略验收**（VeryEasy 档实跑）：
+  - 跑法：`uv run python scripts/build_acceptance.py <strategy_id> --runs 3`
+  - 计数类 check 用 `[at±tol]` 时间窗口判定；`--runs N` 多跑按 check 多数票
+    （消除单跑帧抖动 / 交战随机性）。
+  - 流程文档 `docs/process/new-opening-strategy.md`；设计
+    `docs/plans/2026-05-20-build-acceptance-testing-design.md`
+- **神族 8 策略基线**（VeryEasy 档，3 跑多数票，2026-05-20）：
 
-  | 策略 | 验收 | 备注 |
-  |---|---|---|
-  | 4bg | 9/9 | 用户手动调过，基线 |
-  | dt_rush | 14/16 | 修了 2 个 plan bug（二矿 / 4 BG 抢矿） |
-  | 1g_robo_immortal | 14/16 | |
-  | phoenix_2base | 16/21 | 凤凰节奏偏慢 |
-  | dt_drop_iac | 15-16/20 | **拖局未解决**（见立项 2） |
-  | blink_stalker | 13/18 | |
-  | iac_2base | 12/19 | 暴 BG 偏慢 |
-  | cannon_rush | 5/12 | **ForwardCannonProxy 未解决**（见立项 1） |
+  | 策略 | 验收 | 结果 | 备注 |
+  |---|---|---|---|
+  | 4bg | 9/9 | Victory | 用户手调过，基线 |
+  | 1g_robo_immortal | 15/16 | Victory | robotics_facility spec 偏晚 |
+  | dt_rush | 14/16 | Victory | DT 抵达 / 出门 spec 偏早 |
+  | dt_drop_iac | 17/20 | Victory | 拖局 Tie 已修；second_dt_wave/army_gather spec 失真 |
+  | phoenix_2base | 17/21 | Victory | 二矿偏晚 + 2 号星门慢 |
+  | iac_2base | 15/19 | Victory | 二矿偏晚 + forge spec 严重失真 |
+  | blink_stalker | 13/18 | Victory | 二矿偏晚 + 暴 BG 慢 → 兵不足 |
+  | cannon_rush | 5/12 | Defeat | ForwardCannonProxy 未解决（立项 1）|
 
+  7/8 Victory（无 Tie）；总 105/131。
 - **下一步**：见下「build acceptance 待办」。
 
 ---
 
 ## build acceptance 待办
 
-### 立项（深坑，需独立多轮迭代）
+### 立项 1（深坑，需独立多轮迭代）
 
-1. **cannon_rush — ForwardCannonProxy 不建 BF/BC**
-   - 现象：ForwardCannonProxy 从未建成 Forge/Cannon，验收卡 5/12、Defeat。
-   - 已知设计缺陷：plan 建 Forge→Cannon，但 **Forge 不提供 psi matrix**，proxy 点
-     没 Pylon → 即便 BF 建成 BC 也建不了。需重新设计成 Pylon→Forge→Cannon。
-   - BF 没建成的根因仍未定位（两次 debug，ForwardCannon 运行日志诡异地一行不出）。
-     下一步：用 `print()` 直接 instrument execute 各分支（不依赖 loguru）。
-   - 已修复部分：气矿 bug（原 plan 删气矿导致折跃/追猎瘫痪，已修，确定有效）。
+**cannon_rush — ForwardCannonProxy 不建 BF/BC**
+- 现象：ForwardCannonProxy 从未建成 Forge/Cannon，验收卡 5/12、Defeat。
+- 已知设计缺陷：plan 建 Forge→Cannon，但 **Forge 不提供 psi matrix**，proxy 点
+  没 Pylon → 即便 BF 建成 BC 也建不了。需重新设计成 Pylon→Forge→Cannon。
+- BF 没建成的根因仍未定位（两次 debug，ForwardCannon 运行日志诡异地一行不出）。
+  下一步：用 `print()` 直接 instrument execute 各分支（不依赖 loguru）。
+- 已修复部分：气矿 bug（原 plan 删气矿导致折跃/追猎瘫痪，已修，确定有效）。
 
-2. **dt_drop_iac — 拖局 Tie**
-   - 现象：bot 满人口（200 supply / 48 战斗单位 / 7 基地）却打不死 VeryEasy，
-     游戏拖 200+ 分钟判 Tie。
-   - 已修复部分：PlanZoneDefense 抽兵 bug（对齐 4bg 的 skip，进攻阶段不再抽主力）。
-   - 拖局根因更深，疑在 sharpy `PlanZoneAttack` / `PlanFinishEnemy` 清残敌逻辑。
+> 立项 2（dt_drop_iac 拖局 Tie）已修复 —— 根因是两个 VibeCraftZoneAttack 串进
+> 同一 SequentialList 互相 block + DT 产能瓶颈。见 git log `cbc5b2a` / `4b14dd4`。
 
 ### 待战术判断（用户拍板后再动）
 
-- **二矿系统性偏晚 30-50s**：iac / blink / dt_rush / phoenix 的 `nexus_2` 全部
-  比 spec 晚。是 plan 集体偏晚、还是 spec 按 pro 标准写太早 —— 战术取舍，需用户定。
+- **二矿系统性偏晚 ~20-45s**：phoenix / iac / blink 的 `nexus_2` 全比 spec 晚。
+  plan 集体偏晚 vs spec 按 pro 标准太早 —— 战术取舍，需用户定。
+- **plan 产能偏弱（要不要提前暴建筑）**：phoenix 2 号星门慢→phoenix 只到 6（spec 8）；
+  blink 4 BG 慢→出门只 5 兵（spec 10）；iac DT 首批只 1（单 warpgate 限速）。
+  这类改动会动 build order 资源分配，参照 dt_drop_iac「提前暴 BG」的处理方式。
 
-### 校准 / 优化（低优先级）
+### spec 校准（research-stage 错误，可直接修 spec）
 
-- edge timing 校准：iac `twilight_council`/`forge`、1g_robo `robotics_facility` 等小偏差。
-- iac / blink / phoenix 剩余 FAIL：多是 plan 节奏偏慢、或 VeryEasy 速胜导致 build
-  未完全展开。后者属测试场景局限 —— 考虑把 @300s 后的"后期"check 挪 CheatMoney 档验。
+- iac_2base `forge`：spec 250±30，实际 152s（plan 早出 forge）—— spec 严重失真。
+- 1g_robo_immortal `robotics_facility`：spec 225±25，实际 191s —— spec 偏晚。
+- dt_drop_iac `army_gather`：spec 验 7:45 在家，但 plan 5:10 就出门 —— 时机不符。
+- dt_drop_iac `second_dt_wave`：验「8 DT 同时存活」对骚扰流不现实（边打边死），
+  spec 注释自己也提了 —— 改成验总训练数或放宽。
+- dt_rush `dt_at_enemy` + `attack_moveout`、dt_drop_iac `ground_weapon_1`：VeryEasy
+  速胜导致后期 check 来不及 / spec 偏早。
 
 ### 框架 / 流程
 
