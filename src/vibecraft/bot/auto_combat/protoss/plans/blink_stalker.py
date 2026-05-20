@@ -104,6 +104,8 @@ class BlinkStalker(KnowledgeBot):  # type: ignore[misc]
             # 标准 build：1:24 BY → 1:35 NX
             # 原版 BG ready 时同时触发 Expand(2)+GridBuilding(BY)，NX 可能先完成 → BY 延后
             # 修复：BY 在 BG ready 时建，NX 等 BY exists（确保 BY 先下）
+            # 注：实测把 cyber 触发提前到 UnitExists(BG) 想拉早二矿，3 跑确认是中性
+            # （nexus_2 仍 ~193s、four_gateways 0/3→1/3 不稳定），故维持 UnitReady。
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             Step(UnitExists(UnitTypeId.CYBERNETICSCORE, 1), Expand(2)),
             # ---------- 双矿气矿 ----------

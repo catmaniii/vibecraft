@@ -111,10 +111,13 @@ class Phoenix2Base(KnowledgeBot):  # type: ignore[misc]
             # 标准 build：先建 1 VS，等凤凰产出后再加第 2 VS
             # 不同时建 2 VS（矿资源竞争导致凤凰延后）
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.STARGATE, 1)),
-            # ---------- 第 2 VS（4 凤凰出来后建，~3:59）----------
-            # 等首批凤凰产出后才加第 2 星门，避免过早挤矿
+            # ---------- 第 2 VS（1 号星门一好就连下，撑满双星门产能）----------
+            # 2026-05-20：原触发 UnitExists(PHOENIX,4)（~4:35 才下 2 号星门）→ 5:30
+            # 只 6 凤凰。改 UnitReady(STARGATE,1)：1 号星门好就连下 2 号（~64s 提前）。
+            # 实测 3 跑：stargate_2 稳定达成、phoenix_eight 6→7、首批凤凰 phoenix_four
+            # 仍稳过 —— 双星门拉产能有效，"过早挤矿"代价可接受。
             Step(
-                UnitExists(UnitTypeId.PHOENIX, 4),
+                UnitReady(UnitTypeId.STARGATE, 1),
                 GridBuilding(UnitTypeId.STARGATE, 2),
             ),
             # ---------- 三气（第 2 VS 建造期间补）----------

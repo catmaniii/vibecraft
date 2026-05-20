@@ -112,6 +112,9 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
             ),
             # ---------- BG 一好的并行触发（NX + BY 同时启动）----------
+            # 注：二矿触发故意是 UnitReady(BG)，不是 UnitExists(BG)。实测把它提前
+            # 到 BG 一开建就下二矿，二矿早抢 400 矿 → VC/VD/Charge/DT 科技线全被
+            # 拖垮（dark_shrine 296→381s），验收 15→11。iac 科技密集，二矿不能再早。
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             # ---------- 第二气矿 ----------
@@ -156,7 +159,9 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
                 Archon([UnitTypeId.DARKTEMPLAR]),
             ),
             # ---------- Charge Zealot 主力（target 24，叉球一波的主体）----------
-            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 24, priority=True)),
+            Step(
+                UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 24, priority=True)
+            ),
             # ---------- 经济（sequential pacing）----------
             AutoPylon(),
             [
@@ -210,9 +215,7 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             UpgradeId.PROTOSSGROUNDARMORSLEVEL1,
         ]
         for upg in upgrades_required:
-            done = (
-                ai.already_pending_upgrade(upg) >= 1.0 or upg in ai.state.upgrades
-            )
+            done = ai.already_pending_upgrade(upg) >= 1.0 or upg in ai.state.upgrades
             if not done:
                 return False
         # 至少 2 Archon ready（DT 合，溅伤主力）
@@ -221,12 +224,13 @@ class IacTwoBase(KnowledgeBot):  # type: ignore[misc]
             return False
         # 兵力 / 时间双兜底
         unit_supply = {
-            UnitTypeId.ZEALOT: 2, UnitTypeId.STALKER: 2, UnitTypeId.SENTRY: 2,
-            UnitTypeId.ARCHON: 4, UnitTypeId.DARKTEMPLAR: 2,
+            UnitTypeId.ZEALOT: 2,
+            UnitTypeId.STALKER: 2,
+            UnitTypeId.SENTRY: 2,
+            UnitTypeId.ARCHON: 4,
+            UnitTypeId.DARKTEMPLAR: 2,
         }
-        army_supply = sum(
-            ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items()
-        )
+        army_supply = sum(ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items())
         if army_supply >= 30:
             return True
         # 时间兜底：7:30（DarkShrine 71s 比 TA 36s 慢 → Stats 6:05 + ~50s + 容错）
