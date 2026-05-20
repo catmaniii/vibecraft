@@ -253,7 +253,16 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
             SequentialList(
                 MineOpenBlockedBase(),
                 PlanCancelBuilding(),
-                PlanZoneDefense(),
+                # PlanZoneDefense.get_defenders 会从 Idle/Moving/Fighting/Attacking
+                # 各 task 抽最近的兵标 Defending → 不在 free_units → VibeCraftZoneAttack
+                # 看不见。IAC 主力 ready 后必须 skip，否则主力被持续抽走，
+                # VibeCraftZoneAttack(20) 永远 "No attacking units" → 第二波出不了门
+                # → 拖局 200+ 分钟 Tie（与 4bg 同源问题，见 gate4_pressure.py）。
+                Step(
+                    None,
+                    PlanZoneDefense(),
+                    skip=lambda ai: self._iac_ready_to_pressure(ai),
+                ),
                 RestorePower(),
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
