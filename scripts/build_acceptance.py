@@ -1,10 +1,12 @@
 """Build order 验收 runner。
 
 用法:
-    uv run python scripts/build_acceptance.py <strategy_id> [--opponent veryeasy|cheatmoney]
+    uv run python scripts/build_acceptance.py <strategy_id>
+        [--opponent veryeasy|cheatmoney] [--runs N]
 
-流程:spawn non-realtime SC2 → 跑到 game-time 上限 → 收 telemetry.jsonl →
-verifier 判定 → 出报告。infra-fail(watchdog hang / SC2 崩溃)自动 retry ≤3 次。
+流程:spawn non-realtime SC2 跑 N 局 → 每局收 telemetry.jsonl → verifier 判定 →
+N 局按 check 多数票聚合 → 出报告。infra-fail(watchdog hang / SC2 崩溃)
+每局自动 retry ≤3 次。
 """
 
 from __future__ import annotations
@@ -16,12 +18,17 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
 
 from vibecraft.build_acceptance.spec import load_spec  # noqa: E402
-from vibecraft.build_acceptance.verifier import verify  # noqa: E402
+from vibecraft.build_acceptance.verifier import (  # noqa: E402
+    Report,
+    aggregate_reports,
+    verify,
+)
 from vibecraft.server.game_process import GameConfig, GameProcess  # noqa: E402
 
 _MAX_INFRA_RETRY = 3
@@ -82,9 +89,7 @@ async def _run_one_game(strategy_id: str, opponent: str) -> Path | None:
         await asyncio.wait_for(_consume(), timeout=_WALL_CLOCK_LIMIT_S)
     except TimeoutError:
         # wall-clock 超时：视为 infra-fail，强制 stop
-        print(
-            f"[runner] wall-clock {_WALL_CLOCK_LIMIT_S}s 超时，强制 stop（infra-fail）"
-        )
+        print(f"[runner] wall-clock {_WALL_CLOCK_LIMIT_S}s 超时，强制 stop（infra-fail）")
         await gp.stop()
         return None
     finally:
@@ -107,9 +112,7 @@ async def _run_one_game(strategy_id: str, opponent: str) -> Path | None:
                 candidates.append((mtime, tele))
 
     if not candidates:
-        print(
-            "[runner] 游戏结束但找不到 telemetry.jsonl（logs/game_*/telemetry.jsonl）"
-        )
+        print("[runner] 游戏结束但找不到 telemetry.jsonl（logs/game_*/telemetry.jsonl）")
         return None
 
     # 取 mtime 最新的（本局产生的）
@@ -120,9 +123,27 @@ async def _run_one_game(strategy_id: str, opponent: str) -> Path | None:
     return telemetry_path
 
 
+def _run_with_retry(strategy_id: str, opponent: str) -> Path | None:
+    """跑一局 + infra-fail 自动 retry ≤ _MAX_INFRA_RETRY 次；全失败返回 None。"""
+    for attempt in range(1, _MAX_INFRA_RETRY + 1):
+        print(f"[runner] {strategy_id} vs {opponent} — infra 尝试 {attempt}")
+        telemetry_path = asyncio.run(_run_one_game(strategy_id, opponent))
+        if telemetry_path is not None:
+            return telemetry_path
+        print(f"[runner] infra-fail（第 {attempt} 次），retry...")
+    return None
+
+
+def _load_telemetry(path: Path) -> list[dict[str, Any]]:
+    """读 telemetry.jsonl → record 列表。"""
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Build order 验收 runner：spawn non-realtime SC2 跑一局，出验收报告。"
+        description="Build order 验收 runner：spawn non-realtime SC2 跑 N 局，多数票出验收报告。"
     )
     ap.add_argument("strategy_id", help="验收目标剧本 id，如 1g_robo_immortal")
     ap.add_argument(
@@ -131,7 +152,17 @@ def main() -> int:
         choices=["veryeasy", "cheatmoney"],
         help="对手难度（default: veryeasy）",
     )
+    ap.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="跑几局取多数票（default 1；加固验收建议 3，消除单跑随机性）",
+    )
     args = ap.parse_args()
+
+    if args.runs < 1:
+        print("ERROR: --runs 必须 >= 1")
+        return 2
 
     spec_path = _ROOT / "tests" / "build_acceptance" / f"{args.strategy_id}.yaml"
     if not spec_path.exists():
@@ -139,27 +170,25 @@ def main() -> int:
         return 2
     spec = load_spec(spec_path)
 
-    telemetry_path: Path | None = None
-    for attempt in range(1, _MAX_INFRA_RETRY + 1):
-        print(f"[runner] {args.strategy_id} vs {args.opponent} — 第 {attempt} 次")
-        telemetry_path = asyncio.run(_run_one_game(args.strategy_id, args.opponent))
-        if telemetry_path is not None:
-            break
-        print(f"[runner] infra-fail（第 {attempt} 次），retry...")
-    if telemetry_path is None:
-        print("INFRA BROKEN: 连续 3 次基础设施失败，无法验收。需人工排查。")
+    reports: list[Report] = []
+    for run_idx in range(1, args.runs + 1):
+        print(f"[runner] ===== {args.strategy_id} run {run_idx}/{args.runs} =====")
+        telemetry_path = _run_with_retry(args.strategy_id, args.opponent)
+        if telemetry_path is None:
+            print(f"[runner] run {run_idx} 连续 infra-fail，跳过此局")
+            continue
+        reports.append(verify(_load_telemetry(telemetry_path), spec, opponent=args.opponent))
+
+    if not reports:
+        print("INFRA BROKEN: 所有 run 都基础设施失败，无法验收。需人工排查。")
         return 3
 
-    telemetry = [
-        json.loads(line)
-        for line in telemetry_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    report = verify(telemetry, spec, opponent=args.opponent)
+    agg = aggregate_reports(reports)
     out = "\n".join(
         [
-            f"=== Build Acceptance: {args.strategy_id} vs {args.opponent} ===",
-            report.summary(),
+            f"=== Build Acceptance: {args.strategy_id} vs {args.opponent} "
+            f"({len(reports)}/{args.runs} runs) ===",
+            agg.summary(),
         ]
     )
     print(out)
@@ -169,7 +198,7 @@ def main() -> int:
     rep_file = rep_dir / f"{args.strategy_id}_{args.opponent}_{ts}.txt"
     rep_file.write_text(out, encoding="utf-8")
     print(f"[runner] 报告已写入: {rep_file}")
-    return 0 if report.passed else 1
+    return 0 if agg.passed else 1
 
 
 if __name__ == "__main__":
