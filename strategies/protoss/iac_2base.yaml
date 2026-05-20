@@ -95,6 +95,25 @@ micro_doctrine:
   - "if has_sentry_energy: forcefield split_enemy_army"
   - "warp prism 1-2 个增援 / pickup low_hp 单位"
 
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 IacTwoBase.create_plan 控制
+steps:
+  - "13 build BE"
+  - "13 build BG"
+  - "14 build BA"
+  - "16 build BN"
+  - "16 build BY"
+  - "18 build BA"
+  - "20 research 折跃 @chrono"
+  - "22 build VC"
+  - "22 build BF"
+  - "24 research 冲锋 @chrono"
+  - "24 build VD"
+  - "28 research 地面攻击1 @BF"
+  - "28 research 地面防御1 @BF"
+  - "30 train DT @chrono"
+  - "38 train 叉子"
+  - "48 build BG"
+
 expire_action:
   - "transition: persistent_skytoss"
 

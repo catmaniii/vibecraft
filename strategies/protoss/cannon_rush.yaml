@@ -50,7 +50,6 @@ phases:
 steps:
   - "14 build BE"
   - "16 build BF"
-  - "16 build BA"
   - "18 build BC"
   - "18 build BC"
   - "18 build BG"
