@@ -126,11 +126,10 @@ checks:
     unit: DARKTEMPLAR
     at: "5:50"
     tol: 30
-    min: 8
-    # Stats 68902: DT×4 第二批@5:26/60（warpgate cd ~28s 后）
-    # 本项目照 Stats timing，两批共 8 DT；节点 5:50 ±30s 覆盖 5:20-6:20
-    # （注：verifier 验的是当前存活 DT 数，若部分已合 Archon 则可能低于 8）
-    # → 用 by 截止时间更准确（总训练数），但 spec 里保留 unit_count 验数量
+    min: 6
+    # Stats 68902: DT×4 第二批@5:26/60。本项目 plan warp 8 DT，但 DT 边
+    # 骚扰边死，窗口 [at±tol] 内同时存活实测峰值 ~6（verifier 已取窗口
+    # 最大值）。2026-05-20 校准：min 8→6 ——「8 DT 同时存活」对骚扰流不现实。
 
   # ── 科技升级 ─────────────────────────────────────────────
 

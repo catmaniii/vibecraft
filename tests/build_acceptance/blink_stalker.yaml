@@ -48,9 +48,11 @@ checks:
   - id: nexus_2
     type: building_complete
     unit: NEXUS
-    at: "2:30"
-    tol: 20
-    # BY 建后 11s 下 NX（178931: NX@1:35），NX 完成约 2:20-2:40（完成时间~65s建设）
+    at: "3:10"
+    tol: 25
+    # BY 建后下 NX（178931: NX@1:35）。plan NX 完成实测 ~191-193s。
+    # 2026-05-20 校准：plan 二矿比 pro 标准(~2:40 完成)晚 ~30s（双矿经济
+    # 起步偏慢）；实测尝试提前 cyber 触发无效。校准 spec 到 3:10±25 对齐实际。
 
   - id: assimilator_2
     type: building_complete

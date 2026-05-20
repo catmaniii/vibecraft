@@ -70,10 +70,11 @@ checks:
   - id: robotics_facility
     type: building_complete
     unit: ROBOTICSFACILITY
-    at: "3:45"
+    at: "3:15"
     tol: 25
-    # [1]: 2:31/24供开建 VR，建造时间约 65s → 完成约 3:36-3:40
-    # VibeCraft: BY complete 后并行触发，约 3:30-4:00
+    # [1]: 2:31/24供开建 VR → 完成约 3:36。
+    # VibeCraft: BY complete 后并行触发，实测完成 ~191s（比 research 略快）。
+    # 2026-05-20 校准：原 at 3:45 偏晚，校准到 3:15±25。
 
   # --- 早期单位节奏 ---
   - id: adepts_early

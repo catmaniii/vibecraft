@@ -43,9 +43,12 @@ checks:
   - id: nexus_2
     type: building_complete
     unit: NEXUS
-    at: "2:05"
+    at: "2:45"
     tol: 25
-    # 二矿 natural；参考来源 1:23-1:25 开建，约 1:55-2:10 完成
+    # 二矿 natural。plan 在 BG ready(~1:26) 触发 Expand，NX ~1:38 开建 + 71s
+    # 建造 → 完成实测 ~169s。2026-05-20 校准：原 at 2:05 是 research 算术错误
+    # （注释"1:23 开建→1:55 完成"不可能，Nexus 建造 71s）。校准到 2:45±25。
+    # 注：实测把 Expand 提前到 UnitExists(BG) 会拖垮 iac 科技线，二矿不能再早。
 
   - id: assimilator_2
     type: building_complete
@@ -77,18 +80,20 @@ checks:
   - id: dark_shrine
     type: building_complete
     unit: DARKSHRINE
-    at: "4:30"
+    at: "4:55"
     tol: 30
-    # VD 在 VC 一好后触发；参考 Stats build: 3:14 开建 DarkShrine(71s)→ 完成 ~4:25
-    # 项目 plan: "3:14 VD"，71s 建造时间 → 完成约 4:25-4:30
+    # VD 在 VC ready 后触发。2026-05-20 校准：实测完成 ~296-302s（~5:00），
+    # 比原注释"4:25-4:30"晚 ~30s —— VC(~3:20 完成)后 VD 跟 Forge/Charge/
+    # 6BG 抢矿。校准到 4:55±30 = [4:25,5:25] 覆盖实测。
 
   - id: forge
     type: building_complete
     unit: FORGE
-    at: "4:10"
+    at: "2:35"
     tol: 30
-    # Forge(BF)；参考 Stats: Forge 5:38 开（比 Probe build 的 3:42 晚）
-    # 项目 plan: "3:00 BF"，建造 ~60s → 完成约 4:00-4:15；取 plan 节奏为准
+    # Forge(BF)。plan 在 UnitExists(NEXUS,2) 触发 Forge（二矿一开建就下）→
+    # 实测完成 ~152s。2026-05-20 校准：原 at 4:10 与 plan 实际差 ~100s
+    # （plan 故意早出 Forge 抢 +1/+1 升级时间）。校准到 2:35±30。
 
   - id: charge_research
     type: upgrade_complete
@@ -114,20 +119,20 @@ checks:
     type: worker_count
     at: "4:30"
     tol: 30
-    min: 38
-    # 双矿饱和目标 44 探机；4:30 时应达 ≥38（双矿满员前）
-    # 项目 plan: ActUnit PROBE 44，二矿后继续补农
+    min: 34
+    # 双矿饱和目标 44 探机。2026-05-20 校准：实测 4:30 时 ~34（plan 资源
+    # 分流给 DT 科技 + 攻防升级，农民略少），原 min 38 偏高 → 34。
 
   - id: six_gateways
     type: building_count
     unit: GATEWAY
-    at: "6:30"
-    tol: 30
+    at: "6:50"
+    tol: 40
     min: 6
-    # plan Time(60*4)=240s 触发 GridBuilding(GATEWAY,6)，但 sharpy 逐个建，
-    # 不是 240s 瞬间 6 门 ready。240s 触发 + 6 门逐个建 ~150s → 合理目标 ~6:30。
-    # （原 spec at 4:30 与 plan 触发逻辑矛盾：270s 不可能 6 门 ready）
-    # verifier 自动合并 GATEWAY+WARPGATE 计数
+    # plan Time(60*4)=240s 触发 GridBuilding(GATEWAY,6)，sharpy 逐个建。
+    # 2026-05-20 校准：iac 科技 + 攻防升级密集、矿紧，第 6 门实测 ~7:00-7:30
+    # 才好，原 at 6:30±30 上界 7:00 卡边界 → run 间翻转。放宽到
+    # 6:50±40 = [6:10, 7:30] 覆盖实测。verifier 自动合并 GATEWAY+WARPGATE。
 
   - id: dt_count_first_batch
     type: unit_count

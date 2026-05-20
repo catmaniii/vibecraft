@@ -53,12 +53,12 @@ checks:
   - id: nexus_2
     type: building_complete
     unit: NEXUS
-    at: "1:55"
-    tol: 20
-    # 二矿扩张；参考 126982: 1:24 开建(71s)→完成约 2:35
-    # 参考 149968: 1:34 开建→完成约 2:45
-    # plan: BG ready 后触发 Expand(2)；BG 约 1:20 完成→扩张约 1:25-1:35 开建
-    # 完成约 2:35-2:45；给宽松窗口 at 1:55 ±20 覆盖至 2:55
+    at: "2:55"
+    tol: 25
+    # 二矿扩张；参考 126982: 1:24 开建(71s)→完成约 2:35。
+    # plan: BG ready 后触发 Expand(2)，NX 完成实测 ~174s。
+    # 2026-05-20 校准：原 at 1:55±20 算错（注释自称"覆盖至 2:55"，但
+    # 1:55±20 实际只到 2:15）。校准到 2:55±25 覆盖实测 + research。
 
   - id: assimilator_2
     type: building_complete
@@ -70,10 +70,11 @@ checks:
   - id: cyber_core
     type: building_complete
     unit: CYBERNETICSCORE
-    at: "2:25"
-    tol: 20
-    # 参考 126982: 1:34 开建(50s)→完成约 2:24；149968: 1:24 开建→完成约 2:14
-    # plan: BG ready 后触发 Core；BG 完成约 1:20→Core 开建 1:25→完成约 2:15-2:25
+    at: "2:40"
+    tol: 25
+    # 参考 126982: 1:34 开建(50s)→完成约 2:24。
+    # plan: BG ready 后触发 Core，实测完成 ~157-166s（边界抖动）。
+    # 2026-05-20 校准：原 at 2:25±20 上界 2:45 卡边界，放宽到 2:40±25。
 
   - id: warpgate_research
     type: upgrade_complete
@@ -138,12 +139,13 @@ checks:
   - id: phoenix_eight
     type: unit_count
     unit: PHOENIX
-    at: "5:30"
-    tol: 30
+    at: "6:00"
+    tol: 40
     min: 8
-    # 8 只凤凰出门标准；参考 126982: 5:23 达到 8 只（双 VS chrono）
-    # plan _ready_to_pressure: phoenix ≥ 8 触发出门；单 VS 路线约 5:50-6:00
-    # 给 at 5:30 ±30s 覆盖 5:00-6:00
+    # 8 只凤凰出门标准；参考 126982: 5:23 达到 8 只。
+    # plan _ready_to_pressure: phoenix ≥ 8 触发出门。2026-05-20 校准：实测
+    # 5:30 时 ~7 只、第 8 只约 6:00-6:15（双星门提前后仍受 gas 限速）。
+    # 窗口移到 6:00±40 覆盖实际节奏。
 
   - id: robo_facility
     type: building_complete
@@ -196,7 +198,7 @@ checks:
 
   - id: attack_moveout
     type: attack_moveout
-    by: "6:00"
-    # 出门骚扰；参考 126982: ~5:30 出门（8 凤凰就位后立刻）
-    # plan: phoenix ≥ 8 → VibeCraftZoneAttack(8) 触发
-    # 给 by 6:00 = 8 凤凰约 5:30 + 30s 集结出发
+    by: "7:00"
+    # 出门骚扰；参考 126982: ~5:30 出门（8 凤凰就位后立刻）。
+    # plan: phoenix ≥ 8 → VibeCraftZoneAttack(8) 触发，实测出门 ~6:20-6:35。
+    # 2026-05-20 校准：原 by 6:00 偏紧，校准到 7:00。

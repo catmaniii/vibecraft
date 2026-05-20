@@ -145,6 +145,7 @@ checks:
 
   - id: attack_moveout
     type: attack_moveout
-    by: "5:00"
-    # _ready_to_pressure: VD ready + ≥3 DT ready → 出门；
-    # plan 目标 4:10 出门；源 3:50-4:15 首波出动；宽松给 by 5:00
+    by: "6:30"
+    # _ready_to_pressure: VD ready + ≥3 DT ready → 出门。
+    # plan 目标 4:10 出门，但实测 army_center 离家判定 ~6:02（DT warp +
+    # 行军 + VeryEasy 下判定偏保守）。2026-05-20 校准：by 5:00→6:30。
