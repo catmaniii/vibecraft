@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（最近更新：2026-05-20，分支 `m4-l2-l4-executor`，HEAD = `41a405e`）
+## 当前状态（最近更新：2026-05-20，分支 `m4-l2-l4-executor`，HEAD = `e70fff5`）
 
 - **里程碑**：M6 三族 bot 完成后，本阶段建成 **build acceptance 验收框架**并完成
   神族 8 策略验收 + 修复。
@@ -19,20 +19,20 @@
     （消除单跑帧抖动 / 交战随机性）。
   - 流程文档 `docs/process/new-opening-strategy.md`；设计
     `docs/plans/2026-05-20-build-acceptance-testing-design.md`
-- **神族 8 策略基线**（VeryEasy 档，3 跑多数票，2026-05-20）：
+- **神族 8 策略基线**（VeryEasy 档，3 跑多数票，2026-05-20，spec 校准后）：
 
   | 策略 | 验收 | 结果 | 备注 |
   |---|---|---|---|
   | 4bg | 9/9 | Victory | 用户手调过，基线 |
-  | 1g_robo_immortal | 15/16 | Victory | robotics_facility spec 偏晚 |
-  | dt_rush | 14/16 | Victory | DT 抵达 / 出门 spec 偏早 |
-  | dt_drop_iac | 17/20 | Victory | 拖局 Tie 已修；second_dt_wave/army_gather spec 失真 |
-  | phoenix_2base | 17/21 | Victory | 二矿偏晚 + 2 号星门慢 |
-  | iac_2base | 15/19 | Victory | 二矿偏晚 + forge spec 严重失真 |
-  | blink_stalker | 13/18 | Victory | 二矿偏晚 + 暴 BG 慢 → 兵不足 |
+  | phoenix_2base | 21/21 | Victory | 满分（双星门提前 + spec 校准）|
+  | 1g_robo_immortal | 16/16 | Victory | 满分 |
+  | iac_2base | 18/19 | Victory | 剩 dt_count_first_batch（单 warpgate 限速）|
+  | dt_drop_iac | 18/20 | Victory | 拖局 Tie 已修；剩 2 个瞬态位置 check |
+  | dt_rush | 15/16 | Victory | 剩 dt_at_enemy（瞬态位置 check）|
+  | blink_stalker | 15/18 | Victory | 剩 3 个真·产能 FAIL（暴 BG / stalker）|
   | cannon_rush | 5/12 | Defeat | ForwardCannonProxy 未解决（立项 1）|
 
-  7/8 Victory（无 Tie）；总 105/131。
+  7/8 Victory（无 Tie）；总 117/131。
 - **下一步**：见下「build acceptance 待办」。
 
 ---
@@ -52,23 +52,26 @@
 > 立项 2（dt_drop_iac 拖局 Tie）已修复 —— 根因是两个 VibeCraftZoneAttack 串进
 > 同一 SequentialList 互相 block + DT 产能瓶颈。见 git log `cbc5b2a` / `4b14dd4`。
 
-### 待战术判断（用户拍板后再动）
+> spec 校准已完成（2026-05-20，git log `e70fff5`）：6 个策略 ~12 处 spec
+> 数值是 research 子agent 写错的（算术错误 / 偏晚偏早），3 跑实测后已校准。
+> 「二矿系统性偏晚」经实测证伪 —— iac/phoenix 的 spec 算错了（plan 二矿正常）；
+> iac 提前二矿实测会拖垮科技线，证明 plan 现状是对的。
 
-- **二矿系统性偏晚 ~20-45s**：phoenix / iac / blink 的 `nexus_2` 全比 spec 晚。
-  plan 集体偏晚 vs spec 按 pro 标准太早 —— 战术取舍，需用户定。
-- **plan 产能偏弱（要不要提前暴建筑）**：phoenix 2 号星门慢→phoenix 只到 6（spec 8）；
-  blink 4 BG 慢→出门只 5 兵（spec 10）；iac DT 首批只 1（单 warpgate 限速）。
-  这类改动会动 build order 资源分配，参照 dt_drop_iac「提前暴 BG」的处理方式。
+### 真·plan 产能偏弱（剩余 FAIL，需深修或战术取舍）
 
-### spec 校准（research-stage 错误，可直接修 spec）
+- **blink_stalker（15/18）**：4 BG 偏慢 + stalker 产能不足 → 出门只 6-7 兵
+  （spec 10）、warp_prism 没出。FAIL：four_gateways / stalker_count_moveout /
+  warp_prism_ready。实测提前 cyber 触发无效，需深查 stalker 产线根因。
+- **iac_2base（18/19）**：dt_count_first_batch —— DT 首批只 2（spec 4），
+  单 warpgate warp DT 限速。注：iac 科技密集，提前暴 BG 会拖垮科技线（实测
+  验证过），不能照搬 dt_drop_iac 的「提前暴 BG」修法。
 
-- iac_2base `forge`：spec 250±30，实际 152s（plan 早出 forge）—— spec 严重失真。
-- 1g_robo_immortal `robotics_facility`：spec 225±25，实际 191s —— spec 偏晚。
-- dt_drop_iac `army_gather`：spec 验 7:45 在家，但 plan 5:10 就出门 —— 时机不符。
-- dt_drop_iac `second_dt_wave`：验「8 DT 同时存活」对骚扰流不现实（边打边死），
-  spec 注释自己也提了 —— 改成验总训练数或放宽。
-- dt_rush `dt_at_enemy` + `attack_moveout`、dt_drop_iac `ground_weapon_1`：VeryEasy
-  速胜导致后期 check 来不及 / spec 偏早。
+### 验收 check 固有限制（非 plan 问题，低优先级）
+
+- 瞬态位置 check（dt_rush `dt_at_enemy`、dt_drop_iac `warp_prism_at_enemy`
+  / `army_gather`）：验单位"某刻在某地"，但 DT / 棱镜边打边死、主力分裂成
+  骚扰 + 本队 → 单快照判定天然 flaky。verifier 的窗口判定目前只覆盖计数类。
+  选项：给位置类 check 也加窗口判定，或接受这几个 check 不稳。
 
 ### 框架 / 流程
 
