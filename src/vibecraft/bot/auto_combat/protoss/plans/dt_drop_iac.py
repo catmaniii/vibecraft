@@ -115,7 +115,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 ChronoUnit(UnitTypeId.DARKTEMPLAR, UnitTypeId.GATEWAY),
                 skip=UnitExists(UnitTypeId.DARKTEMPLAR, 8, include_pending=True),
             ),
-
             # ---------- 早期 critical path ----------
             SequentialList(
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 13),
@@ -125,7 +124,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(1),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
             ),
-
             # ---------- BG 一好的并行触发（NX + BY）----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
@@ -133,17 +131,14 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
             # 8:00 chargelot+archon 一波的产能。5:00 game-time 开三矿(DT 骚扰期间
             # 趁机扩,Expand 内部判断已有 NEXUS 数,够了不会重复开)。
             Step(Time(60 * 5), Expand(3)),
-
             # ---------- 第二气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
-
             # ---------- BY 一好：研折跃 + 起 VT（Stats 2:38）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
             ),
-
             # ---------- VC 一好：起 VR（3:05）+ Dark Shrine（3:14）----------
             # Stats 关键路径：VC 不研 Charge,先让 VR + VD 并行起
             Step(
@@ -154,12 +149,10 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
                 GridBuilding(UnitTypeId.DARKSHRINE, 1),
             ),
-
             # ---------- 防身（2026-05-20 用户修正：只出 1 追猎，之后直接刷影刀）----------
             # 用户："上来出一个追猎之后就直接刷影刀就行了"。资源全留给 DT 科技 +
             # WarpPrism。哨兵也砍掉(见下方 — 移到 Charge 主力期才出)。
             ProtossUnit(UnitTypeId.STALKER, 1, priority=True),
-
             # ---------- VR 一好：★ 出 1 个 Warp Prism（不出 Immortal）----------
             # 2026-05-19 修正：用户要求 VR 早出折跃棱镜，飞对方基地附近展开做空投点
             # sharpy MicroWarpPrism 自动处理：transport mode → phasing → 安全位 →
@@ -168,7 +161,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
                 ActUnit(UnitTypeId.WARPPRISM, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
             ),
-
             # ---------- VD 一好：出 8 个 DT（2 批 ×4，~4:38 第 1 批，~5:26 第 2 批）----------
             # 折跃门 warp-in：sharpy 会选最近 power source；如果 Warp Prism 已 phasing
             # 在敌前线，DT 直接在敌方矿区 warp 出来杀农民。否则 fallback warp 在家。
@@ -177,7 +169,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.DARKSHRINE, 1),
                 ProtossUnit(UnitTypeId.DARKTEMPLAR, 8, priority=True),
             ),
-
             # ---------- ★ DT 合 Archon（用户 2026-05-19 spec：延迟合，先全员骚扰）----------
             # 用户要求：8 DT 全部去骚扰，棱镜把残 DT 接回来跟主力汇合后再合 Archon
             # 实现：Archon([DARKTEMPLAR]) 用 Time gate 卡到 7:00，DT 全员保留 ~2 分钟做骚扰
@@ -186,18 +177,15 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 Time(60 * 7),
                 Archon([UnitTypeId.DARKTEMPLAR]),
             ),
-
             # ---------- ★ 棱镜精准骚扰行为（PrismHarassAct）----------
             # 9-状态机：fly_safe → warp 4 DT → load → drop @ enemy main 低地 →
             # hover_wait 保护 + 等 CD → 原地 phase warp 第二波 OR 飞回 safe warp →
             # 8 DT delivered → hover_final → macro_attack → follow_army
             PrismHarassAct(),
-
             # ---------- ★ DT 在 phasing prism 处 warp（强制；否则 sharpy 默认在家 warp）----------
             # 配合 PrismHarassAct WARPING 状态使用。无 phasing prism 时 yield。
             # cap：dt_trained_count ≥ 8 终止 act。
             WarpDTAtPrism(),
-
             # ---------- 5:30 起 Forge + 研 Charge + +1 攻 ----------
             # 注意：Charge 走 Twilight Council 不是 Forge,但 +1 攻走 Forge
             Step(Time(60 * 5 + 30), GridBuilding(UnitTypeId.FORGE, 1)),
@@ -215,7 +203,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 ChronoTech(AbilityId.RESEARCH_CHARGE, UnitTypeId.TWILIGHTCOUNCIL),
             ),
             Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
-
             # ---------- Sentry × 2（力场切阵）----------
             # 2026-05-20 用户修正:哨兵移到 Charge 主力期才出(Time 6:00),前期不出,
             # 资源全给 DT 科技。priority=False — 力场是 nice-to-have,不抢 chargelot 产能。
@@ -223,7 +210,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 Time(60 * 6),
                 ProtossUnit(UnitTypeId.SENTRY, 2),
             ),
-
             # ---------- Charge Zealot 主力 ----------
             # 2026-05-20 用户修正:zealot 移到 Dark Shrine 完成后才开始
             # ("出一个追猎后直接刷影刀" — DT 科技/产能优先,chargelot 是 DT 骚扰
@@ -233,7 +219,6 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.DARKSHRINE, 1),
                 ProtossUnit(UnitTypeId.ZEALOT, 14, priority=True),
             ),
-
             # ---------- 经济 ----------
             AutoPylon(),
             [
@@ -245,10 +230,8 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 StepBuildGas(3, skip=Gas(300)),
                 StepBuildGas(4, skip=Gas(400)),
             ],
-
             # ---------- 6:04 暴 4 BG（Stats spec）----------
             Step(Time(60 * 6), GridBuilding(UnitTypeId.GATEWAY, 4)),
-
             # ---------- 战术 / 维护 / 攻击触发 ----------
             SequentialList(
                 MineOpenBlockedBase(),
@@ -267,19 +250,28 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 DistributeWorkers(),
                 Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
                 PlanZoneGather(),
-                # ★ DT 一波出门：DT 出齐 ~4:40 就该自动 attack
-                # 这条单独的 attack trigger 走玩家显式 override（"DT 偷家"语音）
+                # ★ IAC 大军一波：Charge + Archon 到位（或 8:30 兜底）→ 一波推。
+                # 2026-05-20 修拖局 Tie：原来这条前面还串了一条 DT 骚扰用的
+                # `Step(_dt_harass_ready, VibeCraftZoneAttack(4))`。sharpy
+                # PlanZoneAttack.execute() 只在「敌方已知基地全灭」(target=None) 时
+                # return True，其余一律 return False（源码注释 "Blocks!"）。两个
+                # PlanZoneAttack 串进同一个 SequentialList → 第一个永远 block 第二个。
+                # 且 `_dt_harass_ready` 是瞬态条件（DT 死光 / 7:00 合 Archon 后
+                # DT 数 <3 → 永久转 False），requirement False 时 Step 直接
+                # return False → SequentialList 停 → VibeCraftZoneAttack(20) +
+                # PlanFinishEnemy 永不执行 → bot 暴到 200 人口也不出门 → 拖局
+                # 200+ 分钟判 Tie。
+                # 修法：DT 骚扰本就由 PrismHarassAct + WarpDTAtPrism 全权微操
+                # （含 macro_attack / follow_army 收尾），删掉冗余且会 block 的
+                # VibeCraftZoneAttack(4)，只留主力一波。结构对齐能稳胜的
+                # 4bg / dt_rush：单个 gated ZoneAttack + PlanFinishEnemy。
+                # 玩家显式 attack override 透传到这条主力 trigger。
                 Step(
                     lambda ai: (
-                        self._dt_harass_ready(ai)
+                        self._iac_ready_to_pressure(ai)
                         or getattr(ai.knowledge.vibecraft, "combat_intent_override", None)
                         == "attack"
                     ),
-                    VibeCraftZoneAttack(4),  # 4 个 supply 就推（DT 是 2/个，2 个就够）
-                ),
-                # ★ IAC 大军一波：Charge + Archon + Immortal 都到位 → 8:00 推
-                Step(
-                    lambda ai: self._iac_ready_to_pressure(ai),
                     VibeCraftZoneAttack(20),  # 20 supply（Charge 叉主力 + Archon）
                 ),
                 PlanFinishEnemy(),
@@ -287,22 +279,24 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
         )
 
     @staticmethod
-    def _dt_harass_ready(ai: Any) -> bool:
-        """DT 骚扰 timing：第一批 DT (≥3) ready + ~4:40 game time."""
-        dt_count = ai.units(UnitTypeId.DARKTEMPLAR).ready.amount
-        # 3 DT ready（spec 4 但 ≥3 就够，余 1 个留家防侦察）
-        if dt_count < 3:
-            return False
-        return bool(ai.time >= 60 * 4.5)  # 4:30 起开始骚扰
-
-    @staticmethod
     def _iac_ready_to_pressure(ai: Any) -> bool:
-        """大军一波 timing（2026-05-19 修正：不要求 Immortal，因为本路线不出不朽）.
+        """大军一波 timing（2026-05-19：不要求 Immortal，本路线不出不朽）.
 
-        触发条件（任一）：
-        - Charge done + 2 Archon ready + army_supply >= 30
-        - 8:30 game time 兜底（DT 双波结束 + 残合 archon + chargelot 暴 → 集合反推）
+        触发条件（任一即推）：
+        - 8:30 game time 兜底 —— **无条件**，到点必推
+        - 满人口（supply_used >= 190）—— 再不推就拖局
+        - Charge done + 2 Archon ready + army_supply >= 30 —— 正常 timing
+
+        2026-05-20 修拖局 Tie：原来 `archons < 2 → return False` 写在时间兜底
+        **之前**，DT 骚扰全灭（0 残 DT → 0 Archon）时把 8:30 兜底也一起堵死 →
+        主力一波永不触发。改成时间 / 人口兜底先判，确保「到点 / 满人口必推」。
         """
+        # 时间 / 人口兜底：无条件触发（拖局保险）
+        if ai.time >= 60 * 8.5:
+            return True
+        if ai.supply_used >= 190:
+            return True
+        # 正常 timing：Charge 完成 + 2 Archon + 兵力够
         charge_done = (
             ai.already_pending_upgrade(UpgradeId.CHARGE) >= 1.0
             or UpgradeId.CHARGE in ai.state.upgrades
@@ -312,15 +306,12 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
         archons = ai.units(UnitTypeId.ARCHON).ready.amount
         if archons < 2:
             return False
-        # 兵力够：army_supply >= 30（chargelot 主力 + 2-4 archon + 残 DT，没不朽路线 supply 更低）
         unit_supply = {
-            UnitTypeId.ZEALOT: 2, UnitTypeId.STALKER: 2, UnitTypeId.SENTRY: 2,
-            UnitTypeId.ARCHON: 4, UnitTypeId.DARKTEMPLAR: 2,
+            UnitTypeId.ZEALOT: 2,
+            UnitTypeId.STALKER: 2,
+            UnitTypeId.SENTRY: 2,
+            UnitTypeId.ARCHON: 4,
+            UnitTypeId.DARKTEMPLAR: 2,
         }
-        army_supply = sum(
-            ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items()
-        )
-        if army_supply >= 30:
-            return True
-        # 时间兜底：8:30 game time（DT 双波 + archon 合 + chargelot 集结）
-        return bool(ai.time >= 60 * 8.5)
+        army_supply = sum(ai.units(ut).ready.amount * sup for ut, sup in unit_supply.items())
+        return bool(army_supply >= 30)
