@@ -31,7 +31,11 @@
 - 时间用 `M:SS`
 - 位置用命名锚点 `home` / `enemy_main` / `natural` + `within`
 - check 类型：`building_started` / `building_complete` / `upgrade_complete` /
-  `worker_count` / `unit_count` / `key_unit_at` / `army_gather` / `attack_moveout`
+  `worker_count` / `unit_count` / `building_count` / `key_unit_at` /
+  `army_gather` / `attack_moveout`
+- 计数类 check（`worker_count` / `unit_count` / `building_count`）的
+  `at±tol` 是**时间窗口**：窗口内计数达到过 `min` 即 PASS（窗口取最大值，
+  `by` 模式窗口为 `[0, by]`）。`tol` 按"这个数量能稳定达成的时间范围"给。
 
 ## 第 3 步 — 写 / 改 plan 代码
 
@@ -40,19 +44,21 @@
 - 审计现存 build 时，这一步是"对比 research 出的标准节奏，找 plan 代码里的
   不合理处并改正"（例：dt_drop_iac 曾在出隐刀前出叉子+哨兵 —— 跟标准节奏不符）
 
-## 第 4 步 — 跑 runner（VeryEasy 档）
+## 第 4 步 — 跑 runner（VeryEasy 档，3 跑取多数）
 
 ```
-uv run python scripts/build_acceptance.py <strategy_id>
+uv run python scripts/build_acceptance.py <strategy_id> --runs 3
 ```
 
 默认 `--opponent veryeasy`：VeryEasy 内置 AI 几乎不干扰，验"无压力下 build
-骨架时序"。单局即可（确定性高）。
+骨架时序"。`--runs 3`：non-realtime SC2 单局仍有方差（帧抖动、单位交战
+随机性），边界 check 会在不同局间 PASS/FAIL 翻转 —— 跑 3 局按 check 多数票
+判定，消除单跑噪声。**多局必须串行**（两个 SC2 实例并发会撞）。
 
 ## 第 5 步 — 读报告，修循环
 
-runner 输出 `N/M passed` + 每条 check 的 `actual vs expected`，并写
-`logs/build_acceptance/<id>_<档>_<ts>.txt`。
+runner 输出 `N/M passed` + 每条 check 的多数票结果 `[pass/run]` + 代表性
+`actual vs expected`，并写 `logs/build_acceptance/<id>_<档>_<ts>.txt`。
 
 - **acceptance-fail**（build 时序不符）：读本局 `logs/game_*/telemetry.jsonl`
   分析实际发生了什么 → 判断是 plan 真有问题 还是 spec 数值不准（research 偏差）
@@ -64,16 +70,16 @@ runner 输出 `N/M passed` + 每条 check 的 `actual vs expected`，并写
 判断 fail 性质的依据：infra-fail 是基础设施（runner 自动处理）；
 acceptance-fail 是 build 逻辑（要改 plan）。两者别混。
 
-## 第 6 步 — 跑 CheatMoney 档 ×3
+## 第 6 步 — 跑 CheatMoney 档（3 跑取多数）
 
 VeryEasy 全过后：
 
 ```
-uv run python scripts/build_acceptance.py <strategy_id> --opponent cheatmoney
+uv run python scripts/build_acceptance.py <strategy_id> --opponent cheatmoney --runs 3
 ```
 
 CheatMoney 验抗压。verifier 自动放宽：`tol×2` + 跳过位置类断言 + 主要验
-"科技/建筑/出门最终都达成、骨架没崩"。跑 **3 局看通过率**（抗压本身有方差）。
+"科技/建筑/出门最终都达成、骨架没崩"。抗压本身方差更大，3 跑多数票尤其必要。
 
 ## 第 7 步 — 沉淀
 
