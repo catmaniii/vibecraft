@@ -2,16 +2,16 @@
 
 战术核心
 ========
-极速 VB（DarkShrine），~4:10 首波 3 DT 到达对方主基地偷家：
-  - 早期：速 BY + 折跃 + VT + VB
+极速 VD（DarkShrine），~4:10 首波 3 DT 到达对方主基地偷家：
+  - 早期：速 BY + 折跃 + VT + VD
   - 出击：3 DT 直接走（无 Warp Prism，标准路线）
   - 安全底：4 BG + 二矿，若 DT 被克（Detection）立转中期追猎
 
 关键升级
 ========
 1. WarpgateResearch（必，BY 一好立刻研，全程 chrono）
-2. BlinkTech 不研（节省矿和时间，资源全给 VB）
-3. DT 生产 chrono 加速（VB 好后切 chrono 给 DT warp-in）
+2. BlinkTech 不研（节省矿和时间，资源全给 VD）
+3. DT 生产 chrono 加速（VD 好后切 chrono 给 DT warp-in）
 
 Build 节奏（参考 spawningtool.com 47308，~4:10 首波）
 =====================================================
@@ -22,9 +22,9 @@ Build 节奏（参考 spawningtool.com 47308，~4:10 首波）
   1:58  research 折跃 @chrono
   2:00  VT（TwilightCouncil）
   2:23  补 BG（总 4 BG，偷家成功后追猎产能充足）
-  2:36  VB（DarkShrine）
+  2:36  VD（DarkShrine）
   2:48  BE + 二矿
-  3:50  warp DT × 3（VB 完成立刻，chrono 加速 DT warp-in）
+  3:50  warp DT × 3（VD 完成立刻，chrono 加速 DT warp-in）
   4:10  **DT 抵达**（对方主基地或 natural）
   后续：持续 warp DT（target 5）+ 追猎保家
 """
@@ -60,7 +60,7 @@ from vibecraft.bot.auto_combat.protoss.plans.vibecraft_zone_attack import VibeCr
 
 
 class DtRush(KnowledgeBot):  # type: ignore[misc]
-    """暗使偷家（DT Rush）— ~4:10 首波 DT 偷家，VT + VB 极速科技线。"""
+    """暗使偷家（DT Rush）— ~4:10 首波 DT 偷家，VT + VD 极速科技线。"""
 
     def __init__(self) -> None:
         super().__init__("VibeCraft DT Rush")
@@ -79,7 +79,7 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ChronoTech(AbilityId.RESEARCH_WARPGATE, UnitTypeId.CYBERNETICSCORE),
             ),
-            # DT warp-in chrono：VB 完成后立刻 chrono DT（加速偷家 timing）
+            # DT warp-in chrono：VD 完成后立刻 chrono DT（加速偷家 timing）
             # 标准 DT Rush 在 DT 出来后全力 chrono DT warp-in，vibecraft 原来缺少这项
             Step(
                 UnitReady(UnitTypeId.DARKSHRINE, 1),
@@ -96,26 +96,26 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 BuildGas(2),
                 ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 19),
             ),
-            # ---------- BY 一好 → 折跃 + VT + VB 科技线 ----------
+            # ---------- BY 一好 → 折跃 + VT + VD 科技线 ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
             Step(
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1),
             ),
-            # ---------- VT 一好 → VB（DarkShrine，~2:36）----------
+            # ---------- VT 一好 → VD（DarkShrine，~2:36）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.DARKSHRINE, 1)),
-            # ---------- 补 4 BG（VB 开建后才补，DT 偷家 timing 优先）----------
+            # ---------- 补 4 BG（VD 开建后才补，DT 偷家 timing 优先）----------
             # 2026-05-20 修：原 `UnitReady(CYBERNETICSCORE)` 触发 → BY 一好就补
-            # 4 BG，跟 VT/VB 科技建筑抢矿，VB 完成被拖慢 ~20s → DT 偷家整体晚。
-            # 引用源 spawningtool 47308 本身就是 VB(2:43) 先、补 BG(3:08) 后。
-            # 改 DARKSHRINE exists 触发：VB 一开建就补 4 BG，科技优先，
+            # 4 BG，跟 VT/VD 科技建筑抢矿，VD 完成被拖慢 ~20s → DT 偷家整体晚。
+            # 引用源 spawningtool 47308 本身就是 VD(2:43) 先、补 BG(3:08) 后。
+            # 改 DARKSHRINE exists 触发：VD 一开建就补 4 BG，科技优先，
             # 4 BG 完成仍能跟上 DT warp 产能。
             Step(UnitExists(UnitTypeId.DARKSHRINE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
-            # 二矿:VB **完成后**才开(~3:47),对齐标准 DT Rush 二矿时机(spawningtool
-            # 47308 ~3:44)。2026-05-20 修:原来 `UnitExists(DARKSHRINE)` 在 VB 一开建
-            # (~2:48)就 Expand,二矿 400 矿跟 VB/折跃科技抢矿,推迟 DT 首波 warp。
-            # 改 `UnitReady`:VB 修好 = DT 科技链全部到位,这时开二矿只跟 DT 生产
+            # 二矿:VD **完成后**才开(~3:47),对齐标准 DT Rush 二矿时机(spawningtool
+            # 47308 ~3:44)。2026-05-20 修:原来 `UnitExists(DARKSHRINE)` 在 VD 一开建
+            # (~2:48)就 Expand,二矿 400 矿跟 VD/折跃科技抢矿,推迟 DT 首波 warp。
+            # 改 `UnitReady`:VD 修好 = DT 科技链全部到位,这时开二矿只跟 DT 生产
             # 分矿,不再拖慢偷家 timing。DT rush 失败的经济延续作用不变。
             Step(UnitReady(UnitTypeId.DARKSHRINE, 1), Expand(2)),
             # ---------- 第三气矿（DT 出兵需要）----------
@@ -126,7 +126,7 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
                 UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
                 ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
             ),
-            # DT 主力（VB 完成立刻 warp，首波 3 出门，target 5 持续补充）
+            # DT 主力（VD 完成立刻 warp，首波 3 出门，target 5 持续补充）
             # target=8 会推迟偷家 timing 约 60-90s；标准 DT Rush 首波 3 DT 就出门
             Step(
                 UnitReady(UnitTypeId.DARKSHRINE, 1),
@@ -164,11 +164,11 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
 
     @staticmethod
     def _ready_to_pressure(ai: Any) -> bool:
-        """DT Rush 出门条件：VB 完成 + 至少 3 DT ready。
+        """DT Rush 出门条件：VD 完成 + 至少 3 DT ready。
 
         不等折跃完成 —— DT 偷家 timing 关键，晚一秒可能被 scan/Detection 侦察。
         """
-        # VB 必须 ready（DT 的前置建筑）
+        # VD 必须 ready（DT 的前置建筑）
         darkshrine_ready = ai.structures(UnitTypeId.DARKSHRINE).ready.exists
         if not darkshrine_ready:
             return False
