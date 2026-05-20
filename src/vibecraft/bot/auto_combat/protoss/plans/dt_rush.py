@@ -105,9 +105,13 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
             ),
             # ---------- VT 一好 → VB（DarkShrine，~2:36）----------
             Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), GridBuilding(UnitTypeId.DARKSHRINE, 1)),
-            # ---------- 补 4 BG + 二矿（安全底）----------
-            # 标准 build 共 4 BG（偷家成功后追猎产能充足）；原来补到 3 不够
-            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
+            # ---------- 补 4 BG（VB 开建后才补，DT 偷家 timing 优先）----------
+            # 2026-05-20 修：原 `UnitReady(CYBERNETICSCORE)` 触发 → BY 一好就补
+            # 4 BG，跟 VT/VB 科技建筑抢矿，VB 完成被拖慢 ~20s → DT 偷家整体晚。
+            # 引用源 spawningtool 47308 本身就是 VB(2:43) 先、补 BG(3:08) 后。
+            # 改 DARKSHRINE exists 触发：VB 一开建就补 4 BG，科技优先，
+            # 4 BG 完成仍能跟上 DT warp 产能。
+            Step(UnitExists(UnitTypeId.DARKSHRINE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
             # 二矿:VB **完成后**才开(~3:47),对齐标准 DT Rush 二矿时机(spawningtool
             # 47308 ~3:44)。2026-05-20 修:原来 `UnitExists(DARKSHRINE)` 在 VB 一开建
             # (~2:48)就 Expand,二矿 400 矿跟 VB/折跃科技抢矿,推迟 DT 首波 warp。
