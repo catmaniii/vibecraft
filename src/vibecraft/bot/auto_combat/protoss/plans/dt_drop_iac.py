@@ -129,6 +129,10 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
             # ---------- BG 一好的并行触发（NX + BY）----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
+            # 2026-05-20 用户修正:加三矿。原来只 Expand(2),整局两矿,撑不住
+            # 8:00 chargelot+archon 一波的产能。5:00 game-time 开三矿(DT 骚扰期间
+            # 趁机扩,Expand 内部判断已有 NEXUS 数,够了不会重复开)。
+            Step(Time(60 * 5), Expand(3)),
 
             # ---------- 第二气矿 ----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
@@ -151,9 +155,10 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
                 GridBuilding(UnitTypeId.DARKSHRINE, 1),
             ),
 
-            # ---------- 防身（2026-05-19 修正：仅 2 追猎防御，去掉 Adept）----------
-            # 用户要求："前期随便出一两个追猎"，资源留给 DT + WarpPrism + Chargelot
-            ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
+            # ---------- 防身（2026-05-20 用户修正：只出 1 追猎，之后直接刷影刀）----------
+            # 用户："上来出一个追猎之后就直接刷影刀就行了"。资源全留给 DT 科技 +
+            # WarpPrism。哨兵也砍掉(见下方 — 移到 Charge 主力期才出)。
+            ProtossUnit(UnitTypeId.STALKER, 1, priority=True),
 
             # ---------- VR 一好：★ 出 1 个 Warp Prism（不出 Immortal）----------
             # 2026-05-19 修正：用户要求 VR 早出折跃棱镜，飞对方基地附近展开做空投点
@@ -208,14 +213,22 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
             Step(UnitReady(UnitTypeId.FORGE, 1), Tech(UpgradeId.PROTOSSGROUNDWEAPONSLEVEL1)),
 
             # ---------- Sentry × 2（力场切阵）----------
+            # 2026-05-20 用户修正:哨兵移到 Charge 主力期才出(Time 6:00),前期不出,
+            # 资源全给 DT 科技。priority=False — 力场是 nice-to-have,不抢 chargelot 产能。
             Step(
-                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
-                ProtossUnit(UnitTypeId.SENTRY, 2, priority=True),
+                Time(60 * 6),
+                ProtossUnit(UnitTypeId.SENTRY, 2),
             ),
 
             # ---------- Charge Zealot 主力 ----------
-            # priority=True：必须抢资源（不然会被 DT/Archon/Immortal 挤掉，整局只造 1 个）
-            Step(UnitReady(UnitTypeId.GATEWAY, 1), ProtossUnit(UnitTypeId.ZEALOT, 14, priority=True)),
+            # 2026-05-20 用户修正:zealot 移到 Dark Shrine 完成后才开始
+            # ("出一个追猎后直接刷影刀" — DT 科技/产能优先,chargelot 是 DT 骚扰
+            # 之后的主力)。Dark Shrine ~3:14 完成,之后 zealot 持续暴到 8:00 一波。
+            # priority=True：DT 出完后必须抢资源暴 chargelot。
+            Step(
+                UnitReady(UnitTypeId.DARKSHRINE, 1),
+                ProtossUnit(UnitTypeId.ZEALOT, 14, priority=True),
+            ),
 
             # ---------- 经济 ----------
             AutoPylon(),

@@ -104,6 +104,21 @@ class PrismHarassAct(ActBase):  # type: ignore[misc]
             return False
         self._prism_tag = prism.tag
 
+        # 2026-05-20 关键修复(用户反馈"棱镜一直被无形的力量拉回家"):
+        # sharpy `should_attack(WARPPRISM)` 返回 True(unit_value.py:565 — 棱镜
+        # 不是建筑也不是农民)。于是 PlanZoneGather 把棱镜当普通战斗单位,每 tick
+        # combat-move 回 home gather_point。PrismHarassAct 发的 move(safe) 被
+        # tactics SequentialList 里后跑的 PlanZoneGather 覆盖 → 棱镜永远到不了前线。
+        # 修:每 tick 把棱镜标 Reserved task。sharpy PlanZoneGather 只看 roles.idle,
+        # PlanZoneAttack 只看 free_units(Idle+Moving),Reserved 一律跳过 →
+        # PrismHarassAct 独占棱镜控制权。
+        try:
+            from sharpy.managers.core.roles import UnitTask
+
+            self.knowledge.roles.set_task(UnitTask.Reserved, prism)
+        except Exception:
+            pass
+
         # ---- 优先级 1：HP 低撤 ----
         if self._prism_hp_low(prism):
             if self._state != PrismState.RETREAT_HOME:
