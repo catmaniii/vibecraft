@@ -108,8 +108,12 @@ class DtRush(KnowledgeBot):  # type: ignore[misc]
             # ---------- 补 4 BG + 二矿（安全底）----------
             # 标准 build 共 4 BG（偷家成功后追猎产能充足）；原来补到 3 不够
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
-            # 二矿（VB 建造期间开，保证 DT rush 失败后有经济延续）
-            Step(UnitExists(UnitTypeId.DARKSHRINE, 1), Expand(2)),
+            # 二矿:VB **完成后**才开(~3:47),对齐标准 DT Rush 二矿时机(spawningtool
+            # 47308 ~3:44)。2026-05-20 修:原来 `UnitExists(DARKSHRINE)` 在 VB 一开建
+            # (~2:48)就 Expand,二矿 400 矿跟 VB/折跃科技抢矿,推迟 DT 首波 warp。
+            # 改 `UnitReady`:VB 修好 = DT 科技链全部到位,这时开二矿只跟 DT 生产
+            # 分矿,不再拖慢偷家 timing。DT rush 失败的经济延续作用不变。
+            Step(UnitReady(UnitTypeId.DARKSHRINE, 1), Expand(2)),
             # ---------- 第三气矿（DT 出兵需要）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
             # ---------- 单位训练 ----------

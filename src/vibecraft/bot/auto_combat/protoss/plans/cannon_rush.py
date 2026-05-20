@@ -79,12 +79,15 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
             # 这是 cannon rush 存在的必要条件，不在前线就等于无效战术
             ForwardCannonProxy(),
             # ---------- chrono ----------
-            # 探机 chrono 到 BY 出现
+            # 探机 chrono：开局一直开,到 BY 出现停(下一个 step 折跃 chrono 接管)。
+            # 2026-05-20 修 bug:原来有 `skip_until=UnitExists(ASSIMILATOR,1)`,但炮塔
+            # 速攻**不建气矿**,ASSIMILATOR 永不存在 → skip_until 永不满足 → Step 永远
+            # return True → ChronoUnit 整个 act 从未执行。删掉 skip_until,探机 chrono
+            # 从开局就跑(skip=CYBERNETICSCORE 保证 BY 一出现就停)。
             Step(
                 None,
                 ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
                 skip=UnitExists(UnitTypeId.CYBERNETICSCORE, 1),
-                skip_until=UnitExists(UnitTypeId.ASSIMILATOR, 1),
             ),
             # 折跃 chrono（BY 完成后，把能量全给折跃研究）
             Step(

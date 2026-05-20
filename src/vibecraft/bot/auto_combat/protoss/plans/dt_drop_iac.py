@@ -65,7 +65,7 @@ from sharpy.plans.acts.protoss import (
     ProtossUnit,
     RestorePower,
 )
-from sharpy.plans.require import Gas, Time, UnitExists, UnitReady
+from sharpy.plans.require import All, Gas, Time, UnitExists, UnitReady
 from sharpy.plans.tactics import (
     DistributeWorkers,
     PlanCancelBuilding,
@@ -201,8 +201,12 @@ class DtDropIac(KnowledgeBot):  # type: ignore[misc]
             # ---------- 5:30 起 Forge + 研 Charge + +1 攻 ----------
             # 注意：Charge 走 Twilight Council 不是 Forge,但 +1 攻走 Forge
             Step(Time(60 * 5 + 30), GridBuilding(UnitTypeId.FORGE, 1)),
+            # 2026-05-20 修:Charge 加 Time(5:30) gate。原来只 `UnitReady(TWILIGHTCOUNCIL)`
+            # → VC ~3:38 完成就立刻研 Charge,跟 DT 科技(VR/VD)+ WarpPrism 抢矿,拖慢
+            # 棱镜骚扰 timing。Stats 标准 Charge 5:38 才研(资源先给 DT)。加 All([Time,
+            # UnitReady]) 把 Charge 推到 5:30,跟 Forge 同期,不抢 DT 阶段的矿。
             Step(
-                UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1),
+                All([Time(60 * 5 + 30), UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1)]),
                 Tech(UpgradeId.CHARGE),
             ),
             # Charge chrono（VC 上 chrono,加速出门 timing）
