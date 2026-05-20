@@ -650,6 +650,40 @@ def _make_vibecraft_bot_base_class(
             self.facade = SharpyFacadeClass(self)
             self.director = director_factory(self.facade)
 
+            # telemetry: always-on 游戏内状态采集(项目开发期默认开)
+            self._telemetry = None
+            try:
+                import contextlib
+                from functools import partial
+
+                from vibecraft.bot.telemetry import TelemetryLogger, build_game_start_record
+                from vibecraft.logging_.types import LogStream
+
+                session = getattr(self.director, "session", None) if self.director else None
+                if session is not None:
+                    self._telemetry = TelemetryLogger(
+                        sink_fn=partial(session.log, LogStream.TELEMETRY)
+                    )
+                    home = self.start_location
+                    enemy_main = self.enemy_start_locations[0]
+                    natural = None
+                    with contextlib.suppress(Exception):
+                        exps = list(self.expansion_locations_list)
+                        cands = sorted(exps, key=lambda p: p.distance_to(home))
+                        for p in cands:
+                            if p.distance_to(home) > 1.0:
+                                natural = p
+                                break
+                    self._telemetry.write_event(
+                        build_game_start_record(
+                            t=float(self.time), home=home, enemy_main=enemy_main,
+                            natural=natural, active_recipe=str(getattr(self, "active_recipe", "")),
+                            my_race=str(self.race).rsplit(".", 1)[-1],
+                        )
+                    )
+            except Exception as exc:
+                logger.warning("telemetry init fail: %s", exc)
+
             if self.director is not None:
                 self.director._bot = self
 
@@ -805,6 +839,11 @@ def _make_vibecraft_bot_base_class(
             if self.facade is not None:
                 await self.facade.drain_pending_actions()
 
+            if getattr(self, "_telemetry", None) is not None:
+                import contextlib
+                with contextlib.suppress(Exception):
+                    self._write_telemetry_snapshot()
+
             self._update_tactics_throttled(now_s)
             if self.director is not None:
                 self.director.on_tick(now=now_s)
@@ -824,6 +863,78 @@ def _make_vibecraft_bot_base_class(
             await super().on_step(self._sharpy_iteration)
             self._sharpy_iteration += 1
             self._refresh_llm_controlled_roles()
+
+        def _write_telemetry_snapshot(self) -> None:
+            from sc2.ids.unit_typeid import UnitTypeId
+
+            from vibecraft.bot.telemetry import (
+                _KEY_UNIT_TYPES,
+                _SNAPSHOT_UNIT_TYPES,
+                build_snapshot_record,
+            )
+
+            now = float(self.time)
+            units_count: dict[str, int] = {}
+            for name in _SNAPSHOT_UNIT_TYPES:
+                ut = getattr(UnitTypeId, name, None)
+                units_count[name] = self.units(ut).amount if ut is not None else 0
+            key_units: dict[str, list] = {}
+            for name in _KEY_UNIT_TYPES:
+                ut = getattr(UnitTypeId, name, None)
+                if ut is not None:
+                    ku = self.units(ut)
+                    if ku:
+                        key_units[name] = [u.position for u in ku]
+            army = self.units.exclude_type(
+                {UnitTypeId.PROBE, UnitTypeId.OBSERVER, UnitTypeId.WARPPRISM}
+            ).filter(lambda u: not u.is_structure)
+            army_center = army.center if army else None
+            army_supply = max(0, int(self.supply_army))
+            rec = build_snapshot_record(
+                t=now, supply_used=int(self.supply_used), supply_cap=int(self.supply_cap),
+                workers=int(self.supply_workers), army_supply=army_supply,
+                minerals=int(self.minerals), vespene=int(self.vespene),
+                bases=int(self.townhalls.amount), army_center=army_center,
+                units=units_count, key_units=key_units,
+                active_recipe=str(getattr(self, "active_recipe", "")),
+            )
+            self._telemetry.maybe_write_snapshot(now, rec)
+
+        def _tel_event(self, kind: str, unit: Any) -> None:
+            tel = getattr(self, "_telemetry", None)
+            if tel is None or getattr(unit, "alliance", 1) != 1:
+                return  # 只记己方
+            import contextlib
+            with contextlib.suppress(Exception):
+                from vibecraft.bot.telemetry import build_event_record
+                tel.write_event(build_event_record(
+                    t=float(self.time), kind=kind,
+                    unit=str(unit.type_id).rsplit(".", 1)[-1],
+                    tag=int(unit.tag), pos=unit.position,
+                ))
+
+        def _tel_event_destroyed(self, unit_tag: int) -> None:
+            tel = getattr(self, "_telemetry", None)
+            if tel is None:
+                return
+            import contextlib
+            with contextlib.suppress(Exception):
+                from vibecraft.bot.telemetry import build_event_record
+                tel.write_event(build_event_record(
+                    t=float(self.time), kind="unit_destroyed", tag=int(unit_tag),
+                ))
+
+        def _tel_event_upgrade(self, upgrade: Any) -> None:
+            tel = getattr(self, "_telemetry", None)
+            if tel is None:
+                return
+            import contextlib
+            with contextlib.suppress(Exception):
+                from vibecraft.bot.telemetry import build_event_record
+                tel.write_event(build_event_record(
+                    t=float(self.time), kind="upgrade_complete",
+                    upgrade=str(upgrade).rsplit(".", 1)[-1],
+                ))
 
         def _submit_tactical_action(self, verb: str, now_s: float) -> None:
             """UI 战术按钮：直接 submit TacticalObjectivePayload，绕过 LLM。"""
@@ -895,6 +1006,7 @@ def _make_vibecraft_bot_base_class(
 
         async def on_unit_created(self, unit: Any) -> None:
             _publish_unit_created(self, unit)
+            self._tel_event("unit_created", unit)
             if getattr(unit, "alliance", 0) == 1:
                 self._own_units_dict[unit.tag] = unit
             else:
@@ -913,6 +1025,7 @@ def _make_vibecraft_bot_base_class(
         async def on_unit_destroyed(self, unit_tag: int) -> None:
             if hasattr(self, "event_bus"):
                 _publish_unit_destroyed(self, unit_tag)
+            self._tel_event_destroyed(unit_tag)
             if unit_tag in self._llm_controlled_tags:
                 self._llm_controlled_tags.discard(unit_tag)
                 logger.info("unit_destroyed tag=%d removed from _llm_controlled_tags", unit_tag)
@@ -934,16 +1047,19 @@ def _make_vibecraft_bot_base_class(
 
         async def on_building_construction_started(self, unit: Any) -> None:
             _publish_building_started(self, unit)
+            self._tel_event("building_started", unit)
             if hasattr(super(), "on_building_construction_started"):
                 await super().on_building_construction_started(unit)
 
         async def on_building_construction_complete(self, unit: Any) -> None:
             _publish_building_complete(self, unit)
+            self._tel_event("building_complete", unit)
             if hasattr(super(), "on_building_construction_complete"):
                 await super().on_building_construction_complete(unit)
 
         async def on_upgrade_complete(self, upgrade: Any) -> None:
             _publish_upgrade_complete(self, upgrade)
+            self._tel_event_upgrade(upgrade)
             if hasattr(super(), "on_upgrade_complete"):
                 await super().on_upgrade_complete(upgrade)
 

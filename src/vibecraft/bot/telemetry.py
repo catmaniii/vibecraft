@@ -9,6 +9,8 @@ record 构造是纯函数(本模块上半部),便于单测;接线在 common_bot�
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from typing import Any
 
 
@@ -77,3 +79,52 @@ def build_snapshot_record(
         "key_units": {k: [_xy(p) for p in v] for k, v in key_units.items()},
         "active_recipe": active_recipe,
     }
+
+
+# -----------------------------------------------------------------------
+# TelemetryLogger：采集 + 写 telemetry（接线在 common_bot）
+# -----------------------------------------------------------------------
+
+_logger = logging.getLogger(__name__)
+
+# 周期快照间隔（game-second）
+_SNAPSHOT_INTERVAL_S: float = 2.0
+
+# 快照里 units 计数的固定单位集（神族为主，含三族常见单位）
+_SNAPSHOT_UNIT_TYPES: tuple[str, ...] = (
+    "PROBE", "ZEALOT", "STALKER", "SENTRY", "ADEPT", "DARKTEMPLAR",
+    "HIGHTEMPLAR", "ARCHON", "IMMORTAL", "COLOSSUS", "WARPPRISM",
+    "OBSERVER", "VOIDRAY", "PHOENIX", "CARRIER", "TEMPEST", "MOTHERSHIP",
+)
+# 快照里要记坐标的关键单位
+_KEY_UNIT_TYPES: tuple[str, ...] = ("WARPPRISM", "WARPPRISMPHASING")
+
+
+class TelemetryLogger:
+    """采集 + 写 telemetry。sink_fn 接收一个 dict record(通常 = session.log 的偏函数)。"""
+
+    def __init__(
+        self,
+        sink_fn: Callable[[dict], None],
+        snapshot_interval_s: float = _SNAPSHOT_INTERVAL_S,
+    ) -> None:
+        self._sink = sink_fn
+        self._snapshot_interval_s = snapshot_interval_s
+        self._last_snapshot_t: float = -1000.0
+
+    def write_event(self, record: dict) -> None:
+        """离散事件直接落盘,不节流。"""
+        try:
+            self._sink(record)
+        except Exception as exc:
+            _logger.warning("telemetry write_event fail: %s", exc)
+
+    def maybe_write_snapshot(self, now: float, record: dict) -> None:
+        """节流:距上次 snapshot >= interval 才写。"""
+        if now - self._last_snapshot_t < self._snapshot_interval_s:
+            return
+        self._last_snapshot_t = now
+        try:
+            self._sink(record)
+        except Exception as exc:
+            _logger.warning("telemetry snapshot fail: %s", exc)

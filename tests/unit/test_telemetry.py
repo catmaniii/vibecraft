@@ -53,3 +53,27 @@ def test_snapshot_record():
     assert rec["army_center"] == [100.0, 110.0]
     assert rec["units"] == {"STALKER": 2, "ZEALOT": 0}
     assert rec["key_units"] == {"WARPPRISM": [[114.0, 115.0]]}
+
+
+def test_telemetry_logger_snapshot_throttle():
+    """maybe_write_snapshot 每 ~2s 才真正写一次。"""
+    from vibecraft.bot.telemetry import TelemetryLogger
+
+    written: list[dict] = []
+    tl = TelemetryLogger(sink_fn=written.append, snapshot_interval_s=2.0)
+    snap = {"kind": "snapshot", "t": 0.0}
+    tl.maybe_write_snapshot(now=0.0, record=snap)      # 第一次:写
+    tl.maybe_write_snapshot(now=1.0, record=snap)      # 1s:节流跳过
+    tl.maybe_write_snapshot(now=2.5, record=snap)      # 2.5s:写
+    assert len(written) == 2
+
+
+def test_telemetry_logger_event_passthrough():
+    """write_event 直接落 sink,不节流。"""
+    from vibecraft.bot.telemetry import TelemetryLogger
+
+    written: list[dict] = []
+    tl = TelemetryLogger(sink_fn=written.append)
+    tl.write_event({"kind": "building_started", "t": 1.0})
+    tl.write_event({"kind": "building_complete", "t": 2.0})
+    assert len(written) == 2
