@@ -55,14 +55,10 @@ checks:
     by: "2:45"
     # supply 20 建第 2 气矿，保证持续 Stalker 产能
 
-  - id: four_gateways
-    type: unit_count
-    unit: GATEWAY
-    at: "4:00"
-    tol: 30
-    min: 3
-    # 家 3 BG（野 BG 不计入 GATEWAY count，已 morph 为 WARPGATE）；
-    # 补 BG 条件：WGR ≥ 50% + 矿≥300；约在 3:00-3:30 补齐
+  # 注: "几分钟有几个 BG" 这条指标暂缺 —— telemetry snapshot 的 units 只数移动
+  # 单位(_SNAPSHOT_UNIT_TYPES 不含建筑)，且 GATEWAY 折跃后会 morph 成 WARPGATE。
+  # 建筑计数需 telemetry+verifier 协同改进(框架 backlog)。4bg 骨架由 warpgate_research
+  # + four_stalkers_ready + attack_moveout 三条间接保证。
 
   - id: four_stalkers_ready
     type: unit_count
