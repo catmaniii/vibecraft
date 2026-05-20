@@ -107,6 +107,11 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
             ),
             # ---------- 家里补 BY ----------
             Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
+            # ---------- 家里气矿（折跃研究 + 追猎后手都吃气，必须建）----------
+            # 2026-05-20 修 bug:原 plan 完全删气矿("炮塔速攻纯矿"),但折跃和追猎
+            # 都吃气 → 没气矿 = 折跃永远研不了、追猎永远出不了,后手彻底瘫痪。
+            # 炮塔(BF/BC)确实纯矿,但 BY→折跃→追猎这条后手线必须有气。
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), BuildGas(1)),
             # ---------- 补到 3 门（追猎产能）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 3)),
             # ---------- 折跃研究 ----------
@@ -120,9 +125,9 @@ class CannonRush(KnowledgeBot):  # type: ignore[misc]
             ),
             # ---------- 二矿延续（至少 3 BC 压住后开）----------
             Step(UnitExists(UnitTypeId.PHOTONCANNON, 3), Expand(2)),
-            # ---------- 二矿气矿 ----------
-            Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(1)),
+            # ---------- 二矿气矿（家里已 1 气，二矿补到 3）----------
             Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
+            Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(3)),
             # ---------- 后期补 BG（追猎产能）----------
             Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), GridBuilding(UnitTypeId.GATEWAY, 4)),
             # ---------- 单位训练 ----------

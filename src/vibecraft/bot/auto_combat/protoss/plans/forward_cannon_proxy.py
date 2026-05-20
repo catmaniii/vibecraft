@@ -30,17 +30,15 @@ proxy 选点策略
 
 from __future__ import annotations
 
-import logging
 import math
 import random
 from typing import Any
 
+from loguru import logger
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
 from sharpy.plans.acts import ActBase
-
-logger = logging.getLogger(__name__)
 
 # proxy 周围检测半径（forward 建筑必须在这个范围内）
 _PROXY_R: float = 30.0
@@ -53,7 +51,10 @@ _MAX_DIST_TO_ENEMY: float = 55.0
 # 任务超时（秒，游戏内）
 _TASK_TIMEOUT_S: float = 180.0
 # worker 死亡次数上限
-_MAX_WORKER_DEATHS: int = 2
+# 历史: 2 - cannon proxy 贴敌方 natural 更近，worker 更容易被打死，
+# 2 太少：第 1 个 worker 建到一半死，第 2 个接力又死，卡阈值直接放弃。
+# 对齐 forward_proxy.py 改成 4（多砸几个探机换 BF 完成，值得）。
+_MAX_WORKER_DEATHS: int = 4
 # HP+shield 撤退/复出阈值
 _RETREAT_RATIO: float = 0.5
 _REENGAGE_RATIO: float = 0.9
@@ -118,11 +119,7 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
         top_n = scored[: min(3, len(scored))]
         chosen, score = random.choice(top_n)
         logger.info(
-            "ForwardCannon picked proxy=%s (score=%.1f, %d/%d valid)",
-            chosen,
-            score,
-            len(scored),
-            len(candidates),
+            f"ForwardCannon picked proxy={chosen} (score={score:.1f}, {len(scored)}/{len(candidates)} valid)"
         )
         return chosen
 
@@ -258,11 +255,7 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
             return await self.ai.find_placement(unit_type, near, max_distance=20)
         except Exception as exc:
             logger.warning(
-                "ForwardCannon find_placement fail for %s near (%.1f,%.1f): %s",
-                unit_type.name,
-                near.x,
-                near.y,
-                exc,
+                f"ForwardCannon find_placement fail for {unit_type.name} near ({near.x:.1f},{near.y:.1f}): {exc}"
             )
             return None
 
@@ -344,9 +337,7 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
             return None
         self.proxy_worker_tag = w.tag
         logger.info(
-            "ForwardCannon assigned worker tag=%d (death_count=%d)",
-            w.tag,
-            self._worker_death_count,
+            f"ForwardCannon assigned worker tag={w.tag} (death_count={self._worker_death_count})"
         )
         try:
             from sharpy.managers.core.roles import UnitTask
@@ -394,12 +385,12 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
         if self._start_time is not None:
             elapsed = self.ai.time - self._start_time
             if elapsed > _TASK_TIMEOUT_S:
-                logger.info("ForwardCannon done (C: timeout %.0fs)", elapsed)
+                logger.info(f"ForwardCannon done (C: timeout {elapsed:.0f}s)")
                 return True
 
         # D. worker 死太多
         if self._worker_death_count >= _MAX_WORKER_DEATHS:
-            logger.info("ForwardCannon done (D: %d worker deaths)", self._worker_death_count)
+            logger.info(f"ForwardCannon done (D: {self._worker_death_count} worker deaths)")
             return True
 
         # E. 主力已出门
@@ -457,10 +448,10 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
 
             if not self.retreating and ratio < _RETREAT_RATIO:
                 self.retreating = True
-                logger.debug("ForwardCannon retreating (hp=%.2f)", ratio)
+                logger.debug(f"ForwardCannon retreating (hp={ratio:.2f})")
             elif self.retreating and ratio > _REENGAGE_RATIO:
                 self.retreating = False
-                logger.debug("ForwardCannon re-engaging (hp=%.2f)", ratio)
+                logger.debug(f"ForwardCannon re-engaging (hp={ratio:.2f})")
 
             if self.retreating and self.hide_location is not None:
                 if worker.distance_to(self.hide_location) > 4:
@@ -477,13 +468,12 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
                     place = await self._safe_find_placement(UnitTypeId.FORGE, self.proxy_location)
                     if place is not None:
                         logger.info(
-                            "ForwardCannon build BF(Forge) at (%.1f, %.1f)", place.x, place.y
+                            f"ForwardCannon build BF(Forge) at ({place.x:.1f}, {place.y:.1f})"
                         )
                         worker.build(UnitTypeId.FORGE, place)
-                    elif worker.is_idle:
-                        worker.move(self.proxy_location)
-                elif worker.is_idle:
-                    worker.move(self.proxy_location)  # 走过去等矿
+                        return False
+                # 没钱 或 placement 失败 → 锚定 proxy 点待命
+                self._redirect_worker_to_anchor(worker, self.proxy_location)
                 return False
 
             # BF ready 但 BC 还没有 → 在 BF 附近建 BC
@@ -498,25 +488,58 @@ class ForwardCannonProxy(ActBase):  # type: ignore[misc]
                     bc_pos = await self._safe_find_placement(UnitTypeId.PHOTONCANNON, near)
                     if bc_pos is not None:
                         logger.info(
-                            "ForwardCannon build BC(Cannon) at (%.1f, %.1f)", bc_pos.x, bc_pos.y
+                            f"ForwardCannon build BC(Cannon) at ({bc_pos.x:.1f}, {bc_pos.y:.1f})"
                         )
                         worker.build(UnitTypeId.PHOTONCANNON, bc_pos)
-                    elif worker.is_idle:
-                        worker.move(near)
-                elif worker.is_idle:
-                    bf_tag = self._proxy_tags.get(UnitTypeId.FORGE)
-                    bf_struct = (
-                        self.ai.structures.find_by_tag(bf_tag) if bf_tag is not None else None
-                    )
-                    if bf_struct is not None:
-                        worker.move(bf_struct.position)
+                        return False
+                # 没钱 或 placement 失败 → 锚定 BF 待命
+                self._redirect_worker_to_anchor(worker, self._anchor_position())
                 return False
 
-            # BF ordering/in_progress 或 BC ordering/in_progress → 等着
-            if worker.is_idle and self.proxy_location is not None:
-                worker.move(self.proxy_location)
+            # BF/BC ordering / in_progress → 锚定待命（防 auto-mining 走回家）
+            self._redirect_worker_to_anchor(worker, self._anchor_position())
 
         except Exception as exc:
-            logger.warning("ForwardCannon execute failed: %s", exc)
+            logger.warning(f"ForwardCannon execute failed: {exc}")
 
         return False
+
+    # ------------------------------------------------------------------
+    # worker 锚定（防 auto-mining 走回家）
+    # ------------------------------------------------------------------
+
+    def _anchor_position(self) -> Point2 | None:
+        """worker 应锚定的位置：已有 BF 时贴 BF，否则用 proxy_location。"""
+        bf_tag = self._proxy_tags.get(UnitTypeId.FORGE)
+        bf_struct = self.ai.structures.find_by_tag(bf_tag) if bf_tag is not None else None
+        if bf_struct is not None:
+            return bf_struct.position
+        return self.proxy_location
+
+    def _worker_busy_with_forward_build(self, worker: Any) -> bool:
+        """worker.orders 含 PROTOSSBUILD_FORGE/PHOTONCANNON → 正在 build，别打断。"""
+        for order in getattr(worker, "orders", None) or []:
+            ability = getattr(order, "ability", None)
+            ability_id = getattr(ability, "id", None)
+            if ability_id in (
+                AbilityId.PROTOSSBUILD_FORGE,
+                AbilityId.PROTOSSBUILD_PHOTONCANNON,
+            ):
+                return True
+        return False
+
+    def _redirect_worker_to_anchor(self, worker: Any, anchor: Point2 | None) -> None:
+        """worker 没在 build forward 建筑且距 anchor 偏远 → issue move 拉回。
+
+        关键:不依赖 `worker.is_idle` —— SC2 默认 idle worker 进入 auto-mining,
+        worker.orders 含 HARVEST_GATHER → is_idle=False。旧 `if worker.is_idle:
+        worker.move(...)` 因此从不触发,proxy worker 默默走回家挖矿,BF 永远建不成。
+        改用距离检查主动拉回（与 forward_proxy.py 的 4bg 野 BG proxy 同机制）。
+        """
+        if anchor is None:
+            return
+        if self._worker_busy_with_forward_build(worker):
+            return  # 在 build forward 建筑,别打断
+        if worker.distance_to(anchor) <= 4:
+            return  # 已在 anchor 附近,不重复发命令
+        worker.move(anchor)
