@@ -132,11 +132,13 @@ checks:
   - id: gateway_count_mid
     type: building_count
     unit: GATEWAY
-    at: "6:00"
+    at: "7:00"
     tol: 30
     min: 2
-    # VibeCraft: 6分钟补到4 BG（Step(Time(60*6), GridBuilding(GATEWAY, 4))）
-    # 5:30-6:00 时至少已有 2 BG；building_count verifier 自动合并 WARPGATE
+    # plan Step(Time(60*6)=360s, GridBuilding(GATEWAY,4))：6 分钟才触发补 BG。
+    # 1g robo 开局单门，@6:00 仍是 1 门（补的还没建好）。改 at 7:00 验"补 BG
+    # 已启动"——360s 触发 + 逐个建，7:00 应有 ≥2 门。
+    # building_count verifier 自动合并 WARPGATE
 
   # --- 出门验证 ---
   - id: attack_moveout

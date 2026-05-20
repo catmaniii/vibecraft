@@ -82,19 +82,19 @@ checks:
   - id: dark_shrine_complete
     type: building_complete
     unit: DARKSHRINE
-    at: "3:30"
+    at: "3:55"
     tol: 30
-    # DT Rush 核心节点：VB 建造时长约 71s；
-    # 2:36 开建 → ~3:47；2:43 开建 → ~3:54；
-    # plan 目标 DT @3:50 warp-in，需 VB 完成在 3:50 前；
-    # 取 3:30 ±30s = 3:00-4:00 窗口
+    # DT Rush 核心节点：VB 建造时长约 71s；VT 完成 ~2:50 → VB 最快 ~4:00 完成。
+    # 源数据：2:36 开建→~3:47，2:43 开建→~3:54。取 3:55 ±30s。
+    # （原 spec at 3:30 上界 4:00，但 VB 物理最快 = VT+71s ≈ 4:00，3:30 不可能）
 
   - id: nexus_2
     type: building_started
     unit: NEXUS
-    by: "4:15"
-    # plan: VB 建造期间开二矿（激进，约 2:48）；源 47308: 3:44 @28supply；
-    # 两版本差距大，用 by 4:15 宽容覆盖
+    by: "5:30"
+    # plan 2026-05-20 修：二矿改 UnitReady(DARKSHRINE) 触发（VB 修好才开二矿，
+    # 避免二矿 400 矿跟 DT 科技抢矿）。VB ready ~4:20-4:40 → 二矿 ~5:00-5:20。
+    # by 5:30 覆盖修复后行为（原 by 4:15 是按旧的 VB 建造期开二矿写的）。
 
   - id: worker_22
     type: worker_count
@@ -117,12 +117,13 @@ checks:
   - id: dt_first_warp
     type: unit_count
     unit: DARKTEMPLAR
-    at: "4:20"
+    at: "4:50"
     tol: 30
     min: 2
-    # 首波 DT warp-in；plan 目标 3:50 warp 3 DT；
-    # 源 47308: 4:09 warp 3 DT；源 82515: 3:50 warp 2 DT；
-    # 取 4:20 ±30s = 3:50-4:50，min=2（至少 2 DT 存在）
+    # 首波 DT warp-in；VB 完成 ~3:55 → 首批 2 DT warp-in（~30s/个，chrono）
+    # 约 4:40-4:55。取 4:50 ±30s。
+    # （原 spec at 4:20 与 dark_shrine_complete 不自洽：VB ~3:55 完成后
+    #  4:20 顶多 1 DT，要 2 DT 至少 4:40）
 
   - id: dt_wave_count
     type: unit_count

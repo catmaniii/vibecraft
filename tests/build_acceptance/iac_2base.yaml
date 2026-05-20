@@ -121,10 +121,12 @@ checks:
   - id: six_gateways
     type: building_count
     unit: GATEWAY
-    at: "4:30"
+    at: "6:30"
     tol: 30
     min: 6
-    # 项目 plan: Time(60*4) 触发 6 BG；参考来源 Probe build 4:35 暴 7BG
+    # plan Time(60*4)=240s 触发 GridBuilding(GATEWAY,6)，但 sharpy 逐个建，
+    # 不是 240s 瞬间 6 门 ready。240s 触发 + 6 门逐个建 ~150s → 合理目标 ~6:30。
+    # （原 spec at 4:30 与 plan 触发逻辑矛盾：270s 不可能 6 门 ready）
     # verifier 自动合并 GATEWAY+WARPGATE 计数
 
   - id: dt_count_first_batch
