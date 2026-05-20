@@ -188,10 +188,11 @@ checks:
 
   - id: army_gather
     type: army_gather
-    by: "5:45"
-    # 凤凰成军后集结出发骚扰；参考 126982: 8 凤凰 @5:23 → 立刻出门
-    # plan: _ready_to_pressure 触发 PlanZoneGather + VibeCraftZoneAttack(8)
-    # 给 by 5:45 = 8 凤凰集结后约 15-20s 留余量
+    at: "5:10"
+    near: home
+    within: 55
+    # 凤凰成军前在 home 集结；参考 126982: 8 凤凰 @5:23 → 立刻出门。
+    # 空军质心波动大，within 放宽到 55
 
   - id: attack_moveout
     type: attack_moveout

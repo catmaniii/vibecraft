@@ -147,9 +147,12 @@ checks:
 
   - id: army_gather
     type: army_gather
-    by: "7:10"
-    # 出门前集结；Charge + +1/+1 + 2+ Archon 触发 → 集结时间约 6:30-7:00
-    # 项目 plan _ready_to_pressure: army_supply≥30 OR time≥7:30，给 by 7:10
+    at: "6:20"
+    near: home
+    within: 45
+    # 出门前集结：地面一波在 main↔natural 间待命。
+    # 实测 army_center 距 home 稳定 ~26（集结期），出门 ~6:46 后迅速 >60，
+    # within 45 干净区分；at 6:20 落在集结期内
 
   - id: attack_moveout
     type: attack_moveout

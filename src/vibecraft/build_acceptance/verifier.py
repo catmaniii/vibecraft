@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 from vibecraft.build_acceptance.spec import AcceptanceSpec, Check
 
@@ -52,7 +53,7 @@ def _dist(a: list[float], b: list[float]) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
-def _anchors(telemetry: list[dict]) -> dict[str, list[float]]:
+def _anchors(telemetry: list[dict[str, Any]]) -> dict[str, Any]:
     for rec in telemetry:
         if rec.get("kind") == "game_start":
             return {
@@ -63,9 +64,9 @@ def _anchors(telemetry: list[dict]) -> dict[str, list[float]]:
     return {}
 
 
-def _snapshot_at(telemetry: list[dict], t: float) -> dict | None:
+def _snapshot_at(telemetry: list[dict[str, Any]], t: float) -> dict[str, Any] | None:
     """取 t 时刻最近的 snapshot record。"""
-    best: dict | None = None
+    best: dict[str, Any] | None = None
     best_dt = 1e9
     for rec in telemetry:
         if rec.get("kind") != "snapshot":
@@ -78,7 +79,8 @@ def _snapshot_at(telemetry: list[dict], t: float) -> dict | None:
 
 
 def _check_one(
-    check: Check, telemetry: list[dict], anchors: dict, tol_mult: float
+    check: Check, telemetry: list[dict[str, Any]], anchors: dict[str, Any],
+    tol_mult: float,
 ) -> CheckResult:
     tol = check.tol * tol_mult
     ctype = check.type
@@ -101,6 +103,8 @@ def _check_one(
 
     if ctype in ("worker_count", "unit_count"):
         t = check.at_s if check.at_s is not None else check.by_s
+        if t is None:
+            return CheckResult(check.id, False, detail="无 at/by")
         snap = _snapshot_at(telemetry, t)
         if snap is None:
             return CheckResult(check.id, False, detail="无 snapshot")
@@ -114,6 +118,8 @@ def _check_one(
 
     if ctype == "building_count":
         t = check.at_s if check.at_s is not None else check.by_s
+        if t is None or check.unit is None:
+            return CheckResult(check.id, False, detail="无 at/by 或 unit")
         snap = _snapshot_at(telemetry, t)
         if snap is None:
             return CheckResult(check.id, False, detail="无 snapshot")
@@ -128,9 +134,11 @@ def _check_one(
         )
 
     if ctype == "key_unit_at":
-        t = check.at_s
-        snap = _snapshot_at(telemetry, t)
+        t = check.at_s if check.at_s is not None else check.by_s
+        if t is None or check.near is None:
+            return CheckResult(check.id, False, detail="无 at/by 或 near")
         anchor = anchors.get(check.near)
+        snap = _snapshot_at(telemetry, t)
         if snap is None or anchor is None:
             return CheckResult(check.id, False, detail="无 snapshot/锚点")
         positions = snap.get("key_units", {}).get(check.unit, [])
@@ -142,9 +150,11 @@ def _check_one(
                            detail=f"距 {check.near} {nearest:.1f} (need<={check.within})")
 
     if ctype == "army_gather":
-        t = check.at_s
-        snap = _snapshot_at(telemetry, t)
+        t = check.at_s if check.at_s is not None else check.by_s
+        if t is None or check.near is None:
+            return CheckResult(check.id, False, detail="无 at/by 或 near")
         anchor = anchors.get(check.near)
+        snap = _snapshot_at(telemetry, t)
         if snap is None or anchor is None or snap.get("army_center") is None:
             return CheckResult(check.id, False, detail="无 army_center/锚点")
         d = _dist(snap["army_center"], anchor)
@@ -178,14 +188,18 @@ def _judge_time(check: Check, actual: float, tol: float) -> CheckResult:
         ok = actual <= check.by_s
         return CheckResult(check.id, ok,
                            detail=f"actual {actual:.0f}s, by {check.by_s:.0f}s")
-    lo, hi = check.at_s - tol, check.at_s + tol
+    at_s = check.at_s
+    if at_s is None:
+        return CheckResult(check.id, False, detail="无 at/by")
+    lo, hi = at_s - tol, at_s + tol
     ok = lo <= actual <= hi
     return CheckResult(check.id, ok,
-                       detail=f"actual {actual:.0f}s, want {check.at_s:.0f}±{tol:.0f}s")
+                       detail=f"actual {actual:.0f}s, want {at_s:.0f}±{tol:.0f}s")
 
 
 def verify(
-    telemetry: list[dict], spec: AcceptanceSpec, opponent: str = "veryeasy"
+    telemetry: list[dict[str, Any]], spec: AcceptanceSpec,
+    opponent: str = "veryeasy",
 ) -> Report:
     """主入口。opponent ∈ veryeasy / cheatmoney。"""
     cheat = opponent.lower() == "cheatmoney"

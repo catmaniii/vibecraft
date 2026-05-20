@@ -49,9 +49,15 @@ class Check(BaseModel):
         return parse_mmss(self.by) if self.by else None
 
     @model_validator(mode="after")
-    def _need_time(self) -> Check:
+    def _validate(self) -> Check:
         if self.at is None and self.by is None:
             raise ValueError(f"check {self.id}: 必须有 at 或 by")
+        if self.type in ("army_gather", "key_unit_at") and (
+            self.near is None or self.within is None
+        ):
+            raise ValueError(
+                f"check {self.id}: {self.type} 必须有 near 和 within"
+            )
         return self
 
 

@@ -137,8 +137,10 @@ checks:
 
   - id: army_gather
     type: army_gather
-    by: "5:30"
-    # 部队在出门前集结到出发点（home 端 ramp 或 natural 出口）
+    at: "5:00"
+    near: home
+    within: 45
+    # 闪追出门前在 home 端集结；出门 ~5:07-6:00，at 5:00 落在集结期
 
   - id: attack_moveout
     type: attack_moveout

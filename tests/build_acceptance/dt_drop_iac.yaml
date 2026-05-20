@@ -208,10 +208,10 @@ checks:
   - id: army_gather
     type: army_gather
     at: "7:45"
-    tol: 45
+    near: home
+    within: 45
     # 出门前 30-60s 集结：Archon + Chargelot + 残 DT 在家汇合
     # Stats 原版~7:30 集结开始，8:00 出门；本项目晚合 Archon → ~7:30-8:00 集结
-    # 节点 7:45 ±45s 覆盖 7:00-8:30
 
   - id: attack_moveout
     type: attack_moveout
