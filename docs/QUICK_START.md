@@ -12,8 +12,8 @@
 ## 1. 拉代码 + 装依赖
 
 ```bash
-git clone https://github.com/catmaniii/openVibeCraft.git
-cd openVibeCraft
+git clone https://github.com/catmaniii/vibecraft.git
+cd vibecraft
 uv sync --extra dev --extra sc2          # 核心 + SC2 bot 依赖
 # （可选）语音识别：FunASR + torch（体积大，见末尾「语音识别」注意）
 ```

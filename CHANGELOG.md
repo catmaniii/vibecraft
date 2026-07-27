@@ -19,6 +19,21 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-27 英文 README + 仓库名统一为 vibecraft
+
+**新增 (Added)**：
+- `README.en.md`：完整英文版（不是逐句直译——按英文读者的习惯重写了措辞与例句，18 类语音指令
+  各给了地道的英文说法）。两个 README 顶部互相链接（🇨🇳 中文 · 🇬🇧 English）。
+- 英文版里补了一段中文版没有的说明：**本项目对"验证"的判据**（单测绿 + 内部 trace 绿不算数，
+  给 SC2 下命令的改动要有世界终态证据），以及"多数设计文档是中文"的提示。
+
+**变更 (Changed)**：
+- **仓库名统一为 `vibecraft`**：`docs/QUICK_START.md` 的 clone 地址原本指向
+  `catmaniii/openVibeCraft`，与实际仓库对不上。
+- **`scripts/sync_to_opensource.py` 标记作废**：它实现的是"私有 vibecraft → 公开 openVibeCraft
+  脱敏投影"的两仓模型；现在本仓库**自己就是公开仓**（资产合规、脱敏、历史重建都已就地完成），
+  不存在要同步过去的目标仓。脚本保留存档（脱敏规则清单仍有参考价值），加了醒目横幅说明别再跑。
+
 ### 2026-07-27 开源前准备：资产合规 + 脱敏 + CI 转绿 + 社区文件
 
 **修正 (Fixed)**：

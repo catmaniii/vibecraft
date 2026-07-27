@@ -1,5 +1,7 @@
 # VibeCraft
 
+> 🇨🇳 中文 · [🇬🇧 English](README.en.md)
+
 **动动嘴 / 打打字，AI 替你操作 StarCraft II —— 给操作不动、战略还在线的老玩家。**
 
 你脑子里还能打 SC2，但手已经跟不上节奏了。VibeCraft 让你用**手机下达战略和微操指令**
