@@ -19,6 +19,28 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-27 CI 改跑 Windows + 承认"只支持 3.11"（Linux CI 根本测不了这个项目）
+
+**修正 (Fixed)**：
+- **`requires-python` 过度承诺**：原先写 `>=3.11,<3.13`，但 vendored sharpy 的核心 manager
+  （`pathing_manager` / `building_solver`）**无条件** `import sc2pathlib`，而上游只提供了
+  `sc2pathlib.cp311-win_amd64.pyd` 这一个编译产物 —— **3.12 用户装得完全正常、一跑 bot 就在
+  sharpy 深处 ImportError**。改成 `>=3.11,<3.12`，classifiers 去掉 3.12、补上
+  `Operating System :: Microsoft :: Windows`，两个 README 的"Python 3.11+"改成"只支持 3.11"
+  并说明原因。**与其让人踩这个坑，不如在安装时就说清楚。**
+
+**变更 (Changed)**：
+- **CI 的 lint/test 从 `ubuntu-latest` 改到 `windows-latest`（只测 3.11）**。上一轮把 mypy 修绿、
+  又补上 python-sc2 之后，Linux 上仍有 **153 个用例失败**，根因全是同一个 `sc2pathlib` ——
+  依赖真 sharpy 的那批（**build plan 构造审计**等最有价值的门，正是用来拦"占位 enum 运行时炸整局"
+  那类问题的）在 Linux 上根本 import 不进来。继续加 skip 等于把 CI 最该守的门全关掉；
+  **真正的结论是：Linux CI 从根上测不了这个项目**。跑在 windows-latest + 3.11 后，CI 检查的
+  环境与玩家/开发机实际运行的环境一致，全量 3731 个用例都真跑。
+- gitleaks 拆成独立的 `secret-scan` job 留在 `ubuntu-latest` —— gitleaks-action 是 Docker 容器
+  action，只能在 Linux runner 上跑。
+- 上一轮为 Linux 加的 `pytest.importorskip("sc2pathlib.sc2pathlib")`（2 个文件）保留：在 Windows
+  CI 上不会触发（二进制在），它从"当前生效的跳过"退化成"环境不对时的安全网 + 明确的报错说明"。
+
 ### 2026-07-27 修 GitHub CI（Linux）红 + 开源合规二轮清理
 
 **修正 (Fixed)**：

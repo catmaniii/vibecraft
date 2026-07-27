@@ -24,7 +24,9 @@ matter — **you are the commander, the AI is your executive officer.**
 > **Want to run it yourself? Check these first** — miss any one and you'll get stuck:
 > - A **Windows 10/11** PC (audio capture + PowerShell scripts are Windows-only for now)
 > - **StarCraft II** installed and launched at least once
-> - **Python 3.11+** and [**uv**](https://docs.astral.sh/uv/)
+> - **Python 3.11** — exactly 3.11, *not* "3.11 or newer" — and [**uv**](https://docs.astral.sh/uv/).
+>   The vendored sharpy needs `sc2pathlib`, which upstream ships only as a `cp311-win_amd64`
+>   binary; on 3.12 everything installs fine and then fails at runtime.
 > - A **`DEEPSEEK_API_KEY`** environment variable (the LLM parses your commands; bring your own
 >   pay-as-you-go key). Without it, voice/text commands fail to parse. See
 >   [Part 2 — Self-hosting](#part-2--self-hosting).
@@ -508,6 +510,21 @@ tests/{unit,integration,e2e}/
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 
 > Most design documents (`docs/plans/`, ADRs, the reasoning graph) are written in Chinese.
+
+---
+
+## Contact
+
+- **Bugs, feature ideas, usage questions** → open an
+  [issue](https://github.com/catmaniii/vibecraft/issues). Prefer this — public answers help the
+  next person.
+- **Security vulnerabilities** → don't open a public issue; see [`SECURITY.md`](SECURITY.md).
+- **Anything else** (code-of-conduct reports, licensing, private contact) →
+  **vibecraftproject@gmail.com**.
+
+Issues and PRs in English are welcome — the maintainer's first language is Chinese, so replies
+may be brief, but you won't be ignored. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) and
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) before contributing.
 
 ---
 

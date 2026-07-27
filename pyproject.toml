@@ -3,16 +3,20 @@ name = "vibecraft"
 version = "0.1.0a1"
 description = "用语音 + 文字指挥 AI 替你打星际2（三族）—— 给操作不动了的老玩家"
 readme = "README.md"
-requires-python = ">=3.11,<3.13"
+# 只支持 3.11。不是保守，是硬约束：vendored sharpy 的核心 manager 无条件
+# `import sc2pathlib`，而上游只提供了 `sc2pathlib.cp311-win_amd64.pyd` 这一个编译产物。
+# 3.12 上装得完全正常、一跑 bot 就在 sharpy 深处 ImportError —— 与其让人踩这个坑，
+# 不如在安装时就说清楚。（同理：本项目只在 Windows 上可用。）
+requires-python = ">=3.11,<3.12"
 license = { text = "MIT" }
-authors = [{ name = "catmaniii" }]
+authors = [{ name = "catmaniii", email = "vibecraftproject@gmail.com" }]
 keywords = ["starcraft2", "sc2", "bot", "llm", "voice-control", "rts", "accessibility"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Games/Entertainment :: Real Time Strategy",
 ]
 

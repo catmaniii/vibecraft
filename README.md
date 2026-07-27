@@ -19,7 +19,8 @@ AI 是参谋副官**。
 > **想自己跑起来？先过这份前置检查**（缺一项都会卡住）：
 > - **Windows 10/11** PC（音频分流 / PowerShell 脚本目前是 Windows-only）
 > - 已安装并启动过一次 **正版 StarCraft II**
-> - **Python 3.11+** 和 **uv**（包管理器，https://docs.astral.sh/uv/）
+> - **Python 3.11**（只支持 3.11，**不是 3.11+**）和 **uv**（包管理器，https://docs.astral.sh/uv/）
+>   —— vendored sharpy 依赖的 `sc2pathlib` 只有 cp311-win_amd64 的编译产物，3.12 装得上但跑不起来
 > - **DEEPSEEK_API_KEY** 环境变量（LLM 解析指令用，需自备 DeepSeek API key，**按量付费**；
 >   不设它语音/文字指令会"解析失败"。详见 [二、自行部署](#二自行部署)）
 > - 开发/贡献者另见 [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -479,6 +480,18 @@ tests/{unit,integration,e2e}/
 | [`USER_GUIDE.md`](USER_GUIDE.md) | 玩家入门 + 话语示例 + FAQ |
 | [`CLAUDE.md`](CLAUDE.md) | 约定 + 指针（AI 协作上下文） |
 | [`TASKS.md`](TASKS.md) / [`CHANGELOG.md`](CHANGELOG.md) | 当前状态 / 版本历史 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md) | 怎么参与 / 怎么报安全问题 |
+
+---
+
+## 联系 / Contact
+
+- **bug、功能建议、用法问题** → 开 [Issue](https://github.com/catmaniii/vibecraft/issues)
+  （公开讨论对后来人也有用，优先走这里）。
+- **安全漏洞** → 别开公开 Issue，走 [`SECURITY.md`](SECURITY.md)。
+- **其他**（行为准则投诉、协议/授权、私下联系）→ **vibecraftproject@gmail.com**。
+
+参与前请看 [`CONTRIBUTING.md`](CONTRIBUTING.md) 与 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)。
 
 ---
 

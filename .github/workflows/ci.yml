@@ -6,36 +6,49 @@ on:
   pull_request:
     branches: [main]
 
-jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
+# 为什么 lint/test 跑在 Windows 而不是 ubuntu：
+#   VibeCraft 只能在 Windows + CPython 3.11 上运行，这不是偏好，是硬约束 ——
+#   vendored sharpy 的核心 manager（pathing_manager / building_solver）无条件
+#   `import sc2pathlib`，而仓库里只有上游提供的 `sc2pathlib.cp311-win_amd64.pyd`
+#   这一个构建。在 Linux 上跑 CI，153 个依赖真 sharpy 的用例（build plan 构造审计
+#   等最有价值的那批门）全都 import 不进来；换句话说，Linux CI 从根上测不了这个项目。
+#   跑在 windows-latest + 3.11 = CI 检查的环境和玩家/开发机实际跑的环境一致。
+# gitleaks 单独一个 job：gitleaks-action 是 Docker 容器 action，只能在 Linux runner 上跑。
 
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # gitleaks 要扫历史
 
-      # secret 扫描:pre-commit 只在本地跑,PR 里挡不住 —— CI 侧再扫一道(含完整历史)。
+      # pre-commit 只在本地跑，PR 里挡不住 —— CI 侧再扫一道（含完整历史）。
       - name: Gitleaks (secret scan)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lint-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      # 只测 3.11：vendored sc2pathlib 是 cp311 专用的编译产物，3.12 上真 sharpy 导不进来。
+      # 与 pyproject 的 requires-python = ">=3.11,<3.12" 一致。
+      - name: Set up Python 3.11
+        run: uv python install 3.11
 
       - name: Install dev dependencies
         # sc2-lib = 只装 python-sc2 本体（纯 Python）。没有它，23 个单测文件会因
-        # `No module named 'sc2'` 直接 collect 失败。完整的 sc2 extra 装不了：
-        # sc2-helper 只有 cp311 wheel，3.12 那条腿会挂。
+        # `No module named 'sc2'` 直接 collect 失败。不装完整的 sc2 extra 是因为它会从
+        # git 拉 ares-sc2 / map-analyzer，慢且与 lint/单测无关。
         run: uv sync --extra dev --extra sc2-lib
 
       - name: Ruff check
