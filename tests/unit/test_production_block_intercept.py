@@ -10,10 +10,21 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 # vendor/sharpy 不在标准 path，按生产同款注入。
 from vibecraft.bot.auto_combat.common_bot import _ensure_sharpy_on_path
 
 _ensure_sharpy_on_path()
+
+# 本文件导入的是**真** sharpy（不是别处那种 sys.modules 打桩），而真 sharpy 会连带导入
+# sc2pathlib —— 它是 vendored 的编译扩展，仓库里只有 `sc2pathlib.cp311-win_amd64.pyd`
+# （Windows + CPython 3.11 专用，上游 DrInfy 提供，我们没有其它平台的构建）。
+# 所以在 Linux CI / 非 3.11 的环境里这个文件整体跳过；开发机（Windows + 3.11）正常跑。
+pytest.importorskip(
+    "sc2pathlib.sc2pathlib",
+    reason="vendored sc2pathlib 只有 cp311-win_amd64 的编译产物，非 Windows/3.11 环境跳过",
+)
 
 from sc2.ids.unit_typeid import UnitTypeId  # noqa: E402
 from sharpy.plans.acts.act_unit import ActUnit  # noqa: E402

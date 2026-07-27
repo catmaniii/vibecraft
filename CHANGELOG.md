@@ -47,6 +47,12 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
   修法不是让 CI 装完整 `sc2` extra —— `sc2-helper` 只发了 cp311 的 wheel，3.12 那条腿必挂。
   新增轻量 extra **`sc2-lib = ["burnysc2"]`**（只装 python-sc2 本体，纯 Python、跨平台），
   CI 改用 `uv sync --extra dev --extra sc2-lib`。
+- **再接上：剩下 2 个文件卡在 `sc2pathlib.sc2pathlib`**。`test_production_block_intercept.py`
+  与 `test_vibecraft_micro_zealots.py` 导入的是**真** sharpy（不是别处那种 `sys.modules` 打桩），
+  真 sharpy 会连带导入 vendored 的编译扩展 `sc2pathlib` —— 仓库里只有
+  `sc2pathlib.cp311-win_amd64.pyd`（Windows + CPython 3.11 专用，上游 DrInfy 提供，没有其它
+  平台的构建）。两处加 `pytest.importorskip("sc2pathlib.sc2pathlib", reason=...)`：非 Windows/3.11
+  环境整体跳过、**并在 `-ra` 里显示跳过原因**（不是静默消失），开发机照常真跑。
 
 **变更 (Changed)**：
 - **删掉 `vendor/sharpy/libs/ic52.zip`（6 MB）**：内容是三个 ICU 的 Windows 预编译 DLL

@@ -9,10 +9,19 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 # vendor/sharpy 不在标准 path 上，按生产同样的注入函数先上 path 再 import sharpy。
 from vibecraft.bot.auto_combat.common_bot import _ensure_sharpy_on_path
 
 _ensure_sharpy_on_path()
+
+# 同 test_production_block_intercept.py：本文件导入**真** sharpy，它会连带导入 vendored 的
+# 编译扩展 sc2pathlib（仓库里只有 cp311-win_amd64 的 .pyd）。非 Windows/3.11 环境整体跳过。
+pytest.importorskip(
+    "sc2pathlib.sc2pathlib",
+    reason="vendored sc2pathlib 只有 cp311-win_amd64 的编译产物，非 Windows/3.11 环境跳过",
+)
 
 from sc2.position import Point2  # noqa: E402
 from sharpy.combat import Action, MoveType  # noqa: E402
