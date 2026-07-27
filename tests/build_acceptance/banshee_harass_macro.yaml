@@ -1,0 +1,7 @@
+strategy_id: banshee_harass
+my_race: Terran
+# 开局女妖骚扰 → opening_completed 后自动切运营 doctrine(先骚扰再转运营大军)
+auto_switch_to: persistent_bio_max
+auto_switch_delay_s: 10.0
+checks:
+  - {id: worker_early, type: unit_count, unit: SCV, at: "2:30", tol: 40, min: 8}

@@ -1,0 +1,94 @@
+kind: persistent_doctrine
+id: persistent_lurker_hydra
+display_name_zh: "潜伏者刺蛇"
+display_name_en: "Lurker-Hydralisk Siege"
+summary_zh: "潜伏者埋地控场 + 刺蛇火力 + 毒蛇拉扯的阵地流：潜伏者埋线封锁地面，刺蛇正面输出，毒蛇 abduct 拉关键单位 + 绿水降甲"
+summary_en: "Lurker burrow-siege + Hydralisk ranged fire + Viper pulls; Lurkers bury at chokes to block ground pushes, Hydralisks output damage, Vipers Abduct key units and Blinding Cloud disables ranged fire."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.lurker_hydra:LurkerHydra"
+gas_intensity: high
+aliases:
+  - "潜伏者刺蛇"
+  - "潜伏者"
+  - "lurker"
+  - "潜伏者控场"
+  - "刺蛇潜伏者"
+  - "埋地流"
+
+# BH=孵化场 BS=母池 BV=进化腔 VH=刺蛇巢 VD=潜伏者巢 VI=感染坑
+# 单位：潜伏者 / 刺蛇 / 毒蛇 / 女王
+phases:
+  - id: tech_up
+    display: "Lair → 刺蛇巢 → 潜伏者巢"
+    display_en: "Lair → Hydralisk Den → Lurker Den"
+    subtitle: "BS → Lair → VH → VD，研潜伏者射程 + 刺蛇射程/速度；同步 BV×2 滚攻防"
+    subtitle_en: "Pool → Lair → Hydralisk Den → Lurker Den; research Lurker Range + Hydralisk speed/range; 2 Evolution Chambers rolling upgrades"
+    start_at_time: 0
+  - id: massing
+    display: "暴潜伏者 + 刺蛇"
+    display_en: "Mass Lurkers + Hydralisks"
+    subtitle: "VD 完成 → 持续出潜伏者 + 刺蛇；积累 6+ 潜伏者埋线建立阵地"
+    subtitle_en: "Lurker Den done → continuous Lurker + Hydralisk production; build up 6+ Lurkers for burrow lines"
+    start_at_time: 390  # 2026-06-18 #548 同步代码: 90→390 (VD spec ~6:30, 6:30 锚)
+  - id: siege
+    display: "阵地推进"
+    display_en: "Siege Push"
+    subtitle: "8+ 潜伏者封锁路口 + 20 刺蛇输出 + 3 毒蛇控场 → 层层蚕食推进"
+    subtitle_en: "8+ Lurkers buried at chokes + 20 Hydralisks output + 3 Vipers control → creeping siege advance"
+    start_at_time: 600  # 2026-06-18 #548 同步代码: 300→600 (5+潜伏者 spec ~10:00, 10:00 锚)
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  LurkerMP: 8
+  Hydralisk: 20
+  Viper: 3
+  Queen: 6
+
+required_tech:
+  - EvolveGroovedSpines
+  - EvolveMuscularAugments
+  - LurkerRange
+  - ZergMissileWeaponsLevel1
+  - ZergMissileWeaponsLevel2
+  - ZergMissileWeaponsLevel3
+  - ZergGroundArmorsLevel1
+  - ZergGroundArmorsLevel2
+  - ZergGroundArmorsLevel3
+
+required_structures:
+  Hatchery: 4
+  SpawningPool: 1
+  HydraliskDen: 1
+  LurkerDenMP: 1
+  EvolutionChamber: 2
+  InfestationPit: 1
+
+engagement_doctrine:
+  - "潜伏者优先埋在路口 / 坡道，切断对方推进路线"
+  - "刺蛇站潜伏者后排正面输出，女王辅助治疗 / 注射"
+  - "毒蛇 Abduct 拉对方坦克 / 不朽 / 战舰等重甲单位到刺蛇射程内"
+  - "毒蛇 Blinding Cloud 覆盖对方远程单位，大幅降低输出"
+  - "对方推进时让潜伏者先埋地消耗，刺蛇跟进补伤害"
+engagement_doctrine_en:
+  - "Lurkers burrow priority at chokes and ramps to cut off enemy advance routes"
+  - "Hydralisks stand behind Lurkers for ranged output; Queens support with Transfuse / Inject"
+  - "Vipers Abduct enemy Siege Tanks / Immortals / Battlecruisers into Hydralisk range"
+  - "Viper Blinding Cloud covers enemy ranged units to dramatically reduce their output"
+  - "When enemy pushes, let Lurkers bait and soak damage first; Hydralisks follow up with damage"
+
+win_condition:
+  type: composition_advantage
+  description: "潜伏者埋线封路 + 刺蛇全射程输出 + 毒蛇控场，对方无法正面推进"
+  signals:
+    - "self.units.lurker.amount >= 6"
+    - "self.units.hydralisk.amount >= 12"
+    - "self.upgrade.missile_weapons >= 2"
+
+counters_against:
+  - terran_bio
+  - protoss_gateway
+  - mass_ground
+
+weak_against:
+  - mass_air
+  - terran_liberator
+  - protoss_skytoss

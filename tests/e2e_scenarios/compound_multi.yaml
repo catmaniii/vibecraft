@@ -1,0 +1,33 @@
+# E2E directive scenario 5 — 复合多 directive + multi-item production all_of
+#
+# 覆盖:
+# - production_override 多 item → done_when=all_of 多个 unit_count_built_since
+# - 单一 directive 多兵种(rule 5 例外:不拆,合 1 张卡片)
+strategy_id: 1g_robo_immortal
+description: 复合多 item production + structure_override + scout
+
+schedule:
+  # ── 0:30 production_override 多 item (Zealot + Stalker) → all_of ──
+  # 1g_robo_immortal cyber 后能出 stalker;zealot 1 BG 即可。
+  # auto-fill done_when={all_of, conditions:[
+  #   unit_count_built_since(Zealot,>=,2),
+  #   unit_count_built_since(Stalker,>=,1)]}
+  - at_s: 30
+    text: 出 2 个叉子和 1 个追猎
+    expect_directive_types: [production_override]
+    expect_done_within_s: 240
+
+  # ── 1:30 structure_override Gateway(明确数字) ──
+  # "补 2 BG" 明示 target_count=2,LLM 给 structure_override 不是 build_at。
+  - at_s: 90
+    text: 补 2 个 BG
+    expect_directive_types: [structure_override]
+    expect_done_within_s: 120
+
+  # ── 2:00 scout enemy_natural (改 target:enemy_third 在 VeryEasy 不存在,
+  #   AI 没开三矿 → 单位走不到;改 enemy_natural 之前已多次 PASS。
+  #   inject 时间从 150 提前到 120 避免 VeryEasy 短局 NOT_INJECTED) ──
+  - at_s: 120
+    text: 派 1 农民侦察对方二矿
+    expect_directive_types: [scout, tactical_objective]
+    expect_done_within_s: 120

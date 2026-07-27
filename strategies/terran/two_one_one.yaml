@@ -1,0 +1,72 @@
+kind: opening_build
+id: two_one_one
+display_name_zh: "2BB两矿5:30压制"
+display_name_en: "2-Rax 5:30 Timing Push"
+summary_zh: "2 BB 两矿 2-1-1：双 BB(TechLab + Reactor) 双产 枪兵 + 掠夺者，VF 挂 TechLab 出攻城坦克(~3:50 起)，VS 出 2 医疗船，兴奋剂 + 战斗护盾 + 减速弹 研完 ~5:30 带 兵 + 2 坦克 出门压制；TvP/TvZ timing"
+summary_en: "2-Barracks 2-base 2-1-1: dual Barracks (Tech Lab + Reactor) producing Marines + Marauders, Factory Tech Lab Siege Tanks (~3:50+), Starport 2 Medivacs; Stim + Combat Shield + Concussive Shells done ~5:30 push with bio + 2 Tanks; TvP/TvZ timing."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.two_one_one:TwoOneOne"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: MARAUDER, policy: ratio, per: MARINE, n: 4}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+  - {unit: SIEGETANK, policy: cap, value: 3}
+aliases:
+  - "two_one_one"
+  - "2BB两矿5:30压制"
+  - "2BB压制"
+  - "两矿生化压制"
+  - "2-1-1"
+  - "211"
+  - "2 rax pressure"
+matchup: [TvZ, TvT]
+
+phases:
+  - id: opening
+    display: "2 BB + VF + VS 建线"
+    display_en: "2 Barracks + Factory + Starport"
+    subtitle: "14 农 → BS → BB → Refinery → 第 2 BB + Reactor → VF + VF TechLab(坦克) → VS"
+    subtitle_en: "14 workers → Depot → Barracks → Refinery → 2nd Barracks + Reactor → Factory + Tech Lab (Tanks) → Starport"
+    start_at_supply: 14
+  - id: timing
+    display: "真 2-1-1 timing push"
+    display_en: "True 2-1-1 Timing Push"
+    subtitle: "Stim + CombatShield + ConcussiveShells 研完 + 2 Medivac + Marauder + 2 坦克 → ~5:30 出门"
+    subtitle_en: "Stim + Combat Shield + Concussive Shells done + 2 Medivacs + Marauders + 2 Tanks → ~5:30 move out"
+    start_at_supply: 28
+    start_at_time: 220
+  - id: eco
+    display: "持续压制 + 补经济"
+    display_en: "Sustain Push + Economy"
+    subtitle: "双 CC 升轨道 + 持续补 Marine / Marauder + 医疗船循环"
+    subtitle_en: "Dual CC Orbitals + continuous Marine / Marauder + Medivac reinforcement cycle"
+    start_at_supply: 40
+    start_at_time: 320
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "16 build Refinery"
+  - "17 build Barracks"
+  - "18 build TechLab @Barracks1"
+  - "19 build Reactor @Barracks2"
+  - "20 train Marine"
+  - "20 train Marine"
+  - "21 build Factory"
+  - "22 build Refinery"
+  - "23 build TechLab @Factory"
+  - "24 build Starport"
+  - "26 build CommandCenter"
+  - "26 train SiegeTank"
+  - "27 train Marauder"
+  - "27 train Medivac"
+  - "27 train Medivac"
+  - "28 research Stimpack"
+  - "28 research CombatShield"
+  - "28 research ConcussiveShells"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_armor"

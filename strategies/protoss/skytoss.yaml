@@ -1,0 +1,128 @@
+kind: persistent_doctrine
+id: persistent_skytoss
+display_name_zh: "天空神族"
+display_name_en: "Skytoss"
+summary_zh: "后期航母为核心的空军体系：4 VS + Carrier ×12 + Tempest ×3 + HT/Archon + Mothership，靠空军远程 DPS 慢推；对手过不了 5 矿经济就赢"
+summary_en: "Late-game Carrier-centric air fleet: 4 Stargates + 12 Carriers + 3 Tempests + High Templar/Archon + Mothership; slow-push with air DPS; wins if opponent cannot scale to 5-base economy."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.skytoss:Skytoss"
+gas_intensity: high
+aliases:
+  - "Skytoss"
+  - "skytoss"
+  - "天空神族"
+  - "天空"
+  - "空军神族"
+  - "神族空军"
+  - "航母流"
+  - "航母收"
+  - "出航母"
+  - "憋航母"
+  - "暴航母"
+  - "上航母"
+  - "VS 流"
+  - "母舰流"
+  - "舰队流"
+  - "carrier"
+  - "carrier flow"
+
+# 后期阶段进度（**lategame 无严格 supply 节点**，用 game_time + 关键单位/建筑
+# 数量来判断；PhaseTracker 看到 start_at_time 时按时间推断当前 phase）
+# 注：精确切阶段（如"Carrier ≥ 8 → late_composition"）需 PhaseTracker 加
+# `phase_done_when` checker，目前先按时间粗推。
+phases:
+  - id: tech_up
+    display: "上 VS + VX"
+    display_en: "Stargates + Fleet Beacon"
+    subtitle: "VS / Fleet Beacon / TC / TA 建筑链 + Air Weapons/Armor 1 升级"
+    subtitle_en: "Stargates / Fleet Beacon / Twilight Council / Templar Archives chain + Air Weapons/Armor 1"
+    start_at_time: 0       # 切入即开始
+  - id: carrier_massing
+    display: "暴航母"
+    display_en: "Mass Carriers"
+    subtitle: "Fleet Beacon 完成 → 持续 Carrier + chrono VS；HT 合 Archon；研 Storm + Tempest 射程"
+    subtitle_en: "Fleet Beacon done → continuous Carriers + chrono Stargates; High Templar merge to Archon; Storm + Tempest range research"
+    start_at_time: 60      # 切入 1 分钟后大概率 VX 在建
+  - id: late_composition
+    display: "完整组合"
+    display_en: "Full Composition"
+    subtitle: "8+ Carrier + 3 Tempest + Mothership + 风暴 + 母舰罩"
+    subtitle_en: "8+ Carriers + 3 Tempests + Mothership + Storm + Mass Recall"
+    start_at_time: 240     # 切入 4 分钟后通常已 6-8 Carrier
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+# 跟 unit_data.py 的 STRUCT_COSTS / UNIT_COSTS / TECH_COSTS key 对齐，transition_cost 才能正确算
+target_composition:
+  Carrier: 12
+  Tempest: 3
+  HighTemplar: 5
+  Archon: 4         # 5 HT 自动合 ~2 Archon，sharpy 配 ProtossUnit 兜底加
+  Mothership: 1
+  Observer: 2
+  # 不写 Zealot/Stalker：后期航母为主，剩下的 supply 让 sharpy 自决策
+
+required_tech:
+  - ProtossAirWeaponsLevel1
+  - ProtossAirWeaponsLevel2
+  - ProtossAirWeaponsLevel3
+  - ProtossAirArmorsLevel1
+  - ProtossAirArmorsLevel2
+  - ProtossAirArmorsLevel3
+  - PsiStorm
+  - GravitonCatapult
+
+required_structures:
+  Stargate: 4
+  FleetBeacon: 1
+  TemplarArchives: 1
+  TwilightCouncil: 1
+  RoboticsFacility: 1   # Observer 前置
+  Forge: 1
+  Nexus: 4
+
+# 交战教条（自由文本给 LLM 参考；MVP 不接 DSL 解析器，bot 内 sharpy 自己微操）
+engagement_doctrine:
+  - "spread_units against=storm radius=6   # 自己 HT 风暴时也要散开避免误伤"
+  - "feedback priority=[ghost, viking, infestor, raven]   # HT 优先 feedback 敌方魔法 / 反隐单位"
+  - "storm priority=clumped_bio min_targets=4   # Storm 只甩 4+ 目标聚团（不浪费能量）"
+  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%   # 航母 hit-and-run，血少撤"
+  - "tempest_focus priority=[battlecruiser, brood_lord, mothership]   # Tempest 远程点高血单位"
+  - "mass_recall when=fleet_total_hp<40%   # 整队血少母舰回家保命"
+engagement_doctrine_en:
+  - "spread_units against=storm radius=6   # Spread fleet when High Templars cast Storm to avoid friendly fire"
+  - "feedback priority=[ghost, viking, infestor, raven]   # High Templar Feedback enemy spellcasters and detection units first"
+  - "storm priority=clumped_bio min_targets=4   # Psi Storm only into clusters of 4+ (don't waste energy)"
+  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%   # Carriers hit-and-run; retreat when hull drops below 40%"
+  - "tempest_focus priority=[battlecruiser, brood_lord, mothership]   # Tempests snipe high-HP priority targets at range"
+  - "mass_recall when=fleet_total_hp<40%   # Mothership Mass Recall the fleet home when total HP drops below 40%"
+
+win_condition:
+  type: composition_advantage
+  description: "靠航母 + Tempest 远程 DPS 慢拆，对方过不了 5 矿经济跟不上空军规模"
+  signals:
+    - "self.units.carrier.amount >= 10"
+    - "enemy.expansion_count < 5"
+    - "enemy.units.air_attacker.amount < 8"   # 对方没大量 Viking/Corruptor 反空
+
+# 优势对位（用 enemy_tags.py canonical tag）
+counters_against:
+  - terran_bio             # 航母拉开距离风筝
+  - zerg_roach_hydra       # 航母 + Tempest 高地
+  - zerg_brood             # Tempest 点 Brood，HT feedback
+  - zerg_ultra_brood       # 同上 + Tempest 远点 Ultra
+  - terran_mech_tank       # 航母不怕坦克
+  - mass_ground            # 通用：地面军被空军吊打
+
+# 劣势对位
+weak_against:
+  - mass_viking            # 航母被反空秒
+  - mass_corruptor         # 同上
+  - terran_ghost           # EMP 清盾，HT 攒不出能量
+  - protoss_skytoss        # 后期镜像，比谁 micro 好
+
+# 后期"什么时候撑不住"信号（玩家可用 abort_signals 类似机制硬转，但 lategame
+# 通常没下一手，更多是"该投降的时候投降"）
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 12 AND self.units.carrier.amount < 6"
+    then: "warn:viking_swarm_no_carriers"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

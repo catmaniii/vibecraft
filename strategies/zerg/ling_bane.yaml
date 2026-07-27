@@ -1,0 +1,90 @@
+kind: opening_build
+id: ling_bane
+display_name_zh: "小狗毒爆"
+display_name_en: "Zergling-Baneling Bust"
+summary_zh: "14 农开 BS → 立刻研提速(ZERGLINGMOVEMENTSPEED) → 气矿 + 妖虫巢(BB) → 二矿，持续出狗毒爆，提速好 + 一批毒爆后出门压制；ZvZ/ZvT 标准 timing"
+summary_en: "14-worker pool → immediate Zergling Speed → gas + Baneling Nest → expand; continuous Zerglings morphing Banelings; push at ~4:30 with speed + 6+ Banelings. ZvZ/ZvT standard timing."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.ling_bane:LingBane"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+# 毒爆前压+护蛹在前沿变（all-in 编排，2026-06-16 用户）；build-aware sustain 据此走 forward-morph
+baneling_morph_mode: forward
+core_units:
+  - {unit: ZERGLING, policy: mass}
+  # 爆虫吃气大钱口：用户授权"钱多多孵爆虫、可全变爆虫"。原 ratio(静态近似 20)→ cap 250
+  # (趋向全爆虫)，把浮气孵成爆虫(每个 25 气)+降矿 bank。保持非 mass 让采气优先级仍判
+  # gas-heavy secondary=满气。
+  - {unit: BANELING, policy: cap, value: 250}
+aliases:
+  - "ling_bane"
+  - "小狗毒爆"
+  - "毒爆"
+  - "狗毒"
+  - "ling bane"
+  - "LingBane"
+  - "毒爆流"
+  - "baneling bust"
+matchup: [ZvZ, ZvT]
+
+phases:
+  - id: pool_rush
+    display: "14 农开 BS"
+    display_en: "14-Worker Spawning Pool"
+    subtitle: "14 农就开 SpawningPool(BS)，同时开 BE 气矿，BS 完成即研提速(BS 母池研)"  # 2026-06-18 #548 同步代码: 删"BV 进化腔"—ling speed 在 BS 研，plan 无 BV
+    subtitle_en: "14 workers → Spawning Pool + gas; research Zergling Speed immediately after Pool"
+    start_at_supply: 14
+  - id: gas_nest
+    display: "气矿 + 妖虫巢"
+    display_en: "Gas + Baneling Nest"
+    subtitle: "BS 完成 → 妖虫巢(BB) + 女王，等 ling≥8 开始变毒爆"  # 2026-06-18 #548 同步代码: 删"二矿(BH)"和"毒爆速研究中"—两者均在 macro tail 才出现
+    subtitle_en: "Pool done → Baneling Nest + Queen; begin morphing Banelings when ≥8 Zerglings"
+    start_at_supply: 18
+    start_at_time: 90
+  - id: ling_flood
+    display: "暴狗"
+    display_en: "Zergling Flood"
+    subtitle: "持续刷小狗，等提速完成，开始变毒爆"
+    subtitle_en: "Continuous Zerglings; await speed completion; begin Baneling morphs"
+    start_at_supply: 24
+    start_at_time: 150
+  - id: attack_timing
+    display: "出门压制"
+    display_en: "Push"
+    subtitle: "~4:30 提速好 + 6+ 毒爆 + 一波小狗，出门推对方"  # 2026-06-18 #548 同步代码: ~5:00→~4:30 (plan 注释 4:30 timing, spec attack_moveout 3:45±60s)
+    subtitle_en: "~4:30 speed done + 6+ Banelings + Zergling wave, move out"
+    start_at_supply: 40
+    start_at_time: 300
+
+steps:
+  - "9 build Overlord"
+  - "14 build SpawningPool"
+  - "14 build Extractor"
+  - "16 build Queen"
+  - "16 research ZERGLINGMOVEMENTSPEED"
+  - "18 build Hatchery"
+  - "18 build BanelingNest"
+  - "18 train Zergling"
+  - "18 train Zergling"
+  - "22 train Zergling"
+  - "22 train Zergling"
+  - "28 research CENTRIFICALHOOKS"
+  - "30 train Zergling"
+  - "30 train Zergling"
+
+abort_signals:
+  - sees: "enemy.mass_roach"
+    then: "transition:roach_hydra"
+  - sees: "enemy.mass_marine_early"
+    then: "transition:roach_hydra"
+
+default_transitions:
+  - midgame_id: roach_hydra
+    when: "default"
+  - midgame_id: roach_hydra
+    when: "game_time >= 8:00"
+
+# 1-base 4:30 all-in 没结束游戏 → 持续运营延续 ling/bane 风格(飞龙+小狗+毒爆)
+lategame_transitions:
+  - lategame_id: persistent_muta_ling_bane
+    when: "default"
+  - lategame_id: persistent_muta_ling_bane
+    when: "game_time >= 8:00"

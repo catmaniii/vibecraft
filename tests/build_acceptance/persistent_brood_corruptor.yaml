@@ -1,0 +1,23 @@
+strategy_id: roach_hydra   # 稳妥开局:roach_hydra(brood 的自然转型来源 + 已优化)
+my_race: Zerg
+
+# roach_hydra 开局 opening_completed 后 10s 自动切 persistent_brood_corruptor(模拟玩家确认)。
+# 用于测 doctrine 的**设计用法胜率**(开局→切),而非从零跑 doctrine plan。
+# run: build_acceptance.py persistent_brood_corruptor --runs 3 --parallel 3 --opponent veryhard
+
+auto_switch_to: persistent_brood_corruptor
+auto_switch_delay_s: 10.0
+
+checks:
+  - id: worker_count_early
+    type: unit_count
+    unit: DRONE
+    at: "2:00"
+    tol: 20
+    min: 12
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "5:00"
+    tol: 60
+    min: 18

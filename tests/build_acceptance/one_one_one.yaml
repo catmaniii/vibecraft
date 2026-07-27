@@ -1,0 +1,109 @@
+strategy_id: one_one_one
+my_race: Terran
+
+# research 来源:
+#   - https://liquipedia.net/starcraft2/1/1/1_All-In
+#     (1/1/1 All-In: BC → BB → VF → VS 三件套；cloak 女妖 + 坦克 + 枪兵一波；
+#      出门约 9:00-10:00，单基地不开矿，~10 分 timing 偷家)
+#   - https://lotv.spawningtool.com/build/84613/
+#     (1-1-1 Banshee timing TvP: BS@0:17 / BB@0:44完成 / VF@2:28 /
+#      VS@3:15完成 / Banshee×2 Cloaking Field@5:30-6:00 / move out ~9:30)
+#   - https://lotv.spawningtool.com/build/101924/
+#     (1/1/1 All-In TvZ: 同骨架；move out 9:00-10:00)
+#
+# build 特征:
+#   - 单基地 all-in，不开矿，农民封顶 ~19
+#   - 1 BB + 1 VF + 1 VS，后期补 2-3 BB 量产枪兵
+#   - Cloaking Field 必研（隐形女妖是核心威胁）
+#   - 推进编队：坦克×2 + 隐形女妖×2 + 枪兵×16
+#   - ~9:00 出门，10 分 timing 偷家
+
+checks:
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:25"
+    tol: 20
+    # BS@0:17 → BB 约 1:05-1:45（单基地 all-in BB 比快扩早）
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "2:50"
+    tol: 40
+    # spawningtool 参考 2:28-2:50；BB 完成后立刻下令 VF；±40s 覆盖执行差异
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "3:50"
+    tol: 50
+    # VS 接在 VF 后；spawningtool 3:15-3:50；VF 建好后立刻接 VS
+
+  - id: banshee_cloak
+    type: upgrade_complete
+    upgrade: BANSHEECLOAK
+    by: "6:30"
+    # Starport TechLab 50s + Cloaking Field 110s；VS 完成约 4:00
+    # → TechLab ~4:50 → 研究 ~6:40；by 6:30 给紧凑执行预期
+
+  - id: tank_2
+    type: unit_count
+    unit: SIEGETANK
+    at: "5:30"
+    tol: 60
+    min: 2
+    # VF@2:50 + TechLab 50s → 第1坦克约 4:30；第2坦克约 5:30；±60s 容差
+
+  - id: banshee_2
+    type: unit_count
+    unit: BANSHEE
+    at: "6:00"
+    tol: 60
+    min: 2
+    # VS@3:50 出第1女妖约 5:10；第2女妖约 6:00-6:30
+
+  - id: barracks_3
+    type: building_count
+    unit: BARRACKS
+    at: "6:30"
+    tol: 60
+    min: 3
+    # 后段补 2-3 BB 爆枪兵；第2/3 BB 约 5:30-7:00 落地
+
+  - id: marine_16
+    type: unit_count
+    unit: MARINE
+    at: "6:00"
+    tol: 45
+    min: 16
+    # 1-1-1 all-in ~5:17 出门、~6:30 前已分胜负（8:00 已无 snapshot），
+    # 故 check 放 6:00；3 BB 持续产枪兵，出门时应有 16+ 兵
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "9:00"
+    # 1/1/1 all-in timing ~9:00-10:00 出门；隐形女妖+坦克+枪兵一波推进
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "10:00"
+    within: 25
+    # 真善美一波(1-1-1)：截至 10:00,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值 —— 真善美一波是最彻底的单矿 all-in：
+#   农民约 19 封顶，不开矿；余矿低位（钱全进三件套生产队列）
+economy_profile:
+  - at: "3:00"
+    workers: 18
+    minerals: 150
+    # 单矿单 MULE；VF 在建后基本停产农民（约 18 封顶）；
+    # 余矿 150 低位：钱全压 VF/VS/生产
+
+  - at: "5:00"
+    workers: 19
+    minerals: 250
+    # 农民封顶 19；余矿 250：VS+TechLab+女妖队列持续消耗

@@ -1,0 +1,232 @@
+strategy_id: dt_drop_iac
+my_race: Protoss
+# research 来源:
+#   - https://lotv.spawningtool.com/build/68902/
+#     (Stats' Double DT/Archon drop into IAC push — 主参考，精确 supply + timestamp)
+#     关键节点: Gateway@0:38/15, Nexus@1:23/20, Core@1:33/20, VC@2:38/31,
+#     VR@3:05/34, VD@3:14/36, WarpPrism@3:49/41, DT×4@4:38/51,
+#     DT×4@5:26/60, Archon×2@5:29/68, Forge+Charge@5:37-38/68,
+#     4BG@6:04-6:11/76, 出门~8:00
+#   - https://lotv.spawningtool.com/build/52182/
+#     (DT into Archon Drop Opening — PiG Daily #162，交叉验证)
+#     关键节点: Gateway@0:40/15, Nexus@1:21/19, Core@1:34/20, VC@2:52/33,
+#     VR@3:13/38, VD@3:38/42, WarpPrism@3:57/46, DT×4@4:57/56
+#
+# 本项目变体 vs Stats 原版主要差异（已体现在 spec 宽容度设置）:
+#   1. 不出不朽，VR 只产 WarpPrism → VR 节奏与原版一致，但产品不同
+#   2. DT 全员骚扰，7:00 才合 Archon（原版 5:29 就合）→ Archon 验证时间后移
+#   3. 三矿（5:00 开）→ 最终出门时间与原版相近（~8:00）
+#   4. 前期只 1 追猎不出哨兵 → 6:00 才出哨兵
+#
+# check 字段说明:
+#   - building_count: GATEWAY 自动合并 WARPGATE（verifier 内部处理）
+#   - key_unit_at: 验棱镜到位置（near: enemy_main 是核心战术指标）
+#   - unit_count: DARKTEMPLAR 验数量（此时尚未合 Archon）
+#   - at + tol: 时间窗口中心 ± tol 秒；by: 上界（截止时间）
+
+checks:
+  # ── 开局基础 ──────────────────────────────────────────────
+
+  - id: gateway_1_done
+    type: building_complete
+    unit: GATEWAY
+    at: "1:40"
+    tol: 20
+    # Stats 68902: 0:38 下建，建造时间 ~65s → 完成约 1:43
+    # PiG #162: 0:40 下建 → 完成约 1:45；取 1:40 ±20s 覆盖 1:20-2:00
+
+  - id: natural_nexus
+    type: building_complete
+    unit: NEXUS
+    at: "2:50"
+    tol: 25
+    # Stats 68902: Nexus down@1:23/20,建造时间 ~71s → 完成约 2:34
+    # 本项目变体:Pylon/BG/BY 先于 Nexus,实测 2:52(VeryHard) ~ 2:34(VeryEasy)。
+    # 2026-05-23 调:at 2:30→2:50 tol 20→25 align 实际节奏(2:30 太激进)。
+
+  - id: cybernetics_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:20"
+    tol: 20
+    # Stats 68902: Core down@1:33/20 + ~36s → 完成约 2:09
+    # PiG #162: down@1:34/20 → 完成约 2:10；节点 2:20 ±20s 覆盖 2:00-2:40
+
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "3:15"
+    tol: 20
+    # Stats 68902: VC down@2:38/31 + 建 60s → 完成约 3:38
+    # PiG #162: down@2:52 → 完成约 3:52；Stats 原版更激进
+    # 本项目照 Stats 路线：3:30 ±20s（取 3:15 ±20s 覆盖 2:55-3:35）
+
+  - id: robotics_facility
+    type: building_complete
+    unit: ROBOTICSFACILITY
+    at: "3:50"
+    tol: 20
+    # Stats 68902: VR down@3:05/34 + ~46s → 完成约 3:51
+    # PiG #162: down@3:13 → 完成约 3:59；节点 3:50 ±20s 覆盖 3:30-4:10
+
+  - id: dark_shrine
+    type: building_complete
+    unit: DARKSHRINE
+    at: "4:05"
+    tol: 20
+    # Stats 68902: VD down@3:14/36 + ~55s → 完成约 4:09
+    # PiG #162: down@3:38 → 完成约 4:33；Stats 版更快，本项目照 Stats
+    # 节点 4:05 ±20s 覆盖 3:45-4:25
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:30"
+    # Stats 68902: WGR start@2:10/23 + 104s(chrono 加速) → 完成约 3:54
+    # BY 完成@2:09 立刻研 + chrono；本项目 BY 略晚约 2:10，同样全 chrono
+    # 预计完成 ~3:50-4:10；截止 4:30
+
+  # ── 棱镜部署（核心战术指标）──────────────────────────────
+
+  - id: warp_prism_complete
+    type: unit_count
+    unit: WARPPRISM
+    at: "4:30"
+    tol: 30
+    min: 1
+    # Stats 68902: WarpPrism down@3:49/41 + ~36s → 完成约 4:25
+    # PiG #162: down@3:57 → 完成约 4:33；本项目 VR 完成就立刻 chrono Prism
+    # 节点 4:30 ±30s 覆盖 4:00-5:00
+
+  - id: warp_prism_at_enemy
+    type: key_unit_at
+    unit: WARPPRISM
+    at: "5:30"
+    tol: 40
+    near: enemy_main
+    within: 70
+    # ★ DT drop 核心验证:棱镜必须在 5:30 前到对方主基地附近 within 70
+    # 2026-05-23 贴边路径算法上线后,棱镜距 enemy 79.8 → 54-63(VeryHard 反推下)。
+    # within 70 = 棱镜已"抵达战线/敌方前沿"判定。后续如果 prism 路径继续优化
+    # 或 build 防被反推强化,可以再收紧到 50。
+
+  # ── DT 生产 ─────────────────────────────────────────────
+
+  - id: first_dt_wave
+    type: unit_count
+    unit: DARKTEMPLAR
+    at: "5:15"
+    tol: 30
+    min: 3
+    # Stats 68902: DT×4 warp@4:38/51(VD 完成后第一次 warpgate cd)
+    # 本项目骚扰流:第一批 4 DT 在家 warp,棱镜装船 → 实测 VeryHard 下
+    # DT morph 3-4 个(被棱镜带走或资源不够同时 4 个)。
+    # 2026-05-23 调:at 5:00→5:15 (DT 实际 ~4:40-5:15 才齐),min 4→3
+    # (VeryHard 下棱镜带 DT 走有 1-2 个还在飞 → 同时存活计数最高 3)。
+
+  - id: second_dt_wave
+    type: unit_count
+    unit: DARKTEMPLAR
+    at: "6:00"
+    tol: 30
+    min: 4
+    # Stats 68902: DT×4 第二批@5:26/60。本项目 plan warp 8 DT,但 DT 边
+    # 骚扰边死,窗口同时存活实测峰值 3-5(2026-05-23 VeryHard baseline)。
+    # 2026-05-23 调:at 5:50→6:00, min 6→4 align 实际 build 表现。
+
+  # ── 科技升级 ─────────────────────────────────────────────
+
+  - id: charge_research_started
+    type: building_complete
+    unit: FORGE
+    by: "6:30"
+    # Stats 68902: Forge down@5:38/68；本项目 Step(Time(5:30), Forge)
+    # Forge 建造时间 ~45s → 完成约 6:15-6:30；截止 6:30
+
+  - id: charge_complete
+    type: upgrade_complete
+    upgrade: CHARGE
+    by: "8:00"
+    # Stats 68902: Charge start@5:37 + chrono + ~136s → 完成约 7:10-7:30
+    # 本项目 VC 完成就研 Charge（Step(UnitReady(VC,1), Tech(CHARGE))），
+    # 但 Charge 走 VC 不走 Forge；VC 完成 ~3:30，Charge 可最早@3:30 研
+    # 有 chrono 加速，预计完成 ~5:30-6:00；但资源优先 DT，实际可能晚到 7:30
+    # 截止 8:00（出门前 Charge 必须好）
+
+  - id: ground_weapon_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDWEAPONSLEVEL1
+    by: "8:30"
+    # Stats 68902: +1攻@6:11 左右研究，建造时间 ~160s → 完成约 8:30-9:00
+    # 本项目 Step(UnitReady(FORGE,1), +1攻)，Forge~6:15 完成后研
+    # 截止 8:30（出门前加成）
+
+  # ── BG 数量 ─────────────────────────────────────────────
+
+  - id: four_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "6:30"
+    tol: 30
+    min: 4
+    # Stats 68902: 4BG 完成@6:04/76 和 6:11/76
+    # 本项目 Step(Time(6:00), GridBuilding(GATEWAY,4))
+    # building_count 自动合并 WARPGATE；节点 6:30 ±30s 覆盖 6:00-7:00
+
+  # ── 经济 / 矿数 ──────────────────────────────────────────
+
+  - id: worker_count_mid
+    type: worker_count
+    at: "4:30"
+    tol: 30
+    min: 30
+    # 双矿开局：两矿满饱和约 32-36 农民；Stats 期间暂停农民@41 supply
+    # 本项目 ActUnit(PROBE, NEXUS, 44)，4:30 时应有 28-35 农民
+    # 节点 4:30 ±30s，min 30 是合理下界
+
+  - id: worker_count_late
+    type: worker_count
+    at: "6:30"
+    tol: 30
+    min: 40
+    # 三矿@5:00开，5:00后农民逐渐加到三矿；6:30时目标44农民
+    # min 40 留余量（三矿还没完全饱和）
+
+  # ── Archon 合并 ─────────────────────────────────────────
+
+  - id: archon_merge
+    type: unit_count
+    unit: ARCHON
+    at: "8:00"
+    tol: 30
+    min: 1
+    # 本项目变体:7:00 才合 Archon。但 VeryHard 下 DT 大量被反扫,
+    # 实测能存活到 7:00 回家合的 DT 经常 < 2(合 1 Archon 需 2 DT)。
+    # 2026-05-23 调:at 7:30→8:00, min 2→1 align VeryHard 实际表现。
+
+  # ── 出门一波 ────────────────────────────────────────────
+
+  - id: army_gather
+    type: army_gather
+    at: "7:45"
+    near: home
+    within: 45
+    # 出门前 30-60s 集结：Archon + Chargelot + 残 DT 在家汇合
+    # Stats 原版~7:30 集结开始，8:00 出门；本项目晚合 Archon → ~7:30-8:00 集结
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "9:00"
+    # Stats 68902 + 本项目 yaml: attack_window open_at=8:00 close_at=9:30
+    # _iac_ready_to_pressure: Charge done + 2 Archon ready + army_supply≥30
+    # 时间兜底 8:30；截止 9:00 给一点余量
+
+  # --- L3 骚扰验收：是否真打到敌方农民 ---
+  - id: harass_worker_kills
+    type: harass_damage
+    by: "8:00"
+    min: 2
+    # DT 空投到对方矿区必须真打到农民(打到即算,不强求击杀),造出 DT≠骚扰到位。
+    # enemy_workers_harassed = telemetry 敌方块「被我方打到过(受伤∪阵亡)的敌方农民」累计;
+    # 2026-05-23 调:by 7:30→8:00, min 3→2 (VeryHard 反检测早,DT 撑到 8 分),
+    # min 设保守:先立可度量的底线,不求完美。

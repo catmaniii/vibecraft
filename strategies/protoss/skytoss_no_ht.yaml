@@ -1,0 +1,103 @@
+kind: persistent_doctrine
+id: persistent_skytoss_no_ht
+display_name_zh: "天空神族(无电兵)"
+display_name_en: "Skytoss (No High Templar)"
+summary_zh: "PvT 优化版 Skytoss：去掉 HT/VT 链路，Ghost EMP 场景下改用 DT 合 2-3 Archon 兜底地面 AoE；主力仍是 Carrier/Tempest 空军，不研风暴，适合不想被 EMP 废 HT 能量的场景"
+summary_en: "PvT-optimized Skytoss: skip High Templar/Templar Archives, use Dark Shrine → 4 Dark Templars merging to 2-3 Archons as ground AoE backup; main force is still Carrier/Tempest, no Storm, avoids Ghost EMP draining HT energy."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.skytoss_no_ht:SkytossNoHT"
+gas_intensity: high
+aliases:
+  - "无电兵天空神族"
+  - "无电天空"
+  - "skytoss no ht"
+  - "纯空天空"
+  - "纯航母"
+  - "天空无电兵"
+  - "无HT天空"
+
+phases:
+  - id: tech_up
+    display: "上 VS + VD"
+    display_en: "Stargates + Dark Shrine (No Templar Archives)"
+    subtitle: "VS / VX / VD 建筑链（VD 替换 VT）+ Air Weapons/Armor 1 升级；DT 少量合 Archon 兜底"
+    subtitle_en: "Stargates / Fleet Beacon / Dark Shrine chain (replaces Templar Archives) + Air Weapons/Armor 1; few Dark Templars merge to Archon for ground AoE backup"
+    start_at_time: 0
+  - id: carrier_massing
+    display: "暴航母"
+    display_en: "Mass Carriers"
+    subtitle: "VX 完成 → 持续 Carrier + chrono VS；DT 合 Archon × 2-3；Tempest 射程"
+    subtitle_en: "Fleet Beacon done → continuous Carriers + chrono Stargates; Dark Templar merge to 2-3 Archons; Tempest range research"
+    start_at_time: 60
+  - id: late_composition
+    display: "完整组合"
+    display_en: "Full Composition"
+    subtitle: "8+ Carrier + 3 Tempest + 2-3 Archon(DT 合) + Mothership + 母舰罩"
+    subtitle_en: "8+ Carriers + 3 Tempests + 2-3 Archons (DT merge) + Mothership + Mass Recall"
+    start_at_time: 240
+
+target_composition:
+  Carrier: 12
+  Tempest: 3
+  DarkTemplar: 4    # 4 DT → 合 2 Archon 兜底地面 AoE
+  Archon: 2         # DT 合成 Archon（非 HT 合），兜底近战 AoE
+  Mothership: 1
+  Observer: 2
+
+required_tech:
+  - ProtossAirWeaponsLevel1
+  - ProtossAirWeaponsLevel2
+  - ProtossAirWeaponsLevel3
+  - ProtossAirArmorsLevel1
+  - ProtossAirArmorsLevel2
+  - ProtossAirArmorsLevel3
+  - GravitonCatapult
+  # 不含 PsiStorm / TemplarArchives — 整条 VT 链路删除
+
+required_structures:
+  Stargate: 3
+  FleetBeacon: 1
+  TwilightCouncil: 1
+  DarkShrine: 1        # VD 替换 TemplarArchives
+  RoboticsFacility: 1
+  Forge: 1
+  Nexus: 4
+
+engagement_doctrine:
+  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%   # 航母 hit-and-run，血少撤"
+  - "tempest_focus priority=[battlecruiser, brood_lord, mothership]   # Tempest 远程点高血单位"
+  - "archon_front keep_near=carrier_formation   # Archon 护航，吸收近战 splash"
+  - "mass_recall when=fleet_total_hp<40%   # 整队血少母舰回家保命"
+  - "dt_merge when=dt_energy_low=true   # DT 训练够就合 Archon，不堆 DT"
+engagement_doctrine_en:
+  - "carrier_kite max_dist=12 retreat_when=carrier_hp<40%   # Carriers hit-and-run; retreat when hull drops below 40%"
+  - "tempest_focus priority=[battlecruiser, brood_lord, mothership]   # Tempests snipe high-HP priority targets at range"
+  - "archon_front keep_near=carrier_formation   # Archons escort the carrier formation, absorbing melee splash"
+  - "mass_recall when=fleet_total_hp<40%   # Mothership Mass Recall the fleet home when total HP drops below 40%"
+  - "dt_merge when=dt_energy_low=true   # Merge Dark Templars into Archons once trained; don't stockpile DTs"
+
+win_condition:
+  type: composition_advantage
+  description: "航母 + Tempest 远程 DPS 慢拆；DT 合 Archon 兜底地面近战，不惧 EMP（无 HT 无能量目标）"
+  signals:
+    - "self.units.carrier.amount >= 10"
+    - "enemy.expansion_count < 5"
+    - "enemy.units.air_attacker.amount < 8"
+
+counters_against:
+  - terran_bio           # 航母拉开距离风筝；Ghost EMP 无效（无 HT 能量目标）
+  - zerg_roach_hydra
+  - terran_mech_tank
+  - mass_ground
+
+weak_against:
+  - mass_viking
+  - mass_corruptor
+  - terran_ghost          # EMP 对本体无影响，但 Ghost 数量多仍可打赢
+  - protoss_skytoss
+  - zerg_viper            # 无 Feedback 反 Viper（这是 PvZ 劣势）
+
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 12 AND self.units.carrier.amount < 6"
+    then: "warn:viking_swarm_no_carriers"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

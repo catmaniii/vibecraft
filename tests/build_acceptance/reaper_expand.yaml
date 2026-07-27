@@ -1,0 +1,132 @@
+strategy_id: reaper_expand
+my_race: Terran
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/6657/
+#     (Standard Reaper Expand Opening: 14 SD / 16 BB / 16 Refinery;
+#      Orbital+Reaper@1:28-1:30; CC@1:40)
+#   - https://lotv.spawningtool.com/build/85561/
+#     (Bunny-style Reaper expand → Stim Medivac: BB@0:40 / Orbital+Reaper@1:28 /
+#      CC@1:41 / Factory@2:08 / Barracks Reactor@2:21 / Factory TechLab@2:54)
+#   - https://terrancraft.com/2016/08/12/tvt-1516-reaper-expand-basic-framework/
+#     (15/16 Reaper Expand framework: @100% BB → Reaper + Orbital;
+#      @400 minerals → CC; @100 gas → Factory; CC timing "usually 1:40")
+#   - https://osirissc2guide.com/tvz-reaper-opener-into-expansion.html
+#     (TvZ Reaper opener: early CC + Factory / Reactor on Barracks / adapt vs Roach)
+#
+# 本项目 strategy yaml 的 steps 是 12-supply 版（12 SD / 12 BB / 13 Ref），
+# 比 spawningtool 标准 "14 SD / 16 BB" 略激进（更快 BB），
+# 建筑完成时序整体早 ~5-10s，checks 的 tol 已充分覆盖两端。
+
+checks:
+  # --- 基础建筑骨架 ---
+  - id: supply_depot_1
+    type: building_complete
+    unit: SUPPLYDEPOT
+    by: "0:50"
+    # 12 supply 下 SD；标准 14 SD 完成约 0:40-0:50，宽松给到 0:50
+
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:35"
+    tol: 20
+    # 标准 16 BB → 完成约 1:25-1:55；本项目 12 BB 略快，at 取 1:35
+
+  - id: refinery_1
+    type: building_complete
+    unit: REFINERY
+    by: "2:00"
+    # BB 后接气矿（13 supply）；完成约 1:40-1:55
+
+  - id: orbital_command
+    type: building_count
+    unit: ORBITALCOMMAND
+    at: "2:10"
+    tol: 35
+    min: 1
+    # Orbital 通过 morph 升级，不产生 building_complete 事件；
+    # 改用 building_count 检测快照里的 ORBITALCOMMAND 数量。
+    # BB 完成约 1:30，MorphOrbitals 触发，morph_time ~50s → OC 出现约 2:10-2:20；
+    # 原 at=1:45 tol=30（窗口 max=2:15）偏紧；实测 3 跑一致 0（窗口内无 OC）。
+    # 修正：at=2:10 tol=35 → 窗口 1:35-2:45，覆盖真实节奏。
+
+  - id: reaper_first
+    type: unit_count
+    unit: REAPER
+    at: "2:10"
+    tol: 35
+    min: 1
+    # BB 好后出死神；BB 约 1:30 完成，Reaper 训练 45s → 出产约 2:15；
+    # 但 BB 同时进行 TechLab（建 addon 先占 BB），导致死神要等 TechLab 开建之前出；
+    # 实测 Reaper 约 2:30（150s）；at=2:10 tol=35 → 窗口 1:35-2:45 覆盖实测。
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "3:00"
+    tol: 30
+    min: 2
+    # CC 快扩：Expand(2) 现在在 critical path SequentialList 中（Orbital 之后）；
+    # Orbital morph 发起约 1:30-1:45，Expand SCV 发出约 1:45-2:00，
+    # CC 建造 71s → 完成约 2:56-3:11；at=3:00 tol=30 → 窗口 2:30-3:30。
+    # 注意：此 check 验 "2 个 CC（含升轨道的主基地）" 存在
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:15"
+    tol: 35
+    # 实测 3 跑一致 ~195s（3:15）：plan 在 BB ready 后立即并行触发 GridBuilding(FACTORY)，
+    # 不等气矿 100 gas 积累（SharedRes 策略），所以 VF 比预期早建；
+    # 原 at=4:00±30（窗口 min=3:30）比实测晚 ~95s，3 跑全失败。
+    # 修正：at=3:15 tol=35 → 窗口 2:40-3:50 覆盖真实节奏。
+
+  - id: barracks_reactor
+    type: building_complete
+    unit: BARRACKSTECHLAB
+    by: "3:45"
+    # strategy yaml step "20 build TechLab @Barracks"；TechLab 完成后研 Stim；
+    # BARRACKSTECHLAB 即 add-on 完成事件，约 3:00-3:45
+
+  - id: worker_22
+    type: worker_count
+    by: "3:30"
+    min: 22
+    # 快扩双矿：Orbital MULE + 持续 SCV；3:30 前凑够 22 农民
+
+  - id: worker_32
+    type: worker_count
+    by: "5:30"
+    min: 32
+    # 双矿饱和推进：5:30 前双矿合计 32 农民（含 MULE 折算）
+
+  # --- 侦查价值验收：死神在对方基地内连续存活时长 ---
+  - id: reaper_scout_value
+    type: scout_value
+    unit: REAPER
+    near: enemy_main
+    within: 40
+    min: 360
+    # 死神开矿只维持 1 个死神,单兵难稳定杀农民 —— 改按「侦查价值」验收。
+    # 侦查价值 = 死神「最后一次摸进对方基地(enemy_main 40 格内)」的游戏时刻:
+    # 越晚越好 —— 死神保命侦查、利用回血反复补位,撑得越久侦查价值越大。
+    # min 360 = 至少撑到 6:00 还在对方家侦查。verifier 扫 telemetry key_units
+    # 的 REAPER 坐标取最后一次入场时刻,scout_value 不需要 at/by。
+
+# 经济曲线标准值
+# 死神开矿是双矿经济流 + 少量骚扰，余矿应维持低位（钱投入农民 + 早期 Factory）
+# 3:30 前主要靠单矿 + MULE 撑，4:00 后扩张矿开始发力
+economy_profile:
+  - at: "2:00"
+    workers: 19
+    minerals: 200
+    # 单矿 + MULE 期：Reaper 出门，还没开始双矿爬坡；余矿 200 左右（正在建 CC）
+  - at: "4:00"
+    workers: 28
+    minerals: 250
+    # 双矿开始运转：农民 28 left，余矿压低（在建 Factory + TechLab + 补农民）
+  - at: "6:00"
+    workers: 40
+    minerals: 300
+    # 双矿稳定期：持续输出农民 + 兵营产能扩张，余矿保持低位运营

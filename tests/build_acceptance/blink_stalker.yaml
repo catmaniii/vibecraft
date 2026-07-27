@@ -1,0 +1,127 @@
+strategy_id: blink_stalker
+my_race: Protoss
+# 2026-05-27 重构：6 BG + 无 Robo + 单 BF(+1 攻) + Blink
+# 旧版（4 BG + Robo + Observer + WarpPrism）spec 已删除，
+# 改为对齐新 build：两矿稳经济 → VC + BF 同期 → +1 攻 + Blink → 持续刷追猎 → 出门
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:30"
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:35"
+    tol: 20
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:50"
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:20"
+    tol: 20
+
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    at: "3:10"
+    tol: 30
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:50"
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:10"
+
+  # --- 新建筑：VC（稍晚，二矿稳后）---
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "3:45"
+    tol: 30
+    # 旧版 VC @2:32（BY ready 就建）→ 新版等 NX exists（~2:30-2:45 才下），完成约 ~3:20-3:55
+
+  # --- 新建筑：BF（Forge）---
+  - id: forge
+    type: building_complete
+    unit: FORGE
+    at: "3:45"
+    tol: 30
+    # 二矿 exists 后下 BF，与 VC 同期，完成约 ~3:15-4:15
+
+  # --- 新升级：+1 武器 ---
+  - id: weapon_upgrade_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDWEAPONSLEVEL1
+    by: "6:00"
+    # BF ~3:45 完成 → +1 攻开始研（~160s，chrono 加速约 ~107s）→ 预计完成 ~5:30-5:50
+
+  # --- Blink 研究 ---
+  - id: blink_research
+    type: upgrade_complete
+    upgrade: BLINKTECH
+    by: "5:45"
+    # VC ~3:45 完成 → Blink 开始研（~121s chrono 加速约 81s）→ 预计完成 ~5:05-5:30，宽松给到 5:45
+
+  # --- 6 BG ---
+  - id: six_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "5:30"
+    tol: 30
+    min: 6
+    # 4:10 后开始补到 6 BG；building_count 合并 GATEWAY + WARPGATE
+
+  # --- 经济 ---
+  - id: worker_count_mid
+    type: worker_count
+    at: "3:30"
+    tol: 20
+    min: 22
+
+  # --- 追猎兵力（6 BG 持续刷，早期跟旧版接近，后期远超）---
+  - id: stalker_count_early
+    type: unit_count
+    unit: STALKER
+    at: "4:30"
+    tol: 20
+    min: 5
+    # BY 完成 → Stalker 开始出，4:30 有 5+ Stalker
+
+  - id: stalker_count_moveout
+    type: unit_count
+    unit: STALKER
+    at: "6:00"
+    tol: 30
+    min: 10
+    # 6 BG 暴兵，6:00 应有 10+ Stalker（+1 攻 + Blink 完成附近出门）
+
+  # --- 集结 + 出门 ---
+  - id: army_gather
+    type: army_gather
+    at: "5:30"
+    near: home
+    within: 45
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "7:30"
+    # 出门条件：Blink 完成 + +1 攻完成 + 20 supply 兵力。宽松给到 7:30（含时间兜底 7:00）
+
+  # --- 前压验收 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "8:00"
+    within: 25
+    # 出门后推进到对方家附近，宽松给到 8:00

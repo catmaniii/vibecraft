@@ -1,0 +1,114 @@
+kind: persistent_doctrine
+id: persistent_phoenix_control
+display_name_zh: "凤凰控场"
+display_name_en: "Phoenix Control"
+summary_zh: "凤凰点对点升空抓高威胁单位 + 控空反骚扰，地面巨像攒死球；VS×2 + VF 凤凰射程 + VR→VB 巨像链，2 BF 双线升级，凤凰保多矿运营"
+summary_en: "Phoenix lift key units + air control to counter harassment; ground Colossus deathball; 2 Stargates + Fleet Beacon Phoenix range + Robotics Bay Colossus chain, 2 Forges dual upgrades; Phoenix secures multi-base macro."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.phoenix_control:PhoenixControl"
+gas_intensity: high
+aliases:
+  - "凤凰控场"
+  - "凤凰运营"
+  - "凤凰流"
+  - "两矿凤凰运营"
+  - "凤凰巨像"
+  - "凤凰控"
+  - "控场凤凰"
+  - "凤凰后期"
+  - "凤凰大量"
+  - "phoenix control"
+  - "Phoenix Control"
+  - "凤凰控空"
+  - "凤凰吊矿"
+
+# 后期阶段进度（持续 doctrine 无固定 supply，用 game_time + 关键建筑/单位判断）
+phases:
+  - id: tech_up
+    display: "上 VS×2 + VF + VR"
+    display_en: "2 Stargates + Fleet Beacon + Robotics"
+    subtitle: "VS×2 凤凰产能 / VF 凤凰射程 / VR→VB 巨像链 + 2 BF 升级"
+    subtitle_en: "2 Stargates for Phoenix / Fleet Beacon for range / Robotics → Robotics Bay for Colossus + 2 Forges upgrades"
+    start_at_time: 0
+  - id: phoenix_fleet
+    display: "凤凰 fleet 控场"
+    display_en: "Phoenix Fleet Control"
+    subtitle: "VF 完成 → 凤凰射程研好 → 持续 chrono 凤凰，升空抓高威胁单位"
+    subtitle_en: "Fleet Beacon done → Phoenix range researched → continuous chrono Phoenixes, lift high-value enemy units"
+    start_at_time: 80
+  - id: colossus_push
+    display: "巨像死球出门"
+    display_en: "Colossus Deathball Push"
+    subtitle: "4+ 巨像 + 8+ 凤凰 + 地面攻防 2 → 凤凰控空掩护巨像推进"
+    subtitle_en: "4+ Colossus + 8+ Phoenixes + ground 2/2 → Phoenixes control sky while Colossus pushes"
+    start_at_time: 200
+
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data.py
+# 的 UNIT_COSTS / STRUCT_COSTS / TECH_COSTS key 对齐，transition_cost 才能算对
+target_composition:
+  Phoenix: 12
+  Colossus: 4
+  Stalker: 8
+  Observer: 2
+
+required_tech:
+  - PhoenixRangeUpgrade          # 凤凰射程（VF 完成立刻研）
+  - ExtendedThermalLance         # 巨像射程（VB 完成立刻研）
+  - ProtossAirWeaponsLevel1
+  - ProtossAirWeaponsLevel2
+  - ProtossAirWeaponsLevel3
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+
+required_structures:
+  Stargate: 2
+  FleetBeacon: 1
+  RoboticsFacility: 1
+  RoboticsBay: 1
+  Forge: 2
+  Gateway: 4
+  Nexus: 3
+
+engagement_doctrine:
+  - "phoenix_lift priority=[viper, infestor, medivac, ghost, raven]   # 凤凰升空抓高价值单位"
+  - "phoenix_spread avoid_clump=true   # 凤凰散开防 storm / bio ball 集火"
+  - "colossus_back keep_behind=true   # 巨像站后排，靠凤凰控场撑出安全输出位"
+  - "stalker_kite priority=ground   # 追猎拉扯地面接近单位"
+  - "retreat when=phoenix_count<4   # 凤凰不够时撤，不要在没制空权时强推"
+engagement_doctrine_en:
+  - "phoenix_lift priority=[viper, infestor, medivac, ghost, raven]   # Phoenix Graviton Beam lifts high-value enemy units"
+  - "phoenix_spread avoid_clump=true   # Keep Phoenixes spread to avoid Storm / bio ball focus fire"
+  - "colossus_back keep_behind=true   # Colossus stays back; Phoenixes create safe range for output"
+  - "stalker_kite priority=ground   # Stalkers kite ground units that close into melee range"
+  - "retreat when=phoenix_count<4   # Retreat when Phoenix count is low; never push without air control"
+
+win_condition:
+  type: air_dominance_plus_ground
+  description: "凤凰制空 + 吊走敌方关键单位 → 地面巨像无对手 AoE 压制直接碾压"
+  signals:
+    - "self.units.phoenix.amount >= 8"
+    - "self.units.colossus.amount >= 3"
+    - "self.upgrade.air_weapons >= 1"
+    - "enemy.units.air_counter.amount < 4"
+
+# 优势对位（凤凰升空 + 巨像 AoE，对 bio / 地面 + 低密度防空）
+counters_against:
+  - zerg_roach_hydra      # 凤凰升空刺蛇，巨像清蟑螂
+  - terran_bio            # 凤凰升空医疗船 / 幽灵，追猎 + 巨像清 bio
+  - zerg_ling_bane        # 巨像 AoE 清狗虫，凤凰控制支援
+  - mass_ground           # 制空后地面无解
+
+# 劣势对位（高密度防空 / 大量坦克 / 空军硬反）
+weak_against:
+  - mass_air              # 对方堆大量空军，凤凰不够
+  - terran_mech           # 坦克 + 雷神，凤凰吊不掉
+  - zerg_brood            # BL + 腐化蛆反凤凰
+  - mass_viking           # 维京专门打凤凰 + 巨像
+
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 6 AND self.units.phoenix.amount < 6"
+    then: "warn:viking_countering_phoenix_colossus"
+  - sees: "enemy.units.corruptor.amount >= 6"
+    then: "warn:corruptor_countering_colossus"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

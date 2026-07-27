@@ -1,0 +1,23 @@
+strategy_id: macro_hatch   # 稳妥开局:macro_hatch(经济 macro 框架,虫族)
+my_race: Zerg
+
+# macro_hatch 开局 opening_completed 后 10s 自动切 persistent_ultralisk(模拟玩家确认)。
+# ultralisk doctrine 无自动转型来源,用 macro_hatch 当稳妥开局。测设计用法胜率。
+# run: build_acceptance.py persistent_ultralisk --runs 3 --parallel 3 --opponent veryhard
+
+auto_switch_to: persistent_ultralisk
+auto_switch_delay_s: 10.0
+
+checks:
+  - id: worker_count_early
+    type: unit_count
+    unit: DRONE
+    at: "2:00"
+    tol: 20
+    min: 12
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "5:00"
+    tol: 60
+    min: 18

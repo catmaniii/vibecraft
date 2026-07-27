@@ -1,0 +1,103 @@
+strategy_id: ling_bane
+my_race: Zerg
+
+# 2026-05-23 重写:用户反馈旧 plan "狗慢/二矿早/农民少" → plan 改 1-base 4:30 all-in。
+# spec 跟着改:不再校验二矿/毒爆速(那是 macro tail,只有没赢才触发)。
+#
+# 真实 build(Lowko ZvZ Timing Push + Spawning Tool 14 pool all-in):
+#   0:25 14 BS → 0:30 14 BE → 1:30 BS 完
+#   → Queen + 提速 + 8 ling + BB(17 supply)
+#   → 2:30 BB 完 → 6 bane morph(gate ling≥8)
+#   → 3:25 提速完 / 4:00 集结 / 4:30 attack
+#   → 没赢才 Expand(2) + 升 Lair + 持续 bane(macro tail)
+#
+# 1-base all-in 的 spec 不该校验 macro tail —— 那些 check 在赢局根本不会发生。
+
+checks:
+  # --- 核心建筑 ---
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:15"
+    tol: 20
+    # 14 农开 BS;BS 建造 65s;~0:20 开建 → 完成约 1:15
+
+  - id: baneling_nest
+    type: building_complete
+    unit: BANELINGNEST
+    at: "3:00"
+    tol: 30
+    # 1-base 设计:BS 完(~1:15)后立刻建 BB,但 Queen / ling speed / 8 ling 抢资源,
+    # 实测 BB 完成 ~2:50-3:10。BB 建造本身 60s。
+
+  - id: extractor_first
+    type: building_count
+    unit: EXTRACTOR
+    at: "1:30"
+    tol: 30
+    min: 1
+    # 1 气矿(提速 + bane 都吃气);BS 后立即开
+
+  # --- 关键升级 ---
+  - id: metabolic_boost
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "3:25"
+    tol: 30
+    # 提速 110s 研 + 100 气;BS ~1:15 完后开研 → 完成 ~3:05
+
+  # --- 单位数量 ---
+  - id: zergling_wave1
+    type: unit_count
+    unit: ZERGLING
+    at: "2:30"
+    tol: 30
+    min: 8
+    # BS 完成 priority=True 即出狗;实测 2:30 有 18 只
+
+  - id: baneling_first
+    type: unit_count
+    unit: BANELING
+    at: "3:30"
+    tol: 30
+    min: 4
+    # BB 完成(~2:50)后小狗变毒爆(gate ling≥8);3:30 前有 4+ 毒爆。
+    # VeryEasy 3:00 已 6 bane;VeryHard 防守紧 → 3:00 只 3 bane,3:30 才 4+。
+
+  - id: zergling_army
+    type: unit_count
+    unit: ZERGLING
+    at: "4:30"
+    tol: 30
+    min: 16
+    # 4:30 timing 攻势:1-base 全 larva 砸 ling/bane,有 16+ ling
+
+  # --- 出门 timing ---
+  - id: attack_moveout
+    type: attack_moveout
+    at: "3:45"
+    tol: 60
+    # 1-base 4:30 all-in:提速完 + 6 bane 即出门;
+    # start_attack_power=8 让 6 ling + 2 bane(power ~8)即出。
+
+  # --- L2 前压验收 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "5:30"
+    within: 25
+    # 1-base all-in 必须 5:30 前到敌方家(否则提速完没攻、纯送)。
+
+# 经济曲线(1-base all-in,drone 控 17 — 一矿满采 + 1 气满工)
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 150
+    # BS + BE 花完,drone 17 中(13-17 之间游走,larva 优先 ling)
+  - at: "3:30"
+    workers: 17
+    minerals: 200
+    # 1-base 上限 17,矿持续被 ling/bane 吃掉,余矿在 100-300 浮动
+  - at: "5:00"
+    workers: 17
+    minerals: 200
+    # 4:30 attack 出门,矿没堆积(全砸在 ling/bane 上)

@@ -1,0 +1,110 @@
+kind: opening_build
+id: blink_stalker
+core_units:
+  - {unit: STALKER, policy: mass}
+  - {unit: IMMORTAL, policy: cap, value: 4}
+display_name_zh: "两矿闪追"
+display_name_en: "2-Base Blink Stalker"
+summary_zh: "两矿 6 BG 闪烁追猎（Blink Stalker）：无 Robo + 单 BF + +1 攻 + Blink，持续刷追猎，升级好出门。PvT/PvP"
+summary_en: "2-base 6-Gateway Blink Stalker: no Robotics, single Forge (+1 weapons) + Blink; mass Stalkers with upgrades before pushing. PvT/PvP."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.blink_stalker:BlinkStalker"
+aliases:
+  - "闪烁追猎压制"
+  - "闪追"
+  - "闪追压制"
+  - "闪烁追猎"
+  - "6门闪追"
+  - "六门闪追"
+  - "blink stalker"
+  - "Blink Stalker"
+  - "blink压制"
+  - "闪追timing"
+  - "闪烁timing"
+  - "blink timing"
+  - "6 Gate Blink"
+  - "6gate blink"
+  - "两矿闪追"
+  - "stalker blink"
+matchup: [PvT, PvP]
+
+phases:
+  - id: opening
+    display: "单 BG"
+    display_en: "Single Gateway"
+    subtitle: "13 农 → BG + 1 气"
+    subtitle_en: "13 workers → Gateway + 1 gas"
+    start_at_supply: 13
+  - id: tech
+    display: "BY + 折跃 chrono"
+    display_en: "Cybernetics Core + Warp Gate Chrono"
+    subtitle: "BG ready 上 BY + 二矿，折跃 chrono"
+    subtitle_en: "Gateway ready → Cybernetics Core + expand, Warp Gate chrono"
+    start_at_supply: 19
+  - id: economy
+    display: "稳二矿"
+    display_en: "Secure Natural"
+    subtitle: "二矿存在 → VC + BF，优先运营爬农民"
+    subtitle_en: "Natural active → Twilight Council + Forge, prioritize macro/worker production"
+    start_at_supply: 28
+  - id: upgrades
+    display: "+1 攻 + Blink"
+    display_en: "+1 Weapons + Blink"
+    subtitle: "BF 好研 +1 攻，VC 好研 Blink，同期补 4 BG"
+    subtitle_en: "Forge → +1 weapons, Twilight Council → Blink research, add 4 Gateways"
+    start_at_supply: 38
+  - id: massing
+    display: "补到 6 BG"
+    display_en: "Scale to 6 Gateways"
+    subtitle: "4:10 后补 BG 到 6，持续刷追猎"
+    subtitle_en: "After 4:10 build up to 6 Gateways, continuous Stalker production"
+    start_at_supply: 50
+  - id: pressuring
+    display: "出门闪追"
+    display_en: "Blink Stalker Push"
+    subtitle: "Blink + +1 攻完成，20 supply 兵力出门"
+    subtitle_en: "Blink + +1 weapons done, push with 20 supply of units"
+    start_at_supply: 70
+
+# 战术来源：用户 2026-05-27 修正方案
+# 6 BG + 无 Robo + 单 BF(+1 攻) + Blink；VC 稍晚，优先二矿稳经济
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA"
+  - "20 build BY"
+  - "20 build BN"
+  - "21 build BA"
+  - "22 research 折跃 @chrono"
+  - "28 build VC"
+  - "28 build BF"
+  - "30 research 地面攻击1 @chrono"
+  - "35 research Blink @chrono"
+  - "38 build BG"
+  - "38 build BG"
+  - "40 build BG"
+  - "50 build BG"
+  - "50 build BG"
+  - "55 build BA"
+  - "70 build BN"
+
+scout_at: "13 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.units.colossus.count >= 1"
+    then: "transition:iac_2base"
+  - sees: "enemy.units.disruptor.count >= 1"
+    then: "transition:iac_2base"
+
+# 闪追压制后续：打崩则继续追加 stalker，打不动则开矿转 iac_2base 或 skytoss
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+
+# 后期路线选项（VC + BF 已有；接闪追扰袭最顺，补 VR+VB 即可）
+lategame_transitions:
+  - lategame_id: persistent_blink_harass
+    when: "default"
+  - lategame_id: iac_2base
+    when: "player.requests_ground_push"
+  - lategame_id: persistent_colossus_immortal
+    when: "self.economy.bases >= 3"

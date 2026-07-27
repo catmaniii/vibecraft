@@ -1,0 +1,594 @@
+<!doctype html>
+<!--
+  VibeCraft 玩家操作指南（双语 zh/en，静态自包含、零外部依赖）。
+  语言检测顺序：?lang= URL 参数 → localStorage vibecraft.locale → 浏览器默认 → zh。
+  lang 切换保存到 localStorage，与 PWA i18n 共享同一 key。
+  内嵌 AI 助手：GET /api/guide-chat?q=...&lang=...&h=... → 手册全文为 system prompt。
+-->
+<html lang="zh-CN" data-lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VibeCraft Guide</title>
+<style>
+  :root { --bg:#0e1116; --card:#161b22; --line:#262d36; --fg:#e6edf3; --mut:#9aa7b4; --acc:#4aa3ff; --acc2:#3fb950; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  header { position:sticky; top:0; background:rgba(14,17,22,.95); backdrop-filter:blur(6px); border-bottom:1px solid var(--line); padding:14px 16px; z-index:10; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .header-left { flex:1; min-width:0; }
+  header h1 { margin:0; font-size:18px; }
+  header .sub { color:var(--mut); font-size:13px; margin-top:2px; }
+  .lang-btn { flex-shrink:0; margin-top:2px; background:#1b2230; border:1px solid var(--line); color:var(--acc); font-size:13px; padding:5px 10px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+  .lang-btn:hover { background:#243040; }
+  main { max-width:840px; margin:0 auto; padding:16px; padding-bottom:100px; }
+  .tip { background:#13233a; border:1px solid #234; border-radius:8px; padding:10px 12px; color:#bcd; font-size:14px; margin:12px 0; }
+  h2 { font-size:16px; margin:26px 0 8px; padding-left:10px; border-left:3px solid var(--acc); }
+  h3 { font-size:15px; margin:18px 0 6px; color:var(--acc2); }
+  table { width:100%; border-collapse:collapse; margin:8px 0 14px; background:var(--card); border-radius:8px; overflow:hidden; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#1b222c; color:var(--mut); font-weight:600; font-size:13px; }
+  td:first-child { color:#cfe3ff; white-space:normal; width:46%; }
+  tr:last-child td { border-bottom:none; }
+  .say, td.say { color:#ffd97a; }
+  .note { color:var(--mut); font-size:13px; margin:6px 2px 14px; padding-left:8px; border-left:2px solid var(--line); }
+  .toc { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px; }
+  .toc a { font-size:13px; color:var(--acc); text-decoration:none; background:#13202f; border:1px solid #234; padding:4px 8px; border-radius:6px; }
+  code { background:#1b222c; padding:1px 5px; border-radius:4px; color:#ffd97a; font-size:.92em; }
+  footer { color:var(--mut); font-size:13px; text-align:center; padding:24px 16px 40px; }
+  @media (max-width:560px){ td:first-child{width:50%;} }
+
+  /* ---- 语言切换 ---- */
+  [data-lang="en"] .zh-content { display:none !important; }
+  [data-lang="zh"] .en-content { display:none !important; }
+
+  /* ---- AI 助手 chat widget ---- */
+  #chat-fab { position:fixed; bottom:20px; right:16px; z-index:200; width:48px; height:48px; border-radius:50%; background:var(--acc); border:none; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
+  #chat-fab:hover { background:#2c8ce8; }
+  #chat-panel { position:fixed; bottom:76px; right:12px; z-index:199; width:340px; max-width:calc(100vw - 24px); background:var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.6); display:none; flex-direction:column; overflow:hidden; max-height:520px; }
+  #chat-panel.open { display:flex; }
+  #chat-header { padding:10px 12px; background:#1b222c; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; font-size:14px; font-weight:600; }
+  #chat-close { background:none; border:none; color:var(--mut); font-size:18px; cursor:pointer; padding:0 2px; }
+  #chat-close:hover { color:var(--fg); }
+  #chat-messages { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .chat-msg { max-width:90%; padding:8px 10px; border-radius:8px; font-size:13px; line-height:1.5; word-break:break-word; }
+  .chat-msg.user { align-self:flex-end; background:var(--acc); color:#fff; border-radius:8px 8px 2px 8px; }
+  .chat-msg.assistant { align-self:flex-start; background:#1b2230; border:1px solid var(--line); border-radius:8px 8px 8px 2px; }
+  .chat-msg.error { align-self:center; color:#f87171; font-size:12px; background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.3); }
+  .chat-msg.loading { align-self:flex-start; color:var(--mut); font-size:13px; }
+  .chat-msg.assistant ul { margin:4px 0; padding-left:20px; }
+  .chat-msg.assistant li { margin:2px 0; }
+  .chat-msg.assistant .md-h { font-weight:600; margin:6px 0 2px; }
+  .chat-msg.assistant .md-gap { height:6px; }
+  .chat-msg.assistant code { background:rgba(255,255,255,.12); padding:1px 5px; border-radius:3px; font-size:.9em; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .chat-msg.assistant strong { font-weight:600; color:#fff; }
+  .chat-msg.assistant > :first-child { margin-top:0; }
+  #chat-input-row { display:flex; gap:6px; padding:8px; border-top:1px solid var(--line); }
+  #chat-input { flex:1; background:#0e1116; border:1px solid var(--line); color:var(--fg); font-size:13px; padding:7px 10px; border-radius:6px; outline:none; font-family:inherit; }
+  #chat-input:focus { border-color:var(--acc); }
+  #chat-send { background:var(--acc); border:none; color:#fff; font-size:13px; padding:7px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+  #chat-send:hover { background:#2c8ce8; }
+  #chat-send:disabled { background:#2a3545; color:var(--mut); cursor:not-allowed; }
+  .chat-hint-zh { display:none; }
+  .chat-hint-en { display:none; }
+  [data-lang="zh"] .chat-hint-zh { display:block; }
+  [data-lang="en"] .chat-hint-en { display:block; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1 class="zh-content">VibeCraft 玩家操作指南</h1>
+    <h1 class="en-content">VibeCraft Player Guide</h1>
+    <div class="sub zh-content">你管战略，AI 管执行 · 直接说人话，不用背格式</div>
+    <div class="sub en-content">You command, AI executes · Say it naturally, no rigid format needed</div>
+  </div>
+  <button class="lang-btn" id="lang-toggle" onclick="toggleLang()"></button>
+</header>
+<main>
+
+  <!-- ============================================================ ZH CONTENT ============================================================ -->
+  <div class="zh-content">
+
+  <div class="tip">
+    说不清 bot 会反问澄清或提示。<b>带"这里 / 这边 / 这个位置"的指令，要先用小地图把镜头移到目标点</b>
+    （"这里"= 你当前镜头中心，bot 自动读坐标）。每条下达后在驾驶舱生成一张<b>指令卡片，右上角 × 随时取消</b>。
+  </div>
+
+  <h2>四层粒度速览</h2>
+  <table>
+    <tr><th>层</th><th>管什么 · 例子</th></tr>
+    <tr><td>L1 宏观策略</td><td>整局打法（剧本）：<span class="say">"上 4BG"、"切双矿凤凰"、"转 Skytoss"</span></td></tr>
+    <tr><td>L2 全军战术</td><td>整支军队的姿态：<span class="say">"进攻自然"、"全军撤退"、"原地坚守"</span></td></tr>
+    <tr><td>L3 单位 / 编队</td><td>指定单位干活：<span class="say">"DT 守气矿别动"、"虚空一队进攻三矿"、"派农民去前线修水晶"</span></td></tr>
+    <tr><td>L4 产能 / 经济</td><td>出兵·补建筑·升级·扩张：<span class="say">"造 4 个叉子"、"补 8 BG"、"先研闪烁"、"在这偷矿"</span></td></tr>
+  </table>
+
+  <div class="toc">
+    <a href="#c1">①切剧本</a><a href="#c2">②全军姿态</a><a href="#c3">③派兵打出去</a><a href="#c4">④待命/守点</a>
+    <a href="#c5">⑤巡逻</a><a href="#c6">⑥集结点</a><a href="#c7">⑦语音编队</a><a href="#c8">⑧侦察视野</a>
+    <a href="#c9">⑨产能</a><a href="#c10">⑩代理建造</a><a href="#c11">⑪偷矿</a><a href="#c12">⑫开矿扩张</a>
+    <a href="#c13">⑬技能释放</a><a href="#c14">⑭镜头跟随</a><a href="#c15">⑮连续指令</a><a href="#c16">⑯释放单位</a><a href="#c17">⑰维修</a>
+  </div>
+
+  <h2 id="c1">① 切剧本 / 宏观打法（L1）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"上 4BG"、"切双矿凤凰"、"转 Skytoss"、"打航母"</td><td>切到对应剧本，bot 按它出兵造建筑（三族 40+ 剧本）</td></tr>
+    <tr><td class="say">"取消剧本"、"先别按剧本走"、"停止刷兵"</td><td>bot 转保守运营：只补农守家，不主动出门</td></tr>
+  </table>
+
+  <h2 id="c2">② 全军战术姿态（L2，对应驾驶舱三个大按钮）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"进攻对方二矿"、"A 上三矿"、"全军压上去"</td><td>全军 committed 进攻指定区域（打到底）</td></tr>
+    <tr><td class="say">"试探进攻二矿"、"推上去看看"、"前压试试"</td><td>全军试探：占便宜就占，打不动就撤</td></tr>
+    <tr><td class="say">"强攻 / 一波流 / 不要命冲"</td><td>all-in 强冲，不撤</td></tr>
+    <tr><td class="say">"守家"、"全部回家防守"、"守一波"</td><td>全军回主基地一线防守</td></tr>
+    <tr><td class="say">"持续守家姿态"、"保持防守"</td><td>一直保持守家姿态</td></tr>
+    <tr><td class="say">"全军撤退"、"全部撤回基地"、"回家"</td><td>全军撤回（普通移动，遇敌不恋战）</td></tr>
+    <tr><td class="say">"原地坚守"、"守住别动"、"到斜坡堵口"</td><td>聚团到指定点站住不回家</td></tr>
+  </table>
+  <div class="note">全军命令只作用<b>自由单位</b>；被你单独点名 / 编了队的单位不受影响（要它听全军命令先取消那条独占）。</div>
+
+  <h2 id="c3">③ 派兵打出去：进攻 / 骚扰 / 火力侦查（L2-L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"派 5 个凤凰去骚扰对方主基地"、"飞龙骚扰对面上边分矿"</td><td>指定数量去骚扰（<b>骚扰必须说数量</b>，否则反问）</td></tr>
+    <tr><td class="say">"凤凰打死对方 5 个农民就回"</td><td>骚扰带退出条件（杀够就撤）</td></tr>
+    <tr><td class="say">"火力侦查对方三矿"、"派 4 个追猎前压看看"</td><td>小股前压试探，占便宜 / 损耗大 / 超时任一就退</td></tr>
+    <tr><td class="say">"残血的追猎撤回来"、"盾破的虚空拉回基地"</td><td>按状态选单位撤退</td></tr>
+    <tr><td class="say">"前线那个追猎撤退"、"最前面的叉子退回来"、"后面那个不朽顶上去"</td><td>按当前物理位置选最前 / 最后那个</td></tr>
+  </table>
+
+  <h2 id="c4">④ 单位待命 / 集结 / 守点 / 站桩（L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"派一个农民到这里待命"、"叉子到对方三矿待命"</td><td>移到目标点留守，受敌还击、战后归位（持续到 ×）</td></tr>
+    <tr><td class="say">"所有虚空到这里集中"、"叉子都聚过来这里"</td><td>把<b>现有</b>这批兵聚到一点独占停留</td></tr>
+    <tr><td class="say">"DT 守气矿别动"、"探机守瞭望塔别动"</td><td>钉在原地守住（hold，不主动出击）</td></tr>
+    <tr><td class="say">"2 个追猎去守 5 点分矿"、"叉子在 7 点守"</td><td>守某区域（受敌还击并归位，guard）</td></tr>
+    <tr><td class="say">"派一个追猎站左边瞭望塔"、"使徒去右边瞭望塔"</td><td>占瞭望塔（watchtower / 左 / 右）</td></tr>
+    <tr><td class="say">"让农民蹲对方右下分矿"、"探机去对方 11 点盯着"</td><td>蹲点放视野（方位词 / 钟点都认）</td></tr>
+  </table>
+
+  <h2 id="c5">⑤ 巡逻（两点往返，L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"农民在对方 11 点分矿和三矿之间巡逻"</td><td>单位在两点之间持续往返</td></tr>
+    <tr><td class="say">"3 个凤凰在自然和对方主基地之间巡逻"</td><td>多单位巡逻线</td></tr>
+    <tr><td class="say">"追猎在这里和对方三矿之间巡逻"</td><td>第一个点用"这里"（当前镜头）</td></tr>
+  </table>
+
+  <h2 id="c6">⑥ 出兵集结点（rally，管未来新出的兵，L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"集结点设在这里"、"以后出的兵都到这里集合"、"新兵集结点放这"</td><td>设<b>全局集结点</b>：之后新造出来的兵默认去那（不动现有兵）</td></tr>
+  </table>
+  <div class="note">区别："〈某兵种〉到这里集中"是把<b>现有</b>的兵聚过去（④）；"集结点 / 出兵都去"是管<b>未来新兵</b>去哪（⑥）。</div>
+
+  <h2 id="c7">⑦ 语音编队（1-5 队，L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"把运输机编成 1 队"、"运输机 1 队"</td><td>把这批单位编进 1 队（编队条显示成员）</td></tr>
+    <tr><td class="say">"把 2 个农民编成 3 队"</td><td>只编指定数量进队</td></tr>
+    <tr><td class="say">"以后新出的虚空都编入 1 队"、"将来造的追猎自动加 2 队"</td><td>持续征兵：新出的兵自动入队</td></tr>
+    <tr><td class="say">"1 队进攻对方三矿"、"2 队火力侦查这里"、"3 队撤退"</td><td>直接对某队下指令</td></tr>
+    <tr><td class="say">"释放 2 队"、"取消 2 队"、"清除 2 号队"</td><td>解散编队，单位交还 bot</td></tr>
+  </table>
+
+  <h2 id="c8">⑧ 侦察 / 视野（L2-L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"看一眼对方主基地"、"侦察一下二矿"、"扫一下三矿"</td><td>派 1 单位走一趟，拿到视野即收工</td></tr>
+    <tr><td class="say">"盯着对方主基地"、"保持二矿视野"、"持续看对方升科技"</td><td>持续保持某区域视野</td></tr>
+    <tr><td class="say">"派探机侦察 11 点"</td><td>指定单位去某方位 / 钟点侦察</td></tr>
+    <tr><td class="say">"让探路农民回来"、"探路兵别探了"</td><td>撤回正在探路的农民（回家采矿）</td></tr>
+    <tr><td class="say">"探路农民别探了，去占右边瞭望塔"</td><td>把探路农民改派去做新任务（不回家）</td></tr>
+  </table>
+
+  <h2 id="c9">⑨ 出兵 / 补建筑 / 升级 / 暂停产线（L4 产能）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"出 2 个哨兵"、"造 4 个叉子"、"出 2 叉子加 3 追猎"</td><td>加产指定兵种数量（出齐即消）</td></tr>
+    <tr><td class="say">"刷两个叉子到前线"、"折跃 3 追猎去二矿"</td><td>折跃门直接把新兵生产到指定落点</td></tr>
+    <tr><td class="say">"补一个 BF"、"补两个 VS"、"再来一个气矿"</td><td>增量补建筑（在 N 个基础上 +N）</td></tr>
+    <tr><td class="say">"补到 8 个 BG"、"凑齐 14 个 BG"</td><td>补到绝对总数</td></tr>
+    <tr><td class="say">"二矿补 2 气矿"、"ramp 放 2 炮 1 BF"</td><td>指定地点补建筑</td></tr>
+    <tr><td class="say">"先研闪烁"、"升级地面攻击"、"补个 BY 然后升空军攻防"</td><td>研究升级（"攻防"= 攻击 + 护甲两条）</td></tr>
+    <tr><td class="say">"暂时不出追猎"、"停止造叉子"、"先别造哨兵"</td><td>暂停某兵种产线（× 才恢复）</td></tr>
+  </table>
+
+  <h2 id="c10">⑩ 野建筑 / 代理建造（派农民出去建，L3-L4）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"派农民去前线修个水晶"</td><td>派 1 农民去目标点修水晶，全程不被拉走，建完留原地待命</td></tr>
+    <tr><td class="say">"派农民去对方 6 点分矿修个水晶，水晶好了在旁边修个 BG"</td><td>链式：先水晶，水晶好后在能量场内接着修后续建筑</td></tr>
+    <tr><td class="say">"派个农民去这里修个水晶，然后修两个 VS"</td><td>"这里"= 当前镜头；水晶 + N 建筑用同一农民依次建</td></tr>
+    <tr><td class="say">"再到这里修一个 VS"</td><td>复用正在外面建造的那个农民，追加一个建筑</td></tr>
+  </table>
+  <div class="note">神族机制：后续建筑必须在水晶能量场内，所以代理建造总是<b>先水晶、再建筑</b>，bot 自动排位不撞格。</div>
+
+  <h2 id="c11">⑪ 偷矿（隐蔽采矿点，L4）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"在这偷矿"、"在这里偷一个矿"、"开隐蔽基地"</td><td>先移镜头到目标矿区再说 —— 派约 16 农民隐蔽采矿，受攻击自动逃</td></tr>
+    <tr><td class="say">"在这偷矿，多派点农民"、"偷个矿给 20 个农民"</td><td>调农民数（默认 16，最多 24）</td></tr>
+    <tr><td class="say">"在这偷矿，不要偷气"</td><td>只偷矿不偷气</td></tr>
+  </table>
+
+  <h2 id="c12">⑫ 开矿 / 扩张（L4）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"在这开矿"、"在这下主基地"、"这片矿开了"</td><td>看着矿区说 —— 派农民去下基地开矿（落点自动摆正，太歪弹确认）</td></tr>
+    <tr><td class="say">"再开个矿"、"扩一个"、"开三矿"</td><td>不指地点 —— bot 自选下一个分矿点扩张</td></tr>
+  </table>
+
+  <h2 id="c13">⑬ 高难技能释放（必须你手动下令，L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"给两个 BF 星空加速"、"给星门加速"</td><td>Nexus 对建筑放星空加速（chrono）</td></tr>
+    <tr><td class="say">"所有电兵合成白球"、"合 2 个白球"</td><td>高坦两两合体成白球（Archon）</td></tr>
+    <tr><td class="say">"电兵放心灵风暴到对方主基地"</td><td>HT 放风暴（要给落点）</td></tr>
+    <tr><td class="say">"叉子闪到对方主基地"、"闪追闪进去"</td><td>追猎闪烁（需 Blink 已研）</td></tr>
+    <tr><td class="say">"枪兵嗑药冲"（人族）、"飞蛇拉对面航母"（虫族）</td><td>兴奋剂 / abduct 等各族技能</td></tr>
+  </table>
+
+  <h2 id="c14">⑭ 镜头跟随（L3，只动镜头不动兵）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"镜头跟着大部队"、"看主力部队"</td><td>镜头跟全军质心</td></tr>
+    <tr><td class="say">"镜头跟着追猎"、"盯住那个凤凰"、"跟随母舰"</td><td>跟某兵种</td></tr>
+    <tr><td class="say">"跟着火力侦查那波"、"跟骚扰小队"</td><td>跟当前侦查 / 骚扰小队</td></tr>
+    <tr><td class="say">"镜头跟随探路农民"、"跟守瞭望塔的"、"跟巡逻的"</td><td>按任务身份跟（不是跟同名采矿单位）</td></tr>
+  </table>
+
+  <h2 id="c15">⑮ 连续指令 / 多步串联（L3）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"农民先去右瞭望塔，再去对方 11 点，然后在对方二矿修个水晶，最后回家采矿"</td><td>一个农民按顺序走多步，每步完成自动触发下一步</td></tr>
+  </table>
+
+  <h2 id="c16">⑯ 释放 / 撤回单位</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"那个叉子回来"、"释放所有虚空"</td><td>撤销该单位身上所有在途指令，完全交还 bot</td></tr>
+  </table>
+
+  <h2 id="c17">⑰ 维修（人族，派农民修血，L3-L4）</h2>
+  <table><tr><th>你这样说</th><th>效果</th></tr>
+    <tr><td class="say">"派 3 个农民修大舰"、"派两个农民修指挥中心"</td><td>派指定数量 SCV 去修，修满后自动完成（持续到 ×）</td></tr>
+    <tr><td class="say">"修一下那个地堡"、"修地堡"</td><td>不带数量默认派 3 个农民修</td></tr>
+    <tr><td class="say">"家里残血的坦克都修一下"、"残血大舰都修"</td><td>按类型/状态修一批，全部满血后完成</td></tr>
+  </table>
+  <div class="note">仅<b>人族</b>（SCV 才能修），且只能修<b>机械单位 / 建筑</b>（枪兵等生物兵不能修）。</div>
+
+  <h2>别名约定</h2>
+  <div class="note">
+    建筑用 hotkey 缩写（<code>BG</code>=兵营 / <code>BE</code>=水晶 / <code>VR</code>=机械台 / <code>VS</code>=星门 / <code>BY</code>=控制核心 …），
+    单位用中文黑话（叉子 / 不朽 / 追猎 / 闪追 / DT / 小狗 / 刺蛇 / 飞龙 …），战术黑话保留（4BG / IAC / Skytoss / 12pool / 两矿凤凰 …）。
+    说了非本族单位 / 建筑会被友好拒绝。
+  </div>
+
+  <h2>玩家控制权（四条规则）</h2>
+  <table>
+    <tr><td>1</td><td><b>单位级指令 = 独占 + 最新覆盖</b>：给已被控制的单位下新指令会抢占它。</td></tr>
+    <tr><td>2</td><td><b>全军命令不碰被独占的单位</b>：只作用自由单位；要它听全军命令先取消独占 / 解散编队。</td></tr>
+    <tr><td>3</td><td><b>释放 / 解散单位 → 撤销它身上所有在途指令</b>，还给 bot。</td></tr>
+    <tr><td>4</td><td><b>撤退用普通 move（遇敌不恋战），不 attack-move。</b></td></tr>
+  </table>
+  <div class="note"><b>优先级金字塔</b>：没你的指令 → bot 全自决；你锁住的部分 bot 不动、其余仍自主；你撤销 → 决策权浮回来。</div>
+
+  </div><!-- /zh-content -->
+
+
+  <!-- ============================================================ EN CONTENT ============================================================ -->
+  <div class="en-content">
+
+  <div class="tip">
+    If a command is unclear the bot will ask for clarification. <b>For commands using "here / this location", first pan the minimap to the target point</b>
+    ("here" = your current camera center; the bot reads the coordinates automatically). Each command generates an <b>instruction card in the cockpit — tap × in the top-right to cancel at any time</b>.
+  </div>
+
+  <h2>4-Layer Command Summary</h2>
+  <table>
+    <tr><th>Layer</th><th>What it controls · Examples</th></tr>
+    <tr><td>L1 Macro Strategy</td><td>Full-game build (recipe): <span class="say">"4BG", "switch to dual-expansion Phoenix", "go Skytoss"</span></td></tr>
+    <tr><td>L2 Tactical Command</td><td>Whole-army stance: <span class="say">"attack natural", "full retreat", "hold position"</span></td></tr>
+    <tr><td>L3 Unit / Group</td><td>Specific units: <span class="say">"DT guard gas don't move", "Void group 1 attack third", "send probe to build BE forward"</span></td></tr>
+    <tr><td>L4 Production / Economy</td><td>Units · buildings · upgrades · expand: <span class="say">"make 4 Zealots", "add 8 BG", "research Blink", "hidden mine here"</span></td></tr>
+  </table>
+
+  <div class="toc">
+    <a href="#e1">①Strategy</a><a href="#e2">②Stance</a><a href="#e3">③Attack/Harass</a><a href="#e4">④Standby</a>
+    <a href="#e5">⑤Patrol</a><a href="#e6">⑥Rally</a><a href="#e7">⑦Groups</a><a href="#e8">⑧Scout</a>
+    <a href="#e9">⑨Production</a><a href="#e10">⑩Proxy Build</a><a href="#e11">⑪Hidden Mine</a><a href="#e12">⑫Expand</a>
+    <a href="#e13">⑬Abilities</a><a href="#e14">⑭Camera</a><a href="#e15">⑮Chaining</a><a href="#e16">⑯Release</a><a href="#e17">⑰Repair</a>
+  </div>
+
+  <h2 id="e1">① Strategy / Build (L1)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"4BG", "switch to dual-expansion Phoenix", "go Skytoss", "play Carriers"</td><td>Switch to the corresponding build; bot produces units and buildings (40+ builds across all 3 races)</td></tr>
+    <tr><td class="say">"cancel build", "stop following the build", "stop training units"</td><td>Bot enters conservative mode: only makes workers and defends at home</td></tr>
+  </table>
+
+  <h2 id="e2">② Tactical Stance (L2 — the 3 big cockpit buttons)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"attack their second", "A-move their third", "push all in"</td><td>Full army committed attack on the target area (fights to the end)</td></tr>
+    <tr><td class="say">"probe-attack second", "push to check", "poke forward"</td><td>Probe / feint: take advantage if possible, retreat if too costly</td></tr>
+    <tr><td class="say">"all-in", "one-base all-in", "reckless push"</td><td>All-in rush, no retreat</td></tr>
+    <tr><td class="say">"defend at home", "all units back to defend", "hold a wave"</td><td>Entire army returns to defend the main base line</td></tr>
+    <tr><td class="say">"keep defending", "maintain defensive stance"</td><td>Persistent defensive posture</td></tr>
+    <tr><td class="say">"full retreat", "all units back to base", "come home"</td><td>Army retreats (normal move, does not engage)</td></tr>
+    <tr><td class="say">"hold here", "don't move", "block the ramp"</td><td>Cluster at the target point and hold — does not return home</td></tr>
+  </table>
+  <div class="note">Army-wide commands only affect <b>free units</b>. Units claimed by individual or group orders are unaffected — cancel their claim first to include them.</div>
+
+  <h2 id="e3">③ Sending Units Out: Attack / Harass / Probe (L2-L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"send 5 Phoenix to harass their main", "Mutalisk harass their top expansion"</td><td>Designated quantity sent to harass (<b>harass requires a count</b>, otherwise bot will ask)</td></tr>
+    <tr><td class="say">"Phoenix retreat after killing 5 workers"</td><td>Harass with exit condition (retreat after enough kills)</td></tr>
+    <tr><td class="say">"probe-attack their third", "send 4 Stalkers to poke forward"</td><td>Small-force probe: retreat if taking too many losses or time runs out</td></tr>
+    <tr><td class="say">"retreat the low-HP Stalkers", "pull back the shieldless Void Rays"</td><td>Select units by status and retreat</td></tr>
+    <tr><td class="say">"retreat the front-line Stalker", "fall back the leading Zealot", "push the rear Immortal forward"</td><td>Select unit by physical position (front / rear)</td></tr>
+  </table>
+
+  <h2 id="e4">④ Unit Standby / Rally / Guard / Hold (L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"send a probe here to standby", "Zealot standby at their third"</td><td>Move to target point and stay; fight back if attacked, return after combat (until ×)</td></tr>
+    <tr><td class="say">"all Void Rays group up here", "Zealots gather over here"</td><td>Cluster <b>current</b> units to a single point (claimed, stays there)</td></tr>
+    <tr><td class="say">"DT guard the gas don't move", "Observer guard the watchtower don't move"</td><td>Hold position (hold — does not proactively engage)</td></tr>
+    <tr><td class="say">"2 Stalkers guard the 5 o'clock expansion", "Zealot guard 7 o'clock"</td><td>Guard an area (fight back and return; guard)</td></tr>
+    <tr><td class="say">"send a Stalker to the left watchtower", "Sentry go to right watchtower"</td><td>Capture watchtower (left / right / by name)</td></tr>
+    <tr><td class="say">"park a worker at their lower-right expansion", "Observer at their 11 o'clock watching"</td><td>Vision-scouting spot (accepts cardinal directions and clock positions)</td></tr>
+  </table>
+
+  <h2 id="e5">⑤ Patrol (two-point back-and-forth, L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"worker patrol between their 11 o'clock expansion and third"</td><td>Unit continuously shuttles between two points</td></tr>
+    <tr><td class="say">"3 Phoenix patrol between our natural and their main"</td><td>Multi-unit patrol line</td></tr>
+    <tr><td class="say">"Stalker patrol between here and their third"</td><td>Use "here" for the first point (current camera position)</td></tr>
+  </table>
+
+  <h2 id="e6">⑥ Rally Point (for future units, L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"set rally point here", "all new units meet here", "rally new units to this location"</td><td>Sets the <b>global rally point</b>: newly trained units will go there by default (does not move existing units)</td></tr>
+  </table>
+  <div class="note">Difference: "〈unit type〉 gather here" moves <b>existing</b> units (④); "rally / new units go to" controls where <b>future units</b> report (⑥).</div>
+
+  <h2 id="e7">⑦ Voice Groups (1-5, L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"put the Medivacs into group 1", "Medivac group 1"</td><td>Add these units to group 1 (group bar shows members)</td></tr>
+    <tr><td class="say">"put 2 probes into group 3"</td><td>Add only the specified count to the group</td></tr>
+    <tr><td class="say">"add all future Void Rays to group 1", "auto-add new Stalkers to group 2"</td><td>Auto-conscript: newly trained units join the group automatically</td></tr>
+    <tr><td class="say">"group 1 attack their third", "group 2 probe-attack here", "group 3 retreat"</td><td>Issue commands directly to a numbered group</td></tr>
+    <tr><td class="say">"disband group 2", "cancel group 2", "clear group 2"</td><td>Dissolve the group; units returned to bot control</td></tr>
+  </table>
+
+  <h2 id="e8">⑧ Scouting / Vision (L2-L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"check their main", "scout their second", "scan their third"</td><td>Send 1 unit on a one-time pass; done once vision is obtained</td></tr>
+    <tr><td class="say">"keep watching their main", "maintain vision at second", "watch for tech upgrades"</td><td>Persistent vision on an area</td></tr>
+    <tr><td class="say">"send Observer to scout 11 o'clock"</td><td>Specified unit scouts a direction / clock position</td></tr>
+    <tr><td class="say">"scout probe come back", "stop scouting"</td><td>Recall scouting worker (returns to mine)</td></tr>
+    <tr><td class="say">"scout probe stop scouting, go take right watchtower"</td><td>Redirect scouting worker to a new task (does not return home)</td></tr>
+  </table>
+
+  <h2 id="e9">⑨ Train / Build / Upgrade / Pause (L4 Production)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"train 2 Sentries", "make 4 Zealots", "train 2 Zealots and 3 Stalkers"</td><td>Queue the specified unit count (auto-completes when done)</td></tr>
+    <tr><td class="say">"warp 2 Zealots to the front", "warp 3 Stalkers to second"</td><td>Warp Gate: train units directly at the target location</td></tr>
+    <tr><td class="say">"add a BF", "build two VS", "add another gas"</td><td>Incremental build (adds N on top of current count)</td></tr>
+    <tr><td class="say">"build up to 8 BG", "get to 14 BG total"</td><td>Build to an absolute total</td></tr>
+    <tr><td class="say">"build 2 gas at second", "place 2 cannons and 1 BF at the ramp"</td><td>Build at a specified location</td></tr>
+    <tr><td class="say">"research Blink", "upgrade ground attack", "build BY then upgrade air attack and armor"</td><td>Research upgrades ("attack and armor" = both attack and armor lines)</td></tr>
+    <tr><td class="say">"pause Stalker production", "stop making Zealots", "hold off on Sentries"</td><td>Pause a unit's production line (resume with ×)</td></tr>
+  </table>
+
+  <h2 id="e10">⑩ Proxy / Forward Build (send probe out to build, L3-L4)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"send a probe to build a BE forward"</td><td>Send 1 probe to the target point to build a Pylon; probe stays on site after completion</td></tr>
+    <tr><td class="say">"send probe to enemy 6 o'clock to build BE, then build BG next to it"</td><td>Chain: Pylon first, then build follow-up structures inside the power field</td></tr>
+    <tr><td class="say">"send a probe here to build a BE then two VS"</td><td>"here" = current camera; same probe builds Pylon + N buildings in sequence</td></tr>
+    <tr><td class="say">"add one more VS at that location"</td><td>Queue one more building for the probe already working forward</td></tr>
+  </table>
+  <div class="note">Protoss mechanic: subsequent buildings must be inside a Pylon power field, so proxy builds always <b>start with a Pylon, then the buildings</b>. The bot spaces them automatically so they don't overlap.</div>
+
+  <h2 id="e11">⑪ Hidden Mine (covert mineral line, L4)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"mine here secretly", "set up a hidden base here", "covert expansion here"</td><td>Pan camera to the target mineral field first — sends ~16 workers to mine covertly; auto-flee on attack</td></tr>
+    <tr><td class="say">"hidden mine here, more workers", "20 workers at the hidden mine"</td><td>Adjust worker count (default 16, max 24)</td></tr>
+    <tr><td class="say">"mine here without gas"</td><td>Mine minerals only, skip gas</td></tr>
+  </table>
+
+  <h2 id="e12">⑫ Expand (L4)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"expand here", "drop Nexus here", "take this mineral line"</td><td>While looking at the mineral field — sends a worker to build a base (auto-aligns; prompts if misplaced)</td></tr>
+    <tr><td class="say">"take another expansion", "expand one more", "take third"</td><td>No location specified — bot picks the next best expansion slot</td></tr>
+  </table>
+
+  <h2 id="e13">⑬ Difficult Abilities (must be issued manually, L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"Chrono two BF", "Chrono the Stargate"</td><td>Nexus Chrono Boost on buildings</td></tr>
+    <tr><td class="say">"merge all HT into Archons", "merge 2 Archons"</td><td>Merge High Templar pairs into Archons</td></tr>
+    <tr><td class="say">"HT Psionic Storm their main"</td><td>High Templar casts Storm (target location required)</td></tr>
+    <tr><td class="say">"Blink Stalker into their main", "Blink all in"</td><td>Stalker Blink (Blink upgrade required)</td></tr>
+    <tr><td class="say">"Stim Marines push" (Terran), "Viper pull their Carrier" (Zerg)</td><td>Stim / Abduct and other race-specific abilities</td></tr>
+  </table>
+
+  <h2 id="e14">⑭ Camera Follow (L3 — camera only, no unit movement)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"follow my main force", "watch the main army"</td><td>Camera follows the center of mass of the full army</td></tr>
+    <tr><td class="say">"follow the Stalkers", "track that Phoenix", "follow the Carrier"</td><td>Follow a unit type</td></tr>
+    <tr><td class="say">"follow the probe squad", "track the harass group"</td><td>Follow the current scouting / harassing squad</td></tr>
+    <tr><td class="say">"follow the scouting probe", "follow the watchtower guard", "follow the patrol"</td><td>Follow by role (not the same-type units that are mining)</td></tr>
+  </table>
+
+  <h2 id="e15">⑮ Chaining / Multi-Step Commands (L3)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"probe: go to right watchtower, then enemy 11 o'clock, then build BE at their second, then come home to mine"</td><td>One probe executes multiple steps in order; each step auto-triggers when the previous completes</td></tr>
+  </table>
+
+  <h2 id="e16">⑯ Release / Recall Units</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"that Zealot come back", "release all Void Rays"</td><td>Cancel all in-flight orders on that unit; fully return it to bot control</td></tr>
+  </table>
+
+  <h2 id="e17">⑰ Repair (Terran — send SCV to repair, L3-L4)</h2>
+  <table><tr><th>Say this</th><th>Effect</th></tr>
+    <tr><td class="say">"send 3 workers to repair the Battlecruiser", "2 workers repair the Command Center"</td><td>Send the specified count of SCVs to repair; completes automatically when full HP (until ×)</td></tr>
+    <tr><td class="say">"repair that Bunker", "fix the Bunker"</td><td>No count specified → 3 SCVs by default</td></tr>
+    <tr><td class="say">"repair all damaged Tanks at home", "fix low-HP Battlecruisers"</td><td>Repair a group by type/status; completes when all are at full HP</td></tr>
+  </table>
+  <div class="note"><b>Terran only</b> (SCV mechanic). Can only repair <b>mechanical units / buildings</b> — biological units like Marines cannot be repaired.</div>
+
+  <h2>Alias Conventions</h2>
+  <div class="note">
+    Buildings use SC2 hotkey abbreviations (<code>BG</code>=Gateway / <code>BE</code>=Pylon / <code>VR</code>=Robotics / <code>VS</code>=Stargate / <code>BY</code>=Cybernetics Core…).
+    Units use SC2 community names (Zealot / Immortal / Stalker / Blink-Stalker / DT / Zergling / Hydralisk / Mutalisk…).
+    Tactical jargon is preserved (4BG / IAC / Skytoss / 12pool / two-base Phoenix…).
+    Issuing commands for the wrong race's units or buildings will result in a polite rejection.
+  </div>
+
+  <h2>Player Control Model (4 Rules)</h2>
+  <table>
+    <tr><td>1</td><td><b>Unit-level order = exclusive + latest overrides</b>: issuing a new unit-level order on an already-controlled unit seizes it.</td></tr>
+    <tr><td>2</td><td><b>Army-wide commands do not touch claimed units</b>: only affects free units; cancel the individual claim first to include them.</td></tr>
+    <tr><td>3</td><td><b>Releasing / disbanding a unit cancels all its in-flight orders</b> and fully returns it to the bot.</td></tr>
+    <tr><td>4</td><td><b>Retreating uses normal move (does not engage enemies), not attack-move.</b></td></tr>
+  </table>
+  <div class="note"><b>Priority pyramid</b>: no commands from you → bot decides everything; what you lock the bot can't touch, the rest remains autonomous; you cancel → control floats back.</div>
+
+  </div><!-- /en-content -->
+
+</main>
+<footer class="zh-content">VibeCraft · 你脑子还能打，手交给 AI · 内容源自 README</footer>
+<footer class="en-content">VibeCraft · Your game sense, the AI's hands · Content from README</footer>
+
+<!-- ================================================================ AI 助手 ================================================================ -->
+<button id="chat-fab" onclick="toggleChat()" title="AI 助手 / AI Assistant">?</button>
+<div id="chat-panel">
+  <div id="chat-header">
+    <span class="zh-content">AI 助手 · 问我怎么玩</span>
+    <span class="en-content">AI Assistant · Ask me anything</span>
+    <button id="chat-close" onclick="toggleChat()">&#x2715;</button>
+  </div>
+  <div id="chat-messages">
+    <div class="chat-msg assistant chat-hint-zh">你好！有什么 VibeCraft 相关的问题都可以问我。</div>
+    <div class="chat-msg assistant chat-hint-en">Hi! Feel free to ask me anything about VibeCraft.</div>
+  </div>
+  <div id="chat-input-row">
+    <input id="chat-input" type="text" maxlength="500" placeholder="" onkeydown="if(event.key==='Enter')sendChat()">
+    <button id="chat-send" onclick="sendChat()">
+      <span class="zh-content">发送</span><span class="en-content">Send</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ---- 语言检测 & 切换 ----
+const LS_KEY = 'vibecraft.locale';
+function detectLang() {
+  const p = new URLSearchParams(location.search).get('lang');
+  if (p === 'zh' || p === 'en') return p;
+  const ls = localStorage.getItem(LS_KEY);
+  if (ls === 'zh' || ls === 'en') return ls;
+  return navigator.language && navigator.language.startsWith('en') ? 'en' : 'zh';
+}
+function applyLang(lang) {
+  document.documentElement.setAttribute('data-lang', lang);
+  document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
+  const btn = document.getElementById('lang-toggle');
+  if (btn) btn.textContent = lang === 'en' ? '中文' : 'English';
+  const inp = document.getElementById('chat-input');
+  if (inp) inp.placeholder = lang === 'en' ? 'Ask a question…' : '输入你的问题…';
+}
+function toggleLang() {
+  const cur = document.documentElement.getAttribute('data-lang') || 'zh';
+  const next = cur === 'zh' ? 'en' : 'zh';
+  localStorage.setItem(LS_KEY, next);
+  applyLang(next);
+}
+applyLang(detectLang());
+
+// ---- Chat widget ----
+let chatOpen = false;
+let chatHistory = []; // [{role, content}]
+let chatLoading = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const panel = document.getElementById('chat-panel');
+  if (chatOpen) { panel.classList.add('open'); scrollChat(); }
+  else panel.classList.remove('open');
+}
+function scrollChat() {
+  const el = document.getElementById('chat-messages');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+// 极简 markdown 渲染：先转义 HTML（防 XSS），再转 **加粗** / *斜体* / `代码` /
+// 标题 / 无序列表 / 换行。只覆盖 LLM 常见输出，不求全（够聊天窗好看即可）。
+function renderMarkdown(text) {
+  const inline = (s) => s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
+  const lines = escapeHtml(text).split('\n');
+  let html = '', inList = false;
+  for (const line of lines) {
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    const hd = line.match(/^\s*#{1,6}\s+(.*)$/);
+    if (li) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += '<li>' + inline(li[1]) + '</li>';
+      continue;
+    }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (hd) html += '<div class="md-h">' + inline(hd[1]) + '</div>';
+    else if (line.trim() === '') html += '<div class="md-gap"></div>';
+    else html += '<div>' + inline(line) + '</div>';
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+function appendMsg(role, text) {
+  const box = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  // assistant 输出 markdown → 渲染；user/loading/error 纯文本（安全 + 用户输入不该被当格式）
+  if (role === 'assistant') div.innerHTML = renderMarkdown(text);
+  else div.textContent = text;
+  box.appendChild(div);
+  scrollChat();
+  return div;
+}
+function setLoading(on) {
+  chatLoading = on;
+  const btn = document.getElementById('chat-send');
+  const inp = document.getElementById('chat-input');
+  if (btn) btn.disabled = on;
+  if (inp) inp.disabled = on;
+}
+
+async function sendChat() {
+  if (chatLoading) return;
+  const inp = document.getElementById('chat-input');
+  const q = (inp.value || '').trim();
+  if (!q) return;
+  inp.value = '';
+  const lang = document.documentElement.getAttribute('data-lang') || 'zh';
+  appendMsg('user', q);
+  setLoading(true);
+  const loadEl = appendMsg('loading', lang === 'en' ? 'Thinking…' : '思考中…');
+  try {
+    const h = encodeURIComponent(JSON.stringify(chatHistory.slice(-6)));
+    const url = '/api/guide-chat?q=' + encodeURIComponent(q) + '&lang=' + lang + '&h=' + h;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    loadEl.remove();
+    if (resp.ok && data.answer) {
+      appendMsg('assistant', data.answer);
+      chatHistory.push({ role: 'user', content: q });
+      chatHistory.push({ role: 'assistant', content: data.answer });
+      if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
+    } else {
+      const errMsg = data.error || (lang === 'en' ? 'Service error, please try again' : '服务出错，请稍后再试');
+      appendMsg('error', errMsg);
+    }
+  } catch (e) {
+    loadEl.remove();
+    const netErr = lang === 'en' ? 'Network error, please check your connection' : '网络错误，请检查连接';
+    appendMsg('error', netErr);
+  } finally {
+    setLoading(false);
+  }
+}
+</script>
+</body>
+</html>

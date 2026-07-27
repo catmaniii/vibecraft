@@ -1,0 +1,56 @@
+# macro_hatch + 玩家先 5:00 force attack all_in,90s 后 6:30 改主意 retreat
+# → 验证虫族 sequential 战术切换(action_idx 配对双 check)。
+#
+# 三族 sequential 矩阵补齐:
+# - 神族:1g_robo_immortal__attack_then_retreat(2/2 PASS)
+# - 虫族:本 case(macro_hatch attack→retreat)
+# - 人族:two_base_tanks__attack_then_retreat
+#
+# 选 macro_hatch 而非 roach_hydra:
+# - macro_hatch 是 ZvT macro 流,game 长 10+ min(vs VeryEasy 7-10 min),
+#   有足够 window fire 5:00 attack + 6:30 retreat + 60s wait check
+# - macro_hatch__retreat 已知 PASS,框架健康
+# - 2026-05-28 修了 ROACH 28 → 80 上限,opening 不摆烂,中后期持续刷兵
+#
+# 时间线:
+#   t=5:00 force attack all_in target=enemy_main(此时蟑螂还在量产中,
+#          只 4-10 蟑螂,正常 power check 不放行,mode=all_in 绕过)
+#   t=6:30 check[0]: 90s 后部队到 enemy_main 70 内(蟑螂速度 2.25 + 提速 3.15,
+#          + 蟑螂窝 → enemy_main 路径长,放宽 within=70)
+#   t=6:30 force retreat
+#   t=7:30 check[1]: 60s 后部队回 home 50 内(蟑螂从前线撤退,
+#          有蟑螂速度提速,放宽 50 buffer)
+#
+# 验收意义:
+# - virtual race × intent × sequential 矩阵,虫族那格
+# - 验证虫族 PlanZoneAttack 的 vibecraft hook (combat_intent_override)
+#   在 attack → retreat 切换路径上同样生效(神族已 PASS,这里加虫族)
+
+strategy_id: macro_hatch
+my_race: Zerg
+
+player_actions:
+  - at: "5:00"
+    verb: attack
+    mode: all_in
+    target_area: enemy_main
+  - at: "6:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_advanced_after_attack
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 90
+    near: enemy_main
+    within: 70.0
+    op: "<="
+
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 1
+    after_s: 60
+    near: home
+    within: 50.0
+    op: "<="

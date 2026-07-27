@@ -1,0 +1,37 @@
+# E2E scenario C — 同类延续("再来 N 个")
+#
+# 验证 LLM 用 history 解析"再来 N 个" → 同上次的 unit_type
+# 期望 LLM 看 history 知道上次是 Sentry → "再来 3 个" = production_override(Sentry, 3)
+strategy_id: 1g_robo_immortal
+description: 同类延续 ("再来 N 个" → 续上次 unit_type)
+
+schedule:
+  # ── t=60 锚点:出 1 个 Sentry(production_override) ──
+  # 1g_robo_immortal cyber ~1:30+ 后能出 Sentry
+  - at_s: 90
+    text: 下个 BG 出 1 个哨兵
+    expect_directive_types: [production_override]
+    expect_interpretation_contains: [哨兵]
+    expect_done_within_s: 120
+
+  # ── t=180 穿插:造一个水晶(无关) ──
+  - at_s: 180
+    text: 造一个水晶
+    expect_directive_types: [build_at, structure_override]
+    expect_lifecycle: committed
+    expect_done_within_s: 60
+
+  # ── t=240 延续:"再来 2 个" 期望 LLM 看 history 知道上次是哨兵 ──
+  - at_s: 240
+    text: 再来 2 个
+    expect_directive_types: [production_override]
+    expect_interpretation_contains: [哨兵]
+    expect_done_within_s: 120
+    optional: true
+
+  # ── t=300 进一步延续:"再来一个不朽" 显式给 unit_type 锚点变 ──
+  - at_s: 300
+    text: 再来一个不朽
+    expect_directive_types: [production_override]
+    expect_interpretation_contains: [不朽]
+    expect_done_within_s: 180

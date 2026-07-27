@@ -1,0 +1,69 @@
+kind: opening_build
+id: banshee_harass
+display_name_zh: "隐形女妖偷袭"
+display_name_en: "Cloaked Banshee Harass"
+summary_zh: "速 VS + 女妖 + 隐形升级，骚扰矿线杀农民；TvP/TvZ 早期偷袭，打乱对方节奏争取经济差"
+summary_en: "Fast Starport + Banshee + Cloak upgrade, harass mineral lines and kill workers; TvP/TvZ early raid to disrupt opponent rhythm and gain economic advantage."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.banshee_harass:BansheeHarass"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: BANSHEE, policy: cap, value: 6}
+  - {unit: SIEGETANK, policy: cap, value: 3}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+aliases:
+  - "banshee_harass"
+  - "隐形女妖偷袭"
+  - "隐形女妖"
+  - "女妖骚扰"
+  - "女妖偷袭"
+  - "隐形女妖rush"
+  - "banshee harass"
+  - "cloak banshee"
+  - "女妖rush"
+  - "速女妖"
+  - "女妖流"
+matchup: [TvP, TvZ]
+
+phases:
+  - id: opening
+    display: "速 VS + TechLab"
+    display_en: "Fast Starport + Tech Lab"
+    subtitle: "14 农 → BB → VF → VS → TechLab → 研隐形"
+    subtitle_en: "14 workers → Barracks → Factory → Starport → Tech Lab → research Cloak"
+    start_at_supply: 14
+  - id: harass
+    display: "女妖出门骚扰"
+    display_en: "Banshee Harassment"
+    subtitle: "隐形女妖出门杀农民，持续压制对方矿线"
+    subtitle_en: "Cloaked Banshees move out to kill workers, continuous pressure on enemy mineral lines"
+    start_at_supply: 24
+    start_at_time: 420  # 2026-06-18 #548 同步代码:cloak 实测 ~418s，骚扰窗口 360-450s，改 420
+  - id: eco
+    display: "双基地经济"
+    display_en: "2-Base Economy"
+    subtitle: "骚扰同时开二矿 + 升轨道，补 Marine 保家"
+    subtitle_en: "Expand simultaneously → Orbital Command upgrade, supplement Marines for defense"
+    start_at_supply: 30
+    start_at_time: 360  # 2026-06-18 #548 同步代码:CC2 完成实测 ~369s(spec 6:15±60s)，改 360
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "16 build Refinery"
+  - "18 build Factory"
+  - "19 build Refinery"
+  - "20 build Starport"
+  - "21 build TechLab @Starport"
+  - "22 research BansheeCloak"
+  - "24 train Banshee"
+  - "24 train Banshee"
+  - "26 build CommandCenter"
+  - "28 train Marine"
+  - "30 build SupplyDepot"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_armor"

@@ -1,0 +1,28 @@
+# roach_ravager + 玩家 7:30 按"防守"→ 45s 后单位回防己方区域
+#
+# build_acceptance/roach_ravager.yaml: attack_moveout by=7:30 (attack_window
+# 7:00-8:30, 10 蟑 + 10 破坏者 + 30 狗就位)。玩家在 7:30 切 defend: 此时
+# 部队刚出门,验"按按钮真回来"。
+#
+# within 阈值 40→65（2026-06-13 语义更新,非放宽掩盖退步）:
+# defend 自 2026-06-03 起 = 守前沿分矿,不缩回主基地;2026-06-13 又加威胁感知
+# (守所有己方基地)。虫族 7:30 常已三矿,前沿(三矿)离 home ~55-60 —— 部队从
+# 前线撤回**驻守三矿**是正确防守行为(取证局: army (98,92)→(28,80) 己方前沿,
+# 无敌情无追击)。65 覆盖"回到任一己方基地",仍能抓"根本没回防"(>65=还在前线)。
+
+strategy_id: roach_ravager
+my_race: Zerg
+
+player_actions:
+  - at: "7:30"
+    verb: defend
+    mode: null
+
+checks:
+  - id: army_back_home_after_defend
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 45
+    near: home
+    within: 65.0
+    op: "<="

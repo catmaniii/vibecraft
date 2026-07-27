@@ -1,0 +1,26 @@
+# macro_hatch + 玩家 7:30 按"全军撤退"→ 45s 后单位回家
+#
+# build_acceptance/macro_hatch.yaml: attack_moveout at=6:30 tol=90 (5:00-8:00 出门)
+# 之前 at=7:00 偏早:虫族 macro_hatch 蟑螂速通常 7:00-7:30 才真出门,7:00
+# fire retreat 时 army 还在 natural 集结(d_home ~30 边缘 game variance ±2
+# 反复跨 30 boundary fail)。改 at=7:30 让蟑螂真出门后 retreat 测撤回行为。
+#
+# bug 12 在虫族失效的直接对应 case (commit ab550fc 把 14 个虫族 plan 改成
+# PlanZoneAttack,T1-T3 把 vibecraft hook inline 到 vendor PlanZoneAttack 后才修)。
+
+strategy_id: macro_hatch
+my_race: Zerg
+
+player_actions:
+  - at: "7:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 45
+    near: home
+    within: 30.0
+    op: "<="

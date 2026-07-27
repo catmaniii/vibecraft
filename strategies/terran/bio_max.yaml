@@ -1,0 +1,97 @@
+kind: persistent_doctrine
+id: persistent_bio_max
+display_name_zh: "生化满升"
+display_name_en: "Bio Max Upgrades"
+summary_zh: "MMM 生化海开满升级：6-8 BB 量产枪兵 + 叉子，2 BE 滚步兵攻防 3/3，VG 出幽灵 EMP / 狙杀，医疗船补给，兴奋剂 A 上去"
+summary_en: "MMM bio mass with maxed upgrades: 6-8 Barracks mass Marines + Marauders, 2 Engineering Bays rolling infantry 3/3, Ghost Academy for EMP/Snipe, Medivac support, Stim and push."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bio_max:BioMax"
+gas_intensity: medium
+
+aliases:
+  - "生化满升"
+  - "生化海"
+  - "生化流"
+  - "MMM满"
+  - "枪兵海"
+  - "暴兵"
+  - "bio"
+  - "3-3生化"
+
+# 后期阶段进度（game_time 触发，PWA phase stepper 显示）
+phases:
+  - id: tech_up
+    display: "上 BB × 8 + BE × 2 + VG"
+    display_en: "8 Barracks + 2 Engineering Bays + Ghost Academy"
+    subtitle: "BB 扩产到 8 / 工程湾 × 2 / 幽灵学院 / Stim + ShieldWall 研究"
+    subtitle_en: "Scale Barracks to 8 / 2 Engineering Bays / Ghost Academy / Stim + Combat Shield research"
+    start_at_time: 0
+  - id: massing
+    display: "量产 MMM + 幽灵"
+    display_en: "Mass MMM + Ghosts"
+    subtitle: "持续枪兵 + 叉子 + 医疗船 + 幽灵；步兵攻防 1/2 中"
+    subtitle_en: "Continuous Marines + Marauders + Medivacs + Ghosts; infantry 1/2 upgrades in progress"
+    start_at_time: 120
+  - id: deathball
+    display: "3/3 满升出门"
+    display_en: "3/3 Fully Upgraded Push"
+    subtitle: "步兵攻防 3/3 完成 + 40 枪兵 + 16 叉子 + 8 医疗船 + 4 幽灵 → 强推"
+    subtitle_en: "Infantry 3/3 done + 40 Marines + 16 Marauders + 8 Medivacs + 4 Ghosts → hard push"
+    start_at_time: 360
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Marine: 40
+  Marauder: 16
+  Medivac: 8
+  Ghost: 4
+
+required_tech:
+  - Stimpack
+  - ShieldWall
+  - PunisherGrenades
+  - TerranInfantryWeaponsLevel1
+  - TerranInfantryWeaponsLevel2
+  - TerranInfantryWeaponsLevel3
+  - TerranInfantryArmorsLevel1
+  - TerranInfantryArmorsLevel2
+  - TerranInfantryArmorsLevel3
+
+required_structures:
+  Barracks: 8
+  EngineeringBay: 2
+  GhostAcademy: 1
+  Starport: 2
+  CommandCenter: 4
+
+engagement_doctrine:
+  - "MMM 一起推：医疗船跟着枪兵治疗，叉子顶前排受 focused fire"
+  - "Stim 兴奋剂进战斗开，退出 Stim 立刻拉医疗船补血"
+  - "Ghost EMP 先打对方神族 / 虫族 spellcaster，清魔法值"
+  - "Ghost 狙杀对方高价值单位（巨像 / 雷兽 / 太子）"
+  - "正面被 AoE 打散时医疗船拉走低血量单位"
+engagement_doctrine_en:
+  - "Push MMM together: Medivacs heal Marines while Marauders tank focused fire at the front"
+  - "Stim on engagement; immediately pull low-HP units to Medivac healing after Stim"
+  - "Ghost EMP first on Protoss / Zerg spellcasters to drain shields and energy"
+  - "Ghost Snipe priority targets (Colossus / Ultralisk / High Templar)"
+  - "When AoE scatters the bio ball, Medivacs lift low-HP units to safety"
+
+win_condition:
+  type: composition_advantage
+  description: "步兵攻防 3/3 + Stim MMM 正面压制力极强，加幽灵 EMP 软化对方魔法单位"
+  signals:
+    - "self.upgrade.infantry_weapons >= 3"
+    - "self.upgrade.infantry_armor >= 3"
+    - "self.units.marine.amount >= 30"
+    - "self.units.medivac.amount >= 6"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - zerg_ling_bane
+  - protoss_gateway
+  - mass_ground
+
+weak_against:
+  - protoss_colossus
+  - zerg_lurker
+  - mass_aoe

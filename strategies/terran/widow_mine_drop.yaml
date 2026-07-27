@@ -1,0 +1,66 @@
+kind: opening_build
+id: widow_mine_drop
+display_name_zh: "空投地雷"
+display_name_en: "Widow Mine Drop"
+summary_zh: "Marine + 寡妇雷 医疗船多线空投，~4:00 起手骚扰矿线；工厂 Reactor 双产寡妇雷，Stimpack 加成枪兵，适用 TvP/TvZ"
+summary_en: "Marines + Widow Mines Medivac multi-line drops, ~4:00 harass mineral lines; Factory Reactor double-producing Widow Mines, Stim Marines, TvP/TvZ."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.widow_mine_drop:WidowMineDrop"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: WIDOWMINE, policy: cap, value: 5}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+aliases:
+  - "widow_mine_drop"
+  - "空投地雷"
+  - "寡妇雷空投"
+  - "地雷空投"
+  - "widow mine drop"
+  - "mine drop"
+  - "医疗船地雷"
+  - "地雷骚扰"
+  - "mine harass"
+matchup: [TvP, TvZ]
+
+phases:
+  - id: opening
+    display: "速 BB + VF + VS"
+    display_en: "Fast Barracks + Factory + Starport"
+    subtitle: "14 农 → BB → Refinery → 第二 BB → VF → VF Reactor + BB TechLab → VS"
+    subtitle_en: "14 workers → Barracks → Refinery → 2nd Barracks → Factory → Factory Reactor + Barracks Tech Lab → Starport"
+    start_at_supply: 14
+  - id: drop
+    display: "首波空投"
+    display_en: "First Drop"
+    subtitle: "~4:00 医疗船满编 → Marine + 寡妇雷多线空投骚扰矿线；Stimpack 研完加成枪兵"
+    subtitle_en: "~4:00 Medivac loaded → Marines + Widow Mines multi-line drop harassing mineral lines; Stim Marines"
+    start_at_supply: 28
+    start_at_time: 240
+  - id: eco
+    display: "双基地持续运营"
+    display_en: "2-Base Sustained Operations"
+    subtitle: "双 CC → 升轨道 + 持续补 Marine(24) + 寡妇雷(8+) + 医疗船(6+) 持续骚扰"
+    subtitle_en: "Dual CC Orbitals + continuous Marines (24) + Widow Mines (8+) + Medivacs (6+) sustained drops"
+    start_at_supply: 36
+    start_at_time: 300
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "16 build Refinery"
+  - "18 build Barracks"
+  - "20 build Factory"
+  - "21 build Reactor @Factory"
+  - "21 build TechLab @Barracks"
+  - "22 build Starport"
+  - "24 build CommandCenter"
+  - "26 train WidowMine"
+  - "28 train Medivac"
+  - "30 train Marine"
+  - "31 research Stimpack"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_armor"

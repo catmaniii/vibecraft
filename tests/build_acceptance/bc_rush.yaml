@@ -1,0 +1,85 @@
+strategy_id: bc_rush
+my_race: Terran
+
+# BC Rush「二本速战巡」build acceptance spec
+#
+# 核心结构(2026-06-19 用户铁律 1-base BC)：depot→rax→gas1→Factory→gas2→Starport→
+#   FusionCore(~4:00)+TechLab→首舰(~5:00)→**前 3 个大件连续出**(主矿两口气满采)→才开二矿/补兵营。
+# 即：核心链 + 前 3 大件**绝对优先**，二矿/兵营推到 BATTLECRUISER>=3 之后。气**优先满采**(min_gas=6)。
+#
+# 调研来源：
+#   - Liquipedia Battlecruiser Build Orders (TvP/TvZ BC rush)
+#   - spawningtool BC rush: https://lotv.spawningtool.com (BC timing ~4:10-4:40)
+#   - vibecraft design: docs/plans/2026-06-18-bc-rush-design.md
+#
+# 关键前置说明：
+#   BC 需要 FUSIONCORE + STARPORTTECHLAB 两个前置。
+#   本 build 不研 Yamato（用户要求），普攻骚扰农民即可。
+
+checks:
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:35"
+    tol: 25
+    # 标准开局 BB；~0:17 开始建，~1:30-1:40 完成
+
+  # 注：command_center_2(二矿)check 已移除 —— 2026-06-19 用户铁律改成「前 3 个大件连续出来、有
+  # 多余的钱才开二矿」。CC2 现在 gate=BATTLECRUISER>=3，是**条件性后扩**(取决于局长/能否撑到 3 BC)，
+  # 不再是固定 timing 的开局步骤；短局(veryeasy 速胜)可能根本不到 3 BC → 无 CC2 属正常，不该当 FAIL。
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "2:25"
+    tol: 40
+    # Factory(Starport 前置)。#582(2026-07-04)修资源预留饿死后大幅提前：兵营 ready(~1:32)即建，
+    # ~2:22-2:27 完成(实测 rt=142s / 非rt=147s)。旧 spec 3:15 是被 MorphOrbitals 占矿饿死的慢基线，已作废。
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "4:00"
+    tol: 60
+    # Starport；Factory ready(~3:10)后建，~3:50-4:10 完成
+
+  - id: fusion_core
+    type: building_complete
+    unit: FUSIONCORE
+    at: "4:30"
+    tol: 60
+    # FusionCore；Starport exists(~3:10)即下，~4:10-4:40 完成
+
+  - id: starport_techlab
+    type: building_count
+    unit: STARPORTTECHLAB
+    at: "4:20"
+    tol: 60
+    min: 1
+    # Starport TechLab addon；Starport ready 后即挂，~4:10-4:30 完成
+
+  - id: battlecruiser_1
+    type: unit_count
+    unit: BATTLECRUISER
+    at: "5:00"
+    tol: 90
+    min: 1
+    # 第一艘 BC；设计目标 ~4:10-4:40；给 90s 容差覆盖实际波动
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "8:30"
+    # 本 build 的进攻主要靠 BC 持续骚扰(BcRaidSquadAct,独立于此)；首舰前只 4 枪兵、不早开二矿
+    # → 主力大军成军较晚，moveout ~8:00-8:20。放宽到 8:30（2026-06-20 用户：首舰前少出枪兵）。
+
+# 经济曲线：1-base 速战巡，重 gas（两口气满采）。#582(2026-07-04)后 SCV non-priority 无上限：
+# 大件/科技链永远先吃钱、农民吃余钱不停造 → 农民持续涨(冲破旧 23 封顶)、矿不再 float(在花)。
+economy_profile:
+  - at: "3:00"
+    workers: 24
+    minerals: 120
+    # 核心链建设中：农民 ~24 持续涨（无上限、吃余钱），矿在花不再堆（#582 修）
+  - at: "5:30"
+    workers: 30
+    minerals: 150
+    # 首舰持续出场：农民 ~30（开二矿后分流），矿被大件+农民+扩张烧掉，不再 float

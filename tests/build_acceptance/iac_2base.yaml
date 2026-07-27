@@ -1,0 +1,169 @@
+strategy_id: iac_2base
+my_race: Protoss
+# 2026-05-29 改造：DT 路线 → HT 路线（VT 取代 VD）
+# research 来源:
+#   - Stats PvZ Spawning Tool #81482 (Archon Chargelot ~6:05 出门，HT 路线)
+#   - Liquipedia 2 Base Templar (vs Terran): VT ~3:15, HT start ~4:30, attack ~6:00
+#
+# 本项目变体说明: iac_2base 改 HT 路线，VT(TemplarArchives, 36s 建造) 取代
+# VD(DarkShrine, 71s 建造)，出门 timing 提早 ~50s，约 6:00-6:30。
+# 研 Psi Storm（~110s，chrono 加速）→ HT 放 Storm 后合 Archon。
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:35"
+    # supply 14 下 Pylon
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:20"
+    tol: 20
+    # supply 16 开建，完成约 1:15-1:25
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:40"
+    # 第 1 气矿，supply 17 建
+
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    at: "2:45"
+    tol: 25
+    # 二矿 natural；BG ready(~1:26) 触发 Expand，完成实测 ~169s
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:20"
+    # 第 2 气矿
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:15"
+    tol: 20
+    # supply 20，BG 一好触发
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:00"
+    # WGR start @2:10，研究 ~110s(chrono)，完成约 3:50-4:00
+
+  - id: twilight_council
+    type: building_complete
+    unit: TWILIGHTCOUNCIL
+    at: "3:05"
+    tol: 30
+    # BY 一好后立刻触发 VC。实测 ~182s，校准到 3:05±30
+
+  - id: templar_archives
+    type: building_complete
+    unit: TEMPLARARCHIVE
+    at: "4:20"
+    tol: 30
+    # VC ready 后立刻触发 VT（36s 建造）。VC 完成 ~3:30 → VT 完成 ~4:06-4:20。
+    # 比旧 dark_shrine(4:55±30) 早约 35s。校准到 4:20±30 = [3:50,4:50]
+
+  - id: psistorm_research
+    type: upgrade_complete
+    upgrade: PSISTORMTECH
+    by: "6:00"
+    # VT 一好立刻研 Storm(~110s,chrono 加速 ~80s)；VT ~4:20 完成 → Storm ~5:40-6:00
+
+  - id: forge
+    type: building_complete
+    unit: FORGE
+    at: "5:10"
+    tol: 30
+    # Forge(BF) Time(4:30) gate 晚建，实测完成 ~306s。校准到 5:10±30
+
+  - id: charge_research
+    type: upgrade_complete
+    upgrade: CHARGE
+    by: "5:30"
+    # VC 一好立刻研 Charge(~100s,chrono)；VC 完成约 3:30 → Charge ~5:10
+
+  - id: ground_weapons_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDWEAPONSLEVEL1
+    by: "7:00"
+    # 2 个 Forge Time(4:30) gate 晚建 + 星空加速。HT 路线出门 ~6:00，
+    # +1 攻在出门到达对方家时(~6:30-7:00)正好升级好。by 7:00 兜底。
+
+  - id: ground_armor_1
+    type: upgrade_complete
+    upgrade: PROTOSSGROUNDARMORSLEVEL1
+    by: "7:00"
+    # 同上，+1 防由第 2 个 Forge 并行研究，by 7:00 兜底
+
+  - id: worker_count_2base
+    type: worker_count
+    at: "4:30"
+    tol: 30
+    min: 34
+    # 双矿饱和目标 44 探机，实测 4:30 时 ~34
+
+  - id: six_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "6:50"
+    tol: 40
+    min: 6
+    # plan Time(60*4)=240s 触发 GridBuilding(GATEWAY,6)，sharpy 逐个建
+
+  - id: ht_count_first_batch
+    type: unit_count
+    unit: HIGHTEMPLAR
+    at: "5:00"
+    tol: 30
+    min: 2
+    # VT 完成 ~4:20，第一个 HT warp ~32s(chrono) → ~4:52 ready。
+    # 2 HT 约 4:52-5:00。at 5:00±30 覆盖实测。
+    # （旧 DT：dt_count_first_batch at 5:30±30 min 4，HT 更快）
+
+  - id: stalker_count_limit
+    type: unit_count
+    unit: STALKER
+    at: "7:00"
+    tol: 30
+    min: 3
+    # 2026-05-30 更新：追猎后置（电兵 >= 4 ready 后才开始产），kite 主力 target 10。
+    # 电兵 4 约 5:00 ready → 追猎开始产。at 7:00±30 验证已产出至少 3 只。
+    # （旧：at 6:00±30 min 1，整 build 只造 1 的旧版设计）
+
+  - id: archon_count
+    type: unit_count
+    unit: ARCHON
+    at: "6:00"
+    tol: 30
+    min: 1
+    # 2 HT ~5:00 → MORPH_ARCHON ~10s → 5:10 第一个 Archon。
+    # at 6:00±30 = [5:30,6:30] 覆盖实测；Storm 后才合 idle → 5:30 合。
+    # 2026-05-29 追加 2：目标 6 HT = 3 Archon；at 6:00 不一定全合好,min=1 兜底。
+
+  - id: army_gather
+    type: army_gather
+    at: "5:50"
+    near: home
+    within: 45
+    # HT 路线出门更早，集结时间前移；at 5:50 落在集结期内
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "7:00"
+    # 出门 gate 在「Charge + Storm + 2 Archon」全好。
+    # HT 路线目标 ~6:00 出门；by 7:00 宽裕兜底（比旧 by 8:00 早 60s）
+
+  # --- L2 前压验收 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "8:00"
+    within: 25
+    # HT 路线比 DT 版早 ~50s 出门，压力接触时间相应提前；by 8:00 兜底

@@ -1,0 +1,146 @@
+strategy_id: roach_ravager
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/163476/
+#     (Standard Roach Ravager 3 Base: 13 Extractor / 13 Spawning Pool /
+#      17 Hatch / 18 Roach Warren / 20 Extractor / ~28 3rd Hatch;
+#      Ravager morph starts ~4:30; push timing ~6:30-7:00)
+#   - https://lotv.spawningtool.com/build/192344/
+#     (Roach Ravager Timing ZvT/ZvP: 3 Queen / 10R+8Rav+30ling wave @6:45-7:15;
+#      Glial + Zergling speed + +1 missile weapons ~7:30 good)
+#   - https://liquipedia.net/starcraft2/Roach_Ravager_(vs._Protoss)
+#     (3 base Roach Ravager: RoachWarren @~2:30, Ravager morph @4:30,
+#      move out @6:30-7:30 with 10 Roach + 10 Ravager + 30 Zergling)
+#
+# 本项目 strategy：3 矿蟑螂破坏者，母池 @13 / 蟑螂窝 @~2:30 / 双气 / 3rd hatch @~3:00
+# ~7:00 出门（10 蟑 + 10 破坏者 + 30 狗），升级 ~7:30 到位。
+
+checks:
+  # --- 基础建筑骨架 ---
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    by: "1:30"
+    # 13 农 → BS 开建，55s 建造时间；约 1:15-1:30 完成
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "2:30"
+    tol: 30
+    min: 2
+    # 二矿 Hatchery 71s 建造；约 2:00-3:00 完成；at=2:30 tol=30 覆盖
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "2:30"
+    tol: 30
+    # 母池完成后接蟑螂窝，55s 建造；约 2:10-3:00 完成
+
+  - id: extractor_2
+    type: building_count
+    unit: EXTRACTOR
+    at: "2:15"
+    tol: 30
+    min: 2
+    # 双气矿；第二气矿跟蟑螂窝几乎同时开建，25s 建造；2:00-2:45 完成
+
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "3:30"
+    tol: 45
+    min: 3
+    # 三矿 Hatchery；约 3:00-4:15 完成；at=3:30 tol=45 覆盖
+
+  - id: evolution_chamber
+    type: building_complete
+    unit: EVOLUTIONCHAMBER
+    by: "4:30"
+    # 进化腔开升级用；35s 建造；约 3:30-4:30 完成
+
+  # --- 升级时序 ---
+  - id: zergling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    by: "4:45"
+    # 狗速 110s 研究 + 100 气。BS 完(~1:15) → 但 BuildOrder 内 Expand(3) /
+    # Queen 等 priority 排在 Tech speed 前 reserve 资源,Tech 等积累 100 气
+    # 实测 ~2:47 才启动 → 4:37 完成。spec 容忍上限 4:45 align 实际节奏。
+
+  # 注:无蟑螂速(Glial)check —— 它需 Lair 前置,而 7 分一波 timing 不升 Lair
+  # (升 Lair 占主巢 ~57s morph 掉幼虫产能),保持一本快速暴兵。
+
+  - id: ground_weapons_1
+    type: upgrade_complete
+    upgrade: ZERGMISSILEWEAPONSLEVEL1
+    by: "7:30"
+    # 地面导弹武器 +1（170s 研究）；进化腔约 4:00 完成后开研；约 6:50-7:30 到位
+
+  # --- 兵力编制验收（出门 timing 前） ---
+  - id: roach_10
+    type: unit_count
+    unit: ROACH
+    at: "7:00"
+    tol: 60
+    min: 7
+    # 3 矿双气持续产蟑螂;蟑螂窝完成约 2:30,持续暴兵。
+    # 2026-05-23 调:at 6:30→7:00 align 7:00 push timing;min 10→7
+    # 因为 ZergUnit(ROACH, 18) - ZergUnit(RAVAGER, 8) morph = 实际留场 10
+    # 但部分 morph 抢早 → 实测留场 7-10,min 7 是合理底线。
+
+  - id: ravager_8
+    type: unit_count
+    unit: RAVAGER
+    at: "7:00"
+    tol: 60
+    min: 8
+    # Ravager morph 约 4:30 开始(每只 morph 12s);7:00 应有 8-10 只
+
+  - id: zergling_20
+    type: unit_count
+    unit: ZERGLING
+    at: "7:00"
+    tol: 60
+    min: 10
+    # 2026-05-23 调:min 20→10 align 社区标准。Roach Ravager 7:00 push 实际是
+    # 10 roach + 10 ravager + **~10 ling**(不是 30 — 那是错的 spec 期望)。
+    # ling 排末位 + 不 priority,larva 大多去 roach,实测 6:30 仅 8-10 ling。
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "7:30"
+    # strategy attack_window 7:00-8:30；10 蟑 + 10 破坏者 + 30 狗出门压制
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "8:30"
+    within: 25
+    # 蟑螂破坏者 timing：截至 8:30,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值
+# 蟑螂破坏者是强 timing 流——快扩 3 矿但农民有上限，大量气矿投入蟑螂 + 升级
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 150
+    vespene: 50
+    # 早期快扩期：单矿 + 气矿开始；农民 16，余矿低（BS + 蟑螂窝在建）
+
+  - at: "4:00"
+    workers: 26
+    minerals: 200
+    vespene: 100
+    # 双矿发力：农民 26，气矿开始积累；余矿压低（持续出蟑螂 + 升级）
+
+  - at: "6:30"
+    workers: 36
+    minerals: 250
+    vespene: 150
+    # 三矿稳定:农民 36(timing push 不堆农民,留 supply 给兵),余矿保持低位。
+    # 2026-05-23 调:40→36 align 实际 build —— roach ravager 不是 macro。

@@ -1,0 +1,122 @@
+strategy_id: two_one_one
+my_race: Terran
+
+# 2-1-1 「2BB双矿5:30压制」TvZ（ByuN 2016 风格，into tank 变型）
+#
+# 核心结构：2BB + 1 工厂(TechLab 出攻城坦克) + 1 星港(Reactor 出医疗船)，
+# ~5:30 带 枪兵 + 掠夺者 + 2 医疗船 + 2 攻城坦克 出门 timing 压制。
+#
+# research 来源：
+#   - TL.net PiG 2-1-1 guide / terrancraft.com 2-1-1
+#     (BB1@~0:17 build/~1:30 complete; CC@1:48; BB2@2:10; Factory@3:00;
+#      Factory TechLab@3:50; Starport@4:00; Starport Reactor@4:50;
+#      Stim start@4:30; Tank1@4:40; Medivac1@5:20; move out 5:30-6:00)
+#   - icy-veins TvP/TvZ 2-1-1 into tank
+#     (modern SC2: Siege Tech upgrade removed; Factory TechLab → direct tank production)
+#   - Spawningtool 参考：2-1-1 builds TvZ，Medivac timing ~5:20-5:30
+#
+# 注：现代 SC2 已移除 Siege Tech 升级；Factory TechLab 建好即可出攻城坦克。
+
+checks:
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:30"
+    tol: 20
+    # 标准开局 BB；~1:17 开始建，~1:37 完成；窗口 1:10-1:50
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "2:30"
+    tol: 40
+    min: 2
+    # 快扩 CC；~2:00 下手，~2:40 完成；窗口 1:50-3:10
+
+  - id: barracks_2
+    type: building_count
+    unit: BARRACKS
+    at: "2:30"
+    tol: 40
+    min: 2
+    # 第 2 兵营；~2:10 开始建，~2:50 完成；窗口 2:10-3:10
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:50"
+    tol: 50
+    # 工厂(挂 TechLab 出坦克)；~3:00 开始建，~4:05 完成；窗口 3:00-4:40
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "4:50"
+    tol: 60
+    # 星港(挂 Reactor 双出医疗船)；~4:00 开始建，~5:00 完成；窗口 3:50-5:50
+
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "5:30"
+    # Stim 研究；BB TechLab 后约 4:30 开研，100s → ~6:10；
+    # into-tank 版 5:30 压制目标：Stim 在出门前或出门后立即完成
+
+  - id: tank_count
+    type: unit_count
+    unit: SIEGETANK
+    at: "5:45"
+    tol: 60
+    min: 2
+    # Factory TechLab 完成后持续出坦；~4:40 出 Tank1，~5:45 有 2 坦克
+
+  - id: marauder_count
+    type: unit_count
+    unit: MARAUDER
+    at: "5:45"
+    tol: 60
+    min: 4
+    # 双 BB 出掠夺者；~5:00 起至少 4 个 Marauder 到位
+
+  - id: medivac_count
+    type: unit_count
+    unit: MEDIVAC
+    at: "5:30"
+    tol: 60
+    min: 2
+    # 星港 Reactor 双产医疗船；~5:20-5:30 首批 2 Medivac 到位
+
+  - id: marine_count
+    type: unit_count
+    unit: MARINE
+    at: "5:45"
+    tol: 60
+    min: 12
+    # 双 BB 持续生产枪兵；2-1-1 timing 出门标配 12+ Marines
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "6:30"
+    # 5:30 编队到位后出门；ByuN 风格 into-tank 最晚 6:30 必须压上
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "7:30"
+    within: 25
+    # 两船兵(2-1-1) timing：截至 7:30,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值
+# 2-1-1 into tank 是压制流，农民爬坡有限；
+# 余矿偏低（双 BB + Factory + Starport 全量消耗）
+economy_profile:
+  - at: "3:00"
+    workers: 26
+    minerals: 200
+    # 快扩刚落地 + Factory 在建：双矿起步，农民 26，余矿 200（Factory 钱）
+  - at: "5:30"
+    workers: 40
+    minerals: 300
+    # 出门前：双矿运转，农民 40，余矿 300（生产消耗大，余矿压低正常）

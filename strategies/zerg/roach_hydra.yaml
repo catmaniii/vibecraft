@@ -1,0 +1,88 @@
+kind: opening_build
+id: roach_hydra
+display_name_zh: "蟑螂刺蛇中期"
+display_name_en: "Roach-Hydralisk Mid-game"
+summary_zh: "双矿蟑螂 + 刺蛇中期：蟑螂开路 + 刺蛇跟进，蟑螂速 + 刺蛇射程升级，timing 7:30-8:30 出门压制"
+summary_en: "2-base Roach + Hydralisk mid-game: Roaches lead, Hydralisks follow; Glial Reconstitution + Grooved Spines; 7:30-8:30 timing push."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.roach_hydra:RoachHydra"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: ROACH, policy: mass}
+  - {unit: HYDRALISK, policy: ratio, per: ROACH, n: 2}
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "roach_hydra"
+  - "蟑螂刺蛇"
+  - "蟑刺"
+  - "蟑螂龙"
+  - "RH"
+  - "roach hydra"
+  - "蟑螂+龙"
+
+enter_when:
+  - "self.tech.roach_warren.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [12pool, macro_hatch]"
+
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + 速率升级"
+    display_en: "2-Base + Speed Upgrades"
+    subtitle: "二矿 / Spawning Pool / RoachWarren / Glial Reconstitution"
+    subtitle_en: "Natural / Spawning Pool / Roach Warren / Glial Reconstitution"
+    start_at_time: 0
+  - id: roach_mass
+    display: "暴蟑螂"
+    display_en: "Mass Roaches"
+    subtitle: "~4:30 蟑螂主力到位 8-10 只"
+    subtitle_en: "~4:30 Roach main force 8-10 units"
+    start_at_time: 270
+  - id: hydra_tech
+    display: "上刺蛇 + 升射程"
+    display_en: "Hydralisk Den + Range Upgrade"
+    subtitle: "~5:30 Hydralisk Den + Grooved Spines"
+    subtitle_en: "~5:30 Hydralisk Den + Grooved Spines"
+    start_at_time: 330
+  - id: combined_arms
+    display: "蟑刺合流"
+    display_en: "Roach-Hydra Combined"
+    subtitle: "~6:30 16 蟑 + 6+ 刺蛇组合就位"
+    subtitle_en: "~6:30 16 Roaches + 6+ Hydralisks combined"
+    start_at_time: 390
+  - id: attack_timing
+    display: "7:30 出门压制"
+    display_en: "7:30 Push"
+    subtitle: "蟑刺 + Queen 推对方分矿"
+    subtitle_en: "Roach-Hydra + Queens advance to enemy natural"
+    start_at_time: 450
+
+commitments:
+  units:
+    roach: 16
+    hydralisk: 10
+    queen: 4
+    overseer: 1
+  tech: [GlialReconstitution, GroovedSpines, MuscularAugments]
+  structures:
+    roach_warren: 1
+    hydralisk_den: 1
+    evolution_chamber: 2
+  expansions: 2
+
+attack_window:
+  open_at: "7:30"
+  close_at: "9:00"
+  target_priority: [army, natural, production]
+
+micro_doctrine:
+  - "蟑螂前排吸引攻击，刺蛇后排输出"
+  - "蟑螂速升完后正面推进"
+  - "刺蛇射程升完后站外圈输出"
+  - "对 bio：蟑螂 surround，刺蛇跟进"
+
+lategame_transitions:
+  - lategame_id: persistent_brood_corruptor
+    when: "default"
+  - lategame_id: persistent_brood_corruptor
+    when: "game_time >= 12:00"

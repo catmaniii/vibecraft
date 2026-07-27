@@ -1,0 +1,107 @@
+kind: persistent_doctrine
+id: persistent_blink_harass
+display_name_zh: "闪追扰袭"
+display_name_en: "Blink Stalker Harassment"
+summary_zh: "追猎闪现打游击 + 干扰者球分割，VC 闪现 + VR→VB 干扰者，4 矿快铺，靠骚扰换矿磨对手"
+summary_en: "Stalker Blink hit-and-run + Disruptor shots splitting enemy armies; Twilight Council Blink + Robotics Bay Disruptors; 4-base macro; attrition harassment to trade for map and economy advantage."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.blink_harass:BlinkHarass"
+gas_intensity: medium
+aliases:
+  - "闪追扰袭"
+  - "闪追运营"
+  - "闪烁追猎"
+  - "闪追"
+  - "追猎流"
+  - "干扰者流"
+  - "追猎扰袭"
+  - "闪现扰袭"
+  - "追猎游击"
+  - "Blink Stalker"
+  - "blink stalker"
+
+# 后期阶段进度（lategame 无严格 supply 节点，用 game_time + 关键单位/建筑判断）
+phases:
+  - id: tech_up
+    display: "上 VC + VR"
+    display_en: "Twilight Council + Robotics Bay"
+    subtitle: "VC（闪现前置）/ VR → VB（干扰者前置）/ 2 BF 建筑链 + 研 Blink"
+    subtitle_en: "Twilight Council (Blink prereq) / Robotics Facility → Robotics Bay (Disruptor prereq) / 2 Forges chain + Blink research"
+    start_at_time: 0
+  - id: blink_ready
+    display: "闪现激活"
+    display_en: "Blink Active"
+    subtitle: "Blink 研完 → 追猎机动骚扰启动；VB 在建 → 干扰者快到"
+    subtitle_en: "Blink researched → Stalker mobile harass begins; Robotics Bay building → Disruptors incoming"
+    start_at_time: 130
+  - id: full_harassment
+    display: "扰袭成型"
+    display_en: "Full Harassment Online"
+    subtitle: "14 追猎 + 2+ 干扰者 → 多线骚扰；地面攻防 2/3 收尾"
+    subtitle_en: "14 Stalkers + 2+ Disruptors → multi-prong harass; ground 2/3 upgrades finishing"
+    start_at_time: 220
+
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data.py
+# 的 UNIT_COSTS / STRUCT_COSTS / TECH_COSTS key 对齐，transition_cost 才能算对
+target_composition:
+  Stalker: 20
+  Disruptor: 4
+  Immortal: 3
+  Observer: 3
+
+required_tech:
+  - Blink
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+  - ProtossGroundArmorsLevel1
+  - ProtossGroundArmorsLevel2
+  - ProtossGroundArmorsLevel3
+
+required_structures:
+  TwilightCouncil: 1
+  RoboticsFacility: 1
+  RoboticsBay: 1
+  Forge: 2
+  Gateway: 7
+  Nexus: 4
+
+engagement_doctrine:
+  - "stalker_blink priority=low_hp   # 闪现低血追猎，保留伤害换存活"
+  - "disruptor_shot priority=clumped min_targets=3   # 干扰者球只甩 3+ 聚团"
+  - "split_attack multi_prong=true   # 多线骚扰，分散敌方注意力"
+  - "retreat when=army_hp<40%   # 闪打闪撤，不硬拼正面"
+  - "immortal_front priority=tank_damage   # 不朽顶前排吃集火"
+engagement_doctrine_en:
+  - "stalker_blink priority=low_hp   # Blink low-HP Stalkers to preserve DPS efficiency"
+  - "disruptor_shot priority=clumped min_targets=3   # Fire Disruptor shots only into clusters of 3+"
+  - "split_attack multi_prong=true   # Multi-prong harassment to split enemy attention"
+  - "retreat when=army_hp<40%   # Hit-and-run; avoid committing to frontal engagements"
+  - "immortal_front priority=tank_damage   # Immortals tank the front line and soak focus fire"
+
+win_condition:
+  type: attrition_harassment
+  description: "闪现追猎高机动多线骚扰换矿，干扰者球切割聚团；靠骚扰消耗对手经济 + 拖到地面攻防 3/3 收尾"
+  signals:
+    - "self.units.stalker.amount >= 12"
+    - "self.upgrade.blink == true"
+    - "self.units.disruptor.amount >= 2"
+
+# 优势对位（用 enemy_tags.py canonical tag）
+counters_against:
+  - mass_ground
+  - zerg_roach_hydra
+  - terran_bio
+  - zerg_ling_bane
+
+# 劣势对位
+weak_against:
+  - mass_air
+  - zerg_lurker
+  - terran_tank_line
+  - protoss_immortal_chargelot
+
+abort_signals:
+  - sees: "enemy.units.lurker.amount >= 6 AND self.units.disruptor.amount < 2"
+    then: "warn:lurker_counters_stalker"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

@@ -1,0 +1,41 @@
+# E2E scenario A — 单位指代 + 延续("那个农民"、"再造一个")
+#
+# 验证 LLM 用累积 history(recent_command_buffer=0 = 整局)解析指代:
+# - "那个农民" 应回引 t=30 的 Probe(unit_claim hold_position)
+# - "再造一个气矿" 应识别"再" + 同类型(Assimilator) → 延续 t=60
+#
+# LLM 能力探索性测试,部分 case 可能因 LLM 自由发挥失败 → optional 标记
+strategy_id: 1g_robo_immortal
+description: 单位指代 + 延续 ("那个农民" / "再造一个")
+
+schedule:
+  # ── t=30 锚点:派农民占瞭望塔(unit_claim 持续) ──
+  - at_s: 30
+    text: 派 1 个农民去占瞭望塔
+    expect_directive_types: [unit_claim]
+    expect_lifecycle: committed
+    expect_done_within_s: 30
+
+  # ── t=60 穿插无关:造一个气矿(锚点 build_at) ──
+  - at_s: 60
+    text: 在主基地造一个气矿
+    expect_directive_types: [build_at, structure_override]
+    expect_done_within_s: 90
+
+  # ── t=120 指代测试:"那个农民" → LLM 应走 clarification 给玩家选项 ──
+  # (2026-05-24 加 disambiguation tool 后,复杂指代应输出 clarification 字段,
+  # 让玩家从 2-4 个 options 选择,而非空 directives)
+  # 验:LLM emit clarification(question + ≥2 options) → PASS
+  - at_s: 120
+    text: 那个农民去对方三矿造水晶塔
+    expect_directive_types: []
+    expect_lifecycle: clarification
+    expect_done_within_s: 10
+
+  # ── t=180 延续测试:"再造一个气矿" 延续 t=60 ──
+  # 期望 LLM 识别"再"=同类型 Assimilator
+  - at_s: 180
+    text: 再造一个气矿
+    expect_directive_types: [build_at, structure_override]
+    expect_interpretation_contains: [气]
+    expect_done_within_s: 120

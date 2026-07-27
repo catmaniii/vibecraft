@@ -1,0 +1,69 @@
+strategy_id: roach_hydra_viper
+my_race: Zerg
+
+# 2026-07-10 结构冻结修复验收(worker-saturation-floor 设计文档 4 结构病之一)。
+# 修复前:军队/科技/女王全塞进 SequentialList 最后一个内嵌 BuildOrder,蟑螂要
+# 等 MorphHive(整条 Hive 科技链)完成才开始出——慢 3-4 分钟。修复后:外层
+# SequentialList 改 BuildOrder(并行),硬前置(Pool→BR/Pool→MorphLair/Lair→VH/
+# Lair→VI/VI→MorphHive)继续用 Step(UnitReady(...)) 门控,但军队生产不再被
+# 经济/Hive 链阻塞。
+#
+# 本 spec 核心目的:证明蟑螂/刺蛇在 Hive 完成前就已出现(不再等整条链跑完)。
+# run: .venv/Scripts/python.exe scripts/build_acceptance.py roach_hydra_viper --opponent veryeasy
+
+checks:
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:20"
+    tol: 60
+    # 并行段首建筑；实测并行化后 Pool 约 1:11 完成（比串行更早），窗口 0:20-2:20
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "3:30"
+    tol: 60
+    # Step(UnitReady(SPAWNINGPOOL,1), GridBuilding(ROACHWARREN,1))：Pool 完成后
+    # 立刻触发（并行,不再等 Expand/BV/Lair 链）
+
+  - id: roach_early
+    type: unit_count
+    unit: ROACH
+    at: "5:00"
+    tol: 90
+    min: 1
+    # 核心回归断言:老 bug 下蟑螂要等 MorphHive(整条链)完成才出,实测该 build
+    # 作为独立 doctrine 冷启动时 Hive 完成常在 8-10 分钟之后。这里断言 5:00 前
+    # 已有 ≥1 蟑螂,证明蟑螂生产不再被 Hive 链冻结。
+
+  - id: hydralisk_den
+    type: building_complete
+    unit: HYDRALISKDEN
+    at: "5:30"
+    tol: 90
+    # Step(UnitReady(LAIR,1), GridBuilding(HYDRALISKDEN,1))：Lair 完成即建,
+    # 不再等 VI/Hive
+
+  - id: hydralisk_early
+    type: unit_count
+    unit: HYDRALISK
+    at: "7:00"
+    tol: 120
+    min: 1
+    # 同 roach_early 逻辑:刺蛇不再等 MorphHive 才出
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "13:00"
+    # 蟑螂刺蛇毒蛇是中后期 doctrine,冷启动出门较晚，宽松兜底
+
+# 经济曲线标准值（宽松，仅防止彻底断供）
+economy_profile:
+  - at: "4:00"
+    workers: 26
+    minerals: 300
+
+  - at: "8:00"
+    workers: 40
+    minerals: 400

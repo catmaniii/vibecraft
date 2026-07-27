@@ -1,0 +1,97 @@
+kind: persistent_doctrine
+id: persistent_ultralisk
+display_name_zh: "雷兽流"
+display_name_en: "Ultralisk Death Army"
+summary_zh: "雷兽 + 小狗 + 毒爆的地面碾压死阵：雷兽顶前排吃伤害，小狗毒爆贴脸，女王补血；升满近战攻防，Hive 科技，正面无解"
+summary_en: "Ultralisk + Zergling + Baneling ground crushing deathball: Ultralisks front-line absorbing damage, Zerglings + Banelings flanking; Queens heal; maxed melee attack/armor, Hive tech, frontally unstoppable."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.ultralisk:Ultralisk"
+gas_intensity: high
+aliases:
+  - "雷兽流"
+  - "雷兽"
+  - "暴雷兽"
+  - "雷兽小狗"
+  - "Ultra"
+  - "地面碾压"
+  - "雷兽海"
+
+# 后期阶段进度（用 game_time 触发，对应 BH×5 经济 → Hive 科技 → 死阵成型）
+phases:
+  - id: tech_up
+    display: "升 Lair → Hive 科技链"
+    display_en: "Lair → Hive + Ultralisk Cavern"
+    subtitle: "母池 → Lair → VI(感染坑) → Hive → VU(雷兽洞)；BV×2 滚近战攻防"
+    subtitle_en: "Pool → Lair → Infestation Pit → Hive → Ultralisk Cavern; 2 Evolution Chambers rolling melee attack/armor"
+    start_at_time: 0
+  - id: massing
+    display: "暴雷兽 + 小狗 + 毒爆"
+    display_en: "Mass Ultralisks + Zerglings + Banelings"
+    subtitle: "VU 完成 → 持续出雷兽；BB(妖虫巢) 毒爆补充；女王注射保供应"
+    subtitle_en: "Ultralisk Cavern done → continuous Ultralisks; Baneling Nest → Baneling supplements; Queens inject"
+    start_at_time: 90
+  - id: deathball
+    display: "死阵碾压"
+    display_en: "Deathball Crush"
+    subtitle: "6 雷兽 + 30 小狗 + 12 毒爆 + 近战攻防 3/3 → 正面推进无解"
+    subtitle_en: "6 Ultralisks + 30 Zerglings + 12 Banelings + 3/3 melee upgrades → frontal push unstoppable"
+    start_at_time: 300
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Ultralisk: 6
+  Zergling: 80   # 30→80:雷兽 gas 受限,小狗当矿/larva 出口吸富余(压 larva_idle,见 plan)
+  Baneling: 12
+  Queen: 6
+
+required_tech:
+  - ZerglingMovementSpeed       # 小狗速
+  - ZerglingAttackSpeed         # 肾上腺素
+  - CentrificalHooks            # 毒爆速（BB 研究）
+  - ChitinousPlating            # 雷兽护甲 +2
+  - AnabolicSynthesis           # 雷兽速
+  - ZergMeleeWeaponsLevel1
+  - ZergMeleeWeaponsLevel2
+  - ZergMeleeWeaponsLevel3
+  - ZergGroundArmorsLevel1
+  - ZergGroundArmorsLevel2
+  - ZergGroundArmorsLevel3
+
+required_structures:
+  Hatchery: 5     # 含 Lair / Hive 升级链
+  SpawningPool: 1 # BS：母池，小狗 / 女王前置
+  BanelingNest: 1 # BB：妖虫巢，毒爆前置
+  EvolutionChamber: 2  # BV：进化腔×2，滚近战攻防
+  InfestationPit: 1    # VI：感染坑，Hive 前置
+  UltraliskCavern: 1   # VU：雷兽洞
+
+engagement_doctrine:
+  - "ultralisk_front priority=tank_damage   # 雷兽顶前排，硬吃伤害 / 优先打坦克"
+  - "zergling_surround flank=true          # 小狗包围侧翼拉扯"
+  - "baneling_target=marines,zealots       # 毒爆优先炸轻甲聚团"
+  - "queen_transfuse target=ultralisk      # 女王输血给血少的雷兽"
+  - "retreat when=army_hp<30%             # 死阵血崩立刻撤，别送"
+engagement_doctrine_en:
+  - "ultralisk_front priority=tank_damage   # Ultralisks tank front line; soak damage and focus Siege Tanks"
+  - "zergling_surround flank=true          # Zerglings surround and flank enemy units from the sides"
+  - "baneling_target=marines,zealots       # Banelings prioritize light-armor clustered units"
+  - "queen_transfuse target=ultralisk      # Queens Transfuse low-HP Ultralisks to sustain the front line"
+  - "retreat when=army_hp<30%             # Retreat immediately when deathball HP collapses; never throw it away"
+
+win_condition:
+  type: composition_advantage
+  description: "雷兽近战碾 + 毒爆炸软目标，近战攻防 3/3 后死球正面无解"
+  signals:
+    - "self.units.ultralisk.amount >= 5"
+    - "self.upgrade.melee_weapons >= 2"
+    - "enemy.units.air_attacker.amount < 8"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - terran_bio
+  - protoss_gateway
+  - mass_ground
+
+weak_against:
+  - mass_air
+  - protoss_colossus
+  - terran_mech

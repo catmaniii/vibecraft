@@ -1,0 +1,64 @@
+kind: opening_build
+id: marine_rush
+display_name_zh: "枪兵速攻"
+display_name_en: "5-Barracks Marine Rush"
+summary_zh: "5 BB 枪兵 all-in：单基地不开矿，3:20 带 ~14 枪兵第一波出门，BB2-5 接 Reactor 双产，BB1 TechLab 研 Stim，打不死就输"
+summary_en: "5-Barracks Marine all-in: single base no expand, first wave ~14 Marines, Barracks 2-5 with Reactors double-producing, Barracks 1 Tech Lab researches Stim; win or lose on this wave."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.marine_rush:MarineRush"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+aliases:
+  - "marine_rush"
+  - "枪兵rush"
+  - "枪兵速攻"
+  - "速枪兵"
+  - "5BB"
+  - "marine all-in"
+  - "bio rush"
+  - "早期枪兵"
+matchup: [TvT, TvZ, TvP]
+
+phases:
+  - id: opening
+    display: "速 BB"
+    display_en: "Fast Barracks"
+    subtitle: "10 BS → 12 BB1 → 13 BR，BB2-5 矿够即开"
+    subtitle_en: "10 Depot → 12 Barracks 1 → 13 Refinery, Barracks 2-5 when mineral allows"
+    start_at_supply: 12
+  - id: building
+    display: "5 BB 铺满"
+    display_en: "5-Barracks Setup"
+    subtitle: "BB1 TechLab Stim，BB2-5 各接 Reactor 双产枪兵"
+    subtitle_en: "Barracks 1 Tech Lab + Stim, Barracks 2-5 each with Reactor double-producing Marines"
+    start_at_supply: 18
+  - id: all_in
+    display: "第一波出门"
+    display_en: "First Wave Push"
+    subtitle: "~14 枪兵全力冲，持续增援不回头"  # 2026-06-18 #548 同步代码:实测出门 ~4:23，非 3:20，去掉时间数字
+    subtitle_en: "~14 Marines all-in charge, continuous reinforcements no retreat"
+    start_at_supply: 28
+    start_at_time: 240  # 2026-06-18 #548 同步代码:实测出门 263s(spec attack_moveout by 4:30)，改 240
+
+steps:
+  - "10 build SupplyDepot"
+  - "12 build Barracks"
+  - "13 build Refinery"
+  - "15 build SupplyDepot"
+  - "16 train Marine"
+  - "17 build TechLab @Barracks1"
+  - "18 research Stimpack"
+  - "18 build Barracks2"
+  - "20 build Barracks3"
+  - "22 build Barracks4"
+  - "24 build Barracks5"
+  - "25 build Reactor @Barracks2"
+  - "26 build Reactor @Barracks3"
+  - "27 build Reactor @Barracks4"
+  - "28 build Reactor @Barracks5"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_ground"

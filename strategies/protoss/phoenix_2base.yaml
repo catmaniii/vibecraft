@@ -1,0 +1,94 @@
+kind: opening_build
+id: phoenix_2base
+core_units:
+  - {unit: PHOENIX, policy: mass}
+  - {unit: STALKER, policy: cap, value: 8}
+display_name_zh: "两矿凤凰"
+display_name_en: "2-Base Phoenix Opener"
+summary_zh: "双矿双星门凤凰（Phoenix Opener）：快速上 VS x2，持续 chrono 凤凰吊资源 / 骚扰，PvZ 对飞虫/蟑螂线 / PvT 对 bio 均有效"
+summary_en: "2-base double Stargate Phoenix opener: fast 2 Stargates with continuous chrono Phoenixes for worker lift and harassment; effective vs. Zerg air/Roach lines (PvZ) and Terran bio (PvT)."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.phoenix_2base:Phoenix2Base"
+aliases:
+  - "两矿凤凰"
+  - "双矿凤凰"
+  - "凤凰开局"
+  - "凤凰流"
+  - "两星门"
+  - "双星门凤凰"
+  - "phoenix opener"
+  - "Phoenix Opener"
+  - "2 stargate phoenix"
+  - "2SG phoenix"
+  - "凤凰骚扰"
+  - "凤凰飞"
+  - "飞凤凰"
+  - "Phoenix PvZ"
+matchup: [PvZ, PvT]
+
+phases:
+  - id: opening
+    display: "单 BG"
+    display_en: "Single Gateway"
+    subtitle: "13 农 → BG + 1 气"
+    subtitle_en: "13 workers → Gateway + 1 gas"
+    start_at_supply: 13
+  - id: tech
+    display: "BY + 折跃 chrono"
+    display_en: "Cybernetics Core + Warp Gate Chrono"
+    subtitle: "BG ready 上 BY，折跃 chrono"
+    subtitle_en: "Gateway ready → Cybernetics Core + expand, Warp Gate chrono"
+    start_at_supply: 19
+  - id: stargate
+    display: "双 VS + 凤凰 chrono"
+    display_en: "Double Stargate + Phoenix Chrono"
+    subtitle: "VS x2，持续凤凰 chrono"
+    subtitle_en: "2 Stargates, continuous Phoenix production with chrono"
+    start_at_supply: 38
+  - id: drop
+    display: "Warp Prism + 三矿"
+    display_en: "Warp Prism + Third Base"
+    subtitle: "WP drop 骚扰 + 三矿铺开"
+    subtitle_en: "Warp Prism drop harass + expand to third base"
+    start_at_supply: 46
+  - id: pressuring
+    display: "凤凰 fleet 骚扰 + 转 Skytoss"
+    display_en: "Phoenix Fleet Harassment + Skytoss Transition"
+    subtitle: "凤凰群骚扰对方矿线，转 Skytoss"
+    subtitle_en: "Phoenix fleet harasses enemy workers; transition to Skytoss"
+    start_at_supply: 60
+    start_at_time: 300
+
+# 数据来源：lotv.spawningtool.com/build/126982/ (HuShang Double Stargate Phoenix PvZ)
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA"
+  - "19 build BN"
+  - "20 build BY"
+  - "21 build BA"
+  - "21 build BA"
+  - "22 train 追猎 @chrono"
+  - "22 research 折跃 @chrono"
+  - "24 build VS"
+  - "34 build VS"
+  - "38 train 凤凰 @chrono"
+  - "42 build VR"
+  - "46 train OB"
+  - "50 train 凤凰 @chrono"
+  - "55 build BN"
+  - "58 train 凤凰 @chrono"
+
+scout_at: "13 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.units.muta.count >= 4"
+    then: "transition:persistent_skytoss"
+  - sees: "enemy.units.lurker.count >= 2"
+    then: "transition:iac_2base"
+
+# Phoenix 开局后续视情况转 Skytoss（空军延续）或 iac_2base（地面打法）
+default_transitions:
+  - midgame_id: iac_2base
+    when: "enemy.ground_heavy"
+  - midgame_id: iac_2base
+    when: "default"

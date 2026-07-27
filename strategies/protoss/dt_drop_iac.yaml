@@ -1,0 +1,128 @@
+kind: opening_build
+id: dt_drop_iac
+core_units:
+  - {unit: ZEALOT, policy: mass}
+  - {unit: IMMORTAL, policy: cap, value: 6}
+  - {unit: DARKTEMPLAR, policy: cap, value: 4}
+display_name_zh: "空投隐刀转叉球一波"
+display_name_en: "DT Warp Prism Drop into Chargelot-Archon"
+summary_zh: "VR 早出折跃棱镜飞前线，棱镜处空投 2 波 DT × 4 杀农民；残 DT 回家合 Archon，家里持续暴 Chargelot；最后大军汇合一波 attack"
+summary_en: "Early Warp Prism forward with 2 waves of Dark Templar×4 warp-ins for worker kills; surviving DTs return and merge to Archons; mass Charge Zealots at home; full army all-in at 8:00."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.dt_drop_iac:DtDropIac"
+aliases:
+  - "空投隐刀转叉球一波"
+  - "空投隐刀转叉球"
+  - "暗使转叉球"
+  - "暗使转白球"
+  - "影刀转白球"
+  - "影刀合白球"
+  - "DT合白球IAC"
+  - "DT合白球转叉球"
+  - "DT转Archon"
+  - "Stats DT IAC"
+  - "Stats dt iac"
+  - "Stats叉球"
+  - "DT骚扰转叉球一波"
+  - "暗使白球IAC"
+  - "DT空投转IAC"
+
+enter_when:
+  - "self.tech.warpgate.done"
+  - "self.expansion_count >= 2"
+
+# Phase stepper（2026-05-19 重写：8 DT 全员骚扰 → 棱镜接回 → 合 archon → 一波）
+phases:
+  - id: economic_open
+    display: "双矿 + BY"
+    display_en: "Expand + Cybernetics Core"
+    subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
+    subtitle_en: "1:25 natural / 1:35 Twilight Council / 2:10 Warp Gate research"
+    start_at_time: 0
+  - id: prism_dt_tech
+    display: "VR (棱镜) + VD"
+    display_en: "Robotics (Warp Prism) + Dark Shrine"
+    subtitle: "VR 一好出 Warp Prism 飞前线 + 3:14 黑暗神殿"
+    subtitle_en: "Robotics done → Warp Prism flies to proxy + 3:14 Dark Shrine"
+    start_at_time: 158    # ~2:38
+  - id: dt_harass_all
+    display: "8 DT 棱镜空投骚扰"
+    display_en: "8 DT Warp Prism Drop Harass"
+    subtitle: "4:38 + 5:26 两批 DT × 4 全部从棱镜处 warp 骚扰，尽量保活"
+    subtitle_en: "4:38 + 5:26 two waves of DT×4 warp in from Prism, harass workers, keep alive"
+    start_at_time: 278    # ~4:38
+  - id: prism_evac
+    display: "棱镜接 DT 回家"
+    display_en: "Warp Prism Evacuates DTs"
+    subtitle: "活下来的 DT 棱镜运回主力区，准备合 Archon"
+    subtitle_en: "Surviving DTs loaded into Prism, return to base for Archon merge"
+    start_at_time: 390    # ~6:30
+  - id: archon_merge
+    display: "DT 全合 Archon"
+    display_en: "DT → Archon Merge"
+    subtitle: "~7:00 起 2 DT → 1 Archon，最多合 4 Archon"
+    subtitle_en: "~7:00 start merging: 2 DT → 1 Archon, up to 4 Archons total"
+    start_at_time: 420    # ~7:00
+  - id: attack_timing
+    display: "8:00 大军一波"
+    display_en: "8:00 Main Army All-in"
+    subtitle: "Archon + 满 Chargelot 主力一波（无不朽路线）"
+    subtitle_en: "Archons + massed Charge Zealots all-in push (no Immortal path)"
+    start_at_time: 480    # ~8:00
+
+# 数据来源:https://lotv.spawningtool.com/build/68902/ (Stats' Double DT/Archon drop into IAC push)
+# 关键 build 节点（Stats 韩国职业 PvP/PvT 通用变体）:
+# - 2:38 Twilight Council  (supply 31)
+# - 3:05 Robotics Facility (supply 34)
+# - 3:14 Dark Shrine       (supply 36) ★ DT 前置
+# - 4:38 Dark Templar ×4   (supply 51) ★ 首波 DT 骚扰
+# - 4:40 4 DT 跑至 3/4 地图,骚扰对方矿线
+# - 5:26 Dark Templar ×4   (supply 60) ★ 第二批 DT
+# - 5:29 Archon ×2         (supply 68) ★ 残 DT 合 Archon
+# - 5:38 Forge + Charge research (supply 68)
+# - 6:04 Gateway ×3        (supply 76)
+# - 6:11 Gateway ×4 (共4)  (supply 76)
+# - ~8:00 出门 attack: 3-4 Immortal + 6 Archon + Sentry + 满 Zealot
+# 2026-05-19 重写：用户要求 VR 只出 Warp Prism，不出不朽。
+# DT 全员先骚扰再合 Archon。最终主力：Chargelot + Archon。
+# target_composition / required_* 用 sc2 SDK 名（PascalCase）跟 unit_data 查表对齐
+commitments:
+  units:
+    Zealot: 18              # Charge 叉主力
+    Archon: 4               # ★ DT 合(2:1)，8 DT → 4 Archon
+    DarkTemplar: 8          # transient（骚扰后全合 archon，最终不含 DT）
+    WarpPrism: 1            # ★ 关键：VR 出棱镜飞前线做空投点 / 接残 DT 回家
+    Stalker: 2              # 早期防身
+    Sentry: 2               # 力场切阵
+  tech: [WarpGateResearch, Charge, ProtossGroundWeaponsLevel1]
+  structures:
+    Gateway: 4              # 4 BG 暴叉子够（archon 顶伤害）
+    RoboticsFacility: 1     # 仅产 WarpPrism（不出不朽）
+    TwilightCouncil: 1
+    DarkShrine: 1           # ★ DT 必备
+    Forge: 1
+  expansions: 2
+
+# 一波 timing(Stats spawningtool ~8:00 出门;留窗口到 9:30 接 follow-up)
+attack_window:
+  open_at: "8:00"
+  close_at: "9:30"
+  target_priority: [army, natural, production]
+
+micro_doctrine:
+  - "DT 首波 ~4:40 到对方家,骚扰 worker / supply / tech building"
+  - "保 DT 别死 → 残 DT 回家合 Archon(2 DT 合 1)"
+  - "Archon 切前排 / 集火 bio_clumps + 远程"
+  - "Immortal target high_hp_armored (Stalker / Roach / Marauder)"
+  - "Charge 叉主力前压,接战时 charge 切入对方后排"
+  - "if has_sentry_energy: forcefield split_enemy_army"
+
+expire_action:
+  - "transition: persistent_immortal_archon"
+
+lategame_transitions:
+  - lategame_id: persistent_immortal_archon
+    when: "default"
+  - lategame_id: persistent_skytoss
+    when: "enemy.air_heavy OR self.tech.fleet_beacon.exists"
+  - lategame_id: iac_2base
+    when: "player.requests_iac"

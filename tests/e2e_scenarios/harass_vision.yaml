@@ -1,0 +1,27 @@
+# E2E directive scenario 2 — L2 B 类 vision/scout + L4 production
+#
+# 覆盖:
+# - tactical_objective(vision) → done_when=vision_acquired hold_seconds
+# - tactical_objective(scout) → done_when=vision_acquired hold_seconds=1 (已验证)
+# - production_override (Immortal) → done_when=unit_count_built_since (auto-fill)
+strategy_id: 1g_robo_immortal
+description: L2 vision/scout + L4 不朽
+
+schedule:
+  # ── 0:30 L2 vision: 持续视野 5s ──
+  - at_s: 30
+    text: 在对方主基地保持视野 5 秒
+    expect_directive_types: [tactical_objective]
+    expect_done_within_s: 90
+
+  # ── 1:30 L2 scout: 单兵走一趟 ──
+  - at_s: 90
+    text: 派 1 农民看一眼对方二矿
+    expect_directive_types: [scout, tactical_objective]
+    expect_done_within_s: 90
+
+  # ── 2:30 L4 production_override: 出 1 不朽(1g_robo_immortal 主力,易完成) ──
+  - at_s: 150
+    text: 下个 Robo 出 1 个不朽
+    expect_directive_types: [production_override]
+    expect_done_within_s: 180

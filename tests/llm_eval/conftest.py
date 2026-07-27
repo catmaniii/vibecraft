@@ -1,0 +1,224 @@
+"""LLM eval suite 共享 fixture + collection hook(默认 skip)。
+
+默认 `pytest` 不跑 llm_eval(真调 LLM API 烧钱)。需要 `pytest -m llm_eval`
+或 `pytest tests/llm_eval -m llm_eval` 才会真跑。
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from vibecraft.directives.types import StageKind
+from vibecraft.llm.config import LLMConfig
+from vibecraft.llm.parser import IntentParser, ParserConfig
+from vibecraft.llm.prompt import ParseContext
+from vibecraft.strategy.library import StrategyLibrary
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """默认 skip llm_eval marker。
+
+    pytest -m llm_eval(或 -m "llm_eval or ...")时 markexpr 包含 llm_eval → 跑;
+    没明确指定 → 全部 skip。
+    """
+    markexpr = config.getoption("-m", "") or ""
+    if "llm_eval" in markexpr:
+        return  # 用户明确选,放过
+    skip_marker = pytest.mark.skip(reason="llm_eval 默认 skip(真调 LLM API);用 -m llm_eval 跑")
+    for item in items:
+        if "llm_eval" in {m.name for m in item.iter_markers()}:
+            item.add_marker(skip_marker)
+
+
+@pytest.fixture(scope="session")
+def strategy_library() -> StrategyLibrary:
+    """加载真实 strategies/ + aliases/ —— LLM 解析需要 catalog。"""
+    project_root = Path(__file__).parent.parent.parent
+    strategies_dir = project_root / "strategies"
+    aliases_path = project_root / "docs" / "aliases" / "protoss.yaml"
+    return StrategyLibrary.from_directories(strategies_dir, aliases_path)
+
+
+@pytest.fixture(scope="session")
+def llm_parser(strategy_library: StrategyLibrary) -> IntentParser:
+    """真实 LLM provider + IntentParser。
+
+    按 config/llm.yaml 读 provider(可经环境变量 VIBECRAFT_LLM_MODEL 覆盖 model)。
+    无 session(不写 jsonl 落盘)。
+    """
+    project_root = Path(__file__).parent.parent.parent
+    llm_config = LLMConfig.from_yaml_or_defaults(project_root / "config" / "llm.yaml")
+    # 允许命令行覆盖 model(eval Flash vs Pro 用)
+    override_model = os.environ.get("VIBECRAFT_LLM_MODEL")
+    if override_model:
+        llm_config.model = override_model
+    provider = llm_config.build_provider()
+    # 环境变量 VIBECRAFT_MAX_RETRIES 控制 schema validation retry 次数。
+    # default=1:eval 实测 retry=1 兜底剩余偶发 schema 错(prompt 增强后),
+    # worst-case 耗时仅 ~4.8s 而非 3 次 retry 的 9.6s。
+    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "1"))
+    return IntentParser(
+        provider=provider,
+        library=strategy_library,
+        config=ParserConfig(timeout_s=30.0, max_validation_retries=max_retries),
+    )
+
+
+@pytest.fixture
+def mock_parse_context() -> ParseContext:
+    """默认 mock context:3 分钟,开局过渡到中期,2 基,常见资源/兵力。"""
+    return ParseContext(
+        game_time=180.0,
+        current_stage=StageKind.OPENING,
+        active_strategies={
+            StageKind.OPENING: "1g_robo_immortal",
+            StageKind.MIDGAME: None,
+            StageKind.LATEGAME: None,
+        },
+        minerals=500,
+        gas=200,
+        supply_used=30,
+        supply_cap=40,
+        expansion_count=2,
+        army_summary={"Probe": 22, "Immortal": 1, "Stalker": 2},
+        enemy_summary={"Marine": 8, "Marauder": 2},
+        recent_commands=[],
+        standing_orders=[],
+    )
+
+
+# 当前 eval round 累计 stats(session-scoped,plugin-style 收集)
+class _EvalStats:
+    def __init__(self) -> None:
+        self.per_case: dict[str, list[bool]] = {}
+        self.per_case_reason: dict[str, list[str]] = {}
+        self.latencies_ms: list[float] = []
+        # 详细 dump:每 trial 的完整 outcome dict(给 report generator 用)
+        self.trials: list[dict[str, Any]] = []
+
+    def record(
+        self,
+        case_name: str,
+        inject: str,
+        passed: bool,
+        reason: str,
+        latency_ms: float,
+        outcome_dump: dict[str, Any] | None = None,
+    ) -> None:
+        self.per_case.setdefault(case_name, []).append(passed)
+        self.per_case_reason.setdefault(case_name, []).append(reason)
+        self.latencies_ms.append(latency_ms)
+        self.trials.append(
+            {
+                "case_name": case_name,
+                "inject": inject,
+                "passed": passed,
+                "reason": reason,
+                "latency_ms": round(latency_ms, 1),
+                "outcome": outcome_dump,
+            }
+        )
+
+
+@pytest.fixture(scope="session")
+def eval_stats() -> _EvalStats:
+    return _EvalStats()
+
+
+def serialize_outcome(outcome: Any) -> dict[str, Any]:
+    """把 ParseOutcome 序列化成 JSON-safe dict(LLM raw 输出 + parsed directive)。"""
+    from vibecraft.llm.schema import (
+        AmbiguousParse,
+        IntentParseResult,
+        ParseError,
+    )
+
+    if isinstance(outcome, ParseError):
+        return {
+            "kind": "ParseError",
+            "error_kind": outcome.kind.value,
+            "message": outcome.message,
+            "candidates": list(outcome.candidates),
+        }
+    if isinstance(outcome, AmbiguousParse):
+        return {
+            "kind": "AmbiguousParse",
+            "interpretation_zh": outcome.result.interpretation_zh,
+            "confidence": outcome.result.confidence,
+            "interpretations": list(outcome.interpretations),
+            "directives_count": len(outcome.result.directives),
+        }
+    if isinstance(outcome, IntentParseResult):
+        return {
+            "kind": "IntentParseResult",
+            "interpretation_zh": outcome.interpretation_zh,
+            "confidence": outcome.confidence,
+            "notes": outcome.notes,
+            "directives": [
+                d.model_dump(mode="json", exclude_none=True) for d in outcome.directives
+            ],
+        }
+    return {"kind": "Unknown", "repr": str(outcome)[:200]}
+
+
+def pytest_terminal_summary(terminalreporter: Any, exitstatus: int, config: pytest.Config) -> None:
+    """eval 跑完后输出每 case 的命中率汇总。"""
+    stats: _EvalStats | None = getattr(config, "_eval_stats", None)
+    if stats is None or not stats.per_case:
+        return
+    tr = terminalreporter
+    tr.section("LLM eval 汇总 (per-case accuracy)")
+    total_pass = 0
+    total_runs = 0
+    for name in sorted(stats.per_case.keys()):
+        results = stats.per_case[name]
+        n_pass = sum(results)
+        n_total = len(results)
+        pct = 100 * n_pass / n_total if n_total else 0
+        marker = "✓" if n_pass == n_total else ("✗" if n_pass == 0 else "~")
+        tr.write_line(f"  {marker} {name:38s} {n_pass}/{n_total} {pct:5.1f}%")
+        if n_pass < n_total:
+            reasons = stats.per_case_reason[name]
+            for i, (p, r) in enumerate(zip(results, reasons, strict=False)):
+                if not p:
+                    tr.write_line(f"      [trial {i + 1} FAIL] {r}")
+        total_pass += n_pass
+        total_runs += n_total
+    overall_pct = 100 * total_pass / total_runs if total_runs else 0
+    tr.write_line("")
+    tr.write_line(f"  TOTAL: {total_pass}/{total_runs} ({overall_pct:.1f}%)")
+    avg_ms = 0.0
+    if stats.latencies_ms:
+        avg_ms = sum(stats.latencies_ms) / len(stats.latencies_ms)
+        tr.write_line(f"  平均 LLM 耗时: {avg_ms:.0f}ms")
+
+    # dump 完整 trial 数据到 JSON 供报告 generator 用
+    import json
+    from pathlib import Path
+
+    model = os.environ.get("VIBECRAFT_LLM_MODEL", "default")
+    max_retries = int(os.environ.get("VIBECRAFT_MAX_RETRIES", "1"))
+    out_dir = Path("logs/llm_eval")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{model}_retry{max_retries}.json"
+    payload = {
+        "model": model,
+        "max_retries": max_retries,
+        "total_pass": total_pass,
+        "total_runs": total_runs,
+        "accuracy": overall_pct,
+        "avg_latency_ms": round(avg_ms, 1),
+        "trials": stats.trials,
+    }
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tr.write_line(f"  详细 trial dump: {out_path}")
+
+
+@pytest.fixture(autouse=True)
+def _wire_stats(request: pytest.FixtureRequest, eval_stats: _EvalStats) -> None:
+    """把 eval_stats 挂到 config 上,terminal_summary 拿得到。"""
+    request.config._eval_stats = eval_stats  # type: ignore[attr-defined]

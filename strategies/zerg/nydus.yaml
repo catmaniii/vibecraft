@@ -1,0 +1,79 @@
+kind: opening_build
+id: nydus
+display_name_zh: "坑道虫突袭"
+display_name_en: "Nydus Network Raid"
+summary_zh: "母池 → 提速 → Lair → 尼德斯网络(VN)：狗蟑女王在自家坑道网络集结、坑道虫钻出敌方家后整批投送，优先扑农民偷经济，绕过正面防线"
+summary_en: "Pool → Zergling Speed → Lair → Nydus Network: Zerglings/Roaches/Queens stage at the network and load as one wave once the Nydus Worm emerges in the enemy base, striking workers first, bypassing the defensive line."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.nydus:NydusRush"
+# 中期持续配比(build-aware sustain)。2026-07-12 用户铁律「玩家没确认，不准自动切战术」→ 去掉 HYDRALISK：
+# sustain 只据此爆**蟑螂 + 狗**(保持纯坑道多波)，绝不自动转刺蛇。要转刺蛇混编 = 玩家在宏观面板**确认**
+# 推荐的 lategame doctrine(persistent_roach_hydra_viper，见 lategame_transitions=只推荐不自动切)才切。
+core_units:
+  - {unit: ROACH, policy: mass}
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "nydus"
+  - "坑道虫"
+  - "坑道虫突袭"
+  - "尼德斯"
+  - "尼德斯偷袭"
+  - "虫洞偷袭"
+  - "nydus rush"
+  - "NR"
+  - "虫洞"
+matchup: [ZvT, ZvZ, ZvP]
+
+# Phase stepper（PWA strategy card 显示 milestone 进度）
+phases:
+  - id: pool_gas
+    display: "BS + 气矿"
+    display_en: "Spawning Pool + Gas"
+    subtitle: "14 农 → BS + 气矿，研狗速(ZERGLINGMOVEMENTSPEED)"  # 2026-06-18 #548 同步代码:plan ActUnit(DRONE,14)，非 12
+    subtitle_en: "14 workers → Spawning Pool + gas, research Zergling Speed"
+    start_at_supply: 12
+  - id: lair
+    display: "Lair 升级"
+    display_en: "Lair Upgrade"
+    subtitle: "BS 完成(~1:15) → MorphLair，解锁 VN 尼德斯网络"  # 2026-06-18 #548 同步代码:BS 完成~1:15(spec)，原"~3:00 BS 完成"错误
+    subtitle_en: "Pool done (~1:15) → Lair morph, unlocks Nydus Network"
+    start_at_time: 150
+  - id: nydus_build
+    display: "建 VN 尼德斯网络"
+    display_en: "Build Nydus Network"
+    subtitle: "~3:30 Lair 完成 → 建 NydusNetwork(~4:10)，蟑螂窝同步量产蟑螂"  # 2026-06-18 #548 同步代码:Lair 完成~3:30(spec)，原"~5:00 Lair 完成"错误
+    subtitle_en: "~3:30 Lair done → build Nydus Network (~4:10), Roach Warren simultaneously"
+    start_at_time: 270
+  - id: flood
+    display: "量产 + 虫洞投送"
+    display_en: "Mass Units + Nydus Drop"
+    subtitle: "VN 完成 → 量产小狗/蟑螂/女王，虫洞打通对方基地投送偷袭"
+    subtitle_en: "Nydus Network done → mass Zerglings/Roaches/Queens, open Nydus Worm in enemy base"
+    start_at_time: 390
+
+steps:
+  - "9 build Overlord"
+  - "12 build SpawningPool"
+  - "13 build Extractor"
+  - "16 train Queen"
+  - "16 train Zergling"
+  - "16 train Zergling"
+  - "18 build Hatchery"
+  - "20 research ZERGLINGMOVEMENTSPEED"
+  - "22 build Lair"
+  - "32 build RoachWarren"
+  - "36 build NydusNetwork"
+  - "40 train Roach"
+  - "40 train Zergling"
+
+default_transitions:
+  - midgame_id: roach_hydra
+    when: "default"
+  - midgame_id: mutalisk_harass
+    when: "enemy.macro_opening"
+
+# Nydus all-in 没结束游戏 → 转后期持续运营(蟑螂+刺蛇+毒蛇,沿用地面军风格)
+lategame_transitions:
+  - lategame_id: persistent_roach_hydra_viper
+    when: "default"
+  - lategame_id: persistent_roach_hydra_viper
+    when: "game_time >= 8:00"

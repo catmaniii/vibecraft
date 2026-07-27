@@ -1,0 +1,94 @@
+kind: persistent_doctrine
+id: persistent_ghost_nuke
+display_name_zh: "幽灵核弹"
+display_name_en: "Ghost Nuke"
+summary_zh: "幽灵主导生化体系：VG 量产幽灵 EMP 清魔法 + 持续核弹骚扰矿区，枪兵叉子打底，医疗船补给；BB×6 保产能，双 BE 滚步兵攻防到 3/3"
+summary_en: "Ghost-dominated bio army: Ghost Academy mass Ghosts for EMP + continuous Nuclear Strikes harassing mineral bases; Marines + Marauders as core, Medivac support; 6 Barracks production, dual Engineering Bays rolling infantry 3/3."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.ghost_nuke:GhostNuke"
+gas_intensity: high
+aliases:
+  - "幽灵核弹"
+  - "核弹流"
+  - "幽灵流"
+  - "核平"
+  - "EMP流"
+  - "ghost"
+  - "暴幽灵"
+  - "狙杀流"
+
+# 后期阶段进度（game_time 触发；PWA phase stepper 用）
+phases:
+  - id: tech_up
+    display: "上 VG + 双 BE"
+    display_en: "Ghost Academy + Dual Engineering Bays"
+    subtitle: "GhostAcademy 完 → PersonalCloaking + STIMPACK 研究；双工程湾起步攻防 +1"
+    subtitle_en: "Ghost Academy done → Personal Cloaking + Stim research; dual Engineering Bays start +1 upgrades"
+    start_at_time: 0
+  - id: massing
+    display: "暴幽灵"
+    display_en: "Mass Ghosts"
+    subtitle: "BB×6 持续出幽灵 + 叉子 + 枪兵；步兵攻防 +1 起、三矿后补 Armory 续 +2/+3；Nuke 核武准备"  # 2026-06-18 #547 已补 Armory(plan),攻防可上 3/3
+    subtitle_en: "6 Barracks continuous Ghosts + Marauders + Marines; infantry +1 rolling, Armory after third for +2/+3; Nuke ready"
+    start_at_time: 120
+  - id: pressure
+    display: "核弹骚扰"
+    display_en: "Nuclear Strike Harassment"
+    subtitle: "8 幽灵 + 医疗船 → 持续 EMP 清魔法 / 核弹打对方矿区扩张线"
+    subtitle_en: "8 Ghosts + Medivacs → continuous EMP to clear energy / Nukes hitting enemy mineral lines and expansions"
+    start_at_time: 360
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Ghost: 8
+  Marine: 30
+  Marauder: 10
+  Medivac: 6
+
+required_tech:
+  - Stimpack
+  - ShieldWall
+  - PersonalCloaking
+  - TerranInfantryWeaponsLevel1
+  - TerranInfantryWeaponsLevel2
+  - TerranInfantryWeaponsLevel3
+
+required_structures:
+  Barracks: 6
+  GhostAcademy: 1
+  EngineeringBay: 2
+  Starport: 2
+  CommandCenter: 4
+
+engagement_doctrine:
+  - "ghost_emp priority=[protoss_caster, zerg_caster, terran_ghost]   # EMP 先清魔法值 / 护盾"
+  - "ghost_snipe priority=[HighTemplar, InfestorBurrowed, Medivac]   # 狙击关键单位"
+  - "ghost_nuke target=enemy_expansion   # 核弹打扩张矿区，逼对手做防御动作"
+  - "marine_marauder_stim combined_attack=true   # 枪兵叉子开兴奋剂冲阵"
+  - "medivac_boost priority=low_hp_bio   # 医疗船持续治疗，bio 血低优先接走"
+  - "retreat when=army_hp<30%   # 血崩及时撤，幽灵太贵不能送"
+engagement_doctrine_en:
+  - "ghost_emp priority=[protoss_caster, zerg_caster, terran_ghost]   # EMP first to drain shields and energy"
+  - "ghost_snipe priority=[HighTemplar, InfestorBurrowed, Medivac]   # Snipe key priority targets"
+  - "ghost_nuke target=enemy_expansion   # Nuclear Strike enemy expansions to force defensive reactions"
+  - "marine_marauder_stim combined_attack=true   # Marines and Marauders Stim and push together"
+  - "medivac_boost priority=low_hp_bio   # Medivacs continuously heal; boost pick up low-HP bio units"
+  - "retreat when=army_hp<30%   # Retreat when army is low; Ghosts are too costly to throw away"
+
+win_condition:
+  type: composition_advantage
+  description: "幽灵 EMP 清场 + 核弹骚扰持续消耗对方经济，步兵攻防 3/3 后 MMM+幽灵正面无解"
+  signals:
+    - "self.units.ghost.amount >= 6"
+    - "self.upgrade.infantry_weapons >= 2"
+    - "self.tech.personal_cloaking.done"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - protoss_gateway
+  - protoss_skytoss
+  - zerg_caster
+
+weak_against:
+  - mass_aoe
+  - mass_air
+  - zerg_ling_bane

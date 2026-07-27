@@ -1,0 +1,91 @@
+kind: persistent_doctrine
+id: persistent_brood_corruptor
+display_name_zh: "巢虫腐化运营"
+display_name_en: "Brood Lord-Corruptor"
+summary_zh: "后期巢虫领主 + 腐化者空军组合：BL 出小虫消耗对方，腐化者护卫 + 对空；搭配感染虫 / 毒蛇控场，慢推胜利"
+summary_en: "Late-game Brood Lord + Corruptor air combo: Brood Lords spawn Broodlings to soak damage, Corruptors escort and handle air; paired with Infestors/Vipers for spellcaster control, slow-push to victory."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.brood_corruptor:BroodCorruptor"
+gas_intensity: high
+aliases:
+  - "brood_corruptor"
+  - "巢虫腐化"
+  - "BL腐化"
+  - "BL流"
+  - "巢虫领主"
+  - "brood lord"
+  - "broodlord"
+  - "后期虫族"
+  - "BLC"
+
+phases:
+  - id: tech_up
+    display: "升大刺翼 + 感染坑 → Hive"  # 2026-06-18 #548 同步代码: display 去掉错名"感染深渊"
+    display_en: "Greater Spire + Infestation Pit → Hive"
+    subtitle: "BS → Lair → VI(感染坑) → Hive → Spire → GreaterSpire；飞行攻防同步"  # 2026-06-18 #548 同步代码: 修正建筑顺序 + 删"研 Viper 技能"(无此升级)
+    subtitle_en: "Pool → Lair → Infestation Pit → Hive → Spire → Greater Spire; air attack/armor upgrades running"
+    start_at_time: 0
+  - id: composition
+    display: "暴 BL + 腐化者"
+    display_en: "Mass Brood Lords + Corruptors"
+    subtitle: "GreaterSpire 完成 → 持续转化 BL；腐化者护卫"
+    subtitle_en: "Greater Spire done → continuously morph Brood Lords; Corruptors escort"
+    start_at_time: 600  # 2026-06-18 #548 同步代码: 90→600 (GreaterSpire spec ~11:30, 10:00 保守锚)
+  - id: push
+    display: "推进"
+    display_en: "Push"
+    subtitle: "8+ BL + 6+ 腐化者 + 2+ 毒蛇控场 → 推进对方主基地"
+    subtitle_en: "8+ Brood Lords + 6+ Corruptors + 2+ Vipers → advance on enemy main base"
+    start_at_time: 780  # 2026-06-18 #548 同步代码: 300→780 (4BL spec ~13:30, 13:00 保守锚)
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  BroodLord: 10
+  Corruptor: 8
+  Infestor: 4
+  Viper: 3
+  Zergling: 20
+  Queen: 6
+
+required_tech:
+  - ZergFlyerWeaponsLevel1
+  - ZergFlyerArmorsLevel1
+  - PathogenGlands
+
+required_structures:
+  GreaterSpire: 1
+  InfestationPit: 1
+  Hatchery: 4
+  Spire: 1
+  Hive: 1
+
+engagement_doctrine:
+  - "BL 站后排缓慢推进，小虫吸引对方注意"
+  - "腐化者前排护卫 BL，优先打对方飞行单位"
+  - "毒蛇 Abduct 拉出对方 Tempest / BC / 母舰"
+  - "感染虫 Fungal 锁定地面大部队"
+  - "BL 血少时让腐化者上前护卫"
+engagement_doctrine_en:
+  - "Brood Lords siege from max range pushing slowly; Broodlings draw enemy attention"
+  - "Corruptors escort from the front, prioritizing enemy air units"
+  - "Vipers Abduct enemy Tempests / Battlecruisers / Motherships"
+  - "Infestors Fungal Growth to root and lock down large enemy ground armies"
+  - "When Brood Lords are low HP, move Corruptors forward to shield them"
+
+win_condition:
+  type: composition_advantage
+  description: "BL 小虫消耗 + 腐化者护卫，对方单位被小虫淹没无法靠近 BL"
+  signals:
+    - "self.units.brood_lord.amount >= 8"
+    - "self.units.corruptor.amount >= 6"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - protoss_skytoss
+  - terran_bio
+  - terran_mech_tank
+  - mass_ground
+
+weak_against:
+  - mass_viking
+  - terran_ghost
+  - protoss_mothership_carrier

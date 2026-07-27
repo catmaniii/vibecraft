@@ -1,0 +1,31 @@
+# blink_stalker 出门后 retreat(2026-05-28 Issue 4 验证)
+#
+# 玩家最近 game logs/game_20260527_165623 重现:
+#   - 5:14 出门,5:50 sharpy 自动撤退(劣势),Reset 又 attack 几次,持续消耗
+#   - 6:10 用户按 retreat,但 PlanZoneAttack 整 20s 不被调用,单位不撤
+#   - 根因:blink_stalker Step gate 漏 retreat intent + stalker 死光
+#     supply<20 导致 _ready_to_pressure False → gate False → SequentialList 停
+#
+# 修后 latch + intent={retreat/defend/hold}/attack 都让 gate 通过 →
+# PlanZoneAttack 持续运行 → retreat intent 被读 → 单位撤。
+#
+# 验收设计:
+#   - blink_stalker _ready_to_pressure 触发出门:blink + 1攻 + 20supply。
+#     blink 研究 100s,1攻 研究 100s,从 4 min 开始研究 → ~6:00 满足
+#   - retreat at 7:00: 此时 bot 应已出门,verify 45s 后单位回家
+strategy_id: blink_stalker
+my_race: Protoss
+
+player_actions:
+  - at: "7:00"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 45
+    near: home
+    within: 30.0
+    op: "<="

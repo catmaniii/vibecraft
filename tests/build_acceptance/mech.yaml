@@ -1,0 +1,117 @@
+strategy_id: mech
+my_race: Terran
+
+# 机械化阵地验收 spec
+#
+# 调研来源：
+#   1. Liquipedia — Mech
+#      https://liquipedia.net/starcraft2/Mech
+#   2. spawningtool #132109 — TvP Mech 3 Factory
+#      https://lotv.spawningtool.com/build/132109/
+#   3. spawningtool #188344 — Standard Mech TvZ
+#      https://lotv.spawningtool.com/build/188344/
+#   4. terrancraft — TvP Mech Guide
+#      https://terrancraft.com/2020/08/17/tvp-mech/
+#
+# 策略：mech.yaml（坦克 + 雷神 + 雷车 + 维京，三矿滚机械）
+#   build 骨架：depot → BB → Gas×2 → Expand(2) → Factory×3 → Armory×2 → Starport
+#   出门编制：6-8 坦克 + 3 雷神 + 6 维京 + 地雷，~9:00-10:00 阵地推进
+#
+# 关键 timing（从 mech.py SequentialList 推导）：
+#   command_center_2：早扩 Expand(2) 在 SequentialList 前几步，约 2:30-3:30 落地
+#   factory_1：SequentialList 中 GridBuilding(FACTORY, 1)，约 3:30-4:30 完成
+#   factory_techlab：Factory1 TechLab，约 4:00-5:00 完成（坦克前置）
+#   siege_tank_first：FT1 好后出坦克，约 4:30-6:00 第 1 辆
+#   factory_count_mid：3 Factory 约 6:00-7:30 全部 ready
+#   attack_moveout：6 坦克 + 阵线成型约 9:00-11:00
+
+checks:
+  # --- 基础骨架 ---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "2:00"
+    tol: 30
+    # mech.py SequentialList：depot → BB → Gas×2 → Expand → Factory；BB 约 1:30-2:30
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "3:30"
+    tol: 60
+    min: 2
+    # Expand(2) 在 SequentialList 前期；约 2:30-4:30 落地
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "4:30"
+    tol: 60
+    # Factory1 在 SequentialList；约 3:30-5:30 完成（串行建筑链较长）
+
+  - id: factory_techlab
+    type: building_complete
+    unit: FACTORYTECHLAB
+    at: "5:00"
+    tol: 60
+    # Factory1 TechLab 约 4:00-6:00 完成（坦克前置，核心科技）
+
+  - id: siege_tank_first
+    type: unit_count
+    unit: SIEGETANK
+    at: "6:00"
+    tol: 90
+    min: 1
+    # FT1 好后 32s 出第 1 坦克；约 5:00-7:30 首辆出炉
+
+  - id: factory_count_3
+    type: building_count
+    unit: FACTORY
+    at: "7:30"
+    tol: 90
+    min: 3
+    # 3 Factory 是本 build 核心特征；SequentialList 串行建造 → 约 6:00-9:00 全部 ready
+
+  - id: armory_1
+    type: building_complete
+    unit: ARMORY
+    at: "7:00"
+    tol: 90
+    # Armory1 在 Factory×3 之后建；约 5:30-8:30 完成（机械攻防升级前置）
+
+  - id: mech_weapons_1
+    type: upgrade_complete
+    upgrade: TERRANVEHICLEWEAPONSLEVEL1
+    by: "9:00"
+    # Armory 好后研 +1 机械武器；约 7:00-9:00 完成
+
+  - id: siege_tank_count_6
+    type: unit_count
+    unit: SIEGETANK
+    at: "9:30"
+    tol: 90
+    min: 6
+    # 3 Factory TechLab 持续出坦克；策略目标 8 坦克；9:30 前至少 6 辆
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "11:00"
+    # 机械阵地战：8 坦克就位后阵地推进；策略 attack_window ~9:00-11:00
+
+# 经济曲线标准值
+# mech 是三矿 macro 流，农民持续爬坡，大量矿物投入 Factory×3 + Armory×2 + 坦克
+economy_profile:
+  - at: "3:00"
+    workers: 22
+    minerals: 250
+    # 快扩刚成型：单矿 + MULE，农民 22，余矿 250（Factory 在建消耗）
+
+  - at: "6:00"
+    workers: 40
+    minerals: 350
+    # 双矿运转 + 多 Factory：农民 40，余矿 350（坦克 + 升级大量消耗）
+
+  - at: "9:00"
+    workers: 50
+    minerals: 450
+    # 三矿饱和 + 阵地推进前：农民 50，余矿 450（持续出坦克/维京消耗）

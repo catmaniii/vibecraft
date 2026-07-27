@@ -1,0 +1,51 @@
+from sc2.ids.ability_id import AbilityId
+from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.buff_id import BuffId
+from sc2.unit import Unit
+
+
+from sharpy.plans.acts.act_base import ActBase
+
+
+class ChronoAnyTech(ActBase):
+    ENERGY_COST = 50
+
+    def __init__(self, save_to_energy: int):
+        assert save_to_energy is not None and isinstance(save_to_energy, int)
+        self.save_to_energy = save_to_energy
+        self.types = [
+            UnitTypeId.FORGE,
+            UnitTypeId.ROBOTICSBAY,
+            UnitTypeId.TWILIGHTCOUNCIL,
+            UnitTypeId.TEMPLARARCHIVE,
+            UnitTypeId.CYBERNETICSCORE,
+            UnitTypeId.DARKSHRINE,
+            UnitTypeId.FLEETBEACON,
+        ]
+        super().__init__()
+
+    async def execute(self):
+        # if ai.already_pending_upgrade(self.name):
+        target: Unit
+        nexus: Unit
+        for target in self.cache.own(self.types).ready:
+            for order in target.orders:
+                # TODO: Chrono only up to 90% or 95% complete.
+                ability_id = order.ability.id
+
+                # boost here!
+                if not target.has_buff(BuffId.CHRONOBOOSTENERGYCOST):
+                    # vibecraft: 偷矿成长期 Nexus 能量预留给自我加速，不当能量源
+                    _vc_res = getattr(
+                        getattr(self.knowledge, "vibecraft", None),
+                        "stealth_chrono_reserved_tags",
+                        set(),
+                    )
+                    for nexus in self.cache.own(UnitTypeId.NEXUS):
+                        if nexus.tag in _vc_res:
+                            continue
+                        if nexus.energy > self.save_to_energy + ChronoAnyTech.ENERGY_COST:
+                            nexus(AbilityId.EFFECT_CHRONOBOOSTENERGYCOST, target)
+                            self.print(f"Chrono {ability_id.name}")
+                            return True  # Never block and only boost one building per iteration
+        return True  # Never block

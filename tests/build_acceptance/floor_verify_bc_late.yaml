@@ -1,0 +1,34 @@
+strategy_id: reaper_expand   # 起步 opening（terran 默认开局，稳）
+my_race: Terran
+
+# WorkerSaturationFloorAct 真局验证专用 spec（2026-07-10，不是常规 build_acceptance
+# 门禁）——reaper_expand 开局 opening_completed 后 auto-switch 到
+# persistent_skyterran（bc_late.yaml 的 doctrine，结构冻结病 build 之一），走真实
+# "opening → 玩家切 doctrine（PWA toast confirm）"路径：director.py:7277 一旦
+# board.slots[MIDGAME/LATEGAME] 非空（auto_switch 走的就是这条），
+# OpeningSustainAct 的 sustain_uncap_active flag 永不 set → 整局零农民兜底（除非
+# 有 Floor）。用来验证 Floor 恒生效、不依赖该 flag，doctrine 期间农民仍能爬向
+# ideal_harvesters（受 NON_ZERG_WORKER_CAP=80 封顶）。
+#
+# run: .venv/Scripts/python.exe scripts/build_acceptance.py floor_verify_bc_late --opponent veryeasy
+
+auto_switch_to: persistent_skyterran
+auto_switch_delay_s: 10.0
+
+checks:
+  - id: worker_sanity_early
+    type: unit_count
+    unit: SCV
+    at: "3:00"
+    tol: 60
+    min: 10
+    # 早期 reaper_expand 经济健康基线（宽松，仅防止彻底断供）
+
+economy_profile:
+  - at: "3:00"
+    workers: 20
+    minerals: 200
+
+  - at: "8:00"
+    workers: 35
+    minerals: 300

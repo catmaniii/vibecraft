@@ -1,0 +1,150 @@
+strategy_id: 1g_robo_immortal
+my_race: Protoss
+# research 来源（交叉验证 2 个权威来源）:
+#   [1] Spawning Tool Build #87940 — "PvX 1 gate FE into 3 gate robo, 3 Adept 5 Stalker"
+#       https://lotv.spawningtool.com/build/87940/
+#       标准快扩变种带时间戳：BG@0:38/15供, BA@0:46, BY@1:26/20供,
+#       Nexus@1:34/20供, 折跃@1:56/21供, BA2@2:02, Adept@2:10/22供,
+#       VR@2:31/24供, Immortal 开建@3:23/35供, 4:00 ~5追猎+1不朽完成
+#   [2] Liquipedia SC2 — "1 Gate Robo"
+#       https://liquipedia.net/starcraft2/1_Gate_Robo
+#       标准不扩张变种（仅 supply）：9 BE / 13 BG / 14 BA / 16 BE / 17 BY /
+#       18 BA2 / 21 VR + 折跃 + 追猎 / 26 Immortal or OB / 35 扩张或补 BG
+#
+# VibeCraft 实现（robo_1gate.py）采用快扩变种，与来源 [1] 对齐：
+#   14供 BE → 16供 BA+BG → 20供 Nexus+BY 并行触发 → 21供 折跃研究 →
+#   24供 VR → 22供 Adept x2 → Immortal → OB → 持续 Immortal
+#
+# spec 数值基于来源 [1] 快扩标准节奏，tol 按项目实现可能的偏差放宽。
+
+checks:
+  # --- 开局基础建筑 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:35"
+    # [1]: 14供@0:17 Pylon；VibeCraft 先造 14 探机再 BE，预计 ~0:25-0:33
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:35"
+    tol: 20
+    # [1]: 0:38 开建 BG，完成约 1:33-1:38；[2]: 13供建 BG，完成 ~1:30-1:40
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:00"
+    # [1]: 0:46/16供建气矿1，完成约 1:40-1:55；[2]: 14供建 BA，略快
+
+  - id: cybernetics_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:25"
+    tol: 25
+    # [1]: 1:26/20供建 BY，完成约 2:10-2:25；[2]: 17供建，略快
+    # VibeCraft: BG ready 后触发 BY，约 2:00-2:30
+
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    by: "3:30"
+    # [1]: 1:34/20供建 Nexus，二矿约 2:30-2:50 完成（快扩！）
+    # VibeCraft: BG ready 后 Expand(2) 并行触发，稍晚约 2:30-3:00，宽松给到 3:30
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "3:00"
+    # [1]: 2:02/22供建气矿2（Nexus完成后立刻）；VibeCraft: UnitExists(NEXUS,2) 触发
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:15"
+    # [1]: 1:56/21供开始折跃研究（chrono加速），研究时间约 ~100s chrono下，
+    # 预计 3:30-4:00 完成；[2]: 同样 21供触发
+    # VibeCraft: BY complete 后立刻触发，chrono 加速；给到 4:15 上界
+
+  - id: robotics_facility
+    type: building_complete
+    unit: ROBOTICSFACILITY
+    at: "3:15"
+    tol: 25
+    # [1]: 2:31/24供开建 VR → 完成约 3:36。
+    # VibeCraft: BY complete 后并行触发，实测完成 ~191s（比 research 略快）。
+    # 2026-05-20 校准：原 at 3:45 偏晚，校准到 3:15±25。
+
+  # --- 早期单位节奏 ---
+  - id: adepts_early
+    type: unit_count
+    unit: ADEPT
+    at: "3:30"
+    tol: 30
+    min: 2
+    # [1]: 2:10 第1个 Adept，2:43 第2个；[2] 没有 Adept（追猎变种）
+    # VibeCraft: BY complete 后 ProtossUnit(ADEPT, 2)，约 2:10-2:50 出完 2 个
+
+  - id: worker_count_early
+    type: worker_count
+    at: "3:00"
+    tol: 30
+    min: 22
+    # [1]: 快扩变种二矿开发，3:00 时约 22-24 探机；
+    # VibeCraft: ActUnit(PROBE, NEXUS, 22) + chrono 加速
+
+  - id: worker_count_mid
+    type: worker_count
+    at: "5:00"
+    tol: 30
+    min: 30
+    # 快扩后二矿饱和推进，5:00 时目标 ≥30 探机（二矿满饱和约 44）
+    # VibeCraft: ActUnit(PROBE, NEXUS, 44) 覆盖双矿
+
+  # --- Immortal 核心节奏 ---
+  - id: immortal_first
+    type: unit_count
+    unit: IMMORTAL
+    at: "5:00"
+    tol: 30
+    min: 1
+    # [1]: VR@2:31→完成@3:36, Immortal@3:23→完成约 4:40-5:00（chrono加速）；
+    # 标准 1g Robo 首个 Immortal 约 4:30-5:00
+    # VibeCraft: VR complete 后立刻排 Immortal，chrono 全程加速
+
+  - id: immortal_count_mid
+    type: unit_count
+    unit: IMMORTAL
+    at: "7:00"
+    tol: 30
+    min: 3
+    # 主力出门条件：3+ 不朽 ready（_ready_to_pressure 判定）
+    # 按出门时序倒推：第1个不朽 ~5:00，后续每个约 55-60s（chrono），
+    # 第3个约 6:30-7:00
+
+  - id: observer_first
+    type: unit_count
+    unit: OBSERVER
+    by: "6:30"
+    # VibeCraft: Immortal 后排 Observer（1 OB），约 5:30-6:00 出
+
+  # --- 建筑数量验证 ---
+  - id: gateway_count_mid
+    type: building_count
+    unit: GATEWAY
+    at: "7:00"
+    tol: 30
+    min: 2
+    # plan Step(Time(60*6)=360s, GridBuilding(GATEWAY,4))：6 分钟才触发补 BG。
+    # 1g robo 开局单门，@6:00 仍是 1 门（补的还没建好）。改 at 7:00 验"补 BG
+    # 已启动"——360s 触发 + 逐个建，7:00 应有 ≥2 门。
+    # building_count verifier 自动合并 WARPGATE
+
+  # --- 出门验证 ---
+  - id: attack_moveout
+    type: attack_moveout
+    by: "9:00"
+    # _ready_to_pressure: 3+ 不朽 ready + 折跃完成 → PlanZoneAttack(4)
+    # 折跃研究约 4:00 完成，第3个 Immortal 约 6:30-7:00，
+    # 预计出门约 7:00-8:00；给到 9:00 上界确保稳健判定

@@ -1,0 +1,24 @@
+# phoenix_2base + 玩家 6:30 按"防守"→ 60s 后单位守家
+#
+# build_acceptance/phoenix_2base.yaml: 凤凰 trickle 骚扰,无 group attack,但
+# 仍有少量地面追猎 (mass 不固定)。defend 应让追猎守家,凤凰按 PhoenixHarassAct
+# 可能继续骚扰(凤凰是 air,defend 主要拉地面)。
+#
+# within=50 给凤凰 trickle 摆动留 buffer。
+
+strategy_id: phoenix_2base
+my_race: Protoss
+
+player_actions:
+  - at: "6:30"
+    verb: defend
+    mode: null
+
+checks:
+  - id: army_back_home_after_defend
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 60
+    near: home
+    within: 50.0
+    op: "<="

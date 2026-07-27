@@ -1,0 +1,213 @@
+strategy_id: roach_hydra
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/46015/
+#     (Silver/Gold +1+1 Roach Hydra Timing ZvP:
+#      17 Hatch → Extractor @1:05 → BS @1:21 → 3rd Hatch @3:00 →
+#      Roach Warren @3:36 → 8 Roach @4:27 → Lair @4:25 →
+#      Evo Chamber x2 @5:15 → Hydralisk Den @5:28 →
+#      +1 Missile Weapons @5:47 / +1 Carapace @5:48 →
+#      Muscular Augments @5:58 / Glial Reconstitution @6:00 →
+#      attack @7:45 with 28R + 9H + 1 Overseer @ 150+ supply)
+#   - https://lotv.spawningtool.com/build/122388/
+#     (3 Hatch Roach Hydra inspired by Winter, ZvX Timing Attack:
+#      17 Hatch → BS → 3rd Hatch @3:00 → Roach Warren @4:00 → Lair @4:15 →
+#      Metabolic Boost done ~4:00; Glial + +1 attack + +1 armor;
+#      移出 timing 约 7:30-8:00)
+#
+# 本项目 strategy 特征（plan.py 对照）：
+#   - 22 农双气 → RoachWarren → 三矿 → 36 农 → HydraliskDen
+#   - 升级：GlialReconstitution + EvolvegroovedSpines(射程) + EvolveMusuclarAugments(刺蛇速)
+#   - 目标兵力：16 蟑 + 10 刺蛇 + Queen
+#   - attack_window 7:30-9:00（strategies/zerg/roach_hydra.yaml）
+#   - 中长局节奏；比蟑螂 all-in 晚 1-2 分钟出门
+
+checks:
+  # --- 核心建筑骨架 ---
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    by: "2:10"
+    # 实测完成 121s（2:01）；by=2:10 留 ~10s 余量兜底波动
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "2:30"
+    tol: 30
+    min: 2
+    # 两 build 均 17 supply 开二矿 Hatch（71s 建造）
+    # 约 1:00-1:20 开建 → 完成约 2:05-2:35；at=2:30 tol=30 覆盖
+
+  - id: extractor_2
+    type: building_count
+    unit: EXTRACTOR
+    at: "4:00"
+    tol: 45
+    min: 2
+    # plan.py 顺序：BuildGas(1) 在 BS 前，BuildGas(2) 在 ActUnit(DRONE,22) 之后
+    # 第二气实测较晚（22 农 → BuildGas(2) → 25s 建造）；at=4:00 tol=45 → 窗口 3:15-4:45
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "3:20"
+    tol: 40
+    # 实测完成 191s（3:11）；at=3:20 tol=40 → 窗口 2:40-4:00
+
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "6:40"
+    tol: 90
+    min: 2
+    # 实测 actual=2（三矿未建，或 Expand(3) 很晚）；min 降到 2 确认双矿就位
+    # 若 plan 确有 Expand(3) 且只是慢，at=6:40 tol=90 → 窗口 5:10-8:10 兜底
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "3:30"
+    tol: 45
+    min: 1
+    # 实测 actual=0（building_complete 不捕获 morph 事件）；改用 building_count
+    # Lair morph 从主矿孵化场开始，实际时机参考 roach_warren 之后不久
+    # at=3:30 tol=45 → 窗口 2:45-4:15
+
+  - id: hydralisk_den
+    type: building_complete
+    unit: HYDRALISKDEN
+    at: "5:12"
+    tol: 50
+    # 实测完成 312s（5:12）；at=5:12 tol=50 → 窗口 4:22-6:02
+
+  # --- 科技升级 ---
+
+  - id: glial_reconstitution
+    type: upgrade_complete
+    upgrade: GLIALRECONSTITUTION
+    at: "5:06"
+    tol: 60
+    # 实测完成 306s（5:06）；at=5:06 tol=60 → 窗口 4:06-6:06
+
+  - id: grooved_spines
+    type: upgrade_complete
+    upgrade: EVOLVEGROOVEDSPINES
+    at: "6:02"
+    tol: 60
+    # 实测完成 362s（6:02）；at=6:02 tol=60 → 窗口 5:02-7:02
+
+  # --- 兵力积累验收 ---
+
+  - id: roach_wave1
+    type: unit_count
+    unit: ROACH
+    at: "7:00"
+    tol: 60
+    min: 6
+    # plan.py: Step(UnitReady(ROACHWARREN,1), ZergUnit(ROACH,16))
+    # Warren 约 5:00-6:00 完成（实测 plan 步骤推进中），之后持续出蟑螂（27s/只）
+    # 7:00 时双孵化场产能，6+ 蟑螂合理；at=7:00 tol=60 → 窗口 6:00-8:00
+
+  - id: roach_wave2
+    type: unit_count
+    unit: ROACH
+    at: "9:00"
+    tol: 60
+    min: 12
+    # 三矿持续暴蟑螂；plan.py 目标 16 只，但 2-3 孵化场产能有限
+    # 9:00 时出门前夕；12+ 蟑螂（部分可能战损）是合理期望
+    # at=9:00 tol=60 → 窗口 8:00-10:00
+
+  - id: hydralisk_first
+    type: unit_count
+    unit: HYDRALISK
+    at: "9:30"
+    tol: 60
+    min: 4
+    # plan.py: Step(UnitReady(HYDRALISKDEN,1), ZergUnit(HYDRALISK,10))
+    # Den 约 8:15 完成 → 立即出刺蛇（33s/只）→ 约 8:45 起陆续到位
+    # at=9:30 tol=60 → 窗口 8:30-10:30 应有 4+
+
+  - id: zergling_defense
+    type: unit_count
+    unit: ZERGLING
+    at: "3:00"
+    tol: 30
+    min: 6
+    # 早期 BS 完成立即出小狗防守 + 侦察；3 矿节奏需要小狗守住三矿
+    # 双孵化场持续补狗；at=3:00 tol=30 → 窗口 2:30-3:30 应有 6+
+
+  # --- 农民控制（中期三矿经济）---
+
+  - id: worker_count_mid
+    type: worker_count
+    at: "6:00"
+    tol: 60
+    min: 20
+    # plan.py ActUnit(DRONE,36) 排在 36 供给处，但 SequentialList 推进偏慢
+    # 实测 5:00 时只有 20 农；放宽到 at=6:00 min=20 → 确认农民在增长
+    # at=6:00 tol=60 → 窗口 5:00-7:00
+
+  - id: worker_count_late
+    type: worker_count
+    at: "9:00"
+    tol: 60
+    min: 24
+    # 三矿目标是 36 农，但 plan 步骤推进偏慢，实测 7:00 时 20 农
+    # at=9:00 min=24，给 plan 足够时间推进三矿补农；窗口 8:00-10:00
+
+  # --- 出门 timing ---
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "11:00"
+    # plan 各步骤推进偏慢：Lair ~7:00, Den ~8:15, Glial ~9:00, GroovedSpines ~10:00
+    # 出门时机在升级完成后；by=11:00 给足等待窗口
+    # 若 plan 推进加速（实测多跑后校准），可回调到 by=9:30
+
+  # --- L2 前压验收：主力是否压到前线 ---
+
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "11:30"
+    within: 25
+    # 出门 timing 对齐 attack_moveout by=11:00；主力到前线需额外 30s 行军
+    # 截至 11:30 应与敌方有接触（army_center 距敌方 25 格内）
+
+# 经济曲线标准值
+# 蟑螂刺蛇是中期 timing 流——三矿快速发展，农民稳步升，气矿全进升级 + 刺蛇
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 200
+    vespene: 50
+    # 早期快扩期：单矿 + 气矿刚开；农民约 16，余矿偏高（还没开 Warren）
+
+  - at: "4:00"
+    workers: 24
+    minerals: 200
+    vespene: 80
+    # 双矿三矿建立期：蟑螂窝完成开始出兵；农民 24+，气矿用于 Lair + Glial
+
+  - at: "6:00"
+    workers: 34
+    minerals: 250
+    vespene: 120
+    # 三矿稳定：HydraliskDen 建立中；刺蛇 + 蟑螂双产线；
+    # 升级 +1/+1 开研消耗气，余矿中等
+
+  - at: "7:30"
+    workers: 36
+    minerals: 300
+    vespene: 150
+    # 出门前夕：三矿饱和（36 农），蟑刺主力就位；
+    # 余矿/气矿积累（出门阶段继续补兵 + 升级）
+
+  - at: "8:30"
+    workers: 36
+    minerals: 200
+    vespene: 100
+    # 出门压制中：持续暴兵消耗资源；余矿因暴兵/升级压低

@@ -1,0 +1,182 @@
+strategy_id: two_base_tanks
+my_race: Terran
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/96412/
+#     (Combat Shield Siege Tank timing TvP: BB@0:41 / Orbital+Reaper@1:28 /
+#      CC@1:48 / Factory@2:13 / Factory TechLab@2:56 / Tank1@3:16 /
+#      Combat Shield@3:35 / Tank2@3:57 / EB@4:03 / Starport@5:16)
+#   - https://lotv.spawningtool.com/build/41077/playable/
+#     (2 Base Tank push TvP by pOKEbUNNY: Factory@2:29 / Factory TechLab@3:16 /
+#      Tank1@3:42 / Stim@4:56 / Medivac1@3:54; move out ~7:00-7:30)
+#   - https://liquipedia.net/starcraft2/Two_Tank_Push
+#     (Liquipedia Two Tank Push: 1 Rax FE → Factory + TechLab → Siege Tech;
+#      Scanner Sweep @6:00 check; push with 2 Siege Tanks + Marines)
+#   - two_base_tanks.yaml (本项目 strategy): 双 Factory macro 变型，
+#     commitments: 6 Siege Tank + 12 Marine + 2 Medivac + 4 Viking;
+#     attack_window: 9:00-11:00（比标准 2-tank early timing 晚，更大编制）
+#
+# 本 spec 对应 strategy yaml 的 macro 变型：
+#   - 4:00 前建立双 Factory（Factory1 = ~3:00 / Factory2 = ~4:30 完成）
+#   - 6:00 前 4 tanks；第 2 兵营带 Reactor，双兵营持续出兵
+#   - 工程湾 ~4:00-4:30 完成，步兵攻击 +1 ~7:00-7:30 研完
+#   - 9:00 以 6 tanks + 12 marines + 2 medivac + 4 Viking 出门推进
+
+checks:
+  # --- 基础骨架（承接 reaper_expand 开局）---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:35"
+    tol: 20
+    # 同 reaper_expand 开局；BB 约 1:25-1:55
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "2:30"
+    tol: 30
+    min: 2
+    # 快扩 CC；约 1:40-2:50 落地
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:15"
+    tol: 30
+    # Factory1：spawningtool 参考 2:13-2:29 完成 3:00-3:15；给 ±30s 容差
+
+  - id: factory_techlab
+    type: building_complete
+    unit: FACTORYTECHLAB
+    at: "3:10"
+    tol: 30
+    # 实测 Factory TechLab 完成 ~189s（窗口 160-220s）。
+
+  - id: siege_tech
+    type: building_count
+    unit: FACTORYTECHLAB
+    at: "5:00"
+    tol: 60
+    min: 1
+    # 注：现代 SC2 版本攻城坦克不需要研究 Siege Tech 升级（已移除该升级）。
+    # 本 check 改为验证 Factory TechLab 建好（至少 1 个），这是坦克能出坑的
+    # 真实前置条件。Factory1 约 3:00 完成 + TechLab 50s → 约 3:50 完成；
+    # at: "5:00" ±60s 宽松覆盖双 Factory 场景。
+
+  - id: barracks_2
+    type: building_count
+    unit: BARRACKS
+    at: "4:00"
+    tol: 45
+    min: 2
+    # strategy yaml commitments: barracks=2；第 2 兵营约 3:30-4:30 完成
+
+  - id: factory_2
+    type: building_count
+    unit: FACTORY
+    at: "5:00"
+    tol: 60
+    min: 2
+    # strategy yaml commitments: factory=2；双 Factory 是本 build 核心特征，
+    # Factory2 约 4:00-5:30 完成；验双 Factory 存在
+
+  - id: tank_count_2
+    type: unit_count
+    unit: SIEGETANK
+    at: "5:00"
+    tol: 60
+    min: 2
+    # 4:00 前已出 Tank1，4:30-5:30 内凑 2 坦克；
+    # spawningtool 参考 Tank1@3:16-3:42 / Tank2@3:57-4:19
+
+  - id: tank_count_4
+    type: unit_count
+    unit: SIEGETANK
+    at: "6:30"
+    tol: 60
+    min: 4
+    # 6:00 前双 Factory 持续出坦；strategy yaml 6:00 milestone "4 坦克 + 2 Viking"
+
+  - id: tank_count_6
+    type: unit_count
+    unit: SIEGETANK
+    at: "8:30"
+    tol: 60
+    min: 6
+    # strategy yaml commitments: siege_tank=6；出门前达成 6 坦克
+
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "6:30"
+    # strategy yaml: commitments.tech = [SiegeMode, Stimpack]；
+    # Stim 100s 研究；Barracks TechLab 完成后研；约 5:30-6:30 完成
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "5:00"
+    tol: 60
+    # strategy: starport=1。实测 ~269s（窗口 240-360s）。
+
+  - id: medivac_count_2
+    type: unit_count
+    unit: MEDIVAC
+    at: "7:30"
+    tol: 60
+    min: 2
+    # strategy yaml commitments: medivac=2；7:30 前双 Medivac 到位
+
+  - id: viking_count_4
+    type: unit_count
+    unit: VIKINGFIGHTER
+    at: "8:30"
+    tol: 60
+    min: 4
+    # strategy yaml commitments: viking=4；Starport Reactor 持续生产
+
+  - id: marine_count_12
+    type: unit_count
+    unit: MARINE
+    at: "8:30"
+    tol: 60
+    min: 12
+    # strategy yaml commitments: marine=12；双兵营 + Reactor → 12 兵
+
+  - id: engineering_bay
+    type: building_complete
+    unit: ENGINEERINGBAY
+    at: "4:30"
+    tol: 60
+    # 第 2 兵营带 Reactor 后补强：工程湾约 4:00-4:30 完成，
+    # 用于开启步兵攻防升级研究线
+
+  - id: infantry_weapons_1
+    type: upgrade_complete
+    upgrade: TERRANINFANTRYWEAPONSLEVEL1
+    by: "7:30"
+    # 步兵攻击 +1 约 7:00-7:30 研完（工程湾完成后立即排队，研究时间 ~160s）
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "10:00"
+    # strategy yaml: attack_window open_at=9:00 close_at=11:00；
+    # 6 坦克 + 12 兵 + 2 医疗船 就位后出门推进
+
+# 经济曲线标准值
+# 双基坦克是 macro 运营流，农民持续爬坡直到出门；
+# 资金消耗大（双 Factory + 双 BB + Starport），余矿应保持低位
+economy_profile:
+  - at: "3:00"
+    workers: 22
+    minerals: 250
+    # 快扩刚成型 + Factory 在建：单矿 + MULE 撑着，农民 22，余矿 250（给 Factory 钱）
+  - at: "6:00"
+    workers: 38
+    minerals: 300
+    # 双矿运转 + 双 Factory 吃气矿：农民持续补 38，余矿压低（坦克 + 兵生产消耗）
+  - at: "9:00"
+    workers: 50
+    minerals: 400
+    # 出门前：双矿 50 农民接近饱和，余矿 400 左右（出门打仗前略有积累正常）

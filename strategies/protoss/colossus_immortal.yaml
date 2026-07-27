@@ -1,0 +1,114 @@
+kind: persistent_doctrine
+id: persistent_colossus_immortal
+display_name_zh: "机械巨像"
+display_name_en: "Colossus-Immortal Deathball"
+summary_zh: "巨像+不朽+追猎+叉子+HT 的地面死球：VR→VB 出巨像、VC→VT 出 HT 风暴、2 BF 滚地面攻防到 3/3；3 矿稳运营，靠正面无解的死球强 timing 推进"
+summary_en: "Colossus + Immortal + Stalker + Zealot + High Templar ground deathball: Robotics Bay → Colossus, Templar Archives → Storm, 2 Forges rolling 3/3; 3-base macro, unstoppable deathball timing push."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.colossus_immortal:ColossusImmortal"
+gas_intensity: high
+aliases:
+  - "机械巨像"
+  - "巨像流"
+  - "巨像不朽"
+  - "不朽巨像"
+  - "地面死球"
+  - "死球"
+  - "机械神族"
+  - "巨像死球"
+  - "暴巨像"
+  - "出巨像"
+  - "Colossus"
+  - "colossus"
+
+# 后期阶段进度（lategame 无严格 supply 节点，用 game_time + 关键单位/建筑判断）
+phases:
+  - id: tech_up
+    display: "上 VR + VB"
+    display_en: "Robotics Facility + Robotics Bay"
+    subtitle: "VR×2 / Robotics Bay / VC / VT 建筑链 + 巨像射程 + 地面攻防 1"
+    subtitle_en: "2 Robotics / Robotics Bay / Twilight Council / Templar Archives chain + Colossus range + ground 1/1"
+    start_at_time: 0
+  - id: massing
+    display: "暴巨像不朽"
+    display_en: "Mass Colossus + Immortals"
+    subtitle: "Robotics Bay 完成 → 持续 巨像 + 不朽 + 追猎，chrono 巨像；HT 出风暴"
+    subtitle_en: "Robotics Bay done → continuous Colossus + Immortals + Stalkers, chrono Colossus; High Templar Storm"
+    start_at_time: 60
+  - id: deathball
+    display: "死球成型"
+    display_en: "Deathball Ready"
+    subtitle: "6 巨像 + 6 不朽 + HT 风暴 + 地面攻防 3/3 → 强 timing 出门"
+    subtitle_en: "6 Colossus + 6 Immortals + High Templar Storm + 3/3 ground upgrades → strong timing push"
+    start_at_time: 200
+
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data.py
+# 的 UNIT_COSTS / STRUCT_COSTS / TECH_COSTS key 对齐，transition_cost 才能算对
+target_composition:
+  Colossus: 6
+  Immortal: 6
+  Stalker: 12
+  Zealot: 8
+  HighTemplar: 4
+  Archon: 2          # 没能量的 HT 由 sharpy 自动合 Archon
+  Observer: 2
+
+required_tech:
+  - ExtendedThermalLance      # 巨像射程
+  - PsiStorm
+  - Charge
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+  - ProtossGroundArmorsLevel1
+  - ProtossGroundArmorsLevel2
+  - ProtossGroundArmorsLevel3
+
+required_structures:
+  RoboticsFacility: 2
+  RoboticsBay: 1
+  TwilightCouncil: 1
+  TemplarArchives: 1
+  Forge: 2
+  Gateway: 5
+  Nexus: 3
+
+engagement_doctrine:
+  - "colossus_back keep_behind=true   # 巨像站后排，怕被集火 / 被维京秒"
+  - "immortal_front priority=tank_damage   # 不朽硬盾顶前排吃伤害"
+  - "storm priority=clumped min_targets=4   # HT 风暴只甩 4+ 聚团"
+  - "feedback priority=[ghost, viper, raven]   # HT feedback 敌方魔法"
+  - "retreat when=army_hp<35%   # 死球血崩就撤，别送"
+engagement_doctrine_en:
+  - "colossus_back keep_behind=true   # Keep Colossus in back line; avoid focus fire and Viking snipes"
+  - "immortal_front priority=tank_damage   # Immortals shield wall front line, soaking all incoming damage"
+  - "storm priority=clumped min_targets=4   # High Templar Storm only into clusters of 4+"
+  - "feedback priority=[ghost, viper, raven]   # High Templar Feedback enemy spellcasters first"
+  - "retreat when=army_hp<35%   # Retreat when deathball HP drops; never throw the ball away"
+
+win_condition:
+  type: composition_advantage
+  description: "巨像 AoE + 不朽硬盾正面无解，地面攻防 3/3 后死球直接碾"
+  signals:
+    - "self.units.colossus.amount >= 5"
+    - "self.upgrade.ground_weapons >= 2"
+    - "enemy.units.air_attacker.amount < 6"
+
+# 优势对位（用 enemy_tags.py canonical tag）
+counters_against:
+  - zerg_roach_hydra
+  - terran_bio
+  - zerg_ling_bane
+  - mass_ground
+
+# 劣势对位
+weak_against:
+  - mass_air
+  - zerg_brood
+  - terran_liberator
+  - mass_viking
+
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 8 AND self.units.colossus.amount >= 3"
+    then: "warn:viking_sniping_colossus"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

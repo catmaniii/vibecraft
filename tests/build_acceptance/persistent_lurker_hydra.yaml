@@ -1,0 +1,134 @@
+strategy_id: macro_hatch   # 起步 opening (macro_hatch 经济框架,虫族)
+my_race: Zerg
+
+# Task #350: persistent_doctrine build_acceptance 用。
+# macro_hatch 开局 opening_completed 后 10s 自动切到 persistent_lurker_hydra,
+# 模拟玩家 PWA toast confirm。checks 覆盖:
+#   1. macro_hatch 开局早期(前 5 分钟)— 经济建筑验证切换前 plan 正常跑
+#   2. persistent_lurker_hydra doctrine 切换后(5-12 分钟)— 科技链 + 关键单位
+#
+# run: .venv/Scripts/python.exe scripts/build_acceptance.py persistent_lurker_hydra --opponent veryeasy
+# 或 veryhard(局长,能覆盖中后期 check):
+#   .venv/Scripts/python.exe scripts/build_acceptance.py persistent_lurker_hydra --runs 3 --parallel 3 --opponent veryhard
+
+auto_switch_to: persistent_lurker_hydra
+auto_switch_delay_s: 10.0
+
+checks:
+  # ────────────────────────────────────────────────
+  # 开局早期 — macro_hatch opening 经济框架(auto switch 前)
+  # ────────────────────────────────────────────────
+
+  - id: hatchery_2_early
+    type: building_count
+    unit: HATCHERY
+    at: "2:30"
+    tol: 40
+    min: 2
+    # macro_hatch plan: Expand(2) 约 0:48-1:00 发建 → 完成约 1:40-2:10
+    # 给 auto_switch 准备期宽容到 2:30 tol=40
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "2:30"
+    tol: 30
+    # macro_hatch plan: BS(65s)；实测约 1:17 发建 → 完成约 2:20
+
+  - id: queen_pair
+    type: unit_count
+    unit: QUEEN
+    at: "4:00"
+    tol: 40
+    min: 2
+    # BS 完成(~2:20) → 双女王约 3:10-3:30 完成
+
+  - id: lair_early
+    type: building_count
+    unit: LAIR
+    at: "5:30"
+    tol: 90
+    min: 1
+    # macro_hatch + lurker_hydra 都需要 Lair；切换后 lurker_hydra plan 继续推进
+    # MorphLair(100s)；BS ~2:20 完成 → Lair 约 4:00；at=5:30 宽容
+
+  # ────────────────────────────────────────────────
+  # persistent_lurker_hydra doctrine 切换后验证
+  # (auto switch 发生后 lurker_hydra plan 接管)
+  # ────────────────────────────────────────────────
+
+  - id: hydralisk_den_after_switch
+    type: building_complete
+    unit: HYDRALISKDEN
+    at: "6:30"
+    tol: 90
+    # lurker_hydra plan: Lair 完成后建 VH(40s)
+    # Lair ~4:00 → VH 完成 ~4:40-5:00；tol=90 给切换延迟余量
+
+  - id: lurker_den_after_switch
+    type: building_complete
+    unit: LURKERDENMP
+    at: "8:00"
+    tol: 90
+    # lurker_hydra plan: VH 完成后建 VD(LurkerDenMP 86s)
+    # VH ~5:00 → VD ~6:00-7:00；tol=90 兼顾切换延迟 + 资源竞争
+
+  - id: hydralisk_wave
+    type: unit_count
+    unit: HYDRALISK
+    at: "8:00"
+    tol: 90
+    min: 4
+    # lurker_hydra plan: VH 完成后出刺蛇(33s/只)
+    # at=8:00 tol=90(窗口 6:30-9:30)；min=4 保守下界(前一小批)
+
+  - id: lurker_first_after_switch
+    type: unit_count
+    unit: LURKERMP
+    at: "9:30"
+    tol: 90
+    min: 1
+    # lurker_hydra plan: VD 完成后出潜伏者(18s 孵化)
+    # VD ~6:30-7:00 → 第一只约 7:00-7:30；at=9:30 tol=90 给足余量
+
+  - id: grooved_spines_after_switch
+    type: upgrade_complete
+    upgrade: EVOLVEGROOVEDSPINES
+    at: "8:00"
+    tol: 90
+    # lurker_hydra plan: VH 完成后研刺蛇射程(80s)
+    # VH ~5:00 → 完成约 6:20；tol=90 兼顾切换 + 资源延迟
+
+  # ────────────────────────────────────────────────
+  # 农民数 — macro 经济持续
+  # ────────────────────────────────────────────────
+
+  - id: worker_count_early
+    type: unit_count
+    unit: DRONE
+    at: "2:00"
+    tol: 20
+    min: 12
+    # macro_hatch 早期农民基线
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "5:00"
+    tol: 60
+    min: 18
+    # 切换后 lurker_hydra 持续出农；at=5:00 应有 18+ drone
+
+# 经济曲线(参考值,供 verifier 算偏差分)
+economy_profile:
+  - at: "2:00"
+    workers: 12
+    minerals: 150
+
+  - at: "4:00"
+    workers: 16
+    minerals: 200
+
+  - at: "7:00"
+    workers: 24
+    minerals: 250

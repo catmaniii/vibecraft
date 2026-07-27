@@ -1,0 +1,364 @@
+[project]
+name = "vibecraft"
+version = "0.1.0a1"
+description = "用语音 + 文字指挥 AI 替你打星际2（三族）—— 给操作不动了的老玩家"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "catmaniii" }]
+keywords = ["starcraft2", "sc2", "bot", "llm", "voice-control", "rts", "accessibility"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment :: Real Time Strategy",
+]
+
+
+dependencies = [
+    "pydantic>=2.7,<3",
+    "PyYAML>=6.0",
+    "structlog>=24.1",
+    "anyio>=4.3",
+    "anthropic>=0.40",
+    "httpx>=0.27",
+    "websockets>=12.0",
+    "click>=8.1",
+    "qrcode[pil]>=7.4",  # [pil]=Pillow，/api/qr 渲染高清 PNG 需要
+    "aiortc>=1.14.0",
+    "av>=16.1.0",
+    "mss>=10.2.0",
+    "pygetwindow>=0.0.9",
+    "numpy>=2.4.5",
+    "pyaudiowpatch>=0.2.12.7 ; sys_platform == 'win32'",
+    "comtypes>=1.4 ; sys_platform == 'win32'",
+]
+
+[project.urls]
+Homepage = "https://github.com/catmaniii/vibecraft"
+Repository = "https://github.com/catmaniii/vibecraft"
+Issues = "https://github.com/catmaniii/vibecraft/issues"
+Changelog = "https://github.com/catmaniii/vibecraft/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+# FunASR 语音识别（torch ~GB，仅真机阶段装）。缺失时语音功能禁用，server 正常启动。
+# 安装：uv sync --extra asr  或  uv pip install funasr
+asr = ["funasr"]
+# 开发工具链
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.12",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-PyYAML>=6.0",
+    "pre-commit>=3.7",
+]
+# 端到端依赖（真实 SC2 + ares-sc2）。ares-sc2 / burnysc2 / map-analyzer 都不在
+# PyPI（git 源），所以单独成 extra —— 日常 `uv sync --extra dev` 不会装它们，
+# 只有要跑 smoke / M1.5 ares_adapter 才 `uv sync --extra dev --extra sc2`。
+# uv 用户靠下方 [tool.uv.sources] 解析 git URL；pip 用户走 runbook §1 手动装。
+sc2 = [
+    "ares-sc2",
+    "sc2-helper>=0.2.1",
+]
+
+[project.scripts]
+vibecraft = "vibecraft.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vibecraft"]
+
+# ----------------------------------------------------------------------
+# uv sources —— 把 sc2 extra 里的 git 依赖映射到源（uv 专用，pip 不读这段）。
+# 根治「`uv sync` 把 ares 全家桶清掉」的问题：之前 ares 是 `uv pip install`
+# 旁路装的、不在 pyproject 声明里，任何 `uv sync` 都会清掉它们。
+# burnysc2 / map-analyzer 是 ares-sc2 的传递依赖，显式列源保证用对 URL。
+# `ares_sc2_src.pth`（修 ares-sc2 src-layout 打包 bug）仍需手动建，见 runbook §1。
+# ----------------------------------------------------------------------
+[tool.uv.sources]
+ares-sc2 = { git = "https://github.com/AresSC2/ares-sc2", branch = "main" }
+burnysc2 = { git = "https://github.com/august-k/python-sc2", branch = "develop" }
+map-analyzer = { git = "https://github.com/spudde123/SC2MapAnalysis", branch = "develop" }
+
+# ----------------------------------------------------------------------
+# ruff
+# ----------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["scripts/_vendor/*", "vendor/"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",     # pycodestyle
+    "F",          # pyflakes
+    "I",          # isort
+    "B",          # bugbear
+    "UP",         # pyupgrade
+    "C4",         # comprehensions
+    "SIM",        # simplify
+    "RET",        # return
+    "TID",        # tidy imports
+    "PTH",        # pathlib
+    "ASYNC",      # async best practices
+    "RUF",        # ruff-specific
+]
+ignore = [
+    "E501",       # line too long — handled by formatter
+    "B008",       # function call in default — fine for FastAPI-style deps
+    "SIM108",     # ternary — sometimes if/else is clearer
+    "RUF001",     # ambiguous string char — 中文项目，全角符号是正常的
+    "RUF002",     # ambiguous docstring char — 同上
+    "RUF003",     # ambiguous comment char — 同上
+    "UP042",      # (str, Enum) vs StrEnum — StrEnum 改 __str__ 行为，影响序列化
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # 测试里 assert 是本职
+    "PLR2004",  # 测试里 magic number 可读性更好
+    "RUF012",   # 测试类里的可变类属性(参数表/夹具数据)不必标 ClassVar
+    "B017",     # 有意断言"抛任何异常"的用例(测的就是"会炸",不关心具体类型)
+]
+# 下面这些 E402/I001 都是同一个模式:必须先 sys.path.insert 再 import 被测/被调模块
+# （scripts/ 与 vendor/sharpy 不是包，装不进 site-packages）——把 import 提到顶反而跑不起来。
+"tests/unit/test_build_acceptance_runner.py" = ["E402", "I001"]
+"tests/unit/test_upgrade_target.py" = ["E402"]
+"tests/unit/test_admin_auth.py" = ["E402"]
+"tests/unit/test_build_acceptance_exec_quality.py" = ["E402"]
+"tests/unit/test_structure_override_exec.py" = ["E402"]
+# 自验脚本:轮询真实外部状态(SC2 子进程/TURN 服务器)只能 sleep 轮询,没有可等的 Event;
+# `timeout` 参数是脚本 CLI 的一部分,不是 asyncio 反模式。
+"scripts/*_selftest.py" = ["ASYNC110"]
+"deploy/turn/turn_selftest.py" = ["ASYNC109", "ASYNC110"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ----------------------------------------------------------------------
+# mypy
+# ----------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+exclude = ["vendor/"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["ares.*", "sc2.*", "ares_sc2.*", "burnysc2.*", "qrcode.*", "bot.*", "sharpy.*", "config", "s2clientprotocol.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ── 历史欠账：下列模块暂时放宽的错误码（2026-07-27 开源前）────────────────────
+# 为什么这么做：整仓 strict 下这些文件累计 279 条错误（其中 154 条 union-attr 集中在
+# director.py）。一次性修完风险大、且与功能开发争抢时间；但把 mypy 从 CI 里删掉会让**新代码**
+# 也失去类型保护。折中：**只对这些既有文件、只对它们实际触发的错误码**放宽，其余代码和所有
+# 新增文件仍然 strict —— CI 因此是绿的，欠账也在这里被显式列出来，逐个还清后删掉对应条目即可。
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.director"
+disable_error_code = ["arg-type", "assignment", "attr-defined", "no-any-return", "type-arg", "union-attr", "unreachable", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.common_bot"
+disable_error_code = ["arg-type", "attr-defined", "call-overload", "misc", "type-arg", "unused-ignore", "var-annotated"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.worker_saturation_floor"
+disable_error_code = ["attr-defined", "no-redef", "untyped-decorator"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.game_process"
+disable_error_code = ["assignment", "import-untyped", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.terran.plans.proxy_rax_act"
+disable_error_code = ["no-any-return", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.zerg.plans.nydus_raid_act"
+disable_error_code = ["assignment", "var-annotated"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.drop_path"
+disable_error_code = ["no-any-return", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.stealth.manager"
+disable_error_code = ["no-any-return", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.build_acceptance.verifier"
+disable_error_code = ["no-redef", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.asr"
+disable_error_code = ["misc", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.sc2_multiplayer"
+disable_error_code = ["no-any-return", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.idle_worker_rescue"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.opening_sustain_act"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.plans.archon_after_storm"
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.plans.gate4_pressure"
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.plans.generic_drop_act"
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.plans.phoenix_squad_act"
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.plans.prism_warp_drop_act"
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.protoss.vibecraft_micro_dt"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.terran.bc_raid_act"
+disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.terran.spare_cc_expand_act"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.zerg.baneling_morph"
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.zerg.plans.ling_bane"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.auto_combat.zerg.plans.nydus"
+disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.facade"
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.placement_planner"
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.sharpy_adapter"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.bot.task_monitor"
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.llm.prompt"
+disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.logging_.server_log"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.admin_scram"
+disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.http"
+disable_error_code = ["unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "vibecraft.server.service"
+disable_error_code = ["unused-ignore"]
+
+disallow_incomplete_defs = false
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ----------------------------------------------------------------------
+# pytest
+# ----------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+]
+markers = [
+    "integration: 集成测试 (mock python-sc2, 不需要真实 SC2 实例)",
+    "e2e: 端到端测试 (需要真实 SC2 客户端, default 跳过)",
+    "slow: 慢速测试",
+    "llm_eval: 纯 LLM 解析正确率测试 (真调 LLM API, default 跳过, 用 -m llm_eval 才跑)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pydantic.*",
+    # Windows ProactorEventLoop GC timing：asyncio 在对象析构时发 ResourceWarning，
+    # 触发 PytestUnraisableExceptionWarning；这是已知的 Windows/asyncio 问题，
+    # 与测试顺序相关（test_server_http 的 event loop 在其他测试 GC 时被回收）。
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/vibecraft"]
+omit = [
+    "*/__init__.py",
+    "*/cli.py",                    # CLI 入口，靠端到端覆盖
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]
+precision = 1
+show_missing = true
+skip_covered = false

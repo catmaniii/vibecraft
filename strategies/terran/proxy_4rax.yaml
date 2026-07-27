@@ -1,0 +1,56 @@
+kind: opening_build
+id: proxy_4rax
+display_name_zh: "四兵营偷家rush"
+display_name_en: "4-Barracks Proxy Rush"
+summary_zh: "1 家兵营（迷惑+早期枪兵）+ 3 野兵营（隐蔽 proxy 点），全 pump 枪兵，~2:30-3:00 第一波出门；打不死就输，无转型"
+summary_en: "1 home barracks (deception) + 3 proxy barracks (hidden), all pumping Marines, first wave ~2:30-3:00; all-in, no transition"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.proxy_4rax:Proxy4Rax"
+core_units:
+  - {unit: MARINE, policy: mass}
+aliases:
+  - "proxy_4rax"
+  - "4兵营rush"
+  - "野兵营rush"
+  - "proxy rax"
+  - "偷兵营"
+  - "四兵营偷家"
+  - "proxy rush"
+  - "proxy four rax"
+  - "4rax proxy"
+matchup: [TvP, TvZ, TvT]
+
+phases:
+  - id: opening
+    display: "快BS + 家BB"
+    display_en: "Fast Depot + Home Barracks"
+    subtitle: "14 BS → 15 家 BB，同时派 3 SCV 去 proxy 点"
+    subtitle_en: "14 Depot → 15 Barracks, 3 SCVs head to proxy site"
+    start_at_supply: 14
+  - id: proxy
+    display: "野 3 BB 成型"
+    display_en: "3 Proxy Barracks"
+    subtitle: "3 SCV 到野点建兵营，4 BB 全 pump 枪兵，兵在敌方门口成型"
+    subtitle_en: "3 SCVs build proxy barracks, 4 barracks pump Marines near enemy"
+    start_at_supply: 20
+  - id: all_in
+    display: "第一波出门"
+    display_en: "First Wave Push"
+    subtitle: "~8-12 枪兵 + 3 SCV 全力冲，打不死就输"
+    subtitle_en: "~8-12 Marines + 3 SCVs all-in, win or lose on this wave"
+    start_at_supply: 26
+    start_at_time: 150
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "18 build Barracks"
+  - "20 build Barracks"
+  - "22 build Barracks"
+  - "16 train Marine"
+  - "24 train Marine"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_ground"

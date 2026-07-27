@@ -1,0 +1,33 @@
+/* Tailwind 基础层 + 全局重置 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 移动端：禁用双击缩放 + 默认字号 */
+html {
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+/* PC 高分屏放大根字号（2026-07-25 用户）：Tailwind 尺寸多用 rem，放大 html font-size
+   即整体等比放大字体 + 间距（vh/px 定的视频高度、面板固定宽不受影响）。仅宽视口生效，
+   手机竖屏(默认 16px)不变。 */
+@media (min-width: 1280px) {
+  html { font-size: 17px; }
+}
+@media (min-width: 1600px) {
+  html { font-size: 18px; }
+}
+@media (min-width: 1920px) {
+  html { font-size: 19px; }
+}
+@media (min-width: 2560px) {
+  html { font-size: 21px; }
+}
+
+/* 禁止长按弹出系统菜单（影响录音按钮 UX）*/
+button {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

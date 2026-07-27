@@ -1,0 +1,63 @@
+kind: opening_build
+id: mass_reaper
+display_name_zh: "爆死神"
+display_name_en: "Mass Reaper"
+summary_zh: "上来双气满采 → 2 兵营(加反应堆)持续爆死神,微操 kite 自愈保命、积累数量骚扰逼死对方经济;余钱开气/开矿/补农民/扩张。气够就一直出死神"
+summary_en: "Rush double gas + saturate → 2 Barracks (with reactors) pumping Reapers non-stop; kite-and-heal micro to survive, accumulate numbers and harass the enemy economy; spend excess on gas/expansions/SCVs. Keep making Reapers as long as gas allows."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.mass_reaper:MassReaper"
+# 中期持续配比(build-aware sustain):爆死神 build = 一直出死神(用户 2026-07-13)。
+core_units:
+  - {unit: REAPER, policy: mass}
+aliases:
+  - "mass_reaper"
+  - "爆死神"
+  - "死神海"
+  - "死神rush"
+  - "mass reaper"
+  - "reaper all in"
+  - "爆死神流"
+matchup: [TvT, TvZ, TvP]
+
+# 没赢 → 转持续运营(死神不够破防时接生化)
+lategame_transitions:
+  - lategame_id: persistent_bio_max
+    when: "default"
+  - lategame_id: persistent_bio_max
+    when: "game_time >= 8:00"
+
+phases:
+  - id: gas_rush
+    display: "双气满采 + BB"
+    display_en: "Double Gas + Barracks"
+    subtitle: "12 农 → BB → **两口气背靠背开满**(死神吃气,气满采)"
+    subtitle_en: "12 workers → Barracks → both Refineries back-to-back (Reapers are gas-heavy)"
+    start_at_supply: 12
+  - id: reapers
+    display: "2 兵营持续死神"
+    display_en: "2-Rax Reaper Stream"
+    subtitle: "2 兵营 + 反应堆 → 死神不停出,kite 保命积累"
+    subtitle_en: "2 Barracks + Reactors → non-stop Reapers, kite to survive & accumulate"
+    start_at_supply: 16
+  - id: snowball
+    display: "扩张滚雪球"
+    display_en: "Expand & Snowball"
+    subtitle: "死神压制住 → 余钱开矿/开气/补农民,继续爆死神"
+    subtitle_en: "Reaper pressure holds → spend excess on expansions/gas/SCVs, keep massing Reapers"
+    start_at_time: 240
+
+steps:
+  - "12 build SupplyDepot"
+  - "13 build Barracks"
+  - "13 build Refinery"
+  - "15 build Refinery"
+  - "16 train Reaper"
+  - "16 build OrbitalCommand"
+  - "17 build Barracks"
+  - "20 train Reaper"
+  - "22 build CommandCenter"
+  - "24 build Refinery"
+  - "26 build BarracksReactor"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"

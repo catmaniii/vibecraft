@@ -1,0 +1,602 @@
+"""GameProcess 单测（M1.2）。
+
+测试策略：
+- 不拉真实 SC2，用 fake 子进程入口（只按协议吐 game_status 消息的桩）测生命周期
+- multiprocessing.Queue 直接注入，绕开 spawn，不需要真 SC2 环境
+- 测 GameProcess 的上行状态机 / 下行通道 / 善后逻辑
+- 所有 async 测试走 asyncio_mode = "auto"（pyproject.toml 已配）
+"""
+
+from __future__ import annotations
+
+import multiprocessing
+import queue
+import time
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from vibecraft.server.game_process import (
+    GameConfig,
+    GameProcess,
+    GameStatus,
+    _apply_raw_dict,
+    _build_game_status_frame_dict,
+    _focus_sc2_window,
+)
+
+# ---------------------------------------------------------------------------
+# 工具函数
+# ---------------------------------------------------------------------------
+
+
+def _make_up_q(*messages: dict[str, str]) -> queue.Queue[dict[str, str]]:
+    """构造一个已有若干消息的上行队列（不需要子进程）。
+
+    用标准库同步 `queue.Queue` 而非 `multiprocessing.Queue`：后者的 `put` 经由
+    内部 feeder thread 异步写入底层 pipe，`put` 返回后不保证消息立刻能被 `get`
+    取到 —— 全套测试跑、机器负载高时 feeder 调度慢，`status_events()` 的
+    `get_nowait()` 会取不全消息，导致 flaky。`status_events()` 只用到
+    `get_nowait()` / `get(timeout=)`（两者 `queue.Queue` 都有，且抛同一个
+    `queue.Empty`），换成同步队列后 deterministic。
+    """
+    q: queue.Queue[dict[str, str]] = queue.Queue()
+    for msg in messages:
+        q.put_nowait(msg)
+    return q
+
+
+def _make_fake_proc(
+    pid: int = 12345,
+    alive: bool = True,
+    exitcode: int | None = None,
+) -> MagicMock:
+    """构造一个 fake multiprocessing.Process。"""
+    proc = MagicMock()
+    proc.pid = pid
+    proc.is_alive.return_value = alive
+    proc.exitcode = exitcode
+    proc.terminate = MagicMock()
+    proc.kill = MagicMock()
+    proc.join = MagicMock()
+    return proc
+
+
+# ---------------------------------------------------------------------------
+# GameConfig
+# ---------------------------------------------------------------------------
+
+
+class TestGameConfig:
+    def test_defaults(self) -> None:
+        cfg = GameConfig()
+        assert cfg.map_name == "DaybreakLE"
+        assert cfg.opponent_race == "Random"
+        assert cfg.opponent_difficulty == "VeryHard"
+        assert cfg.realtime is True
+        assert cfg.fullscreen is False
+        assert (cfg.window_x, cfg.window_y) == (0, 0)
+        # window_height=0 是 sentinel(子进程自动 detect workarea);window_width 固定 1720
+        assert (cfg.window_width, cfg.window_height) == (1720, 0)
+
+    def test_picklable(self) -> None:
+        """GameConfig 必须跨 spawn 边界传递，需能 pickle。"""
+        import pickle
+
+        cfg = GameConfig(map_name="DaybreakLE", opponent_race="Protoss", realtime=False)
+        data = pickle.dumps(cfg)
+        restored = pickle.loads(data)
+        assert restored.map_name == "DaybreakLE"
+        assert restored.opponent_race == "Protoss"
+        assert restored.realtime is False
+
+    def test_custom_fields(self) -> None:
+        cfg = GameConfig(
+            map_name="DaybreakLE",
+            opponent_race="Terran",
+            opponent_difficulty="Hard",
+            realtime=False,
+        )
+        assert cfg.map_name == "DaybreakLE"
+        assert cfg.opponent_difficulty == "Hard"
+
+    def test_focus_window_default_false(self) -> None:
+        """focus_window 默认 False —— acceptance 并行多窗口不抢焦点。"""
+        assert GameConfig().focus_window is False
+
+    def test_focus_window_picklable_true(self) -> None:
+        """server 正常开局设 focus_window=True,需跨 spawn 边界 pickle。"""
+        import pickle
+
+        restored = pickle.loads(pickle.dumps(GameConfig(focus_window=True)))
+        assert restored.focus_window is True
+
+
+class TestFocusSc2Window:
+    """_focus_sc2_window: SC2 窗口抢焦点(失焦静音修复)。"""
+
+    def test_non_win32_returns_immediately(self) -> None:
+        """非 win32 平台直接返回,不报错(Linux CI / mac 上单测照跑)。"""
+        log = MagicMock()
+        with patch("sys.platform", "linux"):
+            _focus_sc2_window(log, wait_timeout_s=0.0)
+        # 非 win32 不应碰 win32 API、不应 warn 找不到窗口
+        log.warning.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# GameStatus
+# ---------------------------------------------------------------------------
+
+
+class TestGameStatus:
+    def test_fields(self) -> None:
+        ts = time.time()
+        s = GameStatus(sc2="playing", bot="running", ts=ts, detail="ok")
+        assert s.sc2 == "playing"
+        assert s.bot == "running"
+        assert s.ts == ts
+        assert s.detail == "ok"
+
+    def test_default_detail_empty(self) -> None:
+        s = GameStatus(sc2="idle", bot="idle")
+        assert s.detail == ""
+
+
+# ---------------------------------------------------------------------------
+# 辅助函数（从 game_process 导出，供 ws.py 复用）
+# ---------------------------------------------------------------------------
+
+
+class TestHelperFunctions:
+    def test_apply_raw_dict_normal(self) -> None:
+        raw = {"sc2": "playing", "bot": "running", "detail": ""}
+        sc2, bot, detail = _apply_raw_dict(raw, current_sc2="launching", current_bot="idle")
+        assert sc2 == "playing"
+        assert bot == "running"
+        assert detail == ""
+
+    def test_apply_raw_dict_partial(self) -> None:
+        """部分字段缺失时 fallback 到当前值。"""
+        raw = {"sc2": "crashed"}
+        sc2, bot, detail = _apply_raw_dict(raw, current_sc2="playing", current_bot="running")
+        assert sc2 == "crashed"
+        assert bot == "running"  # fallback
+        assert detail == ""  # fallback
+
+    def test_build_game_status_frame_dict_fields(self) -> None:
+        status = GameStatus(sc2="launching", bot="idle", ts=100.0, detail="")
+        d = _build_game_status_frame_dict(status)
+        assert d["type"] == "game_status"
+        assert d["sc2"] == "launching"
+        assert d["bot"] == "idle"
+        assert d["link"] == "connected"
+        assert d["ts"] == 100.0
+
+
+# ---------------------------------------------------------------------------
+# GameProcess.status property
+# ---------------------------------------------------------------------------
+
+
+class TestGameProcessStatus:
+    def test_initial_status_idle(self) -> None:
+        gp = GameProcess()
+        s = gp.status
+        assert s.sc2 == "idle"
+        assert s.bot == "idle"
+
+    def test_is_running_false_initially(self) -> None:
+        gp = GameProcess()
+        assert gp.is_running is False
+
+
+# ---------------------------------------------------------------------------
+# GameProcess.start()
+# ---------------------------------------------------------------------------
+
+
+class TestGameProcessStart:
+    def test_start_sets_launching(self) -> None:
+        """start() 调用后内部状态应变 launching。"""
+        gp = GameProcess()
+        config = GameConfig(map_name="DaybreakLE", realtime=False)
+
+        # patch multiprocessing.Process.start 让它不真的 spawn
+        with patch("vibecraft.server.game_process.multiprocessing") as mock_mp:
+            ctx = MagicMock()
+            mock_proc = _make_fake_proc()
+            ctx.Queue.return_value = MagicMock()
+            ctx.Process.return_value = mock_proc
+            mock_mp.get_context.return_value = ctx
+
+            gp.start(config)
+
+        assert gp._sc2_state == "launching"
+
+    def test_start_twice_terminates_first(self) -> None:
+        """连续两次 start()，第一次的进程应被 terminate。"""
+        gp = GameProcess()
+        config = GameConfig(realtime=False)
+
+        with patch("vibecraft.server.game_process.multiprocessing") as mock_mp:
+            ctx = MagicMock()
+            first_proc = _make_fake_proc(pid=1001, alive=True)
+            second_proc = _make_fake_proc(pid=1002, alive=True)
+            # 队列 mock：两次 start() 各新建一对队列
+            ctx.Queue.return_value = MagicMock()
+            ctx.Process.side_effect = [first_proc, second_proc]
+            mock_mp.get_context.return_value = ctx
+
+            gp.start(config)
+            gp._proc = first_proc  # 手动设置，让第二次 start 能感知
+            gp.start(config)
+
+        first_proc.terminate.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# GameProcess.status_events() — 核心逻辑测试
+# ---------------------------------------------------------------------------
+
+
+class TestGameProcessStatusEvents:
+    async def test_drain_queue_messages(self) -> None:
+        """status_events() 应把上行队列里的消息全部 yield 出来。"""
+        gp = GameProcess()
+        messages = [
+            {"sc2": "launching", "bot": "idle", "detail": ""},
+            {"sc2": "in_game", "bot": "running", "detail": ""},
+            {"sc2": "playing", "bot": "running", "detail": ""},
+            {"sc2": "ended", "bot": "idle", "detail": ""},
+        ]
+        gp._up_q = _make_up_q(*messages)
+
+        # 子进程：已死，exitcode=0（正常退出）
+        fake_proc = _make_fake_proc(alive=False, exitcode=0)
+        gp._proc = fake_proc
+
+        collected: list[GameStatus] = []
+        async for s in gp.status_events():
+            collected.append(s)
+
+        sc2_states = [s.sc2 for s in collected]
+        assert "launching" in sc2_states
+        assert "playing" in sc2_states
+        assert "ended" in sc2_states
+
+    async def test_crashed_on_nonzero_exit(self) -> None:
+        """子进程以非 0 exitcode 退出 + 没推过 ended → 应补 crashed 状态。"""
+        gp = GameProcess()
+        gp._up_q = _make_up_q()  # 空队列（子进程没来得及推消息就崩了）
+
+        fake_proc = _make_fake_proc(alive=False, exitcode=-9)
+        gp._proc = fake_proc
+
+        collected: list[GameStatus] = []
+        async for s in gp.status_events():
+            collected.append(s)
+
+        assert any(s.sc2 == "crashed" for s in collected), (
+            f"应有 crashed 状态，实际收到：{[s.sc2 for s in collected]}"
+        )
+
+    async def test_no_crash_if_already_ended(self) -> None:
+        """子进程 exitcode 非 0，但已推过 ended，不再重复推 crashed。"""
+        gp = GameProcess()
+        gp._up_q = _make_up_q({"sc2": "ended", "bot": "idle", "detail": ""})
+        gp._sc2_state = "ended"  # 模拟已收到 ended
+
+        fake_proc = _make_fake_proc(alive=False, exitcode=1)
+        gp._proc = fake_proc
+
+        collected: list[GameStatus] = []
+        async for s in gp.status_events():
+            collected.append(s)
+
+        assert not any(s.sc2 == "crashed" for s in collected), (
+            f"不应再出现 crashed，实际收到：{[s.sc2 for s in collected]}"
+        )
+
+    async def test_no_proc_returns_immediately(self) -> None:
+        """_proc 为 None 时 status_events() 应立即结束（空生成器）。"""
+        gp = GameProcess()
+        gp._proc = None
+
+        collected: list[GameStatus] = []
+        async for s in gp.status_events():
+            collected.append(s)
+
+        assert collected == []
+
+    async def test_state_updated_after_events(self) -> None:
+        """yield 之后内部 _sc2_state / _bot_state 应已更新。"""
+        gp = GameProcess()
+        gp._up_q = _make_up_q({"sc2": "in_game", "bot": "running", "detail": ""})
+        fake_proc = _make_fake_proc(alive=False, exitcode=0)
+        gp._proc = fake_proc
+
+        async for _ in gp.status_events():
+            pass
+
+        assert gp._sc2_state in ("in_game", "ended", "crashed")
+
+
+# ---------------------------------------------------------------------------
+# 父进程兜底 watchdog
+# ---------------------------------------------------------------------------
+
+
+class TestParentWatchdog:
+    """父进程层兜底：子进程仍 alive 但长时间无上行消息 → terminate + emit crashed。
+
+    子进程内 HangWatchdog 是第一道防线（30s），父进程是兜底（默认 120s）。
+    测试把阈值 monkeypatch 到 0.5s 加速。
+    """
+
+    async def test_kills_silent_subprocess(self, monkeypatch: Any) -> None:
+        import asyncio
+
+        import vibecraft.server.game_process as gp_mod
+
+        monkeypatch.setattr(gp_mod, "_PARENT_WATCHDOG_STALE_S", 0.5)
+
+        gp = GameProcess()
+        gp._up_q = _make_up_q()  # 永远空
+        gp._sc2_state = "playing"  # 已 playing,模拟 bot 卡死场景
+        fake_proc = _make_fake_proc(alive=True, exitcode=None)
+        gp._proc = fake_proc
+
+        collected: list[dict[str, Any]] = []
+
+        async def collect() -> None:
+            async for raw in gp.raw_events():
+                collected.append(raw)
+
+        await asyncio.wait_for(collect(), timeout=5.0)
+
+        crashed = next((m for m in collected if m.get("sc2") == "crashed"), None)
+        assert crashed is not None, f"应收到 crashed 消息,实际：{collected}"
+        assert "parent_watchdog" in crashed.get("detail", ""), crashed
+        fake_proc.terminate.assert_called()
+
+    async def test_not_triggered_when_messages_flowing(self, monkeypatch: Any) -> None:
+        """子进程持续推消息时 watchdog 不触发。"""
+        import asyncio
+
+        import vibecraft.server.game_process as gp_mod
+
+        monkeypatch.setattr(gp_mod, "_PARENT_WATCHDOG_STALE_S", 0.5)
+
+        gp = GameProcess()
+        msgs = [{"kind": "snapshot", "frame": {"ts": i * 0.1}} for i in range(20)]
+        gp._up_q = _make_up_q(*msgs)
+        # 模拟正常退出:消息消费完后 proc 死,exitcode=0
+        fake_proc = _make_fake_proc(alive=False, exitcode=0)
+        gp._proc = fake_proc
+
+        collected: list[dict[str, Any]] = []
+
+        async def collect() -> None:
+            async for raw in gp.raw_events():
+                collected.append(raw)
+
+        await asyncio.wait_for(collect(), timeout=5.0)
+
+        # 应只收到推入的 snapshot,没有 watchdog 触发的 crashed
+        crashed = [m for m in collected if m.get("sc2") == "crashed"]
+        assert crashed == [], f"watchdog 误触发：{crashed}"
+        assert len(collected) >= 20
+
+
+# ---------------------------------------------------------------------------
+# GameProcess.send_command()
+# ---------------------------------------------------------------------------
+
+
+class TestGameProcessSendCommand:
+    def test_send_command_no_queue_logs_warning(self, caplog: Any) -> None:
+        gp = GameProcess()
+        gp._down_q = None
+        # 不抛异常
+        gp.send_command({"type": "leave"})
+
+    def test_send_command_puts_to_queue(self) -> None:
+        gp = GameProcess()
+        # 同步 queue.Queue 替代 multiprocessing.Queue：后者 put 经 feeder thread
+        # 异步写入，put 完立刻 get_nowait 会偶发 Empty（同 _make_up_q 的 flaky）。
+        gp._down_q = queue.Queue()
+        gp.send_command({"type": "leave"})
+        msg = gp._down_q.get_nowait()
+        assert msg["type"] == "leave"
+
+
+# ---------------------------------------------------------------------------
+# GameProcess.stop()
+# ---------------------------------------------------------------------------
+
+
+class TestGameProcessStop:
+    async def test_stop_no_proc_noop(self) -> None:
+        """stop() 在没有进程时不抛异常。"""
+        gp = GameProcess()
+        await gp.stop()  # 不应报错
+
+    async def test_stop_terminates_proc(self) -> None:
+        """stop() 应对活着的进程调 terminate。"""
+        gp = GameProcess()
+        fake_proc = _make_fake_proc(alive=True)
+        # join 返回后模拟进程已退出
+        fake_proc.join.side_effect = lambda timeout=None: None
+
+        ctx = multiprocessing.get_context("spawn")
+        gp._down_q = ctx.Queue()
+        gp._proc = fake_proc
+
+        await gp.stop()
+
+        fake_proc.terminate.assert_called()
+
+    async def test_stop_clears_state(self) -> None:
+        """stop() 完成后 _proc 应为 None。"""
+        gp = GameProcess()
+        fake_proc = _make_fake_proc(alive=False)
+        fake_proc.join.return_value = None
+        gp._proc = fake_proc
+        ctx = multiprocessing.get_context("spawn")
+        gp._down_q = ctx.Queue()
+        gp._up_q = ctx.Queue()
+
+        await gp.stop()
+
+        assert gp._proc is None
+
+
+# ---------------------------------------------------------------------------
+# WS 层集成：start_game 帧 → GameProcess 交互
+# ---------------------------------------------------------------------------
+
+
+class TestWsStartGameIntegration:
+    async def test_start_game_frame_triggers_game_process_start(self) -> None:
+        """收到 start_game 帧 → GameProcess.start() 被调用，config 正确解析。"""
+        from unittest.mock import AsyncMock, patch
+
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
+
+        ws_mock = MagicMock()
+        ws_mock.remote_address = ("127.0.0.1", 9999)
+        ws_mock.send = AsyncMock()
+
+        registry = RoomRegistry(token="tok")
+        gp = GameProcess()
+
+        called_config: list[GameConfig] = []
+
+        def fake_start(config: GameConfig) -> None:
+            called_config.append(config)
+
+        gp.start = fake_start  # type: ignore[method-assign]
+        gp._sc2_state = "launching"
+        gp._bot_state = "idle"
+
+        conn = WsConnection(ws_mock, registry, game_process=gp)
+
+        # 模拟 status_events() 立即结束（不真的启 SC2）
+        async def _empty_events() -> Any:
+            return
+            yield  # make it an async generator
+
+        with patch.object(gp, "status_events", return_value=_empty_events()):
+            await conn._handle_start_game(
+                {
+                    "type": "start_game",
+                    "config": {
+                        "map": "DaybreakLE",
+                        "opponent_race": "Terran",
+                        "opponent_difficulty": "Hard",
+                        "realtime": False,
+                    },
+                }
+            )
+
+        assert len(called_config) == 1
+        cfg = called_config[0]
+        assert cfg.map_name == "DaybreakLE"
+        assert cfg.opponent_race == "Terran"
+        assert cfg.opponent_difficulty == "Hard"
+        assert cfg.realtime is False
+
+    async def test_start_game_broadcasts_starting_room_state(self) -> None:
+        """start_game 处理后广播 room_state{state: starting}。
+
+        M3 重写：旧的 game_status{launching} 帧由 monitor 异步推送，
+        _handle_start_game 本身广播的是 room_state{state: starting}。
+        """
+        import json
+
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
+
+        ws_mock = MagicMock()
+        ws_mock.remote_address = ("127.0.0.1", 9999)
+        ws_mock.send = AsyncMock()
+
+        registry = RoomRegistry(token="tok")
+        gp = GameProcess()
+        gp.start = MagicMock()  # type: ignore[method-assign]
+
+        conn = WsConnection(ws_mock, registry, game_process=gp)
+        # 注册连接，确保 broadcast_room_state 能触达 ws_mock
+        registry.attach(conn, player_id="default")
+
+        await conn._handle_start_game({"type": "start_game"})
+
+        calls = ws_mock.send.call_args_list
+        assert len(calls) >= 1, "期望至少一帧被发送（room_state 广播）"
+        frames = [json.loads(c.args[0]) for c in calls]
+        room_state_frames = [f for f in frames if f.get("type") == "room_state"]
+        assert any(f.get("state") == "starting" for f in room_state_frames), (
+            f"期望 room_state{{state:starting}} 帧，实际收到：{frames}"
+        )
+
+    async def test_start_game_default_config_when_no_config_field(self) -> None:
+        """start_game 帧不带 config 字段 → 使用 GameConfig 默认值。"""
+        from vibecraft.server.tokens import RoomRegistry
+        from vibecraft.server.ws import WsConnection
+
+        ws_mock = MagicMock()
+        ws_mock.remote_address = ("127.0.0.1", 9999)
+        ws_mock.send = AsyncMock()
+
+        registry = RoomRegistry(token="tok")
+        gp = GameProcess()
+        called_config: list[GameConfig] = []
+        gp.start = lambda cfg: called_config.append(cfg)  # type: ignore[method-assign]
+        gp._sc2_state = "launching"
+        gp._bot_state = "idle"
+
+        conn = WsConnection(ws_mock, registry, game_process=gp)
+
+        async def _empty_events() -> Any:
+            return
+            yield
+
+        with patch.object(gp, "status_events", return_value=_empty_events()):
+            await conn._handle_start_game({"type": "start_game"})
+
+        assert called_config[0].map_name == GameConfig.map_name
+        assert called_config[0].opponent_race == GameConfig.opponent_race
+
+
+# ---------------------------------------------------------------------------
+# game_status 帧格式
+# ---------------------------------------------------------------------------
+
+
+class TestGameStatusFrameFormat:
+    def test_frame_has_required_fields(self) -> None:
+        import json
+
+        from vibecraft.server.ws import _build_game_status_frame
+
+        status = GameStatus(sc2="playing", bot="running", ts=500.0)
+        frame_str = _build_game_status_frame(status)
+        frame = json.loads(frame_str)
+
+        assert frame["type"] == "game_status"
+        assert frame["sc2"] == "playing"
+        assert frame["bot"] == "running"
+        assert frame["link"] == "connected"
+        assert frame["ts"] == 500.0
+        assert "detail" in frame
+
+    def test_crashed_frame_has_detail(self) -> None:
+        import json
+
+        from vibecraft.server.ws import _build_game_status_frame
+
+        status = GameStatus(sc2="crashed", bot="error", detail="地图未找到")
+        frame_str = _build_game_status_frame(status)
+        frame = json.loads(frame_str)
+        assert frame["detail"] == "地图未找到"

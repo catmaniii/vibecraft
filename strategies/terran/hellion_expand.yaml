@@ -1,0 +1,70 @@
+kind: opening_build
+id: hellion_expand
+display_name_zh: "火车开矿"
+display_name_en: "Hellion Fast Expand"
+summary_zh: "恶火控图(6 个封顶) + 2 女妖隐形骚扰 + 转 bio：速 VF 出恶火 + 快扩 → Starport TechLab 出女妖研隐形 → BB2 + Stimpack + Marine 转型，bio 成型后出门推进"
+summary_en: "Hellions for map control (cap 6) + 2 cloaked Banshees + bio transition: fast Factory Hellions + fast expand → Starport Tech Lab Banshees + Cloak research → 2 Barracks + Stim + Marines, push after bio is ready."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.hellion_expand:HellionExpand"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: HELLION, policy: cap, value: 6}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+aliases:
+  - "hellion_expand"
+  - "火车开矿"
+  - "恶火开矿"
+  - "恶火快扩"
+  - "火车快扩"
+  - "恶火扩张"
+  - "火车流"
+  - "hellion FE"
+matchup: [TvZ, TvT, TvP]
+
+phases:
+  - id: opening
+    display: "速 VF + 恶火控图"
+    display_en: "Fast Factory + Hellion Control"
+    subtitle: "14 depot → BB → 气矿 → 死神侦查 → Factory + 快扩"
+    subtitle_en: "14 Depot → Barracks → gas → Reaper scout → Factory + fast expand"
+    start_at_supply: 14
+  - id: banshee
+    display: "Starport + 女妖"
+    display_en: "Starport + Banshee"
+    subtitle: "Starport TechLab → 2 女妖 + 研隐形骚扰"
+    subtitle_en: "Starport Tech Lab → 2 Banshees + research Cloak harass"
+    start_at_supply: 24
+    start_at_time: 270  # 2026-06-18 #548 同步代码:spec VS 完成 4:30±60s，改 270
+  - id: bio
+    display: "转 bio 推进"
+    display_en: "Bio Transition Push"
+    subtitle: "BB2 + Stimpack + Marine ~14 → bio 成型出门"
+    subtitle_en: "2 Barracks + Stim + ~14 Marines → bio ready, move out"
+    start_at_supply: 34
+    start_at_time: 420  # 2026-06-18 #548 同步代码:spec marine_10 at 7:00±60s，stim by 7:30，改 420
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "16 build Refinery"
+  - "17 train Reaper"
+  - "19 build Factory"
+  - "20 build CommandCenter"
+  - "21 build Refinery"
+  - "22 build Reactor @Factory"
+  - "23 train Hellion"
+  - "26 build Starport"
+  - "28 build TechLab @Starport"
+  - "30 research BansheeCloak"
+  - "30 train Banshee"
+  - "32 build Barracks"
+  - "34 build TechLab @Barracks"
+  - "36 research Stimpack"
+  - "38 build Refinery"
+  - "40 train Marine"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"
+  - midgame_id: two_base_tanks
+    when: "enemy.heavy_armor"

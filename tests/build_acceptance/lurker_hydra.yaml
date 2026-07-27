@@ -1,0 +1,225 @@
+strategy_id: lurker_hydra
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/46015/
+#     (Roach Hydra 基础框架;Lair @4:25,HydraliskDen @5:28)
+#   - https://lotv.spawningtool.com/build/122388/
+#     (Roach Hydra into Lurker 转型:LurkerDen 在 HydraliskDen 完成后约 2-3 分钟)
+#
+# 本项目 plan (lurker_hydra.py 实现):
+#   科技链(串行)：BS → MorphLair → VH(刺蛇巢) → VD(潜伏者巢) → VI(感染坑) → MorphHive
+#   并行：28农 → 双气 → 三矿 → 四气 → 四矿 → 44农
+#   升级：射程(GroovedSpines) + 速(MuscularAugments) + 潜伏者射程(LurkerRange) + 远程攻防1-3
+#   出兵：20 刺蛇 + 8 潜伏者 + 3 毒蛇；Hive 完成 → 开局完成 signal
+#
+# 开局完成条件(_opening_done)：Hive ready + 8 潜伏者
+# 局长预计：12-15 分钟(vs VeryHard 后期主力收得慢)
+#
+# timing 推算:
+#   BS 完成约 2:00-2:20 → MorphLair 立即触发 (100s) → Lair 约 3:40-4:00
+#   VH(HydraliskDen)建造 40s → 完成约 4:20-4:40
+#   VD(LurkerDenMP)建造 86s → 完成约 6:00-7:00
+#   VI(感染坑)建造 50s → 完成约 4:50-5:30 (与 VH 并行后不久)
+#   Hive morph (100s) → 完成约 8:00-9:30 (需 VI 完成)
+#   第一只潜伏者(VD 完成后 18s) → 约 6:15-7:20
+#   8 潜伏者积累 → 约 8:00-10:00
+
+checks:
+  # ────────────────────────────────────────────────
+  # 早期建筑 — 经济框架
+  # ────────────────────────────────────────────────
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "2:10"
+    tol: 30
+    # plan: SequentialList 首步 GridBuilding(SPAWNINGPOOL,1)
+    # BS 建造 65s；开局约 0:25-0:50 开建 → 完成约 1:30-2:00
+    # 宽容 tol=30（窗口 1:40-2:40）兼顾农民优先级不同
+
+  - id: extractor_early
+    type: building_count
+    unit: EXTRACTOR
+    at: "2:00"
+    tol: 40
+    min: 1
+    # 并行段 BuildGas(2) 早期；气矿 25s 建造
+    # 第一气约 1:00-1:30 开建 → 完成约 1:30-2:00；min=1 早期至少有 1 条气
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "4:30"
+    tol: 60
+    min: 1
+    # MorphLair：BS 完成后触发；Lair morph 100s
+    # BS 完成约 2:10 → MorphLair → 完成约 3:50-4:20
+    # building_count 覆盖 morph 进行中；at=4:30 tol=60（窗口 3:30-5:30）
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "3:30"
+    tol: 60
+    min: 2
+    # 并行段 Expand(3) 包含二矿和三矿；BH 建造 71s
+    # 二矿约 1:30-2:00 开建 → 完成约 2:40-3:15；min=2 确认二矿在线
+    # tol=60（窗口 2:30-4:30）兼顾资源竞争延误
+
+  # ────────────────────────────────────────────────
+  # 中期建筑 — 科技链
+  # ────────────────────────────────────────────────
+
+  - id: hydralisk_den
+    type: building_complete
+    unit: HYDRALISKDEN
+    at: "5:00"
+    tol: 60
+    # plan: Step(UnitReady(LAIR,1), GridBuilding(HYDRALISKDEN,1))
+    # Lair 完成约 3:50-4:20 → 立建 VH(40s) → 完成约 4:30-5:00
+    # tol=60（窗口 4:00-6:00）给资源竞争余量
+
+  - id: lurker_den
+    type: building_complete
+    unit: LURKERDENMP
+    at: "6:30"
+    tol: 90
+    # plan: Step(UnitReady(HYDRALISKDEN,1), GridBuilding(LURKERDENMP,1))
+    # VH 完成约 4:30-5:00 → 立建 VD(LurkerDenMP 86s) → 完成约 6:00-7:00
+    # tol=90（窗口 5:00-8:00）给串行等待 + 资源宽余
+
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "5:30"
+    tol: 90
+    min: 3
+    # 并行段 Expand(3)；三矿约 4:00-5:00 开建 → 完成约 5:20-6:20
+    # tol=90（窗口 4:00-7:00）兼顾慢局
+
+  - id: hive
+    type: building_count
+    unit: HIVE
+    at: "9:00"
+    tol: 90
+    min: 1
+    # MorphHive：需 VI(感染坑) 完成；VI 约 4:50-5:30 完成 → Hive morph(100s)
+    # 但资源竞争可能推迟触发；at=9:00 tol=90（窗口 7:30-10:30）
+    # building_count 覆盖 morph 进行中
+
+  # ────────────────────────────────────────────────
+  # 关键升级
+  # ────────────────────────────────────────────────
+
+  - id: grooved_spines
+    type: upgrade_complete
+    upgrade: EVOLVEGROOVEDSPINES
+    at: "7:00"
+    tol: 90
+    # 刺蛇射程升级；并行段 Tech(EVOLVEGROOVEDSPINES)；VH 完成后可研
+    # VH 约 4:30-5:00 完成 + 研究 80s → 完成约 5:50-6:20；tol=90 给气矿竞争余量
+
+  - id: lurker_range
+    type: upgrade_complete
+    upgrade: LURKERRANGE
+    at: "9:00"
+    tol: 90
+    # 潜伏者射程升级；Step(UnitReady(LURKERDENMP,1), Tech(LURKERRANGE))
+    # VD 完成约 6:00-7:00 → 立即研 → 完成约 7:30-9:00；tol=90
+
+  # ────────────────────────────────────────────────
+  # 兵力 — 刺蛇先行，潜伏者跟进
+  # ────────────────────────────────────────────────
+
+  - id: hydralisk_wave1
+    type: unit_count
+    unit: HYDRALISK
+    at: "7:00"
+    tol: 90
+    min: 6
+    # plan: Step(UnitReady(HYDRALISKDEN,1), ZergUnit(HYDRALISK,20))
+    # VH 完成约 4:30-5:00 → 持续出刺蛇(33s/只)
+    # at=7:00 tol=90（窗口 5:30-8:30）应有 6+ 刺蛇
+
+  - id: lurker_first
+    type: unit_count
+    unit: LURKERMP
+    at: "8:00"
+    tol: 90
+    min: 2
+    # plan: Step(UnitReady(LURKERDENMP,1), ZergUnit(LURKERMP,8))
+    # VD 完成约 6:00-7:00 → 潜伏者(18s 孵化)
+    # at=8:00 tol=90（窗口 6:30-9:30）；min=2 保守下界（前 2 只先到位）
+
+  - id: lurker_count_mid
+    type: unit_count
+    unit: LURKERMP
+    at: "10:00"
+    tol: 90
+    min: 5
+    # plan 目标 8 潜伏者；at=10:00 tol=90（窗口 8:30-11:30）
+    # min=5 给兵力积累 + 战损余量；8 只潜伏者是最终目标
+
+  # ────────────────────────────────────────────────
+  # 农民数 — 四矿持续运营
+  # ────────────────────────────────────────────────
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "5:00"
+    tol: 60
+    min: 20
+    # 并行段 ActUnit(DRONE,28)；三矿经济扩张中
+    # at=5:00 tol=60（窗口 4:00-6:00）；min=20 保守下界
+
+  - id: worker_count_late
+    type: unit_count
+    unit: DRONE
+    at: "9:00"
+    tol: 90
+    min: 36
+    # 并行段 ActUnit(DRONE,44) 上限；四矿应在线
+    # at=9:00 tol=90（窗口 7:30-10:30）；min=36 三矿饱和下界
+
+  # ────────────────────────────────────────────────
+  # 出门 timing — 后期阵地战，出门晚但规模大
+  # ────────────────────────────────────────────────
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "10:00"
+    tol: 90
+    # 潜伏者流：Hive + 8 潜伏者 + 毒蛇才出门；
+    # 对战 VeryHard 预计 9:00-12:00 出门；tol=90（窗口 8:30-11:30）
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "13:00"
+    within: 25
+    # 阵地推进：潜伏者埋线前进，接触对方防线
+    # 高容限；by=13:00 兜底
+
+# 经济曲线（四矿持续运营，后期 doctrine）
+economy_profile:
+  - at: "3:00"
+    workers: 18
+    minerals: 200
+    # 早期 BS + Lair 资源压力；约 18 农
+
+  - at: "6:00"
+    workers: 26
+    minerals: 250
+    # 三矿运转，VD 在建；26 农是保守下界
+
+  - at: "9:00"
+    workers: 36
+    minerals: 300
+    # 四矿趋于饱和；Hive + 潜伏者积累期
+
+  - at: "11:00"
+    workers: 44
+    minerals: 350
+    # 四矿饱和；持续出兵消耗资源

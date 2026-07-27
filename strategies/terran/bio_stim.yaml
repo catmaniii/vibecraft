@@ -1,0 +1,94 @@
+kind: opening_build
+id: bio_stim
+display_name_zh: "3矿5BB8分钟压制"
+display_name_en: "3-Base Bio Stim Timing"
+summary_zh: "三矿生化 + 兴奋剂：MMM（枪兵+掠夺者+医疗船）三件套，二矿快扩(~3:10)+兴奋剂(~4:20)+5 兵营，攒一波兵后再开三矿(~6:40，不早开)，工程湾攻防 +1，Factory TechLab 出 1-2 坦克，timing ~6-8min stim 压制"
+summary_en: "3-base bio + Stim: MMM (Marines + Marauders + Medivacs), fast natural (~3:10) + Stim (~4:20) + 5 Barracks; stockpile then open third base (~6:40, not early); Engineering Bay +1 upgrades, Factory Tech Lab for 1-2 Tanks, ~6-8min Stim push."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bio_stim:BioStim"
+# 中期运营配比（build-aware sustain 据此持续出兵，2026-06-15 用户锁定）：
+# 枪兵 mass + 光头 4:1 + 医疗船 1:8(光头按2枪兵算) + 坦克 cap3(玩家可调)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: MARAUDER, policy: ratio, per: MARINE, n: 4}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+  - {unit: SIEGETANK, policy: cap, value: 3}
+aliases:
+  - "bio_stim"
+  - "生化兴奋剂"
+  - "MMM"
+  - "bio"
+  - "枪兵掠夺者"
+  - "枪兵流"
+  - "生化流"
+  - "M&M"
+  - "bio push"
+
+enter_when:
+  - "self.tech.stimpack.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [marine_rush, reaper_expand]"
+
+# Phase stepper（PWA strategy card 显示 milestone 进度）
+# 2026-06-18 重写以符合 bio_stim.py 实际节奏（#537/#548）：二矿早开(~3:10)、
+# 兴奋剂 ~4:20、5 兵营 ~5:10、**三矿挪到攒兵后 ~6:40**（不再在开局阶段）、
+# 出门按军队成型(~6-8min)。原 phase 把"三矿"放开局、stim 写 3:30、出门写 8:00 均已过时。
+phases:
+  - id: economic_open
+    display: "二矿 + 5兵营"
+    display_en: "Natural + 5 Barracks"
+    subtitle: "二矿~3:10 / Factory + Starport / gas×3 / 5 兵营 ramp"
+    subtitle_en: "Natural ~3:10 / Factory + Starport / gas ×3 / 5 Barracks ramp"
+    start_at_time: 0
+  - id: tech_lab_stim
+    display: "TechLab + 兴奋剂"
+    display_en: "Tech Lab + Stim"
+    subtitle: "~4:20 兴奋剂研出，掠夺者上线 + 工程湾 +1 攻防"
+    subtitle_en: "~4:20 Stim researched, Marauder online + Engineering Bay +1 attack/armor"
+    start_at_time: 150
+  - id: mmm_online
+    display: "MMM 成型"
+    display_en: "MMM Online"
+    subtitle: "~5min 医疗船 + 掠夺者就位，战斗护盾研究，5 兵营量产"
+    subtitle_en: "~5min Medivacs + Marauders online, Combat Shield researched, 5 Barracks mass producing"
+    start_at_time: 300
+  - id: third_attack
+    display: "攒兵 → 三矿 + stim 压制"
+    display_en: "Stockpile → Third Base + Stim Push"
+    subtitle: "~6:40 攒一波兵后开三矿（不早开），攻防 +1，stim 压向对方分矿"
+    subtitle_en: "~6:40 stockpile one wave then open third base (not early), +1 upgrades, Stim push toward enemy natural"
+    start_at_time: 390
+
+commitments:
+  units:
+    marine: 30
+    marauder: 10
+    medivac: 4
+    siege_tank: 2
+  tech: [Stimpack, CombatShield, ConcussiveShells, InfantryWeapons1, InfantryArmor1]
+  structures:
+    barracks: 5
+    factory: 1
+    starport: 1
+    engineering_bay: 2
+  expansions: 3
+
+attack_window:
+  # 2026-06-18 后移修正(#548):start_attack_power=18,军队成型(~一波 MMM)即出门,
+  # 实测 ~6-8min(原写 8:00-9:30 偏晚,与代码不符)。
+  open_at: "6:00"
+  close_at: "8:00"
+  target_priority: [army, production, natural]
+
+micro_doctrine:
+  - "兴奋剂爆发时 Marine 前压，掠夺者打装甲"
+  - "Medivac 跟随 Marine 治疗，血少的 Marine 优先治"
+  - "坦克架炮在 Marine 身后提供远程压制，推进前先落点"
+  - "对方 Colossus / 坦克：Marauder 集火，坦克反炮"
+  - "Marine 站位 spread，避免 Storm / Fungal 集火"
+  - "Medical kite：Medivac 撤到安全位后继续 heal"
+
+lategame_transitions:
+  - lategame_id: persistent_skyterran
+    when: "default"
+  - lategame_id: persistent_skyterran
+    when: "game_time >= 13:00"

@@ -1,0 +1,120 @@
+strategy_id: widow_mine_drop
+my_race: Terran
+
+# 空投地雷（工厂 Reactor 量产寡妇雷 + 医疗船多线空投）验收 spec
+#
+# 调研来源：
+#   - terrancraft TvP Mass Widow Mine Drop
+#     https://terrancraft.com/2020/07/05/tvp-widow-mine-drop-with-armory/
+#     (BB@~1:20 / CC@~2:00 / Factory+Reactor@~2:30 / Starport@~3:30 /
+#      WM x2 by ~4:00 / Medivac x2 by ~4:30 / 首波空投 ~4:00-4:30)
+#   - Liquipedia Widow Mine Drop (vs. Protoss)
+#     https://liquipedia.net/starcraft2/Widow_Mine_Drop_(vs._Protoss)
+#     (1 Rax FE → Factory Reactor → WM mass; Starport 接 Medivac 空投;
+#      6:00 前积攒 6+ 寡妇雷 + 持续骚扰)
+#   - spawningtool #166327 TvP Widow Mine Drop
+#     https://lotv.spawningtool.com/build/166327/
+#     (BB@1:27 / CC@2:05 / Factory@2:43 / Reactor@3:13 /
+#      Starport@3:40 / Medivac1@4:14 / WM1@3:58 / WM2@4:25 / moveout@4:40)
+#
+# build 核心特征：
+#   - BB → 快扩 CC (~2:00) → VF 挂 Reactor 量产寡妇雷
+#   - VS ~3:50 完成 → 医疗船空运寡妇雷打矿线
+#   - 首波空投 ~4:00-4:30，2 颗寡妇雷 + 2 医疗船出发
+#   - 6:00 前积攒 6+ 颗寡妇雷，持续多线骚扰
+#   - Stim 同步研究支撑中期正面
+
+checks:
+  # --- 基础骨架 ---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:30"
+    tol: 20
+    # BB 标准完成时间 ~1:25-1:35；是本 build 最早科技前置
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:00"
+    tol: 45
+    # VF 完成 ~2:40-3:20；Reactor 立即挂上开始量产寡妇雷
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "3:20"
+    tol: 60
+    min: 2
+    # 快扩 CC ~2:00-2:10 开始建，~3:00-3:30 完成；双矿是本 build 经济基础
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "3:50"
+    tol: 50
+    # VS ~3:30-4:10 完成；医疗船空投是本 build 核心机制
+
+  # --- 寡妇雷量产节奏 ---
+  - id: widowmine_2
+    type: unit_count
+    unit: WIDOWMINE
+    at: "4:30"
+    tol: 60
+    min: 2
+    # VF Reactor 双产：WM1 ~3:58 / WM2 ~4:25；首波空投 2 颗即可出发
+
+  - id: widowmine_6
+    type: unit_count
+    unit: WIDOWMINE
+    at: "6:00"
+    tol: 60
+    min: 6
+    # Reactor 持续双产，6:00 前应积攒 6 颗；多线骚扰基础
+
+  # --- 医疗船（空投载具）---
+  - id: medivac_2
+    type: unit_count
+    unit: MEDIVAC
+    at: "4:45"
+    tol: 60
+    min: 2
+    # Medivac1 ~4:14 / Medivac2 ~4:45；2 医疗船才能双线同时空投
+
+  # --- 科技配套 ---
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "6:00"
+    # BB TechLab 完成后研 Stim ~100s；~5:00-6:00 内完成，撑中期正面
+
+  # --- 首波攻势 ---
+  - id: attack_moveout
+    type: attack_moveout
+    by: "6:30"
+    # 首波空投；原 by=5:40 是 WidowMineDropAct 接入前的基线(~337s)。
+    # 接入后空投把 ~16 补给的寡妇雷 + 医疗船 Reserved 走,主力凑齐略晚
+    # (实测 ~364s),by 同步校准到 6:30 兜底。
+
+  # --- L3 骚扰验收：是否真打到敌方农民 ---
+  - id: harass_worker_kills
+    type: harass_damage
+    by: "7:30"
+    min: 3
+    # 空投寡妇雷——医疗船投雷到对方矿区,一发埋地必须真炸到农民。
+    # enemy_workers_harassed = telemetry 敌方块「被我方打到过(受伤∪阵亡)的敌方农民」累计;
+    # by 7:30:实测医疗船 ~6:00 把雷投到位、雷埋地后骚扰在 ~7:00-7:15 铺开
+    # (WidowMineDropAct 每局炸到 28-32 农民),初设 6:30 偏早,按实测校准。
+
+# 经济曲线标准值
+# widow_mine_drop 是侵略性快攻流，农民爬坡让位给快速生产寡妇雷；
+# VF Reactor 持续消耗矿物，余矿应保持低位
+economy_profile:
+  - at: "3:00"
+    workers: 24
+    minerals: 200
+    # 快扩刚完成 + VF 在建：双矿初期 + MULE 补矿，余矿压低给 VF+VS
+  - at: "6:00"
+    workers: 40
+    minerals: 300
+    # 双矿运转 + VF Reactor 持续吃矿：农民补到 40，余矿低位（寡妇雷 + 医疗船生产消耗）

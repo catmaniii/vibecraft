@@ -1,0 +1,104 @@
+kind: opening_build
+id: dt_rush
+core_units:
+  - {unit: ZEALOT, policy: mass}
+  - {unit: DARKTEMPLAR, policy: cap, value: 8}
+display_name_zh: "速隐刀"
+display_name_en: "Dark Templar Rush"
+summary_zh: "极速 VD 速隐刀（DT Rush）：速 BY → VC → VD 科技线，1 农民提前到敌方家门口修野水晶，VD 完成后 DT 直接在野水晶折跃、落地即偷家；攀科技期只出 1 追猎防守 + 侦察。PvT / PvZ 早期 all-in，刷几轮 DT 后视情况转常规打法"
+summary_en: "Fast Dark Shrine DT rush: Cybernetics Core → Twilight Council → Dark Shrine; 1 Probe placed near enemy front to build proxy Pylon; DTs warp in from proxy and raid enemy workers immediately. PvT/PvZ early all-in."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.dt_rush:DtRush"
+aliases:
+  - "速隐刀"
+  - "DT速推"
+  - "DT Rush"
+  - "DT rush"
+  - "暗使偷家"
+  - "暗使"
+  - "暗影"
+  - "暗影修女"
+  - "黑暗圣堂武士"
+  - "黑暗圣堂"
+  - "DT"
+  - "DT偷家"
+  - "暗影骑士偷家"
+  - "暗使rush"
+  - "速DT"
+matchup: [PvT, PvZ]
+
+phases:
+  - id: opening
+    display: "单 BG + 双气"
+    display_en: "Single Gateway + Double Gas"
+    subtitle: "14 BE → 15 BG → 16 双气 → 19 BY → 20 折跃"
+    subtitle_en: "14 Pylon → 15 Gateway → 16 double gas → 19 Cybernetics Core → 20 Warp Gate"
+    start_at_supply: 14
+  - id: tech
+    display: "VC + VD 快速上科技"
+    display_en: "Twilight Council + Dark Shrine"
+    subtitle: "BY 好 → VC → VD，全程 chrono 折跃"
+    subtitle_en: "Cybernetics Core done → Twilight Council → Dark Shrine, all chrono to Warp Gate"
+    start_at_supply: 21
+  - id: forward
+    display: "野水晶就绪"
+    display_en: "Proxy Pylon Ready"
+    subtitle: "派农民到敌方家门口修 BE → DT 折跃点真建好(事件触发,不再按 supply 估)"
+    subtitle_en: "Probe placed near enemy base builds Pylon → triggers when proxy Pylon completes"
+    start_at_event: "dt_rush_forward_pylon_ready"
+  - id: massing
+    display: "补 BG 到 4 + 二矿"
+    display_en: "Scale to 4 Gateways + Expand"
+    subtitle: "VD 建造期补 BG 到 4 + VD 完成后开二矿（失败转运营的底子）"
+    subtitle_en: "During Dark Shrine build: add Gateways to 4 + expand after Dark Shrine (fallback economy)"
+    start_at_supply: 26
+  - id: pressuring
+    display: "野水晶折跃 DT"
+    display_en: "Warp-in Dark Templars at Proxy"
+    subtitle: "VD 完成 → DT 在野水晶持续折跃,落地即冲敌方矿区"
+    subtitle_en: "Dark Shrine done → continuous DT warp-in at proxy Pylon, rush enemy workers"
+    start_at_supply: 29
+    start_at_time: 230
+  - id: raiding
+    display: "DT 偷家成功"
+    display_en: "DT Raid Successful"
+    subtitle: "DT 真杀到敌方农民(事件触发,看 telemetry 实际计数)"
+    subtitle_en: "DTs reach enemy workers (event-triggered by telemetry worker kill count)"
+    start_at_event: "dt_rush_dt_killed_worker"
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 DtRush.create_plan 控制
+# 参考：lotv.spawningtool.com/build/47308/ + 野水晶（forward proxy）改造
+steps:
+  - "14 build BE"
+  - "15 build BG"
+  - "16 build BA"
+  - "16 build BA"
+  - "19 build BY"
+  - "20 research 折跃 @chrono"
+  - "21 build VC"
+  - "24 build VD"
+  - "24 build BE @forward"
+  - "24 build BG"
+  - "25 build BG"
+  - "26 build BG"
+  - "28 build BN"
+  - "30 train 追猎"
+  - "32 train 暗使 @chrono"
+  - "32 train 暗使 @chrono"
+  - "32 train 暗使 @chrono"
+  - "38 train 暗使"
+  - "38 train 暗使"
+
+scout_at: "15 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.structures.sporecrawler.count >= 2"
+    then: "transition:iac_2base"
+  - sees: "enemy.structures.missileturret.count >= 2"
+    then: "transition:blink_stalker"
+
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+# 注：attack_window 是 midgame_stance 字段，opening_build 不支持。
+# 出门 timing（~4:00）+ 目标优先级（主基地/扩张）由 plan class DtRush._ready_to_pressure 控制。
+# 刷满 8 个 DT 后 DtRush 通过 EmitOpeningCompleteAct 通知 Director 推荐转常规打法。

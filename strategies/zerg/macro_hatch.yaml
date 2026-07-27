@@ -1,0 +1,70 @@
+kind: opening_build
+id: macro_hatch
+display_name_zh: "宏观双孵"
+display_name_en: "Hatch First Expand"
+summary_zh: "17 孵化扩张 → 快开二矿，先经济后科技：17 农 → 开第二孵化场 → BS + OL，适合稳健风格"
+summary_en: "17-worker Hatchery expand → fast natural, economy before tech: 17 workers → second Hatchery → Spawning Pool + Overlord; stable macro-oriented style."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.macro_hatch:MacroHatch"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+# 2026-06-18 同步实现: macro_hatch opening plan 不 morph Ravager；RAVAGER 条目由 sustain doctrine 补，开局产线只出 ROACH
+core_units:
+  - {unit: ROACH, policy: mass}
+  - {unit: RAVAGER, policy: cap, value: 6}  # 由 sustain doctrine 产，opening plan 不 morph
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "macro_hatch"
+  - "macro"
+  - "双孵"
+  - "快扩"
+  - "宏观流"
+  - "17孵化"
+  - "hatch first"
+  - "经济流"
+matchup: [ZvT, ZvZ, ZvP]
+
+phases:
+  - id: opening
+    display: "17 开扩张"
+    display_en: "17-Worker Expand"
+    subtitle: "17 农民开第二孵化场，先扩后池"
+    subtitle_en: "17 workers → second Hatchery, expand before Pool"
+    start_at_supply: 17
+  - id: eco
+    display: "BS + 女王"
+    display_en: "Spawning Pool + Queens"
+    subtitle: "扩张完成后 → BS → 两孵化场同时出女王"
+    subtitle_en: "Hatchery done → Spawning Pool → Queens from both Hatcheries"
+    start_at_supply: 22
+  - id: tech
+    display: "蟑螂窝 + 进化腔"
+    display_en: "Roach Warren + Evolution Chambers"
+    subtitle: "BR 蟑螂窝 + BV×2 进化腔 → Lair → 蟑螂速(Glial) → 量产蟑螂"  # 2026-06-18 #548 同步代码: plan 始终走蟑螂路线, 删"根据侦察选"错误分支描述
+    subtitle_en: "Roach Warren + 2 Evolution Chambers → Lair → Glial Reconstitution → mass Roaches"
+    start_at_supply: 32
+    start_at_time: 200
+
+steps:
+  - "9 build Overlord"
+  - "13 build Extractor"
+  - "17 build Hatchery"
+  - "17 build SpawningPool"
+  - "17 build Overlord"
+  - "20 build Queen"
+  - "20 build Queen"
+  - "22 train Zergling"
+  - "22 train Zergling"
+  - "26 build RoachWarren"
+  - "28 build Overlord"
+
+default_transitions:
+  - midgame_id: roach_hydra
+    when: "default"
+  - midgame_id: mutalisk_harass
+    when: "enemy.skytoss OR enemy.mech"
+
+# 3 矿 macro hatch 运营成型 → 转后期持续运营（蟑螂 + 刺蛇 + 毒蛇）
+lategame_transitions:
+  - lategame_id: persistent_roach_hydra_viper
+    when: "default"
+  - lategame_id: persistent_roach_hydra_viper
+    when: "game_time >= 10:00"

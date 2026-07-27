@@ -1,0 +1,183 @@
+# 虫族中央别名表（M6.2a）
+#
+# 格式跟 protoss.yaml 完全一致(buildings / units / upgrades 三组,
+# default_display + aliases + hotkey)。
+#
+# 虫族建筑 hotkey：Drone build menu 分两层 B（基础）+ V（高级）
+# B 系：Hatchery(BH) / Extractor(BE) / SpawningPool(BS) / EvolutionChamber(BV)
+#        RoachWarren(BR) / BanelingNest(BB) / SpineCrawler(BC) / SporeCrawler(BP)
+# V 系：HydraliskDen(VH) / LurkerDen(VL) / InfestationPit(VI) / Spire(VS)
+#        NydusNetwork(VN) / UltraliskCavern(VU)
+
+buildings:
+  Hatchery:
+    default_display: "BH"
+    aliases: [BH, 孵化, 基地, 一本, 孵化场, Hatchery]
+    hotkey: "B+H"
+  Lair:
+    default_display: "Lair"
+    aliases: [虫穴, 二本, Lair]
+  Hive:
+    default_display: "Hive"
+    aliases: [主巢, 三本, Hive]
+  Extractor:
+    default_display: "BE"
+    aliases: [BE, 气矿, 气, Extractor]
+    hotkey: "B+E"
+  SpawningPool:
+    default_display: "BS"
+    aliases: [BS, 母池, 狗洞, SpawningPool]
+    hotkey: "B+S"
+  EvolutionChamber:
+    default_display: "BV"
+    aliases: [BV, 进化腔, 升级巢, EvolutionChamber]
+    hotkey: "B+V"
+  RoachWarren:
+    default_display: "BR"
+    aliases: [BR, 蟑螂巢, RoachWarren]
+    hotkey: "B+R"
+  BanelingNest:
+    default_display: "BB"
+    aliases: [BB, 爆虫巢, 自杀虫巢, BanelingNest]
+    hotkey: "B+B"
+  SpineCrawler:
+    default_display: "BC"
+    aliases: [BC, 刺蛇塔, 防御塔, SpineCrawler]
+    hotkey: "B+C"
+  SporeCrawler:
+    default_display: "BP"
+    aliases: [BP, 孢子塔, 防空塔, SporeCrawler]
+    hotkey: "B+P"
+  HydraliskDen:
+    default_display: "VH"
+    aliases: [VH, 刺蛇巢, 龙穴, HydraliskDen]
+    hotkey: "V+H"
+  LurkerDen:
+    default_display: "VL"
+    aliases: [VL, 潜伏者巢, 地刺巢, LurkerDen]
+    hotkey: "V+L"
+  InfestationPit:
+    default_display: "VI"
+    aliases: [VI, 感染深渊, InfestationPit]
+    hotkey: "V+I"
+  Spire:
+    default_display: "VS"
+    aliases: [VS, 尖塔, 飞龙塔, Spire]
+    hotkey: "V+S"
+  GreaterSpire:
+    default_display: "GreaterSpire"
+    aliases: [大尖塔, GreaterSpire]
+  NydusNetwork:
+    default_display: "VN"
+    aliases: [VN, 虫巢网络, NydusNetwork]
+    hotkey: "V+N"
+  UltraliskCavern:
+    default_display: "VU"
+    aliases: [VU, 雷兽巢, UltraliskCavern]
+    hotkey: "V+U"
+
+units:
+  Drone:
+    default_display: "农民"
+    aliases: [农民, 工蜂, Drone]
+  Overlord:
+    default_display: "OL"
+    aliases: [OL, 王虫, 监工, Overlord]
+  Overseer:
+    default_display: "OS"
+    aliases: [OS, 监察王虫, Overseer]
+  Larva:
+    default_display: "幼虫"
+    aliases: [幼虫, Larva]
+  Queen:
+    default_display: "女王"
+    aliases: [女王, 后, Queen]
+  Zergling:
+    default_display: "小狗"
+    aliases: [小狗, 跳虫, 狗, Ling, Zergling]
+  Baneling:
+    default_display: "爆虫"
+    aliases: [爆虫, 自杀虫, 妖虫, Baneling]
+  Roach:
+    default_display: "蟑螂"
+    aliases: [蟑螂, 小强, Roach]
+  Ravager:
+    default_display: "破坏者"
+    aliases: [破坏者, 大蟑螂, Ravager]
+  Hydralisk:
+    default_display: "刺蛇"
+    aliases: [刺蛇, 龙, Hydra, Hydralisk]
+  Lurker:
+    default_display: "潜伏者"
+    aliases: [潜伏者, 地刺, Lurker]
+  Infestor:
+    default_display: "感染虫"
+    aliases: [感染虫, 感染, Infestor]
+  SwarmHost:
+    default_display: "蝗虫"
+    aliases: [蝗虫, 母虫, SwarmHost]
+  Mutalisk:
+    default_display: "飞龙"
+    aliases: [飞龙, Muta, Mutalisk]
+  Corruptor:
+    default_display: "腐化者"
+    aliases: [腐化者, 腐化, Corruptor]
+  Viper:
+    default_display: "毒蛇"
+    aliases: [毒蛇, Viper]
+  NydusWorm:
+    default_display: "虫洞"
+    aliases: [虫洞, NydusWorm]
+  Ultralisk:
+    default_display: "雷兽"
+    aliases: [雷兽, 雷, Ultralisk]
+  BroodLord:
+    default_display: "BL"
+    aliases: [BL, 巢虫领主, 巢虫, BroodLord]
+
+upgrades:
+  Burrow:
+    default_display: "钻地"
+    aliases: [钻地, Burrow]
+  MetabolicBoost:
+    default_display: "狗速"
+    aliases: [狗速, 小狗速度, MetabolicBoost]
+  AdrenalGlands:
+    default_display: "狗攻速"
+    aliases: [狗攻速, AdrenalGlands]
+  CentrifugalHooks:
+    default_display: "爆虫速"
+    aliases: [爆虫速, CentrifugalHooks]
+  GlialReconstitution:
+    default_display: "蟑螂速"
+    aliases: [蟑螂速, GlialReconstitution]
+  GroovedSpines:
+    default_display: "刺蛇射程"
+    aliases: [刺蛇射程, GroovedSpines]
+  MuscularAugments:
+    default_display: "刺蛇速"
+    aliases: [刺蛇速, MuscularAugments]
+  PneumatizedCarapace:
+    default_display: "OL速"
+    aliases: [OL速, PneumatizedCarapace]
+  ChitinousPlating:
+    default_display: "雷兽甲"
+    aliases: [雷兽甲, ChitinousPlating]
+  AnabolicSynthesis:
+    default_display: "雷兽速"
+    aliases: [雷兽速, AnabolicSynthesis]
+  ZergMeleeWeapons:
+    default_display: "近战攻击"
+    aliases: [近战攻, 狗攻, ZergMeleeWeapons]
+  ZergMissileWeapons:
+    default_display: "远程攻击"
+    aliases: [远程攻, 蟑攻, ZergMissileWeapons]
+  ZergGroundArmor:
+    default_display: "地面护甲"
+    aliases: [地甲, 虫族地甲, ZergGroundArmor]
+  ZergFlyerWeapons:
+    default_display: "空军攻击"
+    aliases: [空攻, 飞龙攻, ZergFlyerWeapons]
+  ZergFlyerArmor:
+    default_display: "空军护甲"
+    aliases: [空甲, ZergFlyerArmor]

@@ -1,0 +1,114 @@
+strategy_id: roach_allin
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/136003/
+#     (Zerg Roach All-in: 12 Drone → BS → expand → Roach Warren @~1:45;
+#      Glial Reconstitution → mass Roach attack ~5:30-6:00)
+#   - https://liquipedia.net/starcraft2/Roach_All-In_(vs._Terran)
+#     (Roach all-in vs Terran: 两矿双气 → Warren ASAP → Glial + mass Roach;
+#      attack timing 5:30-6:30 depending on opponent pressure)
+#   - https://www.sc2replaystats.com/build/zerg/roach-all-in
+#     (community data: Roach Warren 完成 ~2:30-3:00；蟑螂速完 ~4:00-4:30;
+#      army size 14+ Roach before moveout ~330-360s)
+#
+# 本 build 特征（两矿蟑螂 all-in）:
+#   - 12 农 → BS → 二矿 → Roach Warren 尽早 → 双气矿
+#   - 蟑螂速(Glial) + 小狗速(ZerglingSpeed) 研究
+#   - 农民控制 ~18，不转后期经济
+#   - 5:30-6:00 蟑螂 14+ 只 all-in 出门
+
+checks:
+  # --- 核心建筑骨架 ---
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    by: "1:30"
+    # 12 农就开 BS；BS 建造 65s → 完成约 1:10-1:30
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "2:05"
+    tol: 25
+    # all-in 抢科技：BS 一好立刻开 Warren。实测 3 跑一致 ~2:05 完成 ——
+    # 原锚点 2:45 设晚了,2:05±25(1:40-2:30) 才是这个 all-in 的真实节奏。
+
+  - id: extractor_2
+    type: building_count
+    unit: EXTRACTOR
+    at: "2:15"
+    tol: 30
+    min: 2
+    # 双气矿（BS 前后各一）；完成约 1:45-2:30；at=2:15 tol=30 → 窗口 1:45-2:45
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "2:00"
+    tol: 35
+    min: 2
+    # 二矿（expand 2 = 只开两矿）；Hatchery 建造 71s；二矿 SCV 约 1:00-1:20 → 完成约 2:10-2:30
+    # at=2:00 tol=35 → 窗口 1:25-2:35 宽松覆盖
+
+  # --- 科技升级 ---
+  - id: zergling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    by: "4:30"
+    # BS 好后研 ZerglingSpeed（100s）；~3:30-4:00 完成；宽松上界 4:30
+
+  # 注:无蟑螂速(Glial)check —— 它需 Lair 前置,2 矿 all-in 升 Lair
+  # (主巢 morph ~57s 掉幼虫)不值,保持纯一本暴蟑螂。
+
+  # --- 兵力积累 ---
+  - id: roach_10
+    type: unit_count
+    unit: ROACH
+    at: "4:30"
+    tol: 45
+    min: 10
+    # Warren ~2:30-2:45 开始出蟑螂（每只 27s）；双孵化场 + 注浆 → 4:30 10 只合理
+    # tol=45 → 窗口 3:45-5:15
+
+  # --- 出门 timing（all-in 核心节点）---
+  - id: attack_moveout
+    type: attack_moveout
+    by: "6:30"
+    # all-in 目标 5:30-6:00 出门；start_attack_power=8 让 bot 早出门
+    # 宽松上界 6:30 兜底（对方封堵 / 蟑螂速还差几秒等情况）
+
+  # --- 农民控制（all-in 不过度补农） ---
+  - id: worker_18
+    type: worker_count
+    by: "3:30"
+    min: 18
+    # all-in 控农 ~18；开局 12 + 补少量
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "7:30"
+    within: 25
+    # 蟑螂一波 all-in：截至 7:30,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值
+# 蟑螂 all-in：农民低位冻结（~18），矿全进蟑螂 + 科技 + 气矿，余矿低位运营
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 150
+    # BS + Warren 建造期，矿快速消耗；农民约 14-16，余矿低位
+
+  - at: "4:00"
+    workers: 18
+    minerals: 100
+    # Glial / ZerglingSpeed 研究中 + 持续出蟑螂；双孵化场幼虫全进蟑螂；
+    # all-in 农民冻结 ~18，余矿极低（出兵）
+
+  - at: "5:30"
+    workers: 18
+    minerals: 50
+    # 出门前夕：蟑螂 14+ 只就位，幼虫全出；余矿接近 0（all-in 清仓）

@@ -1,0 +1,104 @@
+kind: opening_build
+id: roach_allin
+display_name_zh: "蟑螂一波"
+display_name_en: "Roach All-in"
+summary_zh: "两矿蟑螂 all-in：隐藏科技、早 timing —— BS → 二矿 → Roach Warren 尽早 → 双气 → 提速小狗 → 全力爆蟑螂，~5:30-6:00 一波推掉（注：不研 Glial，一本 all-in 升 Lair 掉产能不值）"
+summary_en: "2-base Roach all-in: hidden tech, early timing — Pool → expand → Roach Warren → double gas → Zergling Speed → full Roach mass, push at ~5:30-6:00 (no Glial Reconstitution; 1-base all-in, Lair upgrade wastes production)."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.roach_allin:RoachAllin"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: ROACH, policy: mass}
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "roach_allin"
+  - "蟑螂一波"
+  - "蟑螂allin"
+  - "roach allin"
+  - "蟑螂all-in"
+  - "两矿蟑螂"
+  - "蟑螂速攻"
+matchup: [ZvT, ZvZ, ZvP]
+
+# Phase stepper（PWA strategy card 显示 milestone 进度）
+phases:
+  - id: eco_foundation
+    display: "奠基"
+    display_en: "Foundation"
+    subtitle: "BS → 二矿 → 双气矿 → Roach Warren"  # 2026-06-18 #548 同步代码:BuildGas(2) 在 RoachWarren 前，原顺序错误
+    subtitle_en: "Pool → expand → double gas → Roach Warren"
+    start_at_time: 0
+  - id: tech_up
+    display: "小狗速"
+    display_en: "Zergling Speed"
+    subtitle: "Zergling Speed；全力爆蟑螂（不研 Glial，一本不升 Lair）"  # 2026-06-18 同步实现: roach_allin.py 故意不研 GLIALRECONSTITUTION
+    subtitle_en: "Zergling Speed; full Roach mass (no Glial Reconstitution; 1-base, no Lair upgrade)"
+    start_at_time: 150
+  - id: mass_roach
+    display: "暴蟑螂"
+    display_en: "Mass Roaches"
+    subtitle: "~4:00-5:00 蟑螂主力到位 12-16 只"
+    subtitle_en: "~4:00-5:00 Roach main force reaches 12-16"
+    start_at_time: 240
+  - id: attack_timing
+    display: "~5:30 一波 all-in"
+    display_en: "~5:30 All-in Push"
+    subtitle: "蟑螂 + 小狗出门推对方主基地，不回头"
+    subtitle_en: "Roaches + Zerglings push enemy main, no retreat"
+    start_at_supply: 44
+    start_at_time: 330
+
+steps:
+  - "9 build Overlord"
+  - "12 build SpawningPool"
+  - "15 build Hatchery"
+  - "16 build Extractor"
+  - "16 build Extractor"
+  - "17 build RoachWarren"
+  - "18 train Queen"
+  - "18 train Queen"
+  - "20 train Zergling"
+  - "20 train Zergling"
+  - "20 train Zergling"
+  - "24 research ZERGLINGMOVEMENTSPEED"
+  # 2026-06-18 同步实现: GLIALRECONSTITUTION 步骤删除 — 一本 all-in 不升 Lair，不研蟑螂速
+  - "28 train Roach"
+  - "28 train Roach"
+  - "32 train Roach"
+  - "36 train Roach"
+  - "40 train Roach"
+  - "44 train Roach"
+
+commitments:
+  units:
+    roach: 14
+    zergling: 8
+    queen: 2
+  tech: [ZERGLINGMOVEMENTSPEED]  # 2026-06-18 同步实现: 移除 GLIALRECONSTITUTION（一本 all-in 不研，需 Lair 前置）
+  structures:
+    spawning_pool: 1
+    roach_warren: 1
+    extractor: 2
+  expansions: 2
+
+attack_window:
+  open_at: "5:30"
+  close_at: "6:30"
+  target_priority: [army, main, natural]
+
+micro_doctrine:
+  - "蟑螂正面推进，提速小狗两翼包抄"
+  - "全力一波推，不撤退、不转后期"
+  - "蟑螂速升完后立刻出门，timing 就是生命"
+  - "对方防线薄弱先打分矿，防线厚直推主基地"
+  - "all-in：农民停在 18-20，余矿全进兵"
+
+abort_signals:
+  - sees: "self.enemy.wall_off and self.army_value < 600"
+    then: "warn:all-in 遇到强封墙，谨慎出门"
+
+# 蟑螂 all-in 没结束游戏 → 转后期持续运营(蟑螂+刺蛇+毒蛇,延续地面军风格)
+lategame_transitions:
+  - lategame_id: persistent_roach_hydra_viper
+    when: "default"
+  - lategame_id: persistent_roach_hydra_viper
+    when: "game_time >= 8:00"

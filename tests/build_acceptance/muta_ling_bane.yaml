@@ -1,0 +1,217 @@
+strategy_id: muta_ling_bane
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/66228/
+#     (Railgan ZvT 2-Base Mutalisk Speed Banelings:
+#      BS @0:46; Lair @3:05; Spire @4:24; 5 飞龙 @6:05)
+#   - https://lotv.spawningtool.com/build/47537/
+#     (Railgan ZvT 2-Hatch Muta Ling Bane:
+#      BS @0:50; Lair @3:05; Spire @4:13; 首批飞龙 @5:24)
+#
+# 本项目 plan (muta_ling_bane.py 实现):
+#   科技链(串行)：BS → BB(妖虫巢) + BV×2(进化腔) → VS(刺翼)
+#   并行：三矿 → 四矿 → 五矿；双气 → 四气；22/28/40 农 cap
+#   升级：ling 速(ZerglingMovementSpeed) + 攻速(ZerglingAttackSpeed)
+#         毒爆速(CentriFugalHooks)；飞行攻防 1-3（刺翼完成后）
+#   出兵：12 飞龙 + 24 小狗（小狗→毒爆变形）；女王 6
+#
+# 开局完成条件(_opening_done)：VS ready + ≥8 飞龙 + ≥12 小狗
+# 局长预计：9-12 分钟(飞龙骚扰打乱对方节奏后主力跟进)
+#
+# timing 推算（并行段重构后科技链不再被 ActUnit 阻塞）:
+#   BS 建造 65s；约 0:25-0:50 开建 → 完成约 1:30-2:00
+#   BB(妖虫巢) 建造 60s；BS 完成后立即触发 → 完成约 2:30-3:00
+#   BV×2(进化腔) 建造 35s；BB 后接 → 完成约 3:00-3:30
+#   VS(刺翼) 建造 100s；BV 后接 → 完成约 4:30-5:30
+#   首批飞龙：刺翼完成 + 100 矿 + 100 气 → 33s 孵化 → 约 5:00-6:00
+#   8 飞龙积累 → 约 6:30-8:00
+#   BB 完成 + 小狗 ≥8 → 毒爆变形；毒爆首批约 3:30-4:30
+
+checks:
+  # ────────────────────────────────────────────────
+  # 早期建筑 — 科技链核心
+  # ────────────────────────────────────────────────
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:50"
+    tol: 30
+    # plan: SequentialList 首步 GridBuilding(SPAWNINGPOOL,1)
+    # BS 建造 65s；开局较早开建 → 完成约 1:25-1:55
+    # at=1:50 tol=30（窗口 1:20-2:20）
+
+  - id: extractor_early
+    type: building_count
+    unit: EXTRACTOR
+    at: "2:30"
+    tol: 40
+    min: 1
+    # 并行段 BuildGas(2)；早期气矿支撑 Lair + 飞行升级
+    # 第一气约 1:30-2:00 开建 + 25s → 完成约 2:00-2:30；min=1
+
+  - id: baneling_nest
+    type: building_complete
+    unit: BANELINGNEST
+    at: "3:00"
+    tol: 45
+    # plan: SequentialList Step2 GridBuilding(BANELINGNEST,1)
+    # BS 完成后紧接 BB；BB 建造 60s → 完成约 2:30-3:00
+    # tol=45（窗口 2:15-3:45）给资源竞争余量
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "3:30"
+    tol: 60
+    min: 2
+    # 并行段 Expand(3)；二矿约 2:00-3:00 开建 + 71s → 完成约 3:10-4:10
+    # tol=60（窗口 2:30-4:30）
+
+  - id: spire
+    type: building_complete
+    unit: SPIRE
+    at: "5:30"
+    tol: 60
+    # plan: SequentialList Step4 GridBuilding(SPIRE,1)（BV×2 之后）
+    # BV 完成约 3:00-3:30 → VS 建造 100s → 完成约 4:40-5:10
+    # tol=60（窗口 4:30-6:30）兼顾科技链串行等待
+
+  # ────────────────────────────────────────────────
+  # 关键升级
+  # ────────────────────────────────────────────────
+
+  - id: zergling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "4:00"
+    tol: 60
+    # 并行段 Tech(ZERGLINGMOVEMENTSPEED)；BS 完成后可研（110s + 100 气）
+    # BS ~1:50 完成 → 研究 110s → 完成约 3:40-4:00；tol=60 给气矿竞争余量
+
+  - id: centrifugal_hooks
+    type: upgrade_complete
+    upgrade: CENTRIFICALHOOKS
+    at: "5:00"
+    tol: 60
+    # 毒爆速：Step(UnitReady(BANELINGNEST,1), Tech(CENTRIFICALHOOKS))
+    # BB 完成约 2:30-3:00 → 研究 110s → 完成约 4:20-5:00；tol=60
+
+  - id: flyer_weapons_1
+    type: upgrade_complete
+    upgrade: ZERGFLYERWEAPONSLEVEL1
+    at: "6:30"
+    tol: 90
+    # Step(UnitReady(SPIRE,1), Tech(ZERGFLYERWEAPONSLEVEL1))
+    # 刺翼完成约 4:40-5:30 → 研究 150s → 完成约 7:10-8:00
+    # at=6:30 tol=90（窗口 5:00-8:00）
+
+  # ────────────────────────────────────────────────
+  # 兵力 — 飞龙 + 小狗 + 毒爆三件套
+  # ────────────────────────────────────────────────
+
+  - id: zergling_early
+    type: unit_count
+    unit: ZERGLING
+    at: "3:00"
+    tol: 30
+    min: 8
+    # BS 完成后立即出小狗（多孵化场产能）；3:00 时防守 + 等毒爆变形
+    # at=3:00 tol=30（窗口 2:30-3:30）；min=8
+
+  - id: baneling_first
+    type: unit_count
+    unit: BANELING
+    at: "4:00"
+    tol: 60
+    min: 4
+    # BB 完成约 2:30-3:00 + 小狗 ≥8 → 变形（变形约 5s）
+    # 首批毒爆约 3:00-3:30；at=4:00 tol=60（窗口 3:00-5:00）；min=4
+
+  - id: mutalisk_first
+    type: unit_count
+    unit: MUTALISK
+    at: "6:00"
+    tol: 60
+    min: 3
+    # 刺翼完成约 4:40-5:30 + 资源积累 → 首批飞龙(33s/只)
+    # at=6:00 tol=60（窗口 5:00-7:00）；min=3 首批骚扰编队
+
+  - id: mutalisk_count
+    type: unit_count
+    unit: MUTALISK
+    at: "8:00"
+    tol: 90
+    min: 8
+    # plan 目标 12 飞龙；持续生产；at=8:00 tol=90（窗口 6:30-9:30）；min=8
+
+  - id: zergling_army
+    type: unit_count
+    unit: ZERGLING
+    at: "6:00"
+    tol: 90
+    min: 16
+    # plan: ZergUnit(ZERGLING,24)；多孵化场持续出狗 + 毒爆变形消耗
+    # at=6:00 tol=90（窗口 4:30-7:30）；min=16（部分已变毒爆）
+
+  # ────────────────────────────────────────────────
+  # 农民数 — 三矿快速扩张
+  # ────────────────────────────────────────────────
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "4:00"
+    tol: 60
+    min: 18
+    # 并行段 ActUnit(DRONE,22/28)；三矿经济建立中
+    # at=4:00 tol=60（窗口 3:00-5:00）；min=18
+
+  - id: worker_count_late
+    type: unit_count
+    unit: DRONE
+    at: "7:00"
+    tol: 90
+    min: 28
+    # 三矿饱和；ActUnit(DRONE,40) 目标
+    # at=7:00 tol=90（窗口 5:30-8:30）；min=28
+
+  # ────────────────────────────────────────────────
+  # 出门 timing — 飞龙骚扰先行，主力跟进
+  # ────────────────────────────────────────────────
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "6:30"
+    tol: 90
+    # 飞龙凑 8+ 骚扰出门；+ 小狗毒爆压制；
+    # at=6:30 tol=90（窗口 5:00-8:00）
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "9:00"
+    within: 25
+    # 飞龙机动：骚扰到对方矿线；by=9:00 前接触
+
+# 经济曲线（三矿飞龙流）
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 200
+    # BS + BB 资源压力；约 16 农，余矿偏低
+
+  - at: "4:00"
+    workers: 22
+    minerals: 200
+    # 双矿运转，刺翼在建；飞行升级开始消耗气
+
+  - at: "6:00"
+    workers: 28
+    minerals: 250
+    # 三矿稳定；飞龙生产消耗大量气；持续暴兵
+
+  - at: "8:00"
+    workers: 34
+    minerals: 300
+    # 出门骚扰阶段；持续补充三件套

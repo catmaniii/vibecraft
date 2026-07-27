@@ -1,0 +1,6 @@
+# 命名 server 配置(可入库/可分享;绝不含 admin_token——admin 走 -AdminToken/.secrets)
+# 用法: .\scripts\start.ps1 -ServerName close_test
+name: close_test
+token: vibecraft-dev
+port: 8080
+# ip: null  # QR 显示 IP，留空=自动探测

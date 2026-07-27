@@ -1,0 +1,110 @@
+strategy_id: 12pool
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/153110/
+#     (ZvZ 12 Pool 2 Hatch: 12 Drone → BS → 3 Zergling → 二矿 Hatchery → 继续出狗)
+#   - https://lotv.spawningtool.com/74054/
+#     (Zergling Rush replay: 18 BS → Extractor → Queen + Zergling @2:05 → 6只狗 @2:33,
+#      继续刷狗压制，全局在 6:06 结束)
+#   - src/vibecraft/bot/auto_combat/zerg/plans/twelve_pool.py
+#     (plan: 12 农 → BS → BuildGas(1) → Queen + ZergUnit 6 → Expand(2) →
+#      18 农 → ZergUnit 20 → PlanZoneAttack)
+#
+# 本项目 build: 12 农即开 BS（极速母池）→ 第一批 6 狗 → 二矿 → 持续刷狗 → 出门骚扰
+# 12pool 是纯 cheese/rush，无 Metabolic Boost（plan 里没有 ResearchUpgrade），
+# 靠极速出狗数量打对方 timing；游戏通常 2-4 分钟结束，晚期 check 不加。
+# timing 以代码关键路径推算 + spawningtool reference 验证，留合理容差。
+
+checks:
+  # --- 核心建筑 ---
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:10"
+    tol: 15
+    # 实测：BS 完成 70s。
+    # 12 农就开 BS（plan 第一条 GridBuilding(SPAWNINGPOOL,1)），建造 65s。
+    # at=70s=1:10，tol=15 覆盖执行抖动。
+
+  - id: no_gas_early
+    type: building_count
+    unit: EXTRACTOR
+    by: "3:00"
+    max: 0
+    # gasless cheese 验收：3:00 前不应该有气矿。
+    # by="3:00" → 窗口 [0, 180s] 全程扫；max=0 → 窗口内最大 count 必须 <=0。
+    # 修复历史：之前 gas_1 验 min:1 把 bug 当 PASS —— 12pool 是 gasless cheese，
+    # BS ready 后立刻建 BuildGas 是设计 bug（2026-05-27 修复：加 ROACHWARREN gate）。
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "4:00"
+    tol: 40
+    min: 2
+    # 实测：180s 时二矿仍未建（count=1）。
+    # plan SequentialList 强顺序：BS → gas → Queen(50s训练) → ZergUnit(6, ~25-30s/批) →
+    # Expand(2)；Queen 约 120s ready，6只狗约 150s 出完，Expand 约 155s 发出，
+    # BH 建造 71s → 完成约 226s≈3:46。
+    # at=4:00 tol=40 给足执行 + VeryEasy 抖动余量。
+
+  # --- 单位数量（狗 rush 核心节点）---
+  - id: zergling_first_wave
+    type: unit_count
+    unit: ZERGLING
+    at: "2:30"
+    tol: 20
+    min: 4
+    # 实测：110s 时 0 只 zergling（Queen 还没 ready）。
+    # plan：Queen 约 120s ready → ZergUnit(6) 开始孵化（25s/批）→ 首批约 145-155s。
+    # at=150s=2:30，tol=20；min=4（一批幼虫 2-4 只）。
+
+  - id: zergling_wave2
+    type: unit_count
+    unit: ZERGLING
+    at: "3:00"
+    tol: 20
+    min: 8
+    # 首批 ~2:30 出 4 只，再孵一批（25s）约 2:55 → 3:00 应有 8 只。
+    # 双孵化场生效后生产提速；tol=20 覆盖幼虫积累差异。
+
+  - id: zergling_pressure_army
+    type: unit_count
+    unit: ZERGLING
+    at: "3:45"
+    tol: 30
+    min: 14
+    # 二矿约 4:00 完成，双孵化场持续出狗；3:45 时单矿持续生产应积累 14+ 只。
+    # 12pool cheese 靠数量碾压，留 tol=30 覆盖幼虫节奏差异。
+
+  # --- 出门 timing ---
+  - id: attack_moveout
+    type: attack_moveout
+    at: "3:30"
+    tol: 60
+    # 实测：attack_moveout 未触发（plan PlanZoneAttack 需积累足够 start_attack_power）。
+    # 预计 zergling_first_wave 出完后（~2:30-2:40）触发 moveout，VeryEasy 对手无强力防守。
+    # at=3:30 tol=60（即接受 2:30-4:30 窗口内触发）。
+
+  # --- 前线压制验收（狗真的到对方门口）---
+  - id: pressure_contact
+    type: pressure_contact
+    by: "5:00"
+    within: 50
+    # 实测：pressure_contact 未触发（within=25 太严，且 moveout 本身延迟）。
+    # 小狗跑图约 30-60s；moveout ~3:30 → 接触约 4:00-4:30。
+    # by=5:00 给足跑图时间；within=50 格放宽接触判定（地图跑图距离差异大）。
+
+# 经济（12pool 是全攻流，农民极少）
+economy_profile:
+  - at: "1:30"
+    workers: 12
+    minerals: 100
+    # 12 农就开 BS，开建后不刷农，矿工定格在 12-13；
+    # 矿花在 BS(200) + gas(25) 上，余矿偏低
+  - at: "2:30"
+    workers: 14
+    minerals: 75
+    # plan 后段 18 农上限，但大量矿流向 Zergling；
+    # 余矿维持极低（狗刷不停），是 cheese 正常状态

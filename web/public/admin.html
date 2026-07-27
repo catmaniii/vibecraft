@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VibeCraft 管理面板</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", "Helvetica Neue", sans-serif;
+      background: #f0f2f5;
+      color: #222;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── 顶部 header ── */
+    .header {
+      background: #1a2940;
+      color: #e8edf5;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
+    .header .spacer { flex: 1; }
+
+    .server-indicator { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #607d8b;
+      transition: background 0.3s;
+    }
+    .dot.green  { background: #4caf50; }
+    .dot.yellow { background: #ff9800; }
+    .dot.red    { background: #f44336; }
+
+    .last-update { color: #7a8ea8; font-size: 12px; }
+
+    /* ── 오류 배너 ── */
+    #error-view { display: none; }
+    .error-banner {
+      max-width: 560px;
+      margin: 60px auto;
+      background: #ffebee;
+      border: 1px solid #ef9a9a;
+      border-radius: 8px;
+      padding: 28px 32px;
+      text-align: center;
+      color: #c62828;
+    }
+    .error-banner h2 { margin-bottom: 10px; font-size: 18px; }
+    .error-banner p  { font-size: 14px; color: #555; }
+    .error-banner code {
+      background: #f5f5f5; padding: 1px 5px; border-radius: 3px;
+      font-size: 12px; color: #333;
+    }
+
+    /* ── 标签页 ── */
+    .tabs {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 20px;
+      display: flex;
+    }
+    .tab {
+      padding: 12px 22px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .tab:hover  { color: #333; background: #f8f9fa; }
+    .tab.active { color: #1565c0; border-bottom-color: #1565c0; font-weight: 500; }
+
+    /* ── 面板 ── */
+    .tab-panel { display: none; padding: 20px; }
+    .tab-panel.active { display: block; }
+
+    /* ── 卡片 ── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 14px;
+    }
+
+    /* ── 状态指标卡片行 ── */
+    .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .stat-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 14px 20px;
+      min-width: 130px;
+      flex: 1 1 130px;
+    }
+    .stat-card .s-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .stat-card .s-value { font-size: 17px; font-weight: 600; color: #222; word-break: break-all; }
+    .stat-card .s-value.green  { color: #2e7d32; }
+    .stat-card .s-value.yellow { color: #e65100; }
+    .stat-card .s-value.blue   { color: #1565c0; }
+    .stat-card .s-value.sm     { font-size: 13px; }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block; padding: 2px 9px; border-radius: 12px;
+      font-size: 12px; font-weight: 500;
+    }
+    .badge.green  { background: #e8f5e9; color: #2e7d32; }
+    .badge.yellow { background: #fff3e0; color: #e65100; }
+    .badge.blue   { background: #e3f2fd; color: #1565c0; }
+    .badge.gray   { background: #f5f5f5; color: #666; }
+    .badge.red    { background: #ffebee; color: #c62828; }
+
+    /* ── 表格 ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #f7f8fa;
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #e4e4e4;
+      white-space: nowrap;
+    }
+    td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfc; }
+    .empty-msg { padding: 28px 10px; text-align: center; color: #bbb; font-size: 13px; }
+
+    /* ── 聊天区 ── */
+    .chat-log {
+      height: 260px;
+      overflow-y: auto;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #fafafa;
+      margin-bottom: 10px;
+    }
+    .chat-msg { margin-bottom: 5px; }
+    .chat-name { font-weight: 600; color: #444; margin-right: 5px; }
+    .chat-msg.admin .chat-name { color: #1565c0; }
+    .chat-text { color: #222; }
+    .chat-ts   { color: #bbb; font-size: 11px; margin-left: 5px; }
+    .chat-empty { color: #bbb; font-size: 13px; }
+
+    .send-row { display: flex; gap: 8px; }
+    .send-row input {
+      flex: 1; padding: 8px 12px; border: 1px solid #ddd;
+      border-radius: 6px; font-size: 14px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .send-row input:focus { border-color: #1565c0; }
+    .send-row button {
+      padding: 8px 18px; background: #1565c0; color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .send-row button:hover     { background: #0d47a1; }
+    .send-row button:disabled  { background: #90a4ae; cursor: not-allowed; }
+
+    /* ── 玩家芯片 ── */
+    .players-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .p-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; background: #f5f5f5; border-radius: 20px; font-size: 13px;
+    }
+
+    /* ── 操作行 ── */
+    .action-row {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 14px;
+    }
+    .action-row h3 { font-size: 14px; font-weight: 600; color: #333; }
+    .action-count { font-size: 12px; color: #999; }
+
+    .btn {
+      padding: 6px 16px; border-radius: 5px; font-size: 13px;
+      cursor: pointer; border: 1px solid #d0d0d0;
+      background: #fff; color: #333; transition: all 0.15s;
+    }
+    .btn:hover   { background: #f5f5f5; }
+    .btn.primary { background: #1565c0; color: #fff; border-color: #1565c0; }
+    .btn.primary:hover { background: #0d47a1; }
+
+    /* ── 内容单元格 ── */
+    .td-content { min-width: 240px; max-width: 520px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+    .td-ua { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #999; }
+    .td-mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; color: #888; }
+
+    /* ── 响应式 ── */
+    @media (max-width: 600px) {
+      .header { padding: 10px 12px; }
+      .header h1 { font-size: 15px; }
+      .tab  { padding: 10px 12px; font-size: 13px; }
+      .tab-panel { padding: 12px; }
+      .last-update { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ 顶部 header ══════════════════════════════════════════════════ -->
+<div class="header">
+  <h1>VibeCraft 管理面板</h1>
+  <div class="spacer"></div>
+  <div class="server-indicator">
+    <div class="dot" id="server-dot"></div>
+    <span id="server-text">连接中…</span>
+  </div>
+  <span class="last-update" id="last-update"></span>
+</div>
+
+<!-- ══ 登录视图（SCRAM-SHA-256） ════════════════════════════════════ -->
+<div id="login-view" style="display:none">
+  <div class="error-banner" style="max-width:360px;margin:48px auto;text-align:left">
+    <h2 style="text-align:center">管理员登录</h2>
+    <p style="color:var(--mut,#9aa7b4);font-size:13px;text-align:center">SCRAM-SHA-256 · 口令不过线</p>
+    <input type="password" id="login-pw" placeholder="管理员口令" autocomplete="current-password"
+      style="width:100%;box-sizing:border-box;margin:12px 0 8px;padding:10px 12px;border-radius:8px;
+      border:1px solid #334;background:#0e1116;color:#e6edf3;font-size:15px">
+    <button class="btn primary" id="login-btn" style="width:100%;padding:10px">登录</button>
+    <div id="login-err" style="display:none;color:#f85149;font-size:13px;margin-top:8px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- ══ 无权限视图（保留，备用） ══════════════════════════════════════ -->
+<div id="error-view">
+  <div class="error-banner">
+    <h2>无权限或 admin 未启用</h2>
+    <p>请确认 server 已配置 <code>--admin-token</code> 且通过 HTTPS / localhost 访问 <code>/admin</code>。</p>
+  </div>
+</div>
+
+<!-- ══ 主界面 ══════════════════════════════════════════════════════ -->
+<div id="main-view">
+
+  <!-- 标签页导航 -->
+  <div class="tabs">
+    <div class="tab active" data-tab="status">状态与大厅</div>
+    <div class="tab" data-tab="games">对局记录</div>
+    <div class="tab" data-tab="feedback">玩家留言</div>
+  </div>
+
+  <!-- ── Tab 1：状态与大厅 ─────────────────────────────────────── -->
+  <div class="tab-panel active" id="tab-status">
+
+    <!-- 状态指标卡片行 -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="s-label">房间状态</div>
+        <div class="s-value" id="sc-room-state">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">游戏中</div>
+        <div class="s-value" id="sc-in-game">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">当前对局</div>
+        <div class="s-value sm" id="sc-match-id">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">实时模式</div>
+        <div class="s-value" id="sc-realtime">—</div>
+      </div>
+    </div>
+
+    <!-- 大厅席位 -->
+    <div class="card">
+      <div class="card-title">大厅席位</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>昵称</th><th>种族</th><th>就绪</th><th>类型</th><th>队伍</th></tr>
+          </thead>
+          <tbody id="slots-tbody">
+            <tr><td colspan="6" class="empty-msg">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 在线玩家 -->
+    <div class="card">
+      <div class="card-title">在线玩家</div>
+      <div class="players-wrap" id="players-wrap">
+        <span style="color:#bbb;font-size:13px">加载中…</span>
+      </div>
+    </div>
+
+    <!-- 聊天 -->
+    <div class="card">
+      <div class="card-title">聊天记录</div>
+      <div class="chat-log" id="chat-log">
+        <div class="chat-empty">暂无聊天记录</div>
+      </div>
+      <div class="send-row">
+        <input type="text" id="chat-input" placeholder="管理员消息（Enter 发送）…" maxlength="500" autocomplete="off">
+        <button id="chat-btn">发送</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-status -->
+
+  <!-- ── Tab 2：对局记录 ────────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-games">
+    <div class="card">
+      <div class="action-row">
+        <h3>对局记录 <span class="action-count" id="games-count"></span></h3>
+        <button class="btn primary" id="games-refresh-btn">刷新</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>对局 ID</th><th>时间</th><th>参战方</th><th>开局</th><th>时长</th><th>结果</th></tr>
+          </thead>
+          <tbody id="games-tbody">
+            <tr><td colspan="7" class="empty-msg">点击「刷新」加载对局记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 3：玩家留言 ────────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-feedback">
+    <div class="card">
+      <div class="action-row">
+        <h3>玩家留言 <span class="action-count" id="feedback-count"></span></h3>
+        <button class="btn primary" id="feedback-refresh-btn">刷新</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>时间</th><th>昵称</th><th>分类</th><th>内容</th><th>IP</th><th>UA</th></tr>
+          </thead>
+          <tbody id="feedback-tbody">
+            <tr><td colspan="6" class="empty-msg">点击「刷新」加载玩家留言</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-view -->
+
+<script>
+(function () {
+  'use strict';
+
+  // ══ 鉴权：SCRAM-SHA-256（RFC 5802）登录 → 会话令牌 ════════════
+  // 口令本身永不过线（只发 ClientProof）；会话令牌存内存。需 HTTPS 或 localhost
+  // （浏览器 crypto.subtle 仅安全上下文可用；LAN http:// 不行，用 VPS 前门 HTTPS）。
+  let SESSION = '';
+
+  const _enc = new TextEncoder();
+  function _strBytes(s) { return _enc.encode(s); }
+  function _ub64e(bytes) {  // URL-safe base64（传输层，无 padding）
+    let bin = ''; for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function _b64d(s) {  // 标准 base64 → Uint8Array（解 server_first 的 salt）
+    const bin = atob(s); const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u;
+  }
+  function _attr(msg, key) {
+    for (const p of msg.split(',')) if (p.startsWith(key + '=')) return p.slice(key.length + 1);
+    return '';
+  }
+  async function _hmac(keyBytes, dataBytes) {
+    const k = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', k, dataBytes));
+  }
+  async function _sha256(bytes) { return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)); }
+  async function _pbkdf2(passBytes, saltBytes, iters) {
+    const k = await crypto.subtle.importKey('raw', passBytes, { name: 'PBKDF2' }, false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: iters, hash: 'SHA-256' }, k, 256);
+    return new Uint8Array(bits);
+  }
+  function _xor(a, b) { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] ^ b[i]; return o; }
+  function _nonce() { const u = new Uint8Array(18); crypto.getRandomValues(u); return _ub64e(u); }
+
+  async function scramLogin(password) {
+    if (!crypto.subtle) throw new Error('需 HTTPS 或 localhost（浏览器加密 API 仅安全上下文可用）');
+    const cfb = `n=admin,r=${_nonce()}`;
+    const r1 = await fetch(`/api/admin/scram-first?msg=${_ub64e(_strBytes(cfb))}`);
+    if (!r1.ok) throw new Error('登录失败（握手第一步）');
+    const d1 = await r1.json();
+    const sf = d1.server_first;
+    const combined = _attr(sf, 'r'), salt = _b64d(_attr(sf, 's')), iters = parseInt(_attr(sf, 'i'), 10);
+    const salted = await _pbkdf2(_strBytes(password), salt, iters);
+    const clientKey = await _hmac(salted, _strBytes('Client Key'));
+    const storedKey = await _sha256(clientKey);
+    const cfnp = `c=biws,r=${combined}`;
+    const clientSig = await _hmac(storedKey, _strBytes(`${cfb},${sf},${cfnp}`));
+    const proof = _xor(clientKey, clientSig);
+    const url = `/api/admin/scram-final?sid=${encodeURIComponent(d1.sid)}&msg=${_ub64e(_strBytes(cfnp))}&proof=${_ub64e(proof)}`;
+    const r2 = await fetch(url);
+    if (!r2.ok) throw new Error('口令错误或登录被锁定（连续失败会锁 60 秒）');
+    SESSION = (await r2.json()).session;
+    return true;
+  }
+
+  // ══ 工具函数 ═════════════════════════════════════════════════
+  function h(s) {
+    // XSS-safe HTML 转义
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatTs(ts) {
+    if (ts == null || ts === '') return '—';
+    const n = Number(ts);
+    const d = !isNaN(n) ? new Date(n < 1e10 ? n * 1000 : n) : new Date(ts);
+    if (isNaN(d.getTime())) return h(ts);
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function formatDuration(s) {
+    if (s == null || s === '') return '—';
+    const sec = Math.round(Number(s));
+    if (isNaN(sec)) return h(s);
+    const m = Math.floor(sec / 60), r = sec % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  }
+
+  // 玩家用过的 build 序列（按顺序 + 各自切换时间），来自 admin_games 的 builds[]（已滤 <10s 段）。
+  // 空则回退旧字段 active_recipe（兼容旧记录 / 无 snapshot 的局）。
+  function buildsHtml(g) {
+    const bs = Array.isArray(g.builds) ? g.builds : [];
+    if (!bs.length) return h(g.active_recipe || g.recipe || '—');
+    const mut = 'color:#9aa7b4';
+    return bs.map(b =>
+      `${h(b.build)} <span style="${mut};font-size:.85em">${formatDuration(b.at_s)}</span>`
+    ).join(` <span style="${mut}">→</span> `);
+  }
+
+  function raceZh(race) {
+    const m = { protoss:'神族', zerg:'虫族', terran:'人族', random:'随机' };
+    const k = (race || '').toLowerCase();
+    return m[k] || h(race) || '—';
+  }
+
+  function roomStateZh(state) {
+    const m = { lobby:'大厅等待', starting:'启动中', in_game:'游戏中' };
+    return m[state] || h(state) || '—';
+  }
+
+  function slotKindZh(kind) {
+    // VibeCraft 的 bot slot = 真人指挥的 bot（玩家用手机控制）→ 显示"玩家"，不是机器人。
+    // computer = 内置 AI → "电脑"。
+    const m = { human:'玩家', player:'玩家', bot:'玩家', computer:'电脑', open:'空', closed:'关闭', empty:'空' };
+    return m[(kind || '').toLowerCase()] || h(kind) || '—';
+  }
+
+  function resultZh(r) {
+    const m = { victory:'胜', win:'胜', defeat:'败', loss:'败', tie:'平', draw:'平' };
+    return m[(r || '').toLowerCase()] || h(r) || '—';
+  }
+
+  function resultBadge(r) {
+    const lo = (r || '').toLowerCase();
+    const cls = lo === 'victory' || lo === 'win' ? 'green'
+      : lo === 'defeat' || lo === 'loss' ? 'red' : 'gray';
+    return `<span class="badge ${cls}">${resultZh(r)}</span>`;
+  }
+
+  function onlineBadge(online) {
+    return online
+      ? `<span class="badge green">在线</span>`
+      : `<span class="badge gray">离线</span>`;
+  }
+
+  function el(id) { return document.getElementById(id); }
+
+  // ══ API 调用（token 走 header，不走 query） ═══════════════════
+  let _unauthorized = false;
+
+  async function apiFetch(path) {
+    if (_unauthorized) return null;
+    try {
+      const resp = await fetch(path, {
+        headers: { 'X-Admin-Session': SESSION },
+      });
+      if (resp.status === 404) {
+        handleUnauthorized();
+        return null;
+      }
+      if (!resp.ok) {
+        console.warn('[admin] API error', resp.status, path);
+        return null;
+      }
+      return await resp.json();
+    } catch (err) {
+      console.warn('[admin] fetch failed', path, err);
+      return null;
+    }
+  }
+
+  function handleUnauthorized() {
+    // 会话过期/无效 → 回登录页重登（不是死错误页）。
+    _unauthorized = true;
+    SESSION = '';
+    stopPolling();
+    el('main-view').style.display = 'none';
+    el('error-view').style.display = 'none';
+    const lv = el('login-view'); if (lv) lv.style.display = 'block';
+    const er = el('login-err'); if (er) { er.textContent = '会话已过期，请重新登录'; er.style.display = 'block'; }
+  }
+
+  // ══ 登录提交 ═════════════════════════════════════════════════
+  async function doLogin() {
+    const pwEl = el('login-pw'), errEl = el('login-err'), btn = el('login-btn');
+    const pw = pwEl.value;
+    if (!pw) { errEl.textContent = '请输入口令'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; errEl.style.display = 'none';
+    try {
+      await scramLogin(pw);
+      pwEl.value = '';
+      _unauthorized = false;
+      el('login-view').style.display = 'none';
+      el('main-view').style.display = 'block';
+      startPolling();
+    } catch (e) {
+      errEl.textContent = (e && e.message) || '登录失败';
+      errEl.style.display = 'block';
+    } finally { btn.disabled = false; }
+  }
+
+  // ══ 轮询（status + chat，3s，页面隐藏时暂停） ════════════════
+  let _pollTimer = null;
+
+  function startPolling() {
+    if (_pollTimer || _unauthorized) return;
+    _doPoll();  // 立即触发一次
+    _pollTimer = setInterval(_doPoll, 3000);
+  }
+
+  function stopPolling() {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
+
+  async function _doPoll() {
+    await Promise.all([_pollStatus(), _pollChat()]);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    document.hidden ? stopPolling() : startPolling();
+  });
+
+  // ── 状态轮询 ────────────────────────────────────────────────
+  async function _pollStatus() {
+    const data = await apiFetch('/api/admin/status');
+    if (!data) {
+      if (!_unauthorized) _setServerIndicator('yellow', '连接异常');
+      return;
+    }
+    renderStatus(data);
+    _setServerIndicator('green', '在线');
+    _updateLastUpdate();
+  }
+
+  function _setServerIndicator(color, text) {
+    el('server-dot').className = 'dot ' + color;
+    el('server-text').textContent = text;
+  }
+
+  function _updateLastUpdate() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    el('last-update').textContent =
+      `更新于 ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function renderStatus(d) {
+    // 房间状态
+    const state = d.room_state || '';
+    const stateEl = el('sc-room-state');
+    stateEl.textContent = roomStateZh(state);
+    stateEl.className = 's-value'
+      + (state === 'in_game' ? ' blue' : state === 'starting' ? ' yellow' : '');
+
+    // 游戏中
+    const inGame = !!d.in_game;
+    const inGameEl = el('sc-in-game');
+    inGameEl.textContent = inGame ? '是' : '否';
+    inGameEl.className = 's-value' + (inGame ? ' green' : '');
+
+    // match_id
+    el('sc-match-id').textContent = d.match_id || '—';
+
+    // realtime
+    el('sc-realtime').textContent = d.realtime == null ? '—' : (d.realtime ? '是' : '否');
+
+    // 席位表
+    const slots = Array.isArray(d.slots) ? d.slots : [];
+    const slotsTbody = el('slots-tbody');
+    if (slots.length === 0) {
+      slotsTbody.innerHTML = '<tr><td colspan="6" class="empty-msg">暂无席位信息</td></tr>';
+    } else {
+      slotsTbody.innerHTML = slots.map((s, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${h(s.name || '—')}</td>
+          <td>${raceZh(s.race)}</td>
+          <td>${s.ready ? '<span class="badge green">准备</span>' : '<span class="badge gray">等待</span>'}</td>
+          <td>${slotKindZh(s.kind)}</td>
+          <td>${h(s.team != null ? String(s.team) : '—')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // 在线玩家（players_online 是 player_id 字符串列表）
+    const playerIds = Array.isArray(d.players_online) ? d.players_online : [];
+    const pw = el('players-wrap');
+    if (playerIds.length === 0) {
+      pw.innerHTML = '<span style="color:#bbb;font-size:13px">暂无玩家</span>';
+    } else {
+      pw.innerHTML = playerIds.map(pid => `
+        <div class="p-chip">
+          ${onlineBadge(true)}
+          <span>${h(pid)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // ── 聊天轮询 ────────────────────────────────────────────────
+  let _lastChatId = 0;
+  let _chatInitialized = false;
+
+  async function _pollChat() {
+    const data = await apiFetch('/api/admin/chat');
+    if (!data) return;
+    const msgs = Array.isArray(data) ? data : (data.messages || []);
+    _appendChat(msgs);
+  }
+
+  function _appendChat(msgs) {
+    const log = el('chat-log');
+    const sorted = [...msgs].sort((a, b) => (a.id || 0) - (b.id || 0));
+    let added = 0;
+
+    for (const m of sorted) {
+      const mid = m.id || 0;
+      if (mid <= _lastChatId) continue;
+      _lastChatId = Math.max(_lastChatId, mid);
+
+      // 第一条消息时清掉"暂无聊天记录"占位
+      if (!_chatInitialized) {
+        log.innerHTML = '';
+        _chatInitialized = true;
+      }
+
+      const isAdmin = m.pid === '__admin__';
+      const name = isAdmin ? '管理员' : (m.name || m.pid || '?');
+      const div = document.createElement('div');
+      div.className = 'chat-msg' + (isAdmin ? ' admin' : '');
+      div.innerHTML =
+        `<span class="chat-name">${h(name)}</span>` +
+        `<span class="chat-text">${h(m.text || '')}</span>` +
+        `<span class="chat-ts">${formatTs(m.ts)}</span>`;
+      log.appendChild(div);
+      added++;
+    }
+
+    if (added > 0) log.scrollTop = log.scrollHeight;
+  }
+
+  // ── 发送聊天（GET + query，token 走 header） ─────────────────
+  async function sendChat() {
+    const input = el('chat-input');
+    const btn   = el('chat-btn');
+    const text  = input.value.trim();
+    if (!text || _unauthorized) return;
+    input.value = '';
+    btn.disabled = true;
+    await apiFetch('/api/admin/chat-send?text=' + encodeURIComponent(text));
+    btn.disabled = false;
+    // 立刻刷聊天，让管理员看到自己发的消息
+    const data = await apiFetch('/api/admin/chat');
+    if (data) {
+      const msgs = Array.isArray(data) ? data : (data.messages || []);
+      _appendChat(msgs);
+    }
+    input.focus();
+  }
+
+  el('chat-btn').addEventListener('click', sendChat);
+  el('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+
+  // ══ 对局记录（按需加载） ══════════════════════════════════════
+  // 参战方：roster 有则渲染全部（真人名+种族 / 电脑种族+难度，用 " vs " 连接）；
+  // 旧局无 roster → 回退单玩家昵称+种族。
+  function rosterHtml(g) {
+    const r = Array.isArray(g.roster) ? g.roster : [];
+    if (r.length) {
+      return r.map(p => p && p.kind === 'computer'
+        ? `电脑(${raceZh(p.race)}${p.difficulty ? '·' + h(p.difficulty) : ''})`
+        : `${h((p && p.name) || '玩家')}(${raceZh(p && p.race)})`
+      ).join(' <span style="color:var(--mut,#9aa7b4)">vs</span> ');
+    }
+    return `${h(g.nickname || g.player_name || '—')}(${raceZh(g.my_race || g.race)})`;
+  }
+
+  async function loadGames() {
+    const tbody = el('games-tbody');
+    const countEl = el('games-count');
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">加载中…</td></tr>';
+    countEl.textContent = '';
+    const data = await apiFetch('/api/admin/games');
+    if (!data) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">加载失败，请重试</td></tr>';
+      return;
+    }
+    const games = Array.isArray(data) ? data : (data.games || []);
+    if (games.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">暂无对局记录</td></tr>';
+      return;
+    }
+    countEl.textContent = `共 ${games.length} 局`;
+    tbody.innerHTML = games.map(g => {
+      const timeStr = g.mtime ? new Date(g.mtime * 1000).toLocaleString('zh-CN') : '—';
+      return `
+        <tr>
+          <td class="td-mono">${h(g.match_id || g.game_id || '—')}</td>
+          <td style="white-space:nowrap">${h(timeStr)}</td>
+          <td>${rosterHtml(g)}</td>
+          <td>${buildsHtml(g)}</td>
+          <td style="white-space:nowrap">${formatDuration(g.duration_s != null ? g.duration_s : g.duration)}</td>
+          <td>${g.result ? resultBadge(g.result) : '<span class="badge gray">—</span>'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  el('games-refresh-btn').addEventListener('click', loadGames);
+
+  // ══ 玩家留言（按需加载） ══════════════════════════════════════
+  async function loadFeedback() {
+    const tbody = el('feedback-tbody');
+    const countEl = el('feedback-count');
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">加载中…</td></tr>';
+    countEl.textContent = '';
+    const data = await apiFetch('/api/admin/feedback');
+    if (!data) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">加载失败，请重试</td></tr>';
+      return;
+    }
+    // 后端返回 {"rows": [...]}（兼容 feedback / 数组）
+    const rows = Array.isArray(data) ? data : (data.rows || data.feedback || []);
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">暂无玩家留言</td></tr>';
+      return;
+    }
+    countEl.textContent = `共 ${rows.length} 条`;
+    tbody.innerHTML = rows.map(r => {
+      const time     = r.time     || r['提交时间'] || r.ts       || '—';
+      const name     = r.name     || r['昵称']     || r.nickname || '—';
+      const category = r.category || r['分类']     || r.cat      || '—';
+      const content  = r.content  || r['反馈内容'] || r['内容']  || '—';
+      const ip       = r.ip       || r.ip_masked   || r['IP']    || '—';
+      const ua       = r.ua       || r['UA']        || '—';
+      // UA 太长会撑宽表、挤窄"内容"列 → 显示截短，hover(title)看全
+      const uaShort  = ua.length > 30 ? ua.slice(0, 30) + '…' : ua;
+      return `
+        <tr>
+          <td style="white-space:nowrap">${h(time)}</td>
+          <td style="white-space:nowrap">${h(name)}</td>
+          <td><span class="badge gray">${h(category)}</span></td>
+          <td class="td-content">${h(content)}</td>
+          <td class="td-mono" style="white-space:nowrap">${h(ip)}</td>
+          <td class="td-ua" title="${h(ua)}">${h(uaShort)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  el('feedback-refresh-btn').addEventListener('click', loadFeedback);
+
+  // ══ 标签页切换 ═══════════════════════════════════════════════
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      el('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ══ 启动：显示登录页，等 SCRAM 登录成功再进 dashboard ═════════
+  el('login-btn').addEventListener('click', doLogin);
+  el('login-pw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doLogin(); }
+  });
+  el('main-view').style.display = 'none';
+  el('error-view').style.display = 'none';
+  el('login-view').style.display = 'block';
+  if (!crypto.subtle) {
+    el('login-err').textContent = '当前非安全上下文（需 HTTPS 或 localhost）→ 用 VPS 前门 https 访问 /admin';
+    el('login-err').style.display = 'block';
+    el('login-btn').disabled = true;
+  }
+  setTimeout(() => { try { el('login-pw').focus(); } catch (e) {} }, 50);
+
+})();
+</script>
+</body>
+</html>

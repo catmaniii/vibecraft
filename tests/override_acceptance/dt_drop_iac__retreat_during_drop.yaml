@@ -1,0 +1,39 @@
+# dt_drop_iac + 玩家 8:30 按"全军撤退"(drop 中)→ 主力撤回家,Reserved DT 继续 drop
+#
+# build_acceptance/dt_drop_iac.yaml: 棱镜 5:30 到 enemy_main,DT×4 + DT×4
+# 多波 drop,主力 attack_moveout by 9:00 (window 8:00-9:30)。
+#
+# 选 8:30: 主力刚出门 attack-moveout (距 home 60-70 路上),DT/棱镜在 enemy
+# area drop 持续(Reserved transport+cargo 独占 micro)。fire retreat:
+#   - 主力 (非 Reserved) → vendor PlanZoneAttack retreat 拉回 home
+#   - DT/棱镜 (Reserved by GenericDropAct/PrismWarpDropAct) → sharpy free_units
+#     不含 Reserved,layer-1 retreat 不接管,继续 drop micro
+#
+# 验证 layer-1 / layer-2 分工 design contract:army_center 加权
+# (15 主力 + ~6 Reserved 在 enemy):
+#   主力撤到 home area d ~25,Reserved 留 enemy d ~85
+#   center = (15*25 + 6*85) / 21 ≈ 42 → within=50 PASS
+#
+# 如果 within>50 FAIL: 可能主力被 ForwardRally / DT drop logic 干扰,需进
+# 一步 audit。如果 PASS: design contract work,Reserved 单位真的没被
+# layer-1 干扰。
+#
+# 后续 follow-up: 加 framework 新 check (reserved_units_at_enemy) 严格验
+# Reserved 仍在 enemy area 不被拉回(数量小 army_center 反映不显著)。
+
+strategy_id: dt_drop_iac
+my_race: Protoss
+
+player_actions:
+  - at: "8:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 60
+    near: home
+    within: 50.0
+    op: "<="

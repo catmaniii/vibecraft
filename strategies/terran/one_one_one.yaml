@@ -1,0 +1,68 @@
+kind: opening_build
+id: one_one_one
+display_name_zh: "真善美一波"
+display_name_en: "1-1-1 All-in"
+summary_zh: "真善美一波：1 BB + 1 VF + 1 VS 速出 枪兵 + 坦克 + 女妖（隐形）三件套，多兵营量产枪兵，单基地 all-in 一波偷家；TvP 经典强势 timing（注：拉农民修前线地堡前压暂未实现，当前为骨架版）"  # 2026-06-18 同步实现: one_one_one.py 注释"拉农民修前线地堡前压微操暂未实现，当前为骨架版"
+summary_en: "1-1-1 all-in: 1 Barracks + 1 Factory + 1 Starport fast Marine + Tank + Banshee (cloaked) triple threat, multiple Barracks mass Marines, single-base all-in raid; classic strong TvP timing. (proxy Bunker pressure not yet implemented; current is framework version)"
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.one_one_one:OneOneOne"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MARINE, policy: mass}
+  - {unit: SIEGETANK, policy: cap, value: 4}
+  - {unit: BANSHEE, policy: cap, value: 3}
+  - {unit: MEDIVAC, policy: ratio, per: bio, n: 8}
+aliases:
+  - "one_one_one"
+  - "真善美一波"
+  - "真善美"
+  - "1-1-1"
+  - "111"
+  - "1/1/1"
+  - "真善美 all-in"
+  - "枪兵坦克女妖"
+  - "marine tank banshee"
+  - "1 base all-in"
+matchup: [TvP, TvZ]
+
+phases:
+  - id: opening
+    display: "1-1-1 科技链"
+    display_en: "1-1-1 Tech Chain"
+    subtitle: "14 农 → BB → VF → VS，Reactor + TechLab 同步，BB2/BB3 扩产能"
+    subtitle_en: "14 workers → Barracks → Factory → Starport; Reactor + Tech Lab simultaneous; Barracks 2/3 expand production"
+    start_at_supply: 14
+  - id: allin
+    display: "凑三件套 + 隐形"
+    display_en: "Triple Threat + Cloak"
+    subtitle: "枪兵 + 坦克 + 女妖三件套成型，研女妖隐形(Cloaking Field)，多兵营全力产兵"
+    subtitle_en: "Marine + Tank + Banshee trio online, research Banshee Cloaking Field, mass-produce from multiple Barracks"
+    start_at_supply: 22
+  - id: push
+    display: "一波出门"
+    display_en: "All-in Push"
+    subtitle: "三件套就位 + 隐形完成 → 2-3 坦克 + 20+ 枪兵 + 女妖 all-in 出门偷家"
+    subtitle_en: "Triple threat ready + Cloak done → 2-3 Tanks + 20+ Marines + Banshees all-in raid"
+    start_at_supply: 30
+    start_at_time: 360  # 2026-06-18 #548 同步代码: 三件套成型约 5:30-6:30，spec banshee_2≈6:00±60 / banshee_cloak by 6:30，不是 4:00
+
+steps:
+  - "14 build SupplyDepot"
+  - "16 build Barracks"
+  - "16 build Refinery"
+  - "18 build Reactor @Barracks"
+  - "19 build Factory"
+  - "20 build Refinery"
+  - "21 build TechLab @Factory"
+  - "22 build Starport"
+  - "23 train SiegeTank"
+  - "24 train Banshee"
+  - "25 build TechLab @Starport"
+  - "26 research BansheeCloak"
+  - "26 train Marine"
+  - "28 build Barracks"
+  - "30 build Reactor @Barracks2"
+  - "34 build Barracks"
+
+default_transitions:
+  - midgame_id: bio_stim
+    when: "default"

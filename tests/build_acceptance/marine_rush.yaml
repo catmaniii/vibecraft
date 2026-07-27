@@ -1,0 +1,103 @@
+strategy_id: marine_rush
+my_race: Terran
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/63602/
+#     (5-Rax Marine Rush TvX: BB1 完成 ~1:05-1:25 / BB2@1:20 / BB3 完成 ~1:50 /
+#      BB4-5 完成 ~2:30-2:40 / 第一波 ~14 枪兵 3:20 出门)
+#   - https://liquipedia.net/starcraft2/5_Barracks_Marine_Rush
+#     (Liquipedia 5-Rax Marine Rush: 单基地 all-in，不开矿不建气矿；
+#      3 BB by ~1:50, 4-5 BB by ~2:40, move out ~3:20-3:30)
+#   - https://lotv.spawningtool.com/build/41012/
+#     (2-Rax reference: BB1@1:15-1:20, BB2@1:50-2:00)
+#
+# 本 build 特征（枪兵速攻 / 5 兵营 all-in）:
+#   - 单基地，不开矿，不建气矿
+#   - 5 BB 快速堆积枪兵
+#   - BB1 约 1:05-1:25, BB3 约 1:50-2:30, BB4-5 约 2:30-3:00
+#   - Stim 研究（含气变型；若 no-gas 变型则此 check 宽松兜底）
+#   - 3:20 前 ~14 枪兵第一波出门推进
+#   - 农民维持 ~16 左右（不补或略补）
+
+checks:
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:15"
+    tol: 20
+    # BB1 是核心前置；spawningtool 5-rax 参考 BB1 完成 ~1:05-1:25
+
+  - id: barracks_3
+    type: building_count
+    unit: BARRACKS
+    at: "2:10"
+    tol: 40
+    min: 3
+    # BB3 约 1:50 落地完成；at "2:10" ±40s 覆盖 1:30-2:50
+
+  - id: barracks_5
+    type: building_count
+    unit: BARRACKS
+    at: "2:50"
+    tol: 45
+    min: 5
+    # BB4-5 约 2:30-2:40 落地完成；at "2:50" ±45s 覆盖 2:05-3:35
+
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "3:50"
+    # Stim 需 BB TechLab（100s 研究）；含气变型约 3:30-3:50 完成；
+    # no-gas 变型不会触发，宽松上界兜底
+
+  - id: marine_14
+    type: unit_count
+    unit: MARINE
+    at: "3:50"
+    tol: 35
+    min: 14
+    # 第一波出门编制；5-rax 实测 BB2-BB5 Reactor 建设需要时间，
+    # 3:30 时 Reactor 产能未完全拉满，实测只有 11 只；
+    # 右移 20s 到 3:50（marine_24 @ 4:45 实测 40，产能充足，只是 check 时间偏早）。
+
+  - id: marine_24
+    type: unit_count
+    unit: MARINE
+    at: "4:45"
+    tol: 60
+    min: 24
+    # 5 BB 持续产兵；~4:45 凑 24 兵（若 rush 已结束则验后续兵力积累）
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "4:30"
+    # 主推波次出门时间上界；实测 263s（4:23）出门，原 by=4:00（240s）偏紧。
+    # plan 已降 start_attack_power 8→6 加速出门，spec 同步放宽到 4:30 兜底。
+
+  - id: worker_16
+    type: worker_count
+    by: "3:00"
+    min: 16
+    # 单基地 all-in 农民控制目标；初始 12 + 开局略补 = 约 16
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "5:30"
+    within: 25
+    # 枪兵 rush：截至 5:30,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值
+# marine_rush 是单基地 all-in：农民低位冻结，矿快速花在 BB×5 + 兵身上
+economy_profile:
+  - at: "2:00"
+    workers: 16
+    minerals: 150
+    # 3 BB 在建/刚完成，矿被 BB 建造消耗；农民约 16 不再增长
+
+  - at: "3:00"
+    workers: 19
+    minerals: 200
+    # 5 BB 在出兵，矿消耗极快；农民略补至 19，余矿 200 为正常低库存

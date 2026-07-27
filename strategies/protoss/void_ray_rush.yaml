@@ -1,0 +1,111 @@
+kind: opening_build
+id: void_ray_rush
+core_units:
+  - {unit: VOIDRAY, policy: mass}
+  - {unit: STALKER, policy: cap, value: 6}
+display_name_zh: "虚空骚扰开矿"
+display_name_en: "Void Ray Harass into Expand"
+summary_zh: "1 BG + 2 VS，攒 4 虚空舰骚扰对面主基地高地，同时开二矿运营；二矿农民补满后 4 BG 爆兵，地空攻防同步升级，PvZ / PvP / PvT 通用"
+summary_en: "1 Gateway + 2 Stargates, build 4 Void Rays to harass enemy main high ground while expanding to natural; once natural is saturated add 4 Gateways and Warp Gate; dual ground/air upgrades, Zealots + Stalkers + Void Rays push. PvZ/PvP/PvT."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.void_ray_rush:VoidRayHarass"
+aliases:
+  - "速虚空"
+  - "虚空骚扰"
+  - "两矿虚空"
+  - "虚空开矿"
+  - "虚空骚扰开矿"
+  - "2VS虚空"
+  - "双星门虚空"
+  - "虚空舰骚扰"
+  - "void ray harass"
+  - "Void Ray Harass"
+  - "virtual ray harass expand"
+  - "虚空rush"
+  - "虚空舰rush"
+  - "void ray rush"
+  - "Void Ray Rush"
+  - "虚空压制"
+  - "虚空出门"
+  - "出虚空"
+  - "暴虚空"
+  - "一矿虚空"
+matchup: [PvZ, PvP, PvT]
+
+phases:
+  - id: opening
+    display: "9 BE + BG + 2 气"
+    display_en: "9 Pylon + Gateway + Double Gas"
+    subtitle: "9 BE → 13 BG(×1) + BA + BY"
+    subtitle_en: "9 Pylon → 13 Gateway(×1) + gas + Cybernetics Core"
+    start_at_supply: 9
+  - id: tech
+    display: "BY + 2 VS"
+    display_en: "Cybernetics Core + 2 Stargates"
+    subtitle: "BG ready 上 BY，BY ready 后立刻建 2 VS，chrono 全给 BY→VS→虚空舰(折跃延后)"
+    subtitle_en: "Gateway ready → Cybernetics Core; immediately 2 Stargates after; all chrono to Cybernetics→Stargates→Void Rays (Warp Gate delayed)"
+    start_at_supply: 17
+  - id: harass
+    display: "攒 4 虚空舰 + 开二矿"
+    display_en: "Build 4 Void Rays + Expand"
+    subtitle: "2 VS 持续 chrono 虚空舰，4 个 ready → 出门骚扰高地；同时开二矿"
+    subtitle_en: "2 Stargates continuous chrono Void Rays; 4 ready → harass enemy high ground; expand to natural simultaneously"
+    start_at_supply: 30
+    start_at_time: 210
+  - id: expand
+    display: "二矿运营 + 补 4 BG + 折跃"
+    display_en: "Natural Macro + 4 Gateways + Warp Gate"
+    subtitle: "二矿农民补满后加到 4 BG，此时才研折跃(4 BG 折跃爆兵)，4 BG + 2 VS 爆兵"
+    subtitle_en: "Natural saturated → add 4 Gateways, then research Warp Gate (4-Gateway warp burst), 4 Gateways + 2 Stargates mass production"
+    start_at_supply: 50
+    start_at_time: 390
+  - id: scale_up
+    display: "4 BG + BF 攻防"
+    display_en: "4 Gateways + Forge Upgrades"
+    subtitle: "地空双线升级，叉子 + 追猎 + 虚空舰全面推进"
+    subtitle_en: "Dual ground/air upgrade tracks; Zealots + Stalkers + Void Rays full push"
+    start_at_supply: 80
+    start_at_time: 480
+
+# 数据来源：
+#   - https://liquipedia.net/starcraft2/Void_Ray
+#     (Void Ray: 4 supply/unit 生产时间 60s; 2 VS 下约每 30s 出 1 虚空舰(chrono))
+#   - https://lotv.spawningtool.com/build/48299/
+#     (8 VoidRay PvX: double VS 2-base variant; 本 build 取前半段 + 扩展二矿路线)
+#   - 用户设计（2026-05-29）：1 BG + 2 VS，攒 4 虚空舰骚扰高地 + 开二矿同步
+steps:
+  - "9 build BE"
+  - "13 build BG"
+  - "14 build BA"
+  - "15 build BE"
+  - "17 build BY"
+  - "19 build BA"
+  - "19 build VS"
+  - "19 build VS"
+  - "21 train 追猎 @chrono"
+  - "32 train 虚空舰 @chrono"
+  - "35 train 虚空舰 @chrono"
+  - "38 train 虚空舰 @chrono"
+  - "41 train 虚空舰 @chrono"
+  - "44 build BN"
+  - "44 research 折跃 @chrono"
+  - "50 build BG"
+  - "50 build BG"
+  - "50 build BG"
+  - "60 build BF"
+  - "60 build BF"
+
+scout_at: "13 send_probe enemy_natural"
+
+abort_signals:
+  - sees: "enemy.units.marine.count >= 4 AND enemy.units.bunker.count >= 1"
+    then: "warn:terran_bio_wall_detected"
+  - sees: "enemy.units.mutalisk.count >= 4"
+    then: "transition:persistent_skytoss"
+
+default_transitions:
+  - midgame_id: persistent_skytoss
+    when: "enemy.survived_pressure AND self.economy_intact"
+  - midgame_id: persistent_phoenix_control
+    when: "enemy.survived_pressure AND enemy.has_air_units"
+  - midgame_id: iac_2base
+    when: "default"

@@ -1,0 +1,93 @@
+kind: persistent_doctrine
+id: persistent_liberator
+display_name_zh: "解放者空优"
+display_name_en: "Liberator Sky Terran"
+summary_zh: "解放者 + 维京制空压制：VS×3-4 量产解放者架防区锁地面、维京吃制空，女妖偷矿，医疗船救场；舰船攻防升级，靠解放者防区蚕食对方经济基地"
+summary_en: "Liberator + Viking air superiority: 3-4 Starports mass Liberators in Defender mode to lock ground, Vikings for air control, cloaked Banshees for worker harass, Medivac rescue; ship upgrades, chip away enemy economic bases."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.liberator:LiberatorSky"
+gas_intensity: high
+aliases:
+  - "解放者空优"
+  - "解放者流"
+  - "解放者天空"
+  - "解放者维京"
+  - "liberator"
+  - "暴解放者"
+  - "空军压制"
+
+# 后期阶段进度（用 game_time 触发）
+phases:
+  - id: tech_up
+    display: "上 VS×3 + Armory"
+    display_en: "3 Starports + Armory"
+    subtitle: "VF→VS×3→Armory 建筑链完成；开始研究舰船攻击升级"
+    subtitle_en: "Factory → 3 Starports → Armory chain complete; begin ship weapon upgrades"
+    start_at_time: 0
+  - id: massing
+    display: "量产解放者"
+    display_en: "Mass Liberators"
+    subtitle: "VS Reactor 量产解放者 + 维京；女妖接 TechLab 出门偷矿；积累 3 矿经济"
+    subtitle_en: "Starport Reactors mass Liberators + Vikings; cloaked Banshees harass workers; build 3-base economy"
+    start_at_time: 120
+  - id: dominance
+    display: "防区制空"
+    display_en: "Siege Zone Dominance"
+    subtitle: "8 解放者架防区锁对方地面 + 6 维京制空 → 蚕食敌方经济基地"
+    subtitle_en: "8 Liberators in Defender mode lock enemy ground + 6 Vikings air control → chip away enemy economic bases"
+    start_at_time: 360
+
+# target_composition 用 sc2 SDK UnitTypeId 名（PascalCase）
+target_composition:
+  Liberator: 8
+  VikingFighter: 6
+  Banshee: 4
+  Medivac: 4
+  Marine: 10
+
+# required_tech 用 sc2 SDK UpgradeId 名（PascalCase）
+required_tech:
+  - TerranShipWeaponsLevel1
+  - TerranShipWeaponsLevel2
+  - BansheeCloak
+
+# required_structures 用 sc2 SDK UnitTypeId 名（PascalCase）
+required_structures:
+  Starport: 3
+  Factory: 1
+  Barracks: 2
+  Armory: 1
+  CommandCenter: 3
+
+engagement_doctrine:
+  - "Liberator 架防区（AG 模式）锁对方地面单位，维京保持制空护卫"
+  - "VikingFighter 优先清除对方制空威胁（腐化者 / 凤凰 / 对方维京）"
+  - "Banshee 隐形骚扰对方矿线，杀农民打乱对方运营节奏"
+  - "Medivac 接走血量低的解放者撤退维修，延长解放者存活"
+  - "Marine 保家 + 防空（对方地面部队偷袭基地时顶住）"
+  - "舰船攻防升级到 2/2 后解放者防区伤害显著提升，可以推进更激进"
+engagement_doctrine_en:
+  - "Liberators switch to Defender mode to zone out enemy ground units; Vikings maintain air escort"
+  - "Vikings prioritize clearing air threats (Corruptors / Phoenixes / enemy Vikings)"
+  - "Cloaked Banshees harass enemy mineral lines to kill workers and disrupt production"
+  - "Medivacs evacuate low-HP Liberators for repairs to extend their survivability"
+  - "Marines defend base + anti-air when enemy ground forces attempt base raids"
+  - "Ship weapon/armor 2/2 significantly boosts Liberator zone damage; push more aggressively after"
+
+win_condition:
+  type: composition_advantage
+  description: "解放者防区 AoE 锁地面 + 维京制空，形成无解空军碾压；蚕食对方经济基地"
+  signals:
+    - "self.units.liberator.amount >= 6"
+    - "self.units.viking.amount >= 4"
+    - "self.upgrade.ship_weapons >= 1"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - protoss_gateway
+  - terran_mech
+  - mass_ground
+
+weak_against:
+  - mass_corruptor
+  - mass_viking
+  - zerg_hydra

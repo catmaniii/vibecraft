@@ -1,0 +1,96 @@
+kind: persistent_doctrine
+id: persistent_mech
+display_name_zh: "机械化"
+display_name_en: "Mech"
+summary_zh: "坦克 + 雷神 + 雷车 + 维京的机械化阵地流：VF×5 量产坦克/雷神/雷车，VA 双 VA 滚机械攻防，坦克架线步步推进，正面阵地无解"
+summary_en: "Siege Tank + Thor + Hellion + Viking mechanized siege: 5 Factories mass Tanks/Thors/Hellions, dual Armorys rolling vehicle attack/armor, Tank lines step-by-step advance, frontally unstoppable."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.mech:Mech"
+gas_intensity: medium
+aliases:
+  - "机械化"
+  - "机械流"
+  - "坦克机械"
+  - "铁球"
+  - "暴坦克"
+  - "坦克流"
+  - "mech"
+  - "雷神坦克"
+
+phases:
+  - id: tech_up
+    display: "上 VF + VA"
+    display_en: "5 Factories + 2 Armorys"
+    subtitle: "VF×5 / VA×2 建筑链 + 机械武器护甲 1 + MorphOrbitals"  # 2026-06-18 同步实现: GridBuilding(FACTORY, 5)
+    subtitle_en: "5 Factories + 2 Armorys chain + vehicle weapon/armor 1 + Orbital Commands"
+    start_at_time: 0
+  - id: massing
+    display: "暴坦克雷神"
+    display_en: "Mass Tanks + Thors"
+    subtitle: "VF×3 各接 FACTORYTECHLAB → 持续坦克 + 雷神 + 雷车；机械武器攻防 2"
+    subtitle_en: "3 Factory Tech Labs → continuous Tanks + Thors + Hellions; vehicle weapon/armor 2"
+    start_at_time: 300  # 2026-06-18 #548 同步代码: massing 从首个 FactoryTechLab 就绪时起，spec factory_techlab≈5:00±60
+  - id: deathball
+    display: "坦克线成型"
+    display_en: "Tank Line Established"
+    subtitle: "坦克 + 雷神阵线成型(目标 14 坦 + 12 雷神) → 架炮慢推；维京制空护卫"  # 2026-06-18 #548 同步代码: TerranUnit(SIEGETANK,14/THOR,12) 对齐，旧 8+/6+ 已过期
+    subtitle_en: "Tank + Thor line ready (target: 14 Tanks + 12 Thors) → siege slow push; Vikings escort air"
+    start_at_time: 540  # 2026-06-18 #548 同步代码: 阵线成型约 9:00，spec siege_tank_count_6≈9:30±90
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+# 2026-06-18 同步实现: TerranUnit(THOR,12) / TerranUnit(SIEGETANK,14) / TerranUnit(HELLION,12) / TerranUnit(VIKINGFIGHTER,8) / TerranUnit(WIDOWMINE,6)
+target_composition:
+  SiegeTank: 14
+  Thor: 12
+  Hellion: 12
+  VikingFighter: 8
+  WidowMine: 6
+
+# 2026-06-18 同步实现: Tech 链覆盖 Level1/2/3（TERRANVEHICLEWEAPONSLEVEL3 / TERRANVEHICLEANDSHIPARMORSLEVEL3 均已在 .py 研究）
+required_tech:
+  - TerranVehicleWeaponsLevel1
+  - TerranVehicleWeaponsLevel2
+  - TerranVehicleWeaponsLevel3
+  - TerranVehicleAndShipArmorsLevel1
+  - TerranVehicleAndShipArmorsLevel2
+  - TerranVehicleAndShipArmorsLevel3
+
+# 2026-06-18 同步实现: GridBuilding(FACTORY, 5) — VF×5（VF1-3 接 TechLab，VF4/5 裸厂出雷车）
+required_structures:
+  Factory: 5
+  Armory: 2
+  Starport: 1
+  CommandCenter: 3
+
+engagement_doctrine:
+  - "siege_tank_siege mode=siege when=enemy_in_range  # 坦克遇敌即架炮，不要移动"
+  - "thor_front priority=air_attacker  # 雷神顶前排拍飞机/轰炸机"
+  - "widow_mine_burrow pre_place=true  # 地雷提前埋线，守出口/坡道"
+  - "viking_escort stay_near=thor  # 维京护卫雷神，防空载机"
+  - "hellion_harass target=worker when=window_open  # 雷车骚扰对方矿线"
+  - "retreat when=army_hp<30%  # 坦克线崩就拉开，别白送"
+engagement_doctrine_en:
+  - "siege_tank_siege mode=siege when=enemy_in_range  # Siege Tanks go Siege mode on contact; do not move"
+  - "thor_front priority=air_attacker  # Thors anchor front line and focus enemy air units"
+  - "widow_mine_burrow pre_place=true  # Pre-place Widow Mines at exits and ramps before engagements"
+  - "viking_escort stay_near=thor  # Vikings escort Thors and defend against air drops"
+  - "hellion_harass target=worker when=window_open  # Hellions harass enemy mineral lines when a window opens"
+  - "retreat when=army_hp<30%  # Pull back the Tank line when army HP collapses; don't throw it away"
+
+win_condition:
+  type: composition_advantage
+  description: "坦克架炮线 + 雷神防空，机械攻防 2/2 后阵地推进正面无解"
+  signals:
+    - "self.units.siegetank.amount >= 6"
+    - "self.upgrade.vehicle_weapons >= 2"
+    - "enemy.units.flying_attacker.amount < 8"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - zerg_roach_hydra
+  - zerg_ling_bane
+  - mass_ground
+
+weak_against:
+  - zerg_brood
+  - mass_air
+  - protoss_skytoss

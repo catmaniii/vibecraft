@@ -1,0 +1,94 @@
+kind: persistent_doctrine
+id: persistent_skyterran
+display_name_zh: "战巡空军"
+display_name_en: "Battlecruiser Sky Terran"
+summary_zh: "后期战巡 + 老鸦控场：4-6 BC + Raven 干扰 + Ghost EMP，靠 BC 超级武器 + Raven 干扰拿下后期资源战"
+summary_en: "Late-game Battlecruiser + Raven control: 4-6 BCs + Raven Interference Matrix + Ghost EMP; win the late-game resource war through BC super weapons and Raven disruption."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bc_late:BcLate"
+gas_intensity: high
+aliases:
+  - "bc_late"
+  - "战巡后期"
+  - "战列巡洋舰"
+  - "BC流"
+  - "船长流"
+  - "战巡空军"
+  - "skyterran"
+  - "Battlecruiser"
+  - "BC"
+  - "空军人族"
+
+phases:
+  - id: tech_up
+    display: "上 FusionCore + BC"
+    display_en: "Fusion Core + First Battlecruiser"
+    subtitle: "FusionCore 完 → 第一艘 BC + 舰船攻防升级"  # 2026-06-18 #548 同步代码:plan 无 WeaponRefit(Yamato)，实际做 ship weapons/armor 升级
+    subtitle_en: "Fusion Core done → first BC + ship weapon/armor upgrades"
+    start_at_time: 0
+  - id: composition
+    display: "积累 BC 数量"
+    display_en: "Build Battlecruiser Fleet"
+    subtitle: "持续出 BC + Raven + Ghost；研究 BC 武器升级"
+    subtitle_en: "Continuous BC + Raven + Ghost production; research BC weapon upgrades"
+    start_at_time: 480  # 2026-06-18 #548 同步代码:FusionCore spec ~7:30，BC 开始生产后，改 480
+  - id: dominance
+    display: "制空权"
+    display_en: "Air Dominance"
+    subtitle: "4+ BC + 制空 → 收割对方经济基地"
+    subtitle_en: "4+ BCs + air superiority → harvest enemy economic bases"
+    start_at_time: 600  # 2026-06-18 #548 同步代码:attack_moveout by 11:00(spec)，4+BC 就位约 10:00，改 600
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Battlecruiser: 6
+  Raven: 3
+  Ghost: 4
+  Viking: 4
+  Marine: 8
+
+required_tech:
+  - WeaponRefit
+  - TerranShipWeaponsLevel1
+
+required_structures:
+  FusionCore: 1
+  Starport: 2
+  GhostAcademy: 1
+  EngineeringBay: 1
+  Factory: 1
+  Barracks: 2
+  Armory: 1
+  CommandCenter: 3
+
+engagement_doctrine:
+  - "BC Tactical Jump 瞬移到对方矿区 + Yamato 打对方大型单位"
+  - "Raven Auto-Turret 骚扰矿区，Raven Interference Matrix 锁定对方高价值单位"
+  - "Ghost EMP 清除对方神族/虫族魔法值"
+  - "Viking 护卫 BC，防止被 Corruptor / Phoenix 集火"
+  - "BC 血低时 Tactical Jump 撤回维修"
+engagement_doctrine_en:
+  - "Battlecruiser Tactical Jump into enemy mineral lines + Yamato Cannon on high-value targets"
+  - "Raven Auto-Turret harassment at mineral lines; Interference Matrix locks down high-value enemy units"
+  - "Ghost EMP to drain Protoss shields and Zerg caster energy"
+  - "Vikings escort Battlecruisers to prevent Corruptor / Phoenix focus fire"
+  - "Battlecruiser Tactical Jump back to base for repairs when hull is low"
+
+win_condition:
+  type: composition_advantage
+  description: "BC Yamato + Tactical Jump 机动性，搭配 Raven 骚扰，拿下多线经济战"
+  signals:
+    - "self.units.battlecruiser.amount >= 4"
+    - "self.tech.tactical_jump.done"
+    - "enemy.expansion_count >= 3"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - zerg_roach_hydra
+  - terran_mech_tank
+  - protoss_ground_mech
+  - mass_ground
+
+weak_against:
+  - mass_corruptor
+  - mass_viking
+  - protoss_phoenix_storm

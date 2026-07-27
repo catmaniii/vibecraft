@@ -1,0 +1,131 @@
+strategy_id: banshee_harass
+my_race: Terran
+
+# 隐形女妖偷袭（速 VS + 隐形升级，骚扰矿线杀农民）验收 spec
+#
+# 调研来源：
+#   1. spawningtool #97510 — 1-1-1 hellion cloak banshee (TvZ)
+#      https://lotv.spawningtool.com/build/97510/
+#   2. spawningtool #26740 — TY's 1/1/1 Cloak Banshee
+#      https://lotv.spawningtool.com/build/26740/
+#   3. Liquipedia — Banshee Opening
+#      https://liquipedia.net/starcraft2/Banshee_Opening
+#   4. terrancraft — TvP: Cloak Banshee
+#      https://terrancraft.com/2018/06/05/tvp-cloak-banshee/
+#   5. terrancraft — Gas first Cloaked Banshee
+#      https://terrancraft.com/2014/11/05/gas-first-cloaked-banshee/
+#
+# 策略 yaml（strategies/terran/banshee_harass.yaml）steps：
+#   14 BS → 15 BB → 16 BR → 18 VF → 19 BR → 20 VS → 21 TechLab@VS → 22 BansheeCloak → 24 Banshee × 2 → 26 CC
+#
+# 关键 timing 共识（交叉验证）：
+#   BB 完成 ~1:40；VF 完成 ~2:20-2:45（策略 18 supply 早于多数参考）；
+#   VS 完成 ~2:50-3:20（策略 20 supply 极速，无 Reactor 前摇）；
+#   TechLab@VS 完成 ~3:05-3:35；
+#   BansheeCloak 研究开始即刻；研究时长 110s（~1:50）；
+#   1st Banshee 完成 ~3:00-3:40（取决于 VF→VS 速度）；
+#   Cloak 研究完成 ~4:50-5:30；1st Banshee 以隐身状态到达敌方基地 ~5:30-6:30；
+#   TY build: cloak 研究开始 3:00，Liquipedia 注明"正确执行 6:45-7:20 抵达"；
+#   CC（二矿）放置 ~3:30-4:30（策略 26 supply，骚扰同时开矿）。
+#
+# 本策略 VS 超快（18 VF → 20 VS，几乎无 BB Marine 缓冲），故各节点略早于标准 Reaper FE 参考值。
+
+checks:
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:40"
+    tol: 25
+    # 14 农 → 15 BB；正常完成约 1:30-1:55
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "2:40"
+    tol: 35
+    # gas / tactics 结构修复后 build 加速：实测 VF 完成 ~157s（窗口 125-195s）。
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "3:20"
+    tol: 35
+    # 实测 VS 完成 ~197s（窗口 165-235s）。
+
+  - id: banshee_cloak_research
+    type: upgrade_complete
+    upgrade: BANSHEECLOAK
+    by: "7:30"
+    # TechLab@VS 完成约 308s → 隐形研究开始约 308s → 研究时长 110s → 完成约 418s（6:58）。
+    # 实测 415s（6:55）。给 450s（7:30）的宽松上限（Liquipedia 参考 7:20）。
+    # 原 5:30 基于 TechLab 3:05 完成的假设，但 VS 本身就要 5:00 才完成，属错误 timing。
+
+  - id: banshee_first
+    type: unit_count
+    unit: BANSHEE
+    at: "6:45"
+    tol: 45
+    min: 1
+    # TechLab@VS 完成约 308s → Banshee 生产 43s → 第 1 架约 351s（5:51）；
+    # 实测 401s（6:41），主要因为 sharpy 排队延迟。窗口 360-450s。
+    # 原 3:40±40（180-260s）时 VS 尚未建好，Banshee 根本不可能出，属错误 timing。
+
+  - id: banshee_second
+    type: unit_count
+    unit: BANSHEE
+    at: "7:45"
+    tol: 45
+    min: 2
+    # 2nd Banshee 接 1st 后 43s 出炉；1st 在 ~401s → 2nd 约 450s（7:30）。
+    # 实测 450s（7:30）。窗口 415-495s。
+    # 原 4:20±40 同样基于错误 VS timing，属错误 timing。
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "6:15"
+    tol: 60
+    min: 2
+    # 策略 Expand(2) 触发条件：UnitReady(STARPORT, 1)；VS 完成约 288-302s；
+    # CC 建造 71s → 完成约 359-373s（5:59-6:13）。实测 369s（6:09）。窗口 315-435s。
+    # 原 4:30±60（270-330s）时 VS 尚未建好，Expand 不会触发，属错误 timing。
+
+  - id: harass_moveout
+    type: attack_moveout
+    at: "5:30"
+    tol: 60
+    # 实测女妖出门骚扰 ~326s（窗口 270-390s）。
+
+  - id: worker_20
+    type: worker_count
+    by: "4:00"
+    min: 18
+    # 极速科技流，早期农民被压制（无快扩，2 气矿消耗大）
+    # 4:00 之前约 18-22 SCV；CC 开矿后快速追上
+
+  # --- L3 骚扰验收：是否真打到敌方农民 ---
+  - id: harass_worker_kills
+    type: harass_damage
+    by: "7:00"
+    min: 4
+    # 隐形女妖偷袭——女妖隐身摸进矿区必须真打到农民(打到即算,不强求击杀),造出女妖≠骚扰到位。
+    # enemy_workers_harassed = telemetry 敌方块「被我方打到过(受伤∪阵亡)的敌方农民」累计;
+    # 截至 7:00 应 >= 4。隐身女妖杀伤窗口长,门槛比其他骚扰略高。
+
+# 经济曲线标准值
+# 骚扰型极速科技流：早期农民偏少（资源全给 VF + VS + 女妖 + 隐形研究），
+# 余矿偏低（气矿撑着科技线，矿物边造 Marine 边补 SCV）。
+# 双矿成型后（~4:30-5:00）农民数开始追。
+economy_profile:
+  - at: "2:00"
+    workers: 15
+    minerals: 150
+    # 2:00 约 13-17 SCV；极速 VF 科技流，资源紧张，农民数偏少
+  - at: "4:00"
+    workers: 20
+    minerals: 200
+    # 女妖出炉前后；双气矿持续消耗，单 CC 下农民约 18-22
+  - at: "6:00"
+    workers: 30
+    minerals: 250
+    # 二矿开矿后补 SCV；女妖持续骚扰压制对方工人产出

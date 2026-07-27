@@ -1,0 +1,372 @@
+# SC2 通用术语 / 战术 / 地图位置 别名表（跨种族,中英文对照）
+#
+# ⚠️ 跟 protoss/terran/zerg.yaml 不一样:那些 entry 是 SC2 unit type name
+# (代码 + strategies/*.yaml 引用),这里是"概念词" —— 不映射到任何具体 directive
+# 字段 enum 值,只用来教 LLM 中英对应,减少歧义。
+#
+# 数据来源:Liquipedia SC2 Definitions + Map Terminology + Strategy Glossary
+# https://liquipedia.net/starcraft2/Definitions
+# https://liquipedia.net/starcraft2/Terrain_Features
+#
+# ============================================================
+# 格式
+# ============================================================
+# group_name:
+#   canonical_en:                # 英文 canonical(常作 named_spot 字面值)
+#     display_zh: "中文显示名"   # PWA / 日志 default 显示
+#     aliases: [...]              # 玩家说的所有可能说法(中英混)
+#     desc: "一句话解释"           # 给 LLM 看 / 给 user 编辑参考
+#     [maps_to_named_spot: ""]    # 如果对应 NamedSpotRegistry 某个值,标出来
+#
+# ============================================================
+# 加载链路(未来)
+# ============================================================
+# 当前未接入(2026-05-17):AliasTable 只加载 protoss.yaml。本文件作"术语词典"
+# 待 build_glossary() 抽进 system prompt 末尾。
+# 接入后 LLM prompt 会包含:
+#   ====== SC2 通用术语对照(让你识别中英混说法) ======
+#   - natural / nat / 二矿 / 二基 / 分基 → named_spot="natural"
+#   - main / 主基地 / 老家 → named_spot="main"
+#   ...
+
+# ============================================================
+# §1 地图位置 / 地形(直接 maps_to_named_spot)
+# ============================================================
+
+map_terms:
+  main:
+    display_zh: "主基地"
+    aliases: [main, main base, 主基地, 主矿, 家里, 自己家, 老家, 一矿, 第一个基地, Main]
+    desc: "玩家开局的起始基地区域"
+    maps_to_named_spot: "main"
+
+  natural:
+    display_zh: "二矿"
+    aliases: [natural, nat, 二矿, 二基地, 分基, 离家最近的矿, Natural]
+    desc: "离主基地最近的扩张点,通常第一个开的分基"
+    maps_to_named_spot: "natural"
+
+  third:
+    display_zh: "三矿"
+    aliases: [third, 3rd, 三矿, 三基地, 第三矿, 第三基, Third]
+    desc: "主基地 + 二矿之后的第三个扩张点"
+    maps_to_named_spot: "third"
+
+  fourth:
+    display_zh: "四矿"
+    aliases: [fourth, 4th, 四矿, 四基地]
+    desc: "第四个扩张点"
+
+  ramp:
+    display_zh: "斜坡"
+    aliases: [ramp, 斜坡, 缓坡, 大坡, 上坡, 下坡]
+    desc: "从低地到高地的过渡区域,常作 choke point。'你的 ramp' 通常指主基地入口的斜坡"
+    maps_to_named_spot: "main_ramp"
+
+  natural_ramp:
+    display_zh: "二矿坡"
+    aliases: [natural ramp, 二矿坡, 二矿斜坡, 二矿口]
+    desc: "二矿入口的斜坡"
+    maps_to_named_spot: "natural_ramp"
+
+  choke:
+    display_zh: "卡口"
+    aliases: [choke, chokepoint, 卡口, 隘口, 狭口, 路口, choke point]
+    desc: "两个开阔区域之间的狭窄通道,常是 ramp。是布防关键点"
+
+  high_ground:
+    display_zh: "高地"
+    aliases: [high ground, 高地, 高坡, 上方, HG]
+    desc: "海拔高的地块,看低地有视野优势,低地反向看不见高地"
+
+  low_ground:
+    display_zh: "低地"
+    aliases: [low ground, 低地, 低坡, 下方, LG]
+    desc: "海拔低的地块,看高地需要侦察单位提供视野"
+
+  watchtower:
+    display_zh: "瞭望塔"
+    aliases: [watchtower, xelnaga tower, xel'naga tower, 瞭望塔, zel 塔, 视野塔, WT]
+    desc: "中立 Xel'Naga 瞭望塔,被任何单位占据时提供大范围视野"
+
+  mineral_line:
+    display_zh: "矿区"
+    aliases: [mineral line, mining line, 矿区, 采矿区]
+    desc: "基地旁农民采矿的区域,是骚扰高优先目标"
+
+  enemy_main:
+    display_zh: "敌方主基地"
+    aliases: [enemy main, opponent's main, 对方主基地, 敌方主矿, 对面家里, 对面老家, 他家]
+    desc: "敌方起始基地"
+    maps_to_named_spot: "enemy_main"
+
+  enemy_natural:
+    display_zh: "敌方二矿"
+    aliases: [enemy natural, enemy nat, 对方二矿, 对方分基, 他二矿, 敌方分矿]
+    desc: "敌方的二矿"
+    maps_to_named_spot: "enemy_natural"
+
+  enemy_third:
+    display_zh: "敌方三矿"
+    aliases: [enemy third, 对方三矿, 他三矿]
+    desc: "敌方的三矿"
+    maps_to_named_spot: "enemy_third"
+
+
+# ============================================================
+# §2 方向 / 时钟位置(地图上的方位)
+# ============================================================
+
+clock_positions:
+  12_oclock:
+    display_zh: "12 点"
+    aliases: [12 点, 12点, 12 oclock, 12 o'clock, 12, north, 正上, 顶上]
+    desc: "地图 12 点钟方向(正上方)"
+  3_oclock:
+    display_zh: "3 点"
+    aliases: [3 点, 3点, 3 oclock, 3 o'clock, 3, east, 正右]
+  6_oclock:
+    display_zh: "6 点"
+    aliases: [6 点, 6点, 6 oclock, 6 o'clock, 6, south, 正下]
+  9_oclock:
+    display_zh: "9 点"
+    aliases: [9 点, 9点, 9 oclock, 9 o'clock, 9, west, 正左]
+  11_oclock:
+    display_zh: "11 点"
+    aliases: [11 点, 11点, 11 oclock, 11, 左上]
+  1_oclock:
+    display_zh: "1 点"
+    aliases: [1 点, 1点, 1 oclock, 1, 右上]
+  5_oclock:
+    display_zh: "5 点"
+    aliases: [5 点, 5点, 5 oclock, 5, 右下]
+  7_oclock:
+    display_zh: "7 点"
+    aliases: [7 点, 7点, 7 oclock, 7, 左下]
+
+
+# ============================================================
+# §3 战术概念(策略口语,不映射 directive 字段,只让 LLM 理解玩家意图)
+# ============================================================
+
+tactical_concepts:
+  all_in:
+    display_zh: "一波 / all-in"
+    aliases: [all-in, allin, all in, 一波, 一波流, 一波带走, 梭哈, 倾家荡产, 全压, 一波 timing]
+    desc: "把所有家底押在单次进攻,不留后手 macro 资源。失败 = 输"
+    routes_to: "可能 strategy_set (具体一波剧本) 或 tactical_objective(verb=attack)"
+
+  cheese:
+    display_zh: "流氓 / 速攻"
+    aliases: [cheese, 流氓, 流氓战术, 速攻, 邪道, 偷家流]
+    desc: "出其不意的早期攻击,玩家没侦察到就输"
+
+  rush:
+    display_zh: "rush"
+    aliases: [rush, 速攻, 快攻, 抢攻, 抢 rush, 抢节奏, 6 池 rush, cannon rush, 炮台 rush, 光炮 rush]
+    desc: "优化产能在指定时间点用早期军队压制对手"
+
+  push:
+    display_zh: "推进"
+    aliases: [push, 推, 推进, 出门压制, 出去推, 缓推, 一波推]
+    desc: "保持队形缓慢推进,通常是坦克跳跃推 / 不朽阵推"
+    routes_to: "tactical_objective(verb=attack 或 push)"
+
+  harass:
+    display_zh: "骚扰"
+    aliases: [harass, harassment, 骚扰, 拍脸, 偷, 摸黑, 偷农民, 偷家, 拆农民]
+    desc: "小股高机动单位骚扰对方经济(农民/矿线),不主求大规模交战"
+    routes_to: "tactical_objective(verb=harass)"
+
+  drop:
+    display_zh: "空投"
+    aliases: [drop, 空投, 空降, 投放, 棱镜投, 棱镜空降, 运输机 drop]
+    desc: "用运输机(棱镜/医疗运输等)把单位投到敌方基地内"
+    routes_to: "tactical_objective(verb=drop)"
+
+  proxy:
+    display_zh: "野建筑/ 前置 / proxy"
+    aliases: [proxy, 前置, 前哨, 野建筑, 提前在敌方家门口造, proxy 兵营]
+    desc: "在敌方基地附近建造生产建筑,缩短进攻路程"
+
+  contain:
+    display_zh: "限制出门"
+    aliases: [contain, 限制出门, 堵在门口, 关门口, 围, 封, 困死, 卡死出口]
+    desc: "在敌方门口布置军队阻止他扩张/出门"
+
+  base_trade:
+    display_zh: "换家"
+    aliases: [base trade, base race, 换家, 互换基地, 互拆, 互相拆家, 换家流]
+    desc: "双方都不防守,比谁先拆光对方建筑"
+
+  turtle:
+    display_zh: "龟缩"
+    aliases: [turtle, 龟缩, 龟壳, 防守, 全防流, 死守, 完全防御]
+    desc: "全程不出门,专心运营和升级,等大后期"
+
+  kite:
+    display_zh: "风筝"
+    aliases: [kite, kiting, 风筝, 放风筝, 边跑边打, 拉锯, 凤凰 kite]
+    desc: "利用射程优势边跑边打,不让对方近身"
+
+  scout:
+    display_zh: "侦察"
+    aliases: [scout, scouting, 侦察, 探路, 探, 派探机, 看一眼, 摸情报, 探查, 侦查]
+    desc: "派单位查看地图未知区域获取情报"
+
+  timing_attack:
+    display_zh: "timing 一波"
+    aliases: [timing, timing attack, timing 一波, timing 进攻, 6 点 timing, 7 分 timing]
+    desc: "在特定时间窗口科技/产能优势最大化时发起进攻"
+
+  cheese_response:
+    display_zh: "防守反击"
+    aliases: [counter, counter attack, 反打, 防反, 反推, 守了再 a]
+    desc: "守住对方进攻后立即反攻"
+
+
+# ============================================================
+# §4 经济 / 运营 概念
+# ============================================================
+
+economy_concepts:
+  macro:
+    display_zh: "运营"
+    aliases: [macro, 运营, 宏观, 经济运营, 拼 macro]
+    desc: "长期资源管理:造农民/补人口/开矿/升级,跟 micro 相对"
+
+  micro:
+    display_zh: "微操"
+    aliases: [micro, 微操, 操作, 手活, 单位操作]
+    desc: "实时单位操作,跟 macro 相对"
+
+  expand:
+    display_zh: "开矿"
+    aliases: [expand, expansion, expo, 开矿, 开分基, 开二矿, 开三矿, 扩张, 抢矿点]
+    desc: "建造新主基地建筑(Nexus/CommandCenter/Hatchery)"
+    routes_to: "expansion_override directive"
+
+  tech:
+    display_zh: "科技 / 升科技"
+    aliases: [tech, 科技, 升科技, 升一本, 升二本, 升三本, 走科技, 科技流]
+    desc: "解锁单位 / 升级需要的建筑链"
+
+  supply:
+    display_zh: "人口"
+    aliases: [supply, food, psi, 人口, 人口限制, 食物]
+    desc: "Terran=Supply / Zerg=Control / Protoss=Psi,生产兵的人口资源"
+
+  supply_block:
+    display_zh: "卡人口"
+    aliases: [supply block, supply blocked, 人口卡了, 卡人口, 人口爆了, 人口慢了]
+    desc: "人口达上限无法再造单位"
+
+  mineral:
+    display_zh: "水晶 / 钱"
+    aliases: [mineral, minerals, money, cash, 水晶, 钱, 矿, 蓝水晶, 矿钱]
+    desc: "基础资源,蓝色"
+
+  gas:
+    display_zh: "气 / 瓦斯"
+    aliases: [gas, vespene, vesp, 气, 瓦斯, 气矿, 高级矿]
+    desc: "高级资源,绿色,出科技 / 高级兵种用"
+
+  build_order:
+    display_zh: "build / BO"
+    aliases: [build order, BO, build, opener, opening build, 开局, 开局 build, 起手, 出门 build]
+    desc: "前期建筑 / 单位顺序,决定走哪个战术分支"
+
+  worker:
+    display_zh: "农民"
+    aliases: [worker, workers, peon, drone, scv, probe, 农民, 工人, 工蜂, 探机, 矿农]
+    desc: "通用农民称呼(跨种族);具体走 unit alias(Probe/SCV/Drone)"
+
+
+# ============================================================
+# §5 军事 / 战斗 概念
+# ============================================================
+
+military_concepts:
+  army:
+    display_zh: "部队"
+    aliases: [army, 军队, 部队, 兵, 大部队, 主力, 军团]
+    desc: "玩家所有战斗单位的统称"
+
+  composition:
+    display_zh: "兵种搭配"
+    aliases: [composition, comp, army composition, 兵种搭配, 兵种构成, 兵种组合]
+    desc: "玩家选的兵种组合(如 IAC = Immortal+Archon+Chargelot)"
+
+  reinforcement:
+    display_zh: "增援"
+    aliases: [reinforcement, reinforce, 增援, 补兵, 后续兵, 第二波]
+    desc: "前线兵打没了从基地补送的新兵"
+
+  retreat:
+    display_zh: "撤退"
+    aliases: [retreat, fall back, pull back, 撤, 撤退, 撤回, 回来, 回家, 后撤, 拉回来]
+    desc: "把军队拉回安全区"
+    routes_to: "engagement_constraint(stance=retreat) 或 unit_claim verb=retreat"
+
+  defend:
+    display_zh: "守家"
+    aliases: [defend, defense, 守家, 防守, 守, 防, 守住, 不出门]
+    desc: "保持军队在己方基地附近防御"
+    routes_to: "engagement_constraint(stance=defend)"
+
+  attack:
+    display_zh: "进攻"
+    aliases: [attack, engage, fight, 进攻, 打, 出击, 杀, A 过去, A 上去, 推过去, 出门打]
+    desc: "主动出击攻击敌方"
+    routes_to: "tactical_objective(verb=attack)"
+
+  focus_fire:
+    display_zh: "集火"
+    aliases: [focus, focus fire, FF, 集火, 集中火力, 锁这个, 先杀这个, 优先打]
+    desc: "多个单位同时攻击同一目标,快速秒杀"
+
+  flank:
+    display_zh: "侧翼包抄"
+    aliases: [flank, flanking, 侧翼, 包抄, 夹击, 抄后路, 两面夹]
+    desc: "从侧面或背后绕到敌方军队后方攻击"
+
+  engage:
+    display_zh: "交战"
+    aliases: [engage, fight, 交战, 打起来, 开打, 对枪, 团战]
+    desc: "正面交战双方军队"
+
+  disengage:
+    display_zh: "脱离战斗"
+    aliases: [disengage, pull out, 脱战, 撤离, 脱离接触, 拉出来]
+    desc: "中途撤出战斗"
+
+
+# ============================================================
+# §6 情报 / 视野
+# ============================================================
+
+intel_concepts:
+  vision:
+    display_zh: "视野"
+    aliases: [vision, sight, 视野, 看到, 能见度, 视觉]
+    desc: "玩家在地图上能看到的范围(战争迷雾外)"
+
+  fog_of_war:
+    display_zh: "战争迷雾"
+    aliases: [fog, fog of war, 战争迷雾, 黑雾, 雾, 迷雾]
+    desc: "玩家没视野的区域显示为黑/灰色"
+
+  detector:
+    display_zh: "反隐"
+    aliases: [detector, detection, 反隐, 反隐形, 雷达, 反隐 unit]
+    desc: "能看见隐形单位的特殊单位(Observer/Spore/Missile Turret/Overseer 等)"
+
+  cloaked:
+    display_zh: "隐形"
+    aliases: [cloaked, invisible, 隐形, 隐身, 隐刀, 黑色, DT 隐, 女妖隐]
+    desc: "隐形单位状态,普通单位看不见,需 detector"
+
+  burrowed:
+    display_zh: "钻地"
+    aliases: [burrowed, burrow, 钻地, 入地, 钻地隐]
+    desc: "Zerg 单位钻入地下隐藏(地刺/感染虫等)"

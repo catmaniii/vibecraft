@@ -1,0 +1,54 @@
+# 1g_robo_immortal + 玩家先 5:00 force attack,90s 后 6:30 改主意 retreat
+# → 验 sequential player_actions 双 action 都生效(action_idx 配对 check)。
+#
+# build_acceptance/1g_robo_immortal.yaml: 兵种 stalker + immortal,
+# attack_moveout by=9:00(默认要 3+ 不朽出门 ~6:30-9:00)。
+#
+# 选 1g_robo_immortal 而非 4bg:1g_robo game 长 ~10 min(VeryEasy),
+# 容纳 sequential 双 fire + 双 check 而不被 game victory 截断。
+# 4bg VeryEasy ~5-6 min 就赢,t=6:30 fire retreat 时 game 可能已结束。
+#
+# 时间线:
+#   t=5:00 force attack all_in target=enemy_main(此时只 1-2 不朽 + 6-8 追猎,
+#          正常 power check 不放行,mode=all_in 强制出门)
+#   t=6:30 check[0]: 90s 后部队到 enemy_main 60 内(验 attack 真去)
+#   t=6:30 force retreat(玩家改主意按撤退按钮)
+#   t=7:30 check[1]: 60s 后部队回 home 70 内(immortal 速度 1.95,
+#          从 enemy_main 撤回 home 距离 ~120 grid,纯位移 ~60s,放宽 within=70)
+#
+# 验收意义:
+# - action_idx=0 验 attack 真生效(已有 1g_robo_immortal__attack_all_in 覆盖,
+#   这里 sanity check sequential 第一段)
+# - action_idx=1 验"切回 retreat"也生效 — sharpy 进攻态 → retreat 态的
+#   切换路径完整(combat_intent_override 从 attack 改 retreat → vendor
+#   _should_retreat 读 retreat → 拉单位回 home)
+# - 配 _fired_player_actions set + on_tick 顺序 fire 防"两 action 同帧重触"
+
+strategy_id: 1g_robo_immortal
+my_race: Protoss
+
+player_actions:
+  - at: "5:00"
+    verb: attack
+    mode: all_in
+    target_area: enemy_main
+  - at: "6:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_advanced_after_attack
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 90
+    near: enemy_main
+    within: 60.0
+    op: "<="
+
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 1
+    after_s: 60
+    near: home
+    within: 70.0
+    op: "<="

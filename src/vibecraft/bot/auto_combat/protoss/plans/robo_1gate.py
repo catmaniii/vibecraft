@@ -1,0 +1,190 @@
+"""vibecraft 1门 Robo 不朽开 plan（标杆稳健开局，万金油应付未知情况）。
+
+Build 概要（标准 SC2 1g Robo Immortal 开局）：
+  14 BE → 16 BG + BA → NX(二矿) || BY（**并行**）→ Warpgate research +
+  ROBO（**CC 一好的并行触发**）→ Adept x2（保家侦察）→ 1 不朽 + 1 OB +
+  持续不朽 → 4 分钟 VC + Charge 研究 + 5 分钟三矿
+
+退出 timing：
+  - 主力 3+ 不朽 ready + 折跃完成 → PlanZoneAttack(4) 准备出门
+  - vibecraft 中期切走时 active_recipe flag 切到别处，本 plan 让位
+
+关键修正（vs 原始 vibecraft 版）：
+  - VT 从 BY ready（~2:30）延后到 Time(60*4)（对齐标准 5:09 时序）
+  - Charge 研究跟 VT 同步延后，不抢占早期矿资源
+  - 加早期 Adept x2（BY ready 后出，保家 + 侦察）
+  - Zealot target 从 100 降至 10（Immortal+Stalker 才是主力）
+
+设计差异 vs sharpy MacroRobo
+============================
+MacroRobo 把 CC、Robo、TC 全塞进**外层 SequentialList**，导致：
+  - CC 等 Expand 完成才开始 → Warpgate 研究延后 30s
+  - Robo 卡在 TC 之后的 SequentialList → 首个 Immortal 延后 ~1 分钟
+
+本版**早期 critical path 用 SequentialList**（probes/pylon/BG 严守顺序），
+**CC/Expand/ROBO 全用 Step(UnitReady(...), act) 并行触发**，timing 与
+标准 1g Robo Immortal build 对齐。
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.upgrade_id import UpgradeId
+from sharpy.knowledges import KnowledgeBot
+from sharpy.plans import BuildOrder, SequentialList, Step, StepBuildGas
+from sharpy.plans.acts import ActUnit, BuildGas, Expand, GridBuilding, MineOpenBlockedBase, Tech
+from sharpy.plans.acts.protoss import (
+    AutoPylon,
+    ChronoUnit,
+    ProtossUnit,
+    RestorePower,
+)
+from sharpy.plans.require import Gas, Time, UnitExists, UnitReady
+from sharpy.plans.tactics import (
+    DistributeWorkers,
+    PlanCancelBuilding,
+    PlanFinishEnemy,
+    PlanZoneAttack,
+    PlanZoneDefense,
+    PlanZoneGather,
+    SpeedMining,
+)
+from sharpy.plans.tactics.protoss import PlanHeatObserver
+
+from vibecraft.bot.auto_combat.protoss.plans.gate4_pressure import EmitOpeningCompleteAct
+
+
+class Robo1GateImmortal(KnowledgeBot):  # type: ignore[misc]  # sharpy 无类型
+    """1门 Robo 不朽开 — 稳健运营开局，主力 Immortal + Zealot。"""
+
+    def __init__(self) -> None:
+        super().__init__("VibeCraft 1G Robo Immortal")
+        # 2026-05-28 Issue 4:AttackGate 处理 retreat/defend intent + latch
+        from vibecraft.bot.auto_combat.intent_gate import AttackGate
+
+        self._attack_gate = AttackGate(self._ready_to_pressure)
+
+    async def create_plan(self) -> BuildOrder:
+        return BuildOrder(
+            # 开局完成（_ready_to_pressure 首次满足）→ 通知 Director 推荐转持续 doctrine
+            EmitOpeningCompleteAct(self._ready_to_pressure),
+            # ---------- chrono（永久后台，跟其它 sibling 并行）----------
+            # 农民 chrono：到 30 农或开始造 gas 后停（早期经济快）
+            Step(
+                None,
+                ChronoUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS),
+                skip=UnitExists(UnitTypeId.PROBE, 30, include_pending=True),
+                skip_until=UnitExists(UnitTypeId.ASSIMILATOR, 1),
+            ),
+            # Immortal chrono：ROBO 一好就持续 chrono 不朽（核心 DPS）
+            ChronoUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY),
+            # ---------- 早期 critical path（严守顺序，到 20 农停）----------
+            # 后续 CC / Expand / Robo / TC 全 parallel 触发，避免 SequentialList 阻塞
+            SequentialList(
+                ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 14),
+                GridBuilding(UnitTypeId.PYLON, 1),
+                ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 16),
+                BuildGas(1),
+                GridBuilding(UnitTypeId.GATEWAY, 1),
+                ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 20),
+            ),
+            # ---------- BG 一好的并行触发（CC + Expand 同时启动，不互等）----------
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), GridBuilding(UnitTypeId.CYBERNETICSCORE, 1)),
+            Step(UnitReady(UnitTypeId.GATEWAY, 1), Expand(2)),
+            # ---------- CC 一好的并行触发（折跃 + ROBO 同时启动）----------
+            # VT 不在 CC ready 时同时建（标准 1g Robo build VT 在 5:09，属于三矿阶段）
+            Step(UnitReady(UnitTypeId.CYBERNETICSCORE, 1), Tech(UpgradeId.WARPGATERESEARCH)),
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                GridBuilding(UnitTypeId.ROBOTICSFACILITY, 1),
+            ),
+            # ---------- 第二气矿（二矿启动后立刻补）----------
+            Step(UnitExists(UnitTypeId.NEXUS, 2), BuildGas(2)),
+            # ---------- 早期 Adept x2（BY ready 后出，保家 + 侦察——标准 2:10）----------
+            # 标准 1g Robo build 从 2:10 出 Adept 保家侦察；原版缺少这阶段
+            Step(
+                UnitReady(UnitTypeId.CYBERNETICSCORE, 1),
+                ProtossUnit(UnitTypeId.ADEPT, 2, priority=True),
+            ),
+            # ---------- VT 延后到 4 分钟（标准 5:09，三矿扩张阶段）----------
+            # 原版在 BY ready（~2:30）就建 VT，比标准早约 150s，抢占矿资源挤压 VR
+            # 改为 Time(60*4) 触发，Charge 路线随之对齐
+            Step(Time(60 * 4), GridBuilding(UnitTypeId.TWILIGHTCOUNCIL, 1)),
+            # ---------- TC 一好就研 Charge ----------
+            Step(UnitReady(UnitTypeId.TWILIGHTCOUNCIL, 1), Tech(UpgradeId.CHARGE)),
+            # ---------- 防身（Stalker 2 个）----------
+            ProtossUnit(UnitTypeId.STALKER, 2, priority=True),
+            # ---------- ROBO 一好的训练队列（sequential：1 不朽抢节奏 → OB → 20 不朽）----------
+            [
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
+                ),
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.OBSERVER, UnitTypeId.ROBOTICSFACILITY, 1, priority=True),
+                ),
+                Step(
+                    UnitReady(UnitTypeId.ROBOTICSFACILITY, 1),
+                    ActUnit(UnitTypeId.IMMORTAL, UnitTypeId.ROBOTICSFACILITY, 20, priority=True),
+                ),
+            ],
+            # ---------- Zealot 辅助训练（Charge 完后 sharpy 自动出 Charge Zealot）----------
+            # target=100 太激进（持续不断暴叉子），主力是 Immortal+Stalker
+            # 降至 10，后期如有需要 Skytoss/IAC 切走才大规模暴叉
+            ProtossUnit(UnitTypeId.ZEALOT, 10),
+            # ---------- 经济持续（sequential pacing）----------
+            AutoPylon(),
+            [
+                ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 22),
+                Step(
+                    UnitExists(UnitTypeId.NEXUS, 2),
+                    ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 44),
+                ),
+                StepBuildGas(3, skip=Gas(300)),
+                Step(
+                    UnitExists(UnitTypeId.NEXUS, 3),
+                    ActUnit(UnitTypeId.PROBE, UnitTypeId.NEXUS, 56),
+                ),
+                StepBuildGas(5, skip=Gas(200)),
+            ],
+            # ---------- 5 分钟开三矿（vibecraft 中期切剧本时通常已转走，留兜底）----------
+            Step(Time(60 * 5), Expand(3)),
+            # ---------- 后期暴产能（vibecraft 中期切走前通常用不到）----------
+            Step(Time(60 * 6), GridBuilding(UnitTypeId.GATEWAY, 4)),
+            Step(Time(60 * 7), GridBuilding(UnitTypeId.ROBOTICSFACILITY, 2)),
+            # ---------- 战术 / 维护 / 攻击触发（全是 sharpy 自带 Manager）----------
+            SequentialList(
+                MineOpenBlockedBase(),
+                PlanCancelBuilding(),
+                PlanHeatObserver(),
+                PlanZoneDefense(),
+                RestorePower(),
+                DistributeWorkers(),
+                Step(None, SpeedMining(), lambda ai: ai.client.game_step > 5),
+                PlanZoneGather(),
+                # 3 不朽 ready → PlanZoneAttack(4)；玩家显式 attack 立即绕过
+                Step(
+                    self._attack_gate,
+                    PlanZoneAttack(4),
+                ),
+                PlanFinishEnemy(),
+            ),
+        )
+
+    @staticmethod
+    def _ready_to_pressure(ai: Any) -> bool:
+        """主力出门 timing：3+ 不朽 ready + 折跃完成。
+
+        1 BG Robo 不朽开本质是稳健运营，不强求一波，主力到位再压。
+        """
+        immortals = ai.units(UnitTypeId.IMMORTAL).ready.amount
+        if immortals < 3:
+            return False
+        warpgate_done = (
+            ai.already_pending_upgrade(UpgradeId.WARPGATERESEARCH) >= 1.0
+            or UpgradeId.WARPGATERESEARCH in ai.state.upgrades
+        )
+        return bool(warpgate_done)

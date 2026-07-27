@@ -1,0 +1,108 @@
+kind: persistent_doctrine
+id: persistent_immortal_archon_no_ht
+display_name_zh: "不朽白球(隐刀合/DT)"
+display_name_en: "Immortal Archon (Dark Templar Merge)"
+summary_zh: "DT 合 Archon 变体：去掉 HT/VT，改 VC→VD→DT×8 合 Archon×4；IAC 后期自然延续路线（iac_2base 本身就是 DT 开局），DT 合球既省 VT 建造时间又保住隐刀骚扰弹性"
+summary_en: "DT-merge Archon variant: skip High Templar/Templar Archives, use Twilight Council → Dark Shrine → 8 Dark Templars merging to 4 Archons; natural continuation from DT-based openings; saves Templar Archives build time while keeping DT harass flexibility."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.immortal_archon_no_ht:ImmortalArchonNoHT"
+gas_intensity: medium
+aliases:
+  - "隐刀合球"
+  - "DT合球"
+  - "DT叉球"
+  - "纯DT合球"
+  - "无电兵不朽白球"
+  - "DT白球"
+  - "隐刀白球"
+  - "隐刀叉球"
+
+phases:
+  - id: tech_up
+    display: "上 VR + VD"
+    display_en: "Robotics + Dark Shrine"
+    subtitle: "VR×1 / VC / VD 建筑链（VD 替换 VT）+ 2 BF / 6 BG + Charge 研究"
+    subtitle_en: "1 Robotics / Twilight Council / Dark Shrine chain (replaces Templar Archives) + 2 Forges / 6 Gateways + Charge research"
+    start_at_time: 0
+  - id: massing
+    display: "暴不朽 + DT 合球"
+    display_en: "Mass Immortals + DT Merge to Archon"
+    subtitle: "VD 完成 → 持续 不朽 + DT（合 Archon）+ 冲锋叉子 + 哨兵；棱镜接入"
+    subtitle_en: "Dark Shrine done → continuous Immortals + Dark Templars (merge to Archon) + Charge Zealots + Sentries; Warp Prism online"
+    start_at_time: 60
+  - id: push
+    display: "不朽白球出门"
+    display_en: "Immortal-Archon Push"
+    subtitle: "不朽 + Archon 合计 8 → 出门多线骚扰推进"
+    subtitle_en: "8+ Immortals + Archons combined → multi-prong harass and push"
+    start_at_time: 200
+
+target_composition:
+  Immortal: 6
+  Archon: 4         # DT × 8 合成 Archon × 4（每 2 DT = 1 Archon）
+  DarkTemplar: 8    # 训 DT 作为 Archon 原料；合后 count 计 Archon
+  Zealot: 14
+  Sentry: 4
+  WarpPrism: 1
+  Observer: 2
+  # 无 HighTemplar — Archon 来源全部改 DT
+
+required_tech:
+  - Charge
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+  - ProtossGroundArmorsLevel1
+  - ProtossGroundArmorsLevel2
+  - ProtossGroundArmorsLevel3
+  # 不含 PsiStorm / TemplarArchives
+
+required_structures:
+  RoboticsFacility: 1
+  TwilightCouncil: 1
+  DarkShrine: 1        # VD 替换 TemplarArchives
+  Forge: 2
+  Gateway: 6
+  Nexus: 3
+
+engagement_doctrine:
+  - "immortal_front priority=tank_damage   # 不朽硬盾顶前排吃伤害"
+  - "archon_spread spread=true             # 白球展开，最大化 AoE 覆盖"
+  - "zealot_charge priority=surround       # 冲锋叉包围软目标"
+  - "sentry_ff priority=choke             # 哨兵力场卡狭道"
+  - "warpprism_harass mode=multi_prong    # 棱镜多线骚扰（DT warp-in 可配合）"
+  - "retreat when=army_hp<30%            # 兵少时撤回重整"
+engagement_doctrine_en:
+  - "immortal_front priority=tank_damage   # Immortals shield wall front line, soaking damage"
+  - "archon_spread spread=true             # Spread Archons to maximize AoE splash coverage"
+  - "zealot_charge priority=surround       # Charge Zealots to surround and flank soft targets"
+  - "sentry_ff priority=choke             # Sentry Force Fields to block chokes and split engagements"
+  - "warpprism_harass mode=multi_prong    # Warp Prism multi-prong harass (can warp in Dark Templars)"
+  - "retreat when=army_hp<30%            # Retreat and regroup when army HP is low"
+
+win_condition:
+  type: composition_advantage
+  description: "不朽硬盾 + DT 合 Archon 溅射 AoE 正面推不过；Charge 叉包围；VD 路线与 iac_2base 开局无缝衔接"
+  signals:
+    - "self.units.immortal.amount >= 4"
+    - "self.units.archon.amount >= 4"
+    - "self.upgrade.charge == true"
+    - "self.upgrade.ground_weapons >= 1"
+
+counters_against:
+  - zerg_roach_hydra
+  - terran_bio
+  - zerg_ling_bane
+  - mass_ground
+  - zerg_roach_ravager
+
+weak_against:
+  - mass_air
+  - terran_mech_heavy
+  - zerg_brood
+  - mass_disruptor
+
+abort_signals:
+  - sees: "enemy.units.air_attacker.amount >= 10 AND self.units.warpprism.amount < 1"
+    then: "warn:air_threat_no_prism"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

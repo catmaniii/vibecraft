@@ -1,0 +1,6 @@
+strategy_id: widow_mine_drop
+my_race: Terran
+auto_switch_to: persistent_bio_max
+auto_switch_delay_s: 10.0
+checks:
+  - {id: worker_early, type: unit_count, unit: SCV, at: "2:30", tol: 40, min: 8}

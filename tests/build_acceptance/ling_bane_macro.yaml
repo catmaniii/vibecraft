@@ -1,0 +1,7 @@
+strategy_id: ling_bane   # 先 all-in 开局
+my_race: Zerg
+# 开局 opening_completed 后自动切运营 doctrine(先 all-in 再转运营,按科技/兵种转型)
+auto_switch_to: persistent_muta_ling_bane
+auto_switch_delay_s: 10.0
+checks:
+  - {id: worker_early, type: unit_count, unit: DRONE, at: "2:30", tol: 40, min: 8}

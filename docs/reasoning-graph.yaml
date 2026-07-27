@@ -1,0 +1,4155 @@
+# 项目推理图谱 · 机读单一源（通用，不绑单一功能）
+#
+# 权威格式见全局 skill ~/.claude/skills/reasoning-graph/SKILL.md（这是唯一真理源，改这里）。
+# 人读版 docs/reasoning-graph.md 已废弃（迁进全局 skill，2026-07-14 批 F）；可视化改用全局
+# skill 的交互式 viewer（assets/rg-viewer.html，拖拽本文件或经 /rg 路由注入即可看）。
+# 一致性门是全局 skill 的 scripts/rg_validate.py（无环 + 不确定性传播 + schema 等校验），
+# tests/unit/test_reasoning_graph.py 是薄壳、subprocess 调用它校验本文件。
+#
+# 这是一张纯有向无环图（DAG）：结论只靠 deps 边组织、不靠层级。任何判断都能顺依赖链回到已验证
+# 的根（API/真机/实测）。按 domain 分子树（如 nydus-landing），新领域加自己的节点。
+#
+# 字段/分类模型权威见 skill 的 SCHEMA.md。两个正交维度:
+#   kind   建号后不可变: fact(可复核观察) | inference(从deps推出) | decision(选择/承诺,无真值) |
+#          question(待答问题,无真值;任何节点不得依赖它)
+#   status 按 kind 分: fact/inference=verified|unverified|retracted;
+#          decision=active|inactive(生命周期,非真值;代码回退的标 inactive);
+#          question=open|answered(带answered_by)|dropped
+#   deps 指向任意节点(fact/question 可空作根;inference/decision 必须非空;都不得依赖 question)
+#   下面 config 块声明本项目方言(provenance/by 词表、id前缀↔kind、语义规则)
+
+review:
+  last_reviewed: "2026-07-27"
+
+# 左上角项目标题(viewer 顶层可选 title;缺省显示模板通用的"项目推理图谱")。
+title: "vibecraft 项目推理图谱"
+
+version: 4
+
+# 本项目的"方言"声明(可选;skill 通用骨架之外,vibecraft 自己的分类词表 + 语义规则)。
+# 不声明这块的项目,skill 只强制通用骨架(DAG/kind/status/传播/changelog)——这就是可移植的关键:
+# skill 不把 vibecraft 的 provenance/by 词表强加给别的项目。格式见 skill 的 SCHEMA.md「项目方言」。
+config:
+  # 本项目额外必填字段(通用核心 id/kind/statement/deps/status 之外)
+  required_fields: [domain, title, evidence]
+  node_id_pattern: "^[FIDQ]\\d+$" # F=fact / I=inference / D=decision / Q=question
+  id_prefix_by_kind: {fact: F, inference: I, decision: D, question: Q}
+  domain_pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+  # fact 的来源子类型:环境(游戏/API)/纯代码/纯数学/实测
+  fact_provenance_values: [env-game, env-api, own-code, math, empirical, doc]
+  # decision 的决策主体:玩家拍板 / agent(AI)设计
+  decision_by_values: [player, agent]
+  # inference 的推导子类型:演绎(前提真则结论必然真) / 可废止(归纳溯因,须经验验证,缺省)
+  inference_derivation_values: [deductive, defeasible]
+  # 实测 fact 必须有 repro(可复现命令/log 背书)
+  require_repro_for_provenance: [empirical]
+  # 纯数学 fact 不该建在某次实测上
+  forbid_provenance_dep:
+    - {from: math, to: empirical}
+
+nodes:
+  # ==================================================================
+  # domain: nydus-landing —— 坑道虫落点 + OL 供视野
+  # ==================================================================
+
+  # ---- fact · 实测 / API 事实 ----
+  - id: F1
+    title: "地形高度可读(terrain_height)"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "game_info.terrain_height / get_terrain_height(pos) 读每格地形高度(0-255)"
+    deps: []
+    evidence: "python-sc2 game_info.py:233、bot_ai.py:1204"
+    status: verified
+
+  - id: F2
+    title: "某格能否放建筑可用 in_placement_grid 判定"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "in_placement_grid(pos) / game_info.placement_grid 判某格能否放建筑"
+    deps: []
+    evidence: "bot_ai.py:1221"
+    status: verified
+
+  - id: F3
+    title: "某格能否走可用 in_pathing_grid 判定"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "in_pathing_grid(pos) 判某格能否走（配合 F1 定悬崖/边界）"
+    deps: []
+    evidence: "bot_ai.py:1231"
+    status: verified
+
+  - id: F4
+    title: "某点是否有视野可用 is_visible 判定"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "is_visible(pos) 返回某点此刻我方有没有视野（动态）"
+    deps: []
+    evidence: "bot_ai.py:1239"
+    status: verified
+
+  - id: F5
+    title: "can_place(NYDUSCANAL) 可批量判定能否放坑道虫"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "can_place(NYDUSCANAL, [pos...]) 让引擎判能否放坑道虫，footprint 引擎自校验，批量"
+    deps: []
+    evidence: "bot_ai.py:622/629"
+    status: verified
+
+  - id: F6
+    title: "expansion_locations_dict 不靠视野即知敌方矿脉位置"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "expansion_locations_dict[基地点] = 该基地矿脉 Units，开局即知、不需视野（算矿后锚点用）"
+    deps: []
+    evidence: "sharpy zone.py:63"
+    status: verified
+
+  - id: F7
+    title: "OL 视野半径 = 11"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "Overlord sight_range = 11.0"
+    deps: []
+    evidence: "探针实测 2026-07-12"
+    status: verified
+
+  - id: F8
+    title: "算能不能放坑道虫需要先有视野"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "无视野时 can_place(NYDUSCANAL) 对可放格返回 False；有视野才返回 True"
+    deps: [F5, F4]
+    evidence: "探针实测 2026-07-12（nydus_terrain_probe.py，无视野时对边缘可放格 0/40 返回 True）"
+    status: verified
+
+  - id: F9
+    title: "空军能从悬崖外看见高地上的格"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "飞行单位（OL）在悬崖外/下方仍能看见高地上的格；地面单位看不上悬崖"
+    deps: []
+    evidence: "SC2 规则 + 探针（OL 在低地 h=135/207 仍 is_visible 高地落点）"
+    status: verified
+
+  - id: F10
+    title: "坑道虫落点硬要求:必须 is_visible 否则静默拒绝"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "BUILD_NYDUSWORM(pos) 要求 pos is_visible（否则静默拒绝）；坑道虫不需蔓延、不需挨基地，任意可见+可放格都能落"
+    deps: []
+    evidence: "代码 + 2026-07-09「170 次空放」踩坑"
+    status: verified
+
+  - id: F11
+    title: "高地与高地边缘可由 terrain_height 连片+悬崖落差算出"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "敌方主基高地 = terrain_height 同高度连片；高地边缘 = 高地格中「周围有低 ≥12 的悬崖格」的那些"
+    deps: [F1, F2]
+    evidence: "探针实测（DaybreakLE base_h=223、高地 828 格、边缘 210 格、其中可放 148 格）"
+    status: verified
+
+  - id: F12
+    title: "速狗机动性强适合 hit-and-run 骚扰空虚分矿"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "速狗（zergling + 狗速升级 metabolic boost）机动性强，能 hit-and-run 骚扰没防守的分矿矿线（打了就撤，守军追不上）"
+    deps: []
+    evidence: "SC2 常识 + 本 build 已研狗速"
+    status: verified
+
+  - id: F15
+    title: "sharpy 里矿/气靠 priority=True 才 reserve,不看 children 顺序"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "sharpy 里【排在 children 前面】≠【先拿到矿】——children 顺序只影响 larva 分配/执行序,**矿/气靠 priority=True 才 reserve**。缺矿时 priority act 每帧 reserve 住 cost、抢在非 priority act 之前;非 priority 建筑排得再前,只要有 priority 单位在抢矿,它就攒不够钱建不起来"
+    deps: []
+    evidence: "sharpy act_unit.py/grid_building.py priority reserve 逻辑 + 2026-07-13 真机(VN 排蟑螂前但非 priority → 被 priority 蟑螂截胡矿整局没建起)"
+    status: verified
+
+  - id: F13
+    title: "OL push=10 落点视野外沿多不可见,push≤7 稳定可见"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "scripts/nydus_terrain_probe.py（真机探针:push/格心/视野几何）"
+    statement: "push=10 时 OL 漂在离敌中心 27 格(离高地边缘 ~10-12)、落点边缘格在视野 11 的外沿、绝大多数帧不可见;push≤7 时落点稳定可见"
+    deps: [F7]
+    evidence: "真机诊断 2026-07-12 nydus_landing_diag.py(8 局，per-tile vis/place/dOL 分解)"
+    status: verified
+
+  - id: F35
+    title: "坑道虫落点必须 snap 到格心(X.5/Y.5)才可放"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "scripts/nydus_terrain_probe.py / nydus_landing_diag.py（per-tile place 分解）"
+    statement: "worm 实际落点是 X.5/Y.5 格心；can_place_single 对整数格角返 False、对格心返 True——落点须 snap 到格心才可放"
+    deps: [F5]
+    evidence: "真机诊断 2026-07-12 nydus_landing_diag.py（整数格角 place=False、格心 place=True）"
+    status: verified
+
+  - id: F36
+    title: "落地失败主因是视野几何,几乎不是 can_place"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "scripts/nydus_landing_diag.py（per-tile vis/place 分解）"
+    statement: "落地失败几乎全是视野几何(落点无 is_visible)、而非 can_place——诊断中有视野但 can_place 失败的占比≈0"
+    deps: [F8]
+    evidence: "真机诊断 2026-07-12 nydus_landing_diag.py(8 局，诊断 vis 但放不了≈0)"
+    status: verified
+
+  - id: F14
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance nydus（真机对战观察 OL 接近轨迹）+ 几何探针"
+    title: "OL 避障半径 ≤ 主基高地半径会直线穿基地被秒"
+    statement: "OL 接近避障半径 ≤ 敌主基高地半径(~15) 时不触发绕行、直线掠过基地，OL 穿基地中间被发现秒杀(旧默认 13<15 即如此)"
+    deps: [F11]
+    evidence: "真机三迭代(用户 2026-07-13):OL 穿基地被杀 → r_avoid 13→22 修穿基地 → 大包围圈过度避障 0/4 落地(见 F37) → 退回单绕主基(r_avoid=22)+选最远侧偷看(见 D8)；log: scripts/nydus_landing_diag.py 真机诊断产物 + logs/game_<id>/events.jsonl"
+    status: verified
+
+  - id: F37
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance nydus（大包围圈避障实测）+ 几何探针"
+    title: "大避障圈(R≥27)会把落点圈进禁区导致 0 落地"
+    statement: "以落点为心的大避障圈(R≥27)会把落点自身(离主基中心才 ~24)圈进禁区，OL 被挡在 33 格外够不到视野、0 落地"
+    deps: []
+    evidence: "真机(大包围圈 R≥27 → 0/4 落地) + 几何探针(落点离主基中心 ~24)；log: scripts/nydus_landing_diag.py 真机诊断产物 + logs/game_<id>/events.jsonl"
+    status: verified
+
+  - id: F38
+    title: "坑道虫落地后需 morph 才钻出,期间无自卫"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "NYDUSCANAL 落地后需 morph ~14s 才钻出,morph 期间无自卫、可被敌方主力摧毁"
+    deps: []
+    evidence: "SC2 引擎机制(nydus worm morph 时长)+ 2026-07-09「170 次空放」踩坑观察"
+    status: verified
+
+  # ---- inference · 逻辑推导 ----
+  - id: I1
+    title: "先供视野,再定落点"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "没视野连「能不能放坑道虫」都算不出 → 必须先让 OL 供视野，再定落点"
+    deps: [F8]
+    evidence: null
+    status: verified
+
+  - id: I2
+    title: "OL 不用进基地/上高地就能供视野"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "OL 是空军，能从悬崖外低地看见高地边缘 → 不用上高地/进基地就能给落点供视野"
+    deps: [F9, F11]
+    evidence: null
+    status: verified
+
+  - id: I3
+    title: "OL 离高地边缘 ~10 格仍在视野内"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "视野 11 → OL 站在离高地边缘落点 ~8 格的悬崖外低地,落点仍在视野内"
+    deps: [F7, I2]
+    evidence: "探针实测(OL 离边缘 8.2/8.4 格、on_low=True、落点可见 ✓ 可放 ✓)。2026-07-26 反向审查:原文写「~10 格」超出自身证据、且与 F13(push=10 时落点多数帧不可见)互斥,按证据收回到 ~8 格"
+    status: verified
+
+  - id: I4
+    title: "OL 进基地会被发现导致敌方视野暴露"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "OL 进基地/贴前沿 → 进入敌农民(sight~8)+主力视野被发现暴露"
+    deps: [F9]
+    evidence: "F9 反用 + 真机观察（用户点破 2026-07-12）"
+    status: verified
+
+  - id: I22
+    title: "OL 暴露会导致主力回防/赖家,落点窗口永不开"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "OL 暴露被发现 → 敌主力赖家/回防 → 落点区『主力不在』条件永不满足"
+    deps: [I4, I5]
+    evidence: null
+    status: verified
+
+  - id: I5
+    title: "下坑道虫判定门:视野+可放+主力不在"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "下坑道虫判定门 = (is_visible ∧ can_place) ∧ (落点区敌方主力不在) —— 主力在则 morph 期被秒"
+    deps: [F10, F8, F38]
+    evidence: "用户战术拍板"
+    status: verified
+
+  - id: I6
+    title: "OL 往外方向应顺 terrain_height 下降算,基地中心距离是废参照"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "算 OL 站位/落点「往外」的方向，该顺 terrain_height 下降（悬崖→低地），基地中心距离是废参照"
+    deps: [F1]
+    evidence: "用户纠正 2026-07-12"
+    status: verified
+
+  - id: I7
+    title: "OL 漂浮点由静态地形栅格算出,不需要先有视野"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "高地边缘可放格(F11) + 顺悬崖外推(I6) = OL 漂浮点，全部来自静态地形栅格，开局即可算，不需要先有视野"
+    deps: [F11, I6]
+    evidence: "探针漂浮点由静态边缘格算出"
+    status: verified
+
+  - id: I8
+    title: "速狗骚扰空虚分矿造成直接经济伤害"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "速狗骚扰防守空虚的分矿 = 直接经济伤害(屠农民占便宜)"
+    deps: [F12]
+    evidence: null
+    status: verified
+
+  - id: I10
+    title: "分矿骚扰能拉动敌方主力回防"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "分矿骚扰能逼敌方分兵/主力回防(拉动主力)"
+    deps: [I8]
+    evidence: "vs 内置 AI 弱佯攻拉不动是真机观察到的；更强/更聪明的分矿骚扰能否拉动主力待真机验"
+    status: unverified
+
+  - id: I9
+    title: "敌主力回防分矿能打开落点窗口"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "敌主力回防分矿 → 落点区主力下降 → 满足 I5 门④,canal 顺势落"
+    deps: [I10, I5]
+    evidence: "vs 内置 AI 弱佯攻拉不动是真机观察到的；更强/更聪明的分矿骚扰能否拉动主力待真机验"
+    status: unverified
+
+  # ---- decision · 设计决策 ----
+  - id: D1
+    title: "OL 站位:高地边缘外推 9 格"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "OL 漂浮点 = 由落点顺地形下坡方向外推 9 格、停在悬崖外低地格"
+    deps: [I1, I2, I3, I4, I6, F13, I63]
+    evidence: "代码真值 nydus_landing_planner.py:67 `_OL_PUSH=9.0`。取值来由:7 与 10 都实测过(F13:push≤7 落点稳定可见、push=10 落点多数帧不可见),9 是两者之间的折中,**其本身未经真机实测**(见 Q11)。选 9 而非 7 的机制是 I63(驻守距离要大于 flee 半径),不是可见性。2026-07-26 反向审查:本节点长期写成 7、与代码不符,按代码订正"
+    targets: [Q11]
+    status: active
+
+  - id: D2
+    title: "坑道虫落点动态扫高地边缘+可放+可见,挑离矿近的"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "落点动态扫「高地边缘 ∧ 可放 ∧ 此刻可见」的格，挑离矿近的（次选打得到产能/科技，再次任意）；不再用固定锚点环"
+    deps: [F11, I5]
+    evidence: null
+    status: active
+
+  - id: D3
+    title: "多只 OL 分扇区分散驻守供视野"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "把静态边缘格按角度分扇区,每扇区取最外围的可落格算漂浮点,派多只 OL 分散驻守做冗余"
+    deps: [D1, F11, I7, I66]
+    evidence: "探针出 2 个漂浮点(单 OL 只覆盖部分弧)。2026-07-26 反向审查:原文取的是「最外围格」,被 I66 判定会系统性挑到放不下的落点,故改取「最外围的可落格」;边缘格计数删去(与 F151 重复)"
+    status: active
+
+  - id: D4
+    title: "下坑道虫判定门:有视野+主力不在"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "planner pick_available_now 判定门 = 有视野 ∧ 主力不在落点区(PROBE 严阈值 / COMMIT 放宽)"
+    deps: [I5]
+    evidence: "nydus_landing_planner.py；2026-07-12 反向复审(D5 定案后)：canal 保持「主力不在才落」不改硬下，D4 依旧、但不再是死结——D5 负责在主力赖家时用速狗骚扰创造窗口/占便宜"
+    status: active
+
+  - id: D24
+    title: "落点命中即锁坐标快照,幂等复用"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "命中落点即锁坐标快照、幂等复用同一坐标(目标一次规划锁定)"
+    deps: [D4]
+    evidence: "nydus_landing_planner.py"
+    status: active
+
+  - id: D25
+    title: "canal 被拆则拉黑该点换点重选"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "canal 被拆则拉黑该点、换点重选"
+    deps: [D4]
+    evidence: "nydus_landing_planner.py。2026-07-26 被 D109 收窄:拉黑改为 60 秒后失效(永久拉黑会把唯一验证过可落的点永远排除)"
+    status: active
+
+  - id: D5
+    title: "主力赖家时改速狗骚扰分矿逼其开窗,不硬下 canal"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "Q1 的解（2026-07-12 用户拍板）：主力赖家时不硬下 canal（保持「主力不在才落」），改用速狗机动骚扰没防守的分矿——直接吃经济(I8) + 副作用逼主力出来开窗(I9)；主力被引出来 canal 顺势落。待 FeintSquad 升级 + 真机验"
+    deps: [I8, I9, I5, D4]
+    evidence: "用户 2026-07-12 拍板；实效待真机验（依赖 I9 unverified）"
+    status: active
+
+  - id: D6
+    title: "落点首选耦合到驻守 OL 真实视野,保证真有视野+可放"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "落点首选耦合到 OL 的真实视野:对每只驻守 OL 取它视野内的边缘格作首选候选,不再只挑「离矿最近」的格(那些常落在没 OL 驻守的扇区、没视野、永远落不下);候选格 snap 到格心"
+    deps: [F13, F35, F36, I3, F11]
+    evidence: "真机诊断 2026-07-12:修前落地 2/4、修后(push7+OL 视野耦合+格心 snap)活到窗口的局 7/7 落地。2026-07-26 反向审查:原文「取离它最近的可放边缘格(必在其视野内 + 可放)」被 F152 证伪(最近格 5/5 place=False),该断言已删;取几个候选由 D114 收窄"
+    status: active
+
+  - id: D7
+    title: "主力持续赖家阻塞超时后绕过④按最空格硬落"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "首次投放时,若「主力不在落点区」阻塞超 25 秒 → 绕过该条件、按局部威胁挑最空的格硬落(保落地率)"
+    deps: [I5, D4, F172]
+    evidence: "用户 2026-07-12「只要落地率、后面怎么打交给玩家」:与 D5「速狗骚扰引主力」并存(D5 保胜率、D7 保落地率),不是战术/doctrine 自动切换;真机诊断 2026-07-12:主力赖家局兜底触发 811 次、这些局也落地了,8 局落地率 6/8→7/8。2026-07-26 被 D108 收窄到只适用首次投放——重投硬落等于把第二个虫送回刚拆掉第一个的兵堆"
+    status: active
+
+  - id: I11
+    title: "隐蔽优先于抢视野"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "OL 被发现(敌方战斗单位或贴脸农民)会招致敌主力回防、秒掉 morph 中的 canal ⟹ 隐蔽优先于抢视野"
+    deps: [I22]
+    evidence: "真机(2026-07-12 用户强怒:OL 有视野还往里冲被发现→canal被打)+ 反证:躲所有农民会把落地率打回 1/4;派生的执行规则(有视野即停住/暴露即撤)见 D8"
+    status: verified
+
+  - id: D8
+    title: "OL 侦查走位:单只+有视野即停+暴露即撤"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "OL 侦查 = 单只(越少越不易暴露)+ 对某可放边缘格有视野即停住 + 暴露即撤(战斗单位进隐蔽半径7/农民贴脸5→顺同方向往低地外撤)"
+    deps: [I11, D1]
+    evidence: "已实现(nydus.py _SendOverlordToEnemy _pick_concealed_float/_exposed/_has_vision_on_landing)+ 真机效果验证中"
+    status: active
+
+  - id: F159
+    title: "首波装载后坑道队 total_staged 卡在 6、装载指令空发 70 秒"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "2026-07-26 真局 19:58:59 首波装载后 2 秒,佯攻队认领 6 只狗;同期坑道队 total_staged 恒为 6、wave=reinforce 装载指令每 1.8s 空发持续 70 秒,这批狗无一进入坑道"
+    deps: []
+    evidence: "logs/server_20260726_192600.log:19:58:59 `NYDUSRAID load n=29 wave=1` → 19:59:01 首条 `NYDUSFEINT squad` → 19:59:32~20:00:41 `NYDUSRAID load n=2 wave=reinforce` 每 1.8s 一条、`total_staged=6` 恒定;用户肉眼:狗在家门口与外面之间来回走"
+    repro: "起一局 nydus,等首波装载后看 `NYDUSRAID load ... wave=reinforce` 是否高频空转 + total_staged 是否恒等于 feint_cap"
+    status: verified
+
+  - id: F160
+    title: "招募封顶按累计计数算,阵亡不回落"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "坑道队招募封顶比较的是累计计数(只增不减) `_recruited_roach/zergling/queen`,单位阵亡时不递减"
+    deps: []
+    evidence: "描述 2026-07-26 修复前的 nydus_raid_act.py:`_recruited_* += 1` 只增,`_prune_dead` 不减;修复后改为 `_held_count()` 按存活计"
+    status: verified
+
+  - id: I59
+    title: "累计计数封顶让第二波永远招不到兵"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "首波单位全部阵亡后坑道队再也招不到新兵,第二波无兵可用"
+    deps: [F160]
+    evidence: "还需「首波会招满封顶」这个前提才必然(未建节点,故 defeasible);改前行为由单测复现 tests/unit/test_nydus_raid.py::test_recruit_cap_frees_up_after_wave_dies"
+    status: verified
+
+  - id: D103
+    title: "佯攻队与坑道队双向互斥"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "两个 act 互相排除对方已认领的单位:坑道队每帧交出佯攻队认领的狗(已在坑道内的除外)"
+    deps: [I62, D29]
+    evidence: "改前只有单向排除(坑道队读佯攻队发布的集合),挡不住佯攻队启用那刻抢走坑道队早已认领的单位;单测 tests/unit/test_nydus_raid.py::test_yield_to_feint_drops_staged_ling_claimed_by_feint"
+    status: active
+
+  - id: D104
+    title: "重投只做 8 秒防抖,时机交给「主力不在落点区」这道门"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "坑道虫被拆后只防抖 8 秒,之后每帧都试,真正决定何时重投的是「主力不在落点区」那道门"
+    deps: [F165, I64, D5, D112]
+    evidence: "用户 2026-07-26:「第一波的坑道虫没放成功被打掉的话,过一会还要再第二次,但是需要配合其他佯攻部队吸引火力」;随后真机反馈「狗去引了主力、虫却没跟着下」,判定为定时器否决了佯攻创造的窗口(I64)。先设 40 秒被证伪,降为 8 秒防抖"
+    status: active
+
+  - id: D105
+    title: "钻出的女王在敌方家铺菌毯"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "从坑道虫钻出的女王,在保留一发输血能量的前提下,往脚下菌毯外沿种菌毯瘤,把菌毯朝敌方矿线扩"
+    deps: [F163, F164, F173]
+    evidence: "用户 2026-07-26:「女王从坑道虫出来以后,要在对方家里放菌毯」;真机生效 logs/nydus_force_drop_selftest.log `NYDUSRAID creep tag=... at=(59,23)`"
+    status: active
+
+  - id: D106
+    title: "坑道链卡住时多余女王往最外分矿方向铺菌毯"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "自家坑道网络就绪超过 150 秒仍没在敌方立住虫时,超出注卵需要的女王往最外侧自家分矿方向铺菌毯"
+    deps: [F164, F173]
+    evidence: "用户 2026-07-26:「家里多的女王,如果到对方家放坑道虫一直不成功,可以出去铺菌毯,然后作为部队去参与前线防守(最外面的分矿)」;阈值 150s 见 spare_queen_act._STALL_AFTER_S"
+    status: active
+
+  - id: F158
+    title: "破晓黎明敌方主基西侧有一块离最近可落格 10.8 格的孤立小高台"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "破晓黎明敌方主基西侧约 23 格处有一块约 3x3 的孤立高台(terrain_height=223,与主基同高),四周是低一级(207)乃至低两级(135)的地形;它离最近的可落格 10.8 格"
+    deps: [F1, F11, F154]
+    evidence: "logs/probes/2026-07-26-nydus_viz_dump.json 的 heights 栅格(x 103-105 / y 107-109 高度 223,四周 207/135);用户在可视化图上圈出该处并指认"
+    repro: "scripts/nydus_vision_viz_probe.py 的 dump(heights 栅格)+ 逐格打印"
+    status: verified
+
+  - id: D102
+    title: "站位优先选落点 11 格内的小高台上方"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "OL 站位优先取可落格视野半径内的孤立小高台正上方;附近没有这种高台才退回「高地边缘顺悬崖外推 9 格到低地」"
+    deps: [F158, I61, D99, D1]
+    evidence: "用户 2026-07-26 在可视化图上圈出该高台并指定用它;可达性判据 10.8 < 视野 11(F158);隐蔽性判据是 I61,尚未验证(见 Q10)"
+    status: active
+
+  - id: Q10
+    title: "停在高台上方的 OL 是否真的更难被低地敌人发现?"
+    domain: nydus-landing
+    kind: question
+    statement: "低地的敌方地面单位能否看见悬停在高台上方的飞行单位?"
+    deps: [F9]
+    evidence: "尚未验。可测法:把地面单位放在高台旁的低地,量它对高台格的 is_visible,再对停在高台上方的飞行单位复测。答案将决定 I61 成立与否"
+    status: open
+
+  - id: F156
+    title: "瞭望塔只认地面单位,飞行单位拿不到塔视野"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "Xel'Naga 瞭望塔只能被地面单位占领,飞行单位停在塔上不获得塔视野"
+    deps: []
+    evidence: "真机核实 logs/probes/2026-07-26-nydus_watchtower.log:塔上仅一只 OL 时半径 26 内可见 421 格(≈OL 自身视野 11 的圆面积),再加一只小狗后变 1528 格(≈塔视野 22 的圆面积)"
+    repro: "scripts/nydus_watchtower_probe.py"
+    status: verified
+
+  - id: F157
+    title: "破晓黎明的瞭望塔离敌方主基 50+ 格,照不到落点"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "破晓黎明两座瞭望塔离敌方主基 49.9 / 73.2 格"
+    deps: []
+    evidence: "logs/probes/2026-07-26-nydus_watchtower.log 段①;同段实测:占塔时敌方高地边缘格可见 0/148(塔视野 22 够不到 49.9 外)"
+    repro: "scripts/nydus_watchtower_probe.py"
+    status: verified
+
+  - id: D112
+    title: "虫被拆后冷却 40 秒再重投"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "坑道虫被拆后冷却 40 秒再重投"
+    deps: [F165]
+    evidence: "被真机证伪:用户 2026-07-26 反馈「狗去引了主力、虫却没跟着下」——冷却期内佯攻创造的窗口被定时器一并否决,等冷却结束主力已回防。取代它的是 D104(降为 8 秒防抖、时机交给判定条件)"
+    status: inactive
+
+  - id: I67
+    title: "刚拆掉虫的敌方部队短时间内仍在落点区"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "刚把坑道虫拆掉的敌方部队短时间内仍停留在落点区,此时原地硬落等于把第二个虫送进同一堆兵"
+    deps: [F38]
+    evidence: "尚无直接观察(那一局第二个虫从未投出);「部队不会立刻散开」是假设,故 unverified"
+    status: unverified
+
+  - id: I68
+    title: "小高台的扫描半径必须大于落点的扫描半径"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "小高台常落在落点扫描半径之外(实测那块在 23 格、落点扫描半径 18),故找高台必须用更大的扫描半径,否则站位算法看不到它"
+    deps: [F158, F154, F171]
+    evidence: "复核推导即可:23 > 18;实现按此把高台扫描半径取 30(F171)"
+    status: verified
+
+  - id: F171
+    title: "小高台的扫描半径取 30 格"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "找小高台驻守点时,敌方主基周围的地形扫描半径取 30 格"
+    deps: []
+    evidence: "nydus_landing_planner.py `_PERCH_SCAN_R = 30`(与落点候选的 `_SCAN_R = 18` 分开取值)"
+    status: verified
+
+  - id: F172
+    title: "主力赖家超过 25 秒后判定条件会被绕过"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "「主力不在落点区」这道判定条件被阻塞满 25 秒后会被绕过,转为挑局部最空的格硬落"
+    deps: []
+    evidence: "nydus_landing_planner.py `_ARMY_GATE_FALLBACK_S = 25.0`"
+    status: verified
+
+  - id: F173
+    title: "菌毯给虫族地面单位加速并提供视野"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "菌毯为其上的虫族地面单位提供移动加速,并为己方提供该片区域的视野"
+    deps: []
+    evidence: "游戏机制"
+    status: verified
+
+  - id: F174
+    title: "ability 名不在引擎枚举里时执行侧静默失效"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "执行侧按名字查引擎的 ability 枚举,查不到就只打一条警告并返回 cast 0 次,不做任何回退"
+    deps: []
+    evidence: "common_bot.py `cast_ability_on_units`:`getattr(AbilityId, ability_id.upper(), None)` 为 None 时 warning + return 0(2026-07-26 修复前的唯一分支)"
+    status: verified
+
+  - id: F175
+    title: "OL 的 flee 半径取 7"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "侦查 OL 的 flee 半径取 7 格(按虫族女王的对空射程取值,未按三族分化)"
+    deps: [F161]
+    evidence: "nydus.py `_SCOUT_STEALTH_RADIUS = 7.0` 及同处注释"
+    status: verified
+
+  - id: F161
+    title: "女王对空/对地攻击射程 = 7"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "虫族女王的攻击射程为 7"
+    deps: []
+    evidence: "游戏数值;与 phoenix-micro 域 F124 中同一数值一致(那里是多值合并节点,此处抽为原子 fact 供跨域引用)"
+    status: verified
+
+  - id: F162
+    title: "坑道虫占地 3x3"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "坑道虫(NYDUSCANAL)的建筑占地为 3x3 格"
+    deps: []
+    evidence: "游戏数值;与真机一致——单格在 placement grid 但周围缺格时 can_place 返回 False"
+    status: verified
+
+  - id: F163
+    title: "坑道虫落地后在周围生成菌毯"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "坑道虫(NYDUSCANAL)落地后在其周围生成一圈菌毯"
+    deps: []
+    evidence: "游戏机制;真机佐证 logs/nydus_force_drop_selftest.log:钻出的女王脚下即有菌毯、可直接种瘤"
+    status: verified
+
+  - id: F164
+    title: "菌毯瘤只能种在已有菌毯上"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "女王的菌毯瘤只能种在已有菌毯的格子上"
+    deps: []
+    evidence: "游戏机制(单测 test_strike_queen_skips_creep_without_creep_under_foot 只是按此建模,不构成验证)"
+    status: verified
+
+  - id: F165
+    title: "虫被拆后仅隔 2 秒即重下"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "2026-07-26 修复前:坑道虫被拆后仅隔 2 秒即重新下达投放"
+    deps: []
+    evidence: "nydus.py `_BUILD_WORM_COOLDOWN_S = 2.0`(修复前唯一的重投节流)"
+    status: verified
+
+  - id: F166
+    title: "虫被拆后 2 分钟内「主力不在落点区」持续成立"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "2026-07-26 真局:虫被拆后的 2 分钟里「主力不在落点区」这个条件持续成立(army_away=True nearby=1)"
+    deps: []
+    evidence: "logs/server_20260726_230748.log:23:15:27 canal lost → 23:16:26~23:17:48 每 ~4s 一条 `NYDUSDIAG gate: army_away=True nearby=1` 与 `tile[0/1] vis=True place=False`、`tile[2..11] vis=False`;用户肉眼:好几次机会都没放"
+    repro: "起一局 nydus 打到虫被拆,grep `NYDUSDIAG gate` 与 `NYDUSDIAG tile`"
+    status: verified
+
+  - id: F167
+    title: "拉黑原为永不过期,判定半径 3 格"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "2026-07-26 修复前:虫被拆后把落点加入黑名单且永不过期,黑名单的判定半径为 3 格"
+    deps: []
+    evidence: "nydus_landing_planner.py `notify_canal_lost` / `_is_blacklisted`(2026-07-26 修复前);真局 logs/server_20260726_230748.log 中 (57.5,20.5) 被拉黑后,相距 2.2 格的 (59.5,19.5) 同时判为 bl=True"
+    status: verified
+
+  - id: F168
+    title: "扫描半径放宽到 26 时高地边缘格从 148 增至 211"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "把敌方主基周围地形扫描半径从 18 放宽到 26 时,扫出的高地边缘格从 148 个增至 211 个"
+    deps: [F154]
+    evidence: "logs/probes/2026-07-26-nydus_vision_viz-round1.log(默认 148)与 --scan-r 26 那轮(211)对比"
+    repro: "scripts/nydus_vision_viz_probe.py --scan-r 26"
+    status: verified
+
+  - id: F170
+    title: "同一时段唯二有视野的候选格都放不下,其余候选没视野"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "F166 所述那 2 分钟内,12 个落点候选无一同时满足可见与可放:2 个可见但 can_place=False,其余 10 个不可见"
+    deps: [F166]
+    evidence: "logs/server_20260726_230748.log 23:16:26~23:17:48 的 `NYDUSDIAG tile[0/1] vis=True place=False`、`tile[2..11] vis=False`"
+    repro: "起一局 nydus 打到虫被拆,grep `NYDUSDIAG tile`"
+    status: verified
+
+  - id: I60
+    title: "OL 实际停靠点比规划漂浮点更远 1-2 格"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "受避障与 flee 走位影响,OL 实际停靠位置比规划的漂浮点离落点再远 1-2 格"
+    deps: [F13]
+    evidence: "由 F13 反推:push=10 时实测 OL 离高地边缘 10-12 格;尚无直接测量,故 unverified"
+    status: unverified
+
+  - id: I61
+    title: "悬停在高台上方的飞行单位受地形遮蔽"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "悬停在高台上方的飞行单位受地形遮蔽,低地的敌方地面单位看不见它"
+    deps: [F9]
+    evidence: "尚未验证——F9 说的是地面单位看不见高地上的**格**,是否同样适用于停在高台上方的**飞行单位**未测(见 Q10)"
+    status: unverified
+
+  - id: I62
+    title: "两个 act 抢同一批狗导致它们来回走"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "佯攻队与坑道队认领的是同一批狗,两个 act 每帧对它们下相反的命令"
+    deps: [F159, D29]
+    evidence: "支持:卡住数恰等于佯攻队上限 6。但这是复述前提、不是正交证据;单测只验我方代码按我方假设行事(内部自洽)。要坐实需修复后真局的终态 log(total_staged 突破 6、装载不再空转),尚未取得"
+    status: unverified
+
+  - id: I63
+    title: "驻守距离必须大于 flee 半径,否则站不住"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "OL 的驻守距离必须大于它的 flee 半径,否则一到位就被 flee 逻辑推走、供不上稳定视野"
+    deps: [F175]
+    evidence: "代码注释记录的真机诊断:push=7 时落点可见但 OL 太贴边,主力在家时被逼得给不上视野(nydus_landing_planner.py:63-67)"
+    status: unverified
+
+  - id: I64
+    title: "定时器重投会否决佯攻创造的窗口"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "用固定时长的冷却决定何时重投,会把佯攻在冷却期内创造的窗口一并否决——等冷却结束时敌方主力往往已经回防"
+    deps: [D112]
+    evidence: "用户 2026-07-26 对 40 秒那版的真机反馈「狗去引了主力、虫却没跟着下」。注意:同日 server_20260726_230748.log 那段不能当证据——那一局跑的是 2 秒冷却,且该局没投出去的根因按 F170 是候选全废,与本推论是竞争性假设。缺 40 秒版的 log 锚点,故 unverified"
+    status: unverified
+
+  - id: D107
+    title: "招募封顶改按当前存活数计"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "坑道队的招募封顶改为按当前仍持有的存活单位数计算,阵亡即回落"
+    deps: [I59]
+    evidence: "tests/unit/test_nydus_raid.py::test_recruit_cap_frees_up_after_wave_dies 覆盖"
+    status: active
+
+  - id: D108
+    title: "重投时禁用「主力赖家超时硬落」兜底"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "虫被拆过之后的重投一律不许走「主力赖家超时就硬落」的兜底,必须等真窗口"
+    deps: [F172, I67]
+    evidence: "硬落等于把第二个虫扔回刚拆掉第一个的那堆兵里;实现见 `pick_available_now(allow_gate_bypass=...)`"
+    status: active
+
+  - id: D109
+    title: "被拆点的拉黑 60 秒后失效"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "被拆落点的拉黑记录在 60 秒后自动失效"
+    deps: [F167, D25]
+    evidence: "永久拉黑会把全场唯一验证过可落的点永远排除;单测 tests/unit/test_nydus_landing_planner.py::test_blacklist_expires_after_ttl"
+    status: active
+
+  - id: D110
+    title: "落点候选先过 3x3 静态筛"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "挑落点时先用 3x3 静态判据过筛候选格"
+    deps: [I56, I57]
+    evidence: "真局里仅有的两个有视野的候选都是 can_place=False(F170);单测 tests/unit/test_nydus_landing_planner.py::test_edge_candidates_filtered_by_3x3"
+    status: active
+
+  - id: D113
+    title: "全部候选都过不去时重新启用已拉黑的旧落点"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "若所有候选都过不了判定,则第二轮不再排除黑名单,重新启用已被拉黑的旧落点"
+    deps: [F170, D109]
+    evidence: "有个虫总比没有强;单测 tests/unit/test_nydus_landing_planner.py::test_pick_reuses_blacklisted_spot_when_nothing_else_passes"
+    status: active
+
+  - id: D114
+    title: "每只 OL 贡献视野内最近的若干个候选"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "每只驻守 OL 贡献其视野内最近的 6 个可落格作为候选,不再只贡献最近的那一个"
+    deps: [F170, D6]
+    evidence: "「离 OL 最近」那个恰恰最贴崖、最放不下(F152);实现见 `_ol_vision_edge_tiles`"
+    status: active
+
+  - id: D111
+    title: "玩家喊放坑道虫即转为强制投放意图"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "玩家指令被解析成「放坑道虫」类技能时,一律转成强制投放模式,60 秒内有效:重新启用已拉黑的落点、并按 COMMIT 口径放宽判定阈值"
+    deps: [F169, I65, F174, D4]
+    evidence: "用户 2026-07-26 真机:喊了两次「放坑道虫」都毫无反应;真局自验 scripts/nydus_force_drop_selftest.py(原样重放那条出错 directive)PASS"
+    status: active
+
+  - id: F169
+    title: "LLM 把「放坑道虫」解析成不存在的 ability 名,执行链静默失效"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "2026-07-26 真局:玩家两次说「放坑道虫」,LLM 输出 `cast_ability`,ability 名为 SC2 中不存在的 `NYDUSWORMLOCATION_NYDUSNETWORK`"
+    deps: []
+    evidence: "logs/server_20260726_230748.log:23:16:24 `ws_command_sent text=放坑道虫` → 23:16:26 `cast_ability_on_units: unknown ability=NYDUSWORMLOCATION_NYDUSNETWORK` + `cast 0 times`"
+    repro: "scripts/nydus_force_drop_selftest.py(mock LLM 原样重放该 directive)"
+    status: verified
+
+  - id: I65
+    title: "放坑道虫不是对单位放技能"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "「对单位释放技能」这条执行路径接不住「放坑道虫」——后者走的是带目标坐标的建筑能力"
+    deps: [F10]
+    evidence: "复核推导即可:F10 已给出该能力的形态(带坐标、目标须可见)"
+    status: verified
+
+  - id: Q11
+    title: "push=8/9 的落点可见率与驻守稳定性如何?"
+    domain: nydus-landing
+    kind: question
+    statement: "OL 外推距离取 8 或 9 时,落点的可见率与 OL 能否稳定驻守分别如何?"
+    deps: []
+    evidence: "7 与 10 都实测过(F13),9 是两者之间未经实测的插值;可测法:scripts/nydus_landing_diag.py 对 push=7/8/9/10 各跑若干局,比对落点 is_visible 比例与 OL 被迫 flee 的频次"
+    status: open
+
+  - id: F176
+    title: "python-sc2 的 Unit 没有 is_worker 属性"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "sc2.unit.Unit 不存在 is_worker 属性,且该类没有 __getattr__ 兜底(访问即 AttributeError)"
+    deps: []
+    evidence: "核实 .venv/Lib/site-packages/sc2/unit.py:dir(Unit) 的 is_* 只有 is_mine / is_mineral_field / is_carrying_minerals 等;实例访问 is_worker 抛 AttributeError。回归钉子 tests/unit/test_unit_kind.py::test_sc2_unit_really_has_no_is_worker"
+    status: verified
+
+  - id: F177
+    title: "16 处代码用这个不存在的属性判农民"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "2026-07-27 修复前:16 处用 is_worker 判单位是不是农民,其中多数写作 getattr(u, \"is_worker\", False),4 处直接访问 u.is_worker"
+    deps: []
+    evidence: "grep 结果覆盖 bc_raid_act.py / nydus.py / nydus_landing_planner.py / nydus_raid_act.py"
+    status: verified
+
+  - id: I69
+    title: "假属性让找农民的分支从没走到过"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "属性不存在时 getattr 取默认值 False、直接访问抛异常被上层吞掉,两种写法都使依赖它的农民判定恒不成立,故钻出的部队从不选农民当目标"
+    deps: [F176, F177]
+    evidence: "复核推导即可;真机对照:修前 tgt=worker 恒 0%(0/163 retarget),修后 66/133(50%)"
+    status: verified
+
+  - id: D115
+    title: "单位类别判据统一走 type_id,并加静态门禁用假属性"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "判断单位是不是农民/军队一律用引擎必有的 type_id 自组判据(bot/unit_kind.py),并加静态审计禁止全仓再出现 is_worker 属性写法"
+    deps: [I69]
+    evidence: "行为单测 + 静态门 tests/unit/test_unit_kind.py::test_no_source_uses_fake_is_worker_attribute;单靠行为单测挡不住——原来的 mock 正是按同一个假设建模才一直绿"
+    status: active
+
+  - id: F151
+    title: "高地边缘单格可放的 148 格里,3x3 全可放的只有 42 格"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "破晓黎明真机:敌方主基周围单格 in_placement_grid 的高地边缘格 148 个,其中「自身+周围 8 格全在 placement grid」的仅 42 个"
+    deps: [F11]
+    evidence: "logs/probes/2026-07-26-nydus_vision_viz.log 段①「高地边缘格 = 148 个,其中【3x3 真放得下】= 42 个」"
+    repro: "scripts/nydus_vision_viz_probe.py（真机放 OL + 逐格判定）"
+    status: verified
+
+  - id: F152
+    title: "由最外围边缘格推出的站位,其最近边缘格 5/5 可见但放不下"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "按「每扇区最外围边缘格」推出的 5 个 OL 站位,各自视野内最近的边缘格 5/5 是 is_visible=True 而 can_place(NYDUSCANAL)=False"
+    deps: [F5]
+    evidence: "logs/probes/2026-07-26-nydus_vision_viz-round1.log 段②③(OL0..OL4 逐行「有视野=True 放得下=False」;同局整圈 77 个可见边缘格中仅 13 个 can_place=True)"
+    repro: "scripts/nydus_vision_viz_probe.py"
+    status: verified
+
+  - id: F155
+    title: "存在站位其视野圈内可落格为 0"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "由最外围边缘格推出的站位中,有站位视野圈(半径 11)内可落格数 = 0,最近可落格在圈外 21 格"
+    deps: [F5, F7]
+    evidence: "logs/probes/2026-07-26-nydus_vision_viz-round1.log 段③(OL2 视野圈内 0 个可落格、最近的在 21 格外);用户看图直接指出该站位连线指向它看不见的点"
+    repro: "scripts/nydus_vision_viz_probe.py --only 1,2"
+    status: verified
+
+  - id: F153
+    title: "静态 3x3 判据对真 can_place 漏判 0、误报 6/27"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "视野内被「自身+周围 8 格都 in_placement_grid」判为可放的 27 格中,真 can_place 通过 21 个;真 can_place 通过而该判据漏判的为 0 个"
+    deps: [F2, F5]
+    evidence: "logs/probes/2026-07-26-nydus_vision_viz.log 的「静态判据校验」行"
+    repro: "scripts/nydus_vision_viz_probe.py（同局同时跑静态判据与真 can_place 对比）"
+    status: verified
+
+  - id: F154
+    title: "落点候选只扫敌方主基 18 格半径内"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "落点/站位候选的地形扫描半径固定为敌方主基周围 18 格(_SCAN_R=18)"
+    deps: []
+    evidence: "src/vibecraft/bot/auto_combat/zerg/plans/nydus_landing_planner.py `_SCAN_R = 18`;放宽后的实测见 F168"
+    status: verified
+
+  - id: I56
+    title: "最外围贴崖边缘格系统性放不下坑道虫"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "最外围那圈贴崖边缘格因周围缺可放格,系统性放不下 3x3 的坑道虫"
+    deps: [F5, F162, F151, F152]
+    evidence: "正交证据 F153(不在本节点 deps 里):改用「自身+周围 8 格」静态判据后对真 can_place 漏判 0,说明放不下的根因确实是周围缺格;原始输出见 logs/probes/2026-07-26-nydus_vision_viz.log 的「静态判据校验」行"
+    status: verified
+
+  - id: I66
+    title: "由最外围格反推站位会挑到放不下的落点"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "由「每扇区最外围边缘格」反推 OL 站位,会系统性挑到放不下坑道虫的落点"
+    deps: [I56, F152]
+    evidence: "复核推导即可:I56 说最外围格放不下,F152 实测这样推出的 5 个站位其最近格 5/5 都 place=False"
+    status: verified
+
+  - id: I57
+    title: "3x3 静态判据可作开局无视野预筛"
+    domain: nydus-landing
+    kind: inference
+    derivation: defeasible
+    statement: "F153 那条静态判据不需要视野即可算(纯 placement grid),故可在开局就预筛掉放不下的候选格,不必等 OL 飞到"
+    deps: [F153, F2, I7]
+    evidence: "仅破晓黎明一张图一局验证,跨地图未验"
+    status: unverified
+
+  - id: D99
+    title: "落点必须取自该站位视野圈∩高地的交集"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "坑道虫落点必须取自「该 OL 站位视野圈 ∩ 敌方高地边缘」的交集内;交集内没有可落格就换站位"
+    deps: [F8, F155, I66]
+    evidence: "用户 2026-07-26 看可视化图直接指出「圈外那个点它看不见、不能当落点」;后半句「交集内没有可落格就换站位」是落地时补的处置(agent)"
+    status: active
+
+  - id: D100
+    title: "站位由可落格反推,不由最外围边缘格反推"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "OL 站位改为由「3x3 可落格」反推:每扇区取最外围的可落格,顺地形下坡方向外推 push 格到低地"
+    deps: [D99, I66, I60]
+    evidence: "探针 2026-07-26 logs/probes/2026-07-26-nydus_vision_viz.log:改反推后 5/5 站位圈内均有可落格(各 2-8 个)。push 取值与其可见率的不确定性由 D1 + Q11 承载,本节点不重复"
+    status: active
+
+  - id: D101
+    title: "只用朝我方一侧的站位,不绕敌方主基"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "OL 站位只取朝我方一侧的扇区,不用那些需要绕过或穿越敌方主基才能抵达的远端扇区"
+    deps: [D3, F14]
+    evidence: "用户 2026-07-26 指图保留靠我方一侧的两个站位、去掉远端三个"
+    status: active
+
+  - id: D26
+    title: "OL 接近主基时绕行,避障半径大于主基高地半径"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "OL 接近敌主基时绕行,避障半径 22 > 主基高地半径~15,绝不穿基地中间"
+    deps: [F14]
+    evidence: "已实现(nydus.py _SendOverlordToEnemy 绕行半径 22)+ 真机效果验证中"
+    status: active
+
+  - id: D27
+    title: "OL 选离其他视野源最远那侧的隐蔽漂浮点偷看"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "OL 选离其他视野源(二矿/军队)最远那侧的隐蔽漂浮点偷看,不用大包围圈"
+    deps: [F37]
+    evidence: "已实现(nydus.py _SendOverlordToEnemy _pick_concealed_float)+ 真机效果验证中"
+    status: active
+
+  - id: D9
+    title: "佯攻狗兵力劣势则 hit-and-run 撤,不硬拼送死"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "佯攻狗兵力劣势(敌战斗单位 > 己方佯攻狗)→ hit-and-run 撤,不硬拼送死"
+    deps: [D5]
+    evidence: "已实现(feint_squad_act.py _outnumbered 提前 return，不再只看 HP<35%)+ 真机效果验证中"
+    status: active
+
+  - id: D28
+    title: "前期不收编佯攻狗,释放回防守家"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "前期(army 未装进坑道网络)不收编佯攻狗,释放回防守家"
+    deps: [D5]
+    evidence: "已实现(feint_squad_act.py _tick 提前 return，前期送狗=家没人守被早压死)+ 真机效果验证中"
+    status: active
+
+  - id: D29
+    title: "投送窗口才收编佯攻狗去引主力"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "投送窗口(nydus_wave_loaded)才收编狗去佯攻引主力"
+    deps: [D5, I9]
+    evidence: "已实现(feint_squad_act.py _drop_imminent)+ 真机效果验证中"
+    status: active
+
+  - id: D10
+    title: "主力回防后佯攻狗自适应转打最外空虚外矿"
+    domain: nydus-landing
+    kind: decision
+    by: player
+    statement: "主力回家救场(敌主基附近战斗单位 ≥ 阈值)→ 佯攻狗从「引主力(打二矿)」自适应转「真打最外面(离主基最远)已占且无防守的敌方外矿(四矿→三矿→二矿)」吃经济(punish)。这把「引出去」和「趁虚打」串成一条链:引不动就趁它回防打它空虚外矿"
+    deps: [D9, I8, I9]
+    evidence: "用户 2026-07-12 拍板 + 已实现(_get_target_anchor 自适应 pull/punish)+ 真机验证中"
+    status: active
+
+  - id: D11
+    title: "VN 必须 priority=True 才能按时建起来,不被蟑螂截胡"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "VN(all-in 命脉)必须 `GridBuilding(NYDUSNETWORK, priority=True)`:否则被 priority 蟑螂每帧 reserve 光矿(矿压<150)截胡、整局攒不够 150 建不起来(光排蟑螂前不够，因 F15 priority 才锁矿)。priority=True 后 Lair 好即 ~15s 建起，是坑道链的前置命脉"
+    deps: [F15]
+    evidence: "2026-07-13 真机复盘(用户「6:30 连坑道虫都没造出来」;telemetry VN=0 全程、矿被蟑螂压 <150、非 priority VN 攒不够 150)+ 已修 priority=True,真机验证中;坑道相关一切失败先查 VN 建没建起来"
+    status: active
+
+  # ---- open · 待定 / 未验证问题（不能当结论用）----
+  - id: Q1
+    title: "主力赖家不走到底怎么办?"
+    domain: nydus-landing
+    kind: question
+    statement: "vs 内置 AI 主力几乎永远在家（真机观察），佯攻拉不动，D4 的落点门第④条永不满足、坑道永不落"
+    deps: [I22, D4]
+    evidence: null
+    status: answered
+    answered_by: D5
+
+  - id: F27
+    title: "can_place 通过(可见+格心)则坑道虫必定钻出"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    repro: "scripts/nydus_landing_diag.py + build_acceptance nydus（telemetry building_started NYDUSCANAL）"
+    statement: "can_place(NYDUSCANAL, 可见+格心格)==BUILD_NYDUSWORM 成功：真机诊断对可见可放格心下 worm，telemetry `building_started NYDUSCANAL` 确认虫子真钻出、多局多次落地"
+    deps: [F8, F10, F35]
+    evidence: "【已终态确认】真机诊断 2026-07-12：building_started NYDUSCANAL(终态黑盒)确认(7/8 局落地，每局多次)；注意口径：整数格角 can_place=False 不代表 worm 会失败——格角本就放不下，落点 snap 格心即可(因 F35)；log: scripts/nydus_landing_diag.py 真机诊断产物 + logs/game_<id>/events.jsonl(building_started NYDUSCANAL)"
+    status: verified
+
+  - id: Q7
+    title: "坑道 all-in 成功判据是什么?"
+    domain: nydus-landing
+    kind: question
+    statement: "成功判据(用户 2026-07-13 定,后续会细化):**canal 在 5:30(≤5:00~5:30)前建成并投送成功**(坑道虫钻出 + army 灌过去)才算成功。反推链路预算:Lair ~3:30 → VN priority ~3:50 好 → 兵装好 + OL 供视野 → BUILD_NYDUSWORM → 14s 钻出 → ≤5:30。前置全靠 D11(VN 按时)+ D6/D8(OL 供视野)+ 经济(蟑螂早出)"
+    deps: [D11, D6, D8]
+    evidence: "用户 2026-07-13 定判据;当前真机 6:30 都没投出去(VN 没建),修 VN priority 后验证中"
+    status: open
+
+  # ==================================================================
+  # domain: mass-reaper —— 人族爆死神 build 运营 + 死神骚扰微操
+  # ==================================================================
+
+  # ---- fact · 实测 / 引擎事实 ----
+  - id: F16
+    title: "死神 build 只开 3 矿时矿/气飘到 36421+、prod_util≈0.99"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_efficiency.py <telemetry>:只开 3 矿的 mass_reaper 局 minerals 飘到 36421、gas 同飘、prod_util≈0.99"
+    statement: "真机 mass_reaper build 只开 3 矿时 minerals 一路飘到 36421、gas 同步囤积、prod_util≈0.99(收入花不掉、持续堆积)"
+    deps: []
+    evidence: "真机 telemetry(矿飘 36421、gas 同飘、prod_util 0.99)；log: scripts/build_efficiency.py 读 logs/game_<id>/telemetry.jsonl"
+    status: verified
+
+  - id: F17
+    title: "死神产能利用率≈0.99但存活净增仅+1/min"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "scripts/build_efficiency.py score <telemetry>（真机 prod_util）"
+    statement: "真机 `prod_util≈0.99`(兵营几乎满负荷在产死神),但存活死神净增仅 ~+1/min(产 ~9 只/min),数量攒不起来"
+    deps: []
+    evidence: "真机 build_efficiency prod_util=0.9873;telemetry 死神数 vs 兵营数长期背离；log: scripts/build_efficiency.py 读 logs/game_<id>/telemetry.jsonl"
+    status: verified
+
+  - id: F18
+    title: "move 命令会打断正在进行的 attack 前摇"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-game
+    statement: "SC2 引擎:单位收到 move 命令会打断正在进行的 attack 前摇(攻击未出手即被取消)"
+    deps: []
+    evidence: "真机:旧逻辑 46 分钟 harassed=0(attacks 发了一堆);改攻击优先(D12)后 harassed 0→26"
+    status: verified
+
+  - id: I23
+    title: "每帧发撤退 move 会使死神一枪打不出,harassed 恒 0"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "骚扰微操每帧发撤退 move → attack 前摇永被打断、一枪打不出 → harassed 恒 0"
+    deps: [F18]
+    evidence: "真机:旧逻辑 46 分钟 harassed=0(attacks 发了一堆);改攻击优先(D12)后 harassed 0→26"
+    status: verified
+
+  # ---- decision · 微操 / 运营决策 ----
+  - id: D12
+    title: "死神攻击优先:武器好必须开火,只在冷却帧后撤"
+    domain: mass-reaper
+    kind: decision
+    by: agent
+    statement: "stutter-step 铁律:**武器好 + 射程内有农民 → 必须开火**,绝不用撤退把这一枪前摇取消;只在**冷却帧**才走位后撤。这样每次武器一好就打一枪、打完立刻撤 = 真·风筝"
+    deps: [F18]
+    evidence: "真机 harassed 0→26;24 单测覆盖；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper harass 回归)"
+    status: inactive
+
+  - id: D13
+    title: "死神双模式走位:有敌军 attack-move 拉扯,无敌军 move 精准够农民"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "双模式走位,按「有没有敌方部队」分:**有敌军 → attack-move 跟它拉扯对打**(reaper 射程+速度优势 kite 军队);**兵少/没兵 → 重点关照农民、用 `move`(非 attack-move)精准够农民**(不被沿途军队/建筑带偏白打)"
+    deps: [F18, D12]
+    evidence: "用户拍板 + 真机 harass 1→26、vs VeryEasy Defeat→Victory(之前成群死神贴 22 农民却只 harass 1,全 attack-move 撞敌军)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs veryeasy)"
+    status: inactive
+
+  - id: D14
+    title: "死神撤退方向 = 远离攻击者质心+朝家偏置+扇形校验,非纯反方向"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "两条被围撤退规则:① **有单位靠近就退、不等挨打**(≥3 农民扑到 3 格内触发被围撤退;区分扑脸农民 vs 采矿农民——采矿农民在死神维持 5 射程时够不到 3 格,不误触发);② 撤退方向**不是最近攻击者的纯反方向**(会退进死角卡死)——改**远离攻击者质心 + 朝家偏置 + 可走扇形校验**(落点不可走就 ±25/50/80/110° 转着找能走的),『攻击者来自家方向』时丢弃朝家偏置"
+    deps: [D12]
+    evidence: "用户 2026-07-13 观察 + 已实现(_retreat_pos)+ 24 单测 + 真机 Victory；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper harass 回归)"
+    status: inactive
+
+  - id: D15
+    title: "死神数量<5 集结待命,≥5 才成群骚扰(攒够再打)"
+    domain: mass-reaper
+    kind: decision
+    by: agent
+    statement: "存活死神 < 5 → **前沿集结点待命不裸送**(集结点 = 自家出生点朝敌方主基前移 15 格,两端固定 → 确定性不漂移);≥5 才投入成群骚扰;被打到 ≤2 撤回重攒(滞回防抖)"
+    deps: [I13]
+    evidence: "真机 reaper_mass 4→17(死神攒得起来了)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper harass 回归) + logs/game_<id>/telemetry.jsonl"
+    status: inactive
+
+  - id: D16
+    title: "多余矿花在开矿/开气/扩兵营(随基地数 scale)"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "矿存 >400 且**无在建 CC** → 再开一矿(一次一个,滚到 6 矿);气随基地 scale(3 矿→6 口气、4 矿→8 口气);兵营随气 scale(4 气→5、6 气→7)。多矿=多气=多死神=矿花得掉的良性循环"
+    deps: [I12]
+    evidence: "用户规格『多余矿开新矿/开气/扩张』;真机到 5 矿(矿飘从只开 3 矿囤死改善);vs VeryHard 胜率验证中"
+    status: active
+
+  # ---- open · 待定 ----
+  - id: Q4
+    title: "爆死神 all-in 能不能赢 VeryHard?"
+    domain: mass-reaper
+    kind: question
+    statement: "爆死神 all-in 能不能赢 VeryHard?**重新开放**:早先『打不破=转型域天花板』的判断被 I16 推翻(真根因是 build 坏、非战略天花板);D20 放手攒军队后 vs Medium 0/6→6/6、Hard 已破 0 → VeryHard 攒成军队后待测"
+    deps: [D13, D15, D16, I16, D20]
+    evidence: "反向审查:F24/D20 证明输是 build 坏(可修)非天花板;基线全 0/6、修后 Medium 6/6"
+    status: open
+
+  - id: F19
+    title: "死神脱战自动回血且速率高"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-game
+    statement: "死神脱离战斗即自动回血(regen)且速率高——伤员退出交火一小步即可回满血再投入(不真死)"
+    deps: []
+    evidence: "SC2 引擎机制(reaper out-of-combat regen);用户 2026-07-13 强调回复快"
+    status: verified
+
+  - id: D17
+    title: "死神数量占优(≥1.3倍)时压制不后撤,劣势才标准 kite"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "数量占优判据:我方死神数 ≥ 视野内敌方战斗单位数 × 1.3 → **压制不后撤**(武器冷却也不走位后撤,战损靠数量 + 快速回血扛),只让**个体低血的退一步回血再回**(_retreat_pos 后撤 5 格、脱战 regen 满就回、**不撤回家**);劣势才标准 kite"
+    deps: [I14, D13]
+    evidence: "动机『既要保命、又不能撤太快降战斗力』(用户 2026-07-13);已实现(harass_act group_advantage)+ 27 单测;真机正面对抗效果验证中；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper harass 回归)"
+    status: inactive
+
+  - id: D18
+    title: "三矿后余钱补步兵攻防(强化本兵种,非转兵种战略)"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "**三矿前纯爆死神**(一分钱不分给科技);开到 3 矿以上、余钱多了 → 补 Engineering Bay + Armory 研**步兵攻防 +1/+1→+2/+2**(死神是轻甲步兵直接吃)。这是**强化死神本兵种、不是转兵种战略**,直接写进 build 合规;**真正转枪兵/生化**是兵种战略切换,仍走**玩家确认的 lategame_transition**(persistent_bio_max),遵『没确认不自动切兵种』⛔ 铁律"
+    deps: [I12]
+    evidence: "用户 2026-07-13 拍板:三矿前纯爆死神(一分钱不分给科技);已实现(gate townhalls.ready>=3);真机升级完成时序验证中"
+    status: active
+
+  # ---- open · 待定 ----
+  - id: Q5
+    title: "死神怎么多线骚扰找以多打少占便宜?"
+    domain: mass-reaper
+    kind: question
+    statement: "开放问题:死神**纯骚扰(不攒军队)**能否靠选目标/走位/积累数量打破 VeryHard?多版实测 vs VeryHard **harassed 恒 0**——死神到得了软基地边缘(dmin 10-21)但 attacks≈0,**VeryHard 封矿口+全基地防守、死神 `move` 够不到墙内农民**。倾向:纯骚扰打不破强防守(D20 证明真正见效的是放手攒成军队);跳崖绕墙(D19)与多线拆队未系统验"
+    deps: [D13, I14, D19]
+    evidence: "用户 2026-07-13『骚扰路线要讲究、多线、找以多打少;用死神速度+回复优势穿插矿区、掉血逃回血再来,别硬打正面』;6 版真机全 harassed=0 vs VeryHard(worker-snipe/软目标/mobility/dip重排/攒16→26);vs VeryEasy 强(harass 25-26、3胜1负)。诊断:dmin 10-21 够边缘但 attacks≈0、封墙够不到。→ 未试的正解=D19 跳崖绕墙"
+    status: open
+
+  # ==================================================================
+  # 基础属性 fact(env-game)——单位引擎属性,上层引用这里别复述(2026-07-13 用户:抽基础 fact 再引用一层)
+  # ==================================================================
+  - id: F20
+    title: "死神基础属性:50矿50气1供应,移速快,脱战回血,可跳崖,KD-8手雷"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-game
+    statement: "Reaper 引擎属性:50矿+50气、1供应、建造32s(faster)、移速快、脱战自动回血(regen)、能上下悬崖/跨断崖(cliff-jump)、KD-8手雷(击退);矿:气=1:1"
+    deps: []
+    evidence: "SC2 单位数据 + Liquipedia Reaper;脱战回血/跳崖为 reaper 招牌机制"
+    status: verified
+
+  - id: F21
+    title: "OL 基础属性:飞行/视野11/慢速/可运兵/可 morph 监视王"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-game
+    statement: "Overlord 引擎属性:飞行单位、视野 sight=11、移速慢、可运兵(装载)、可 morph 成监视王(哨兵)"
+    deps: []
+    evidence: "SC2 单位数据 + 探针实测(F7 vision=11、F9 空军看高地)"
+    status: verified
+
+  - id: F22
+    title: "unit.move 发 MOVE_MOVE 交由引擎寻路"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "unit.move(pos) = 发 AbilityId.MOVE_MOVE 给引擎,寻路由游戏引擎用单位自身能力执行(sc2/unit.py:1490)"
+    deps: []
+    evidence: "sc2/unit.py:1490 move 只发 MOVE_MOVE ability 给引擎"
+    status: verified
+
+  - id: F39
+    title: "in_pathing_grid/query_pathing 是 bot 侧地面栅格查询,不是引擎执行路径"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "in_pathing_grid / query_pathing 是 bot 侧地面栅格查询(不含悬崖),≠ move 执行时引擎用的路径"
+    deps: []
+    evidence: "query_pathing(client.py:247)是 bot 侧地面查询、非 move 执行路径;2026-07-13 曾误用 in_pathing_grid 地面栅格望文生义判定 move 不跳崖、被用户质疑纠正"
+    status: verified
+
+  - id: I24
+    title: "reaper move 到崖对面引擎自动跳过去,原生支持跳崖"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "move 由引擎能力寻路(F22) ∧ reaper 引擎寻路含跳崖(F20) → reaper move 到崖对面引擎自动跳过去,原生支持跳崖、不需自定义悬崖寻路"
+    deps: [F22, F39, F20]
+    evidence: "真机行为观察(见 D19):死神收到跨崖 move 后确实自动越过悬崖到达对面,跳崖机制本身生效(D19 未起效的根因是目标点选得不好,非跳崖能力缺失)"
+    status: verified
+
+  - id: F23
+    title: "ZoneManager.expansion_zones 可拿到敌方各基地+防守/农民数据"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "knowledge.get_required_manager(ZoneManager).expansion_zones = 全地图 Zone 列表(敌+我+中立)。每个 Zone 暴露:is_enemys/is_ours(归属)、enemy_workers(Units,该基地敌农民)、known_enemy_power(ExtendedPower,.ground_power/.air_power/.power 是战斗力数值)、mineral_line_center(矿线正面中心)、behind_mineral_position_center(矿线背后悬崖侧点)、center_location"
+    deps: []
+    evidence: "vendor/sharpy/sharpy/general/zone.py(is_enemys/enemy_workers/known_enemy_power/mineral_line_center/behind_mineral_position_center)+ 本会话 _pick_harass_target 真机用它选到 def_ground/workers 各异的基地(HARASSTARGET 日志);用法:选『有农民、防守最弱的敌方基地』做骚扰/侦查目标就靠这些字段(bc_raid_act 打矿后点也用它)"
+    status: verified
+
+  - id: D19
+    title: "死神跳崖切矿区背后农民(实现选点不佳,未起效,待重做)"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "用死神跳崖从矿区背后切 VeryHard 封矿口内农民(跳崖原生支持 F22/I24);简单实现(harass 目标=Zone.behind_mineral_position_center)实测未起效、已搁置待重做"
+    deps: [F20, I24]
+    evidence: "动机『死神能上下斜坡,用起来』(用户 2026-07-13)。跳崖原生支持=F22(unit.py:1490 move→MOVE_MOVE);behind_mineral 实测没起效,根因非跳崖机制而是目标点选得不好(矿后点≠农民所在)+ harass vs VeryEasy 高方差在追噪声(2026-07-13 用户质疑纠正我的错判)。重做需:选对目标(直接给矿线让 reaper 自己跳进去)+ 低方差判据验"
+    status: inactive
+    # 注:Q5→D19(问题指向候选解,同 Q1→D5 惯例),避免环
+
+  - id: F24
+    title: "baseline 爆死神 vs Medium/Hard/VeryHard 全 0/6"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance mass_reaper --opponent medium/hard/veryhard --runs 6(基线 0/6);telemetry production busy=8 但 REAPER 卡 2-9、gas 飘 1000+、末 army=0"
+    statement: "baseline mass_reaper 真机(2026-07-13):8 兵营满负荷产死神(~15 只/min,production busy=8),但 REAPER count 卡 **2-9**、gas/矿飘到几千、末 army=0;vs Medium/Hard/VeryHard **全 0/6**,只赢 VeryEasy"
+    deps: []
+    evidence: "真机 6局×3档(Medium/Hard/VeryHard)全 0/6 + telemetry(production busy=8/REAPER卡2-9/gas飘/末army=0)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs medium/hard/veryhard)"
+    status: verified
+
+  - id: D20
+    title: "死神骚扰设 release_after=240,到点放手攒军队"
+    domain: mass-reaper
+    kind: decision
+    by: agent
+    statement: "给 HarassWorkerLineAct 设 `release_after=240`:死神只骚扰**前 4 分钟**(早期压制),到点放手 → 不再 Reserved,交回 PlanZoneDefense/Gather/Attack **攒成死神军队**防守家 + 够强再一波推。判据:修 F29 的全-reserve-送死"
+    deps: [F29, I16]
+    evidence: "真机 vs Medium 6/6(基线0/6)、死神峰值 30-118(基线5-12);vs Hard 0-1/6(高方差、基本负)、VeryHard 0/6;autonomous 迭代 v1 2026-07-13"
+    status: active
+
+  - id: F25
+    title: "GenericMicro 血低/冷却中才后撤,基础 stutter-step kite"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "sharpy GenericMicro.should_retreat = weapon_cooldown<0 或 health_percentage<0.3 时后撤(基础 stutter-step kite)"
+    deps: []
+    evidence: "读源码 vendor/sharpy/sharpy/combat/generic_micro.py 2026-07-13"
+    status: verified
+
+  - id: F42
+    title: "sharpy 自带 MicroReaper(躲雷/扔雷/血低才退)"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "sharpy 自带 MicroReaper(躲己方KD8 / 对6格内聚集敌军扔KD8 AoE减速 / run_percentage=0.15 血<15%才退,其余走 GenericMicro)"
+    deps: []
+    evidence: "读源码 vendor/sharpy/sharpy/combat/terran/micro_reaper.py 2026-07-13"
+    status: verified
+
+  - id: F43
+    title: "sharpy 默认未注册 REAPER micro"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "sharpy default_rules.load_default_micro() 默认未注册 REAPER micro"
+    deps: []
+    evidence: "读源码 vendor/sharpy/sharpy/combat/micro_rules.py 2026-07-13"
+    status: verified
+
+  - id: I25
+    title: "死神打仗从不扔手雷,只走 generic 基础 kite"
+    domain: mass-reaper
+    kind: inference
+    derivation: deductive
+    statement: "MicroReaper 存在(F42) ∧ 默认未注册(F43) → 死神打仗从不扔手雷,只走 generic 基础 kite(F25)"
+    deps: [F25, F42, F43]
+    evidence: null
+    status: verified
+
+  - id: F26
+    title: "GroupCombatManager.rules 要 execute() 才赋值,on_start 时不存在"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "GroupCombatManager.rules 要 execute() 才赋值(vendor group_combat_manager.py:99),on_start 时不存在"
+    deps: []
+    evidence: "读 vendor group_combat_manager.py:99 / micro_step.py:57;2026-07-13;真机 game log grep '注入失败' → WARNING 'GroupCombatManager' object has no attribute 'rules';改 default_rules 后 grep 'engaged_power' → 每帧 AttributeError 刷屏(768次/局)"
+    status: verified
+
+  - id: I26
+    title: "神族 DT/Zealot 自定义 micro 自 2026-05-19 从没真跑"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "on_start 用 self.combat.rules 注册 micro → rules 不存在抛 AttributeError 被 except 吞成 warning → 神族 DT/Zealot 自定义 micro 自 2026-05-19 从没真跑"
+    deps: [F26]
+    evidence: "真机 warning log 实锤;修复会顺带激活沉睡的神族 micro(需独立回归)故本次只记录 bug、未上线修复(见 pitfalls 2026-07-13)"
+    status: verified
+
+  - id: F40
+    title: "正确注册 micro 须改 default_rules 且 await inst.start"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-api
+    statement: "正确注册 micro:目标改 default_rules + new 的 micro 实例须 await inst.start(knowledge)(否则缺 engaged_power/cache/pather 每帧崩)"
+    deps: []
+    evidence: "读 vendor group_combat_manager.py / micro_step.py 2026-07-13"
+    status: verified
+
+  - id: D21
+    title: "注册 MicroReaper 提升死神胜率的尝试(已回退)"
+    domain: mass-reaper
+    kind: decision
+    by: agent
+    statement: "给死神注册 sharpy MicroReaper(KD8手雷+kite)以提升军队胜率——已回退"
+    deps: [D20, I25, F26]
+    evidence: "判据:autonomous 迭代『军队 kite』杠杆(先撞 F26 注入 bug、修 default_rules+await start 才真生效);已回退:common_bot 整块 revert 到 HEAD;真机 vs Medium 6局 3胜3负(D20基线6/6)、vs Hard 6局0/6;2026-07-13 autonomous 迭代 v2,已 revert；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs medium/hard)"
+    status: inactive
+
+  - id: D22
+    title: "爆死神自主优化边界:上限 Medium 6/6,破 Hard+ 需转兵种战略"
+    domain: mass-reaper
+    kind: decision
+    by: agent
+    statement: "决定:自主优化到此为止,接受**自主胜率上限 = Medium 6/6**;破 Hard+ 需转兵种组合(死神→生化/机械),按 ⛔ 铁律**转兵种战略须玩家确认**、超出自主范围"
+    deps: [I17, I19]
+    evidence: "用户 2026-07-13『迭代到无法提升即可、不用强求』;D20(Medium 6/6)+ D21(微操杠杆耗尽)+ ⛔铁律(转兵种需玩家确认,CLAUDE.md)"
+    status: active
+
+  - id: D23
+    title: "玩家指定 3/3 步兵攻防"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "玩家指定 3/3 步兵攻防(在 D18 的 +2/+2 基础上推到 +3/+3)"
+    deps: [D18]
+    evidence: "玩家 2026-07-14 指定;build_acceptance mass_reaper 两轮各6局 vs medium/hard/veryhard(2026-07-14);telemetry:只完成 INFANTRY*LEVEL1;Fable5 战术评审"
+    status: active
+
+  - id: D30
+    title: "敌走空则 latch 补防空三件套,堵『敌走空=必败』分支"
+    domain: mass-reaper
+    kind: decision
+    by: player
+    statement: "敌走空(死神纯对地)→ 触发后补防空三件套(枪兵跟军队+提前EB+每基地矿后导弹炮塔,全防御建筑非转兵种),堵『敌走空=必败』"
+    deps: [D22]
+    evidence: "玩家 2026-07-14 指定;build_acceptance mass_reaper 两轮各6局 vs medium/hard/veryhard(2026-07-14);telemetry:炮塔per-base建出、枪兵latch触发、Medium 6/6(5空军局全胜)、Hard 0/6(遇空军建炮塔仍负);Fable5 战术评审"
+    status: active
+
+  # ==================================================================
+  # 原子重构节点(2026-07-14 批:把 F16/F17/F19/F24/D20-D23 等调试会话总结体
+  # 拆成原子 fact + 显式 inference,推理住进边里可被反向审查)
+  # ==================================================================
+
+  # ---- 由 F16(矿飘)拆出:隐藏前提 + 推论 ----
+  - id: F28
+    title: "标准运营下气采集速率结构性低于矿"
+    domain: mass-reaper
+    kind: fact
+    provenance: env-game
+    statement: "标准运营下单基地气采集速率结构性低于矿采集速率(每基地气产出有上限,气比矿稀缺)"
+    deps: []
+    evidence: "SC2 标准经济:每基地气矿点数/饱和上限使气 income 恒低于矿 income"
+    status: verified
+
+  - id: I12
+    title: "气瓶颈导致死神 build 矿花不掉持续飘到几万"
+    domain: mass-reaper
+    kind: inference
+    derivation: deductive
+    statement: "死神造价矿:气=1:1(F20) ∧ 气采集慢于矿(F28) → 气是死神产量瓶颈,矿花不掉持续堆积(气受限、矿花不掉而堆积)"
+    deps: [F20, F28]
+    evidence: "F20 造价 + F28 气瓶颈的演绎;真机 F16 矿飘 36421 佐证"
+    status: verified
+
+  # ---- 由 F17(产能)拆出:推论 ----
+  - id: I13
+    title: "死神数量上不去不是产能问题,是 solo 送死攒不起来"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "兵营满负荷产死神但存活数净增极低(F17) → 死神产量瓶颈不是产能,而是死神单打独斗/落单扎进敌军送死、攒不起来"
+    deps: [F17]
+    evidence: "prod_util≈0.99 与死神净增 +1/min 并存 → 死神在产出后大量阵亡"
+    status: verified
+
+  # ---- 由 F19(回血)拆出:质变战斗力推论 ----
+  - id: I14
+    title: "脱战快速回血是死神数量质变战斗力的底层原因"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "死神脱战快速回血(F19) → 数量多时战损率结构性下降(伤员退回血再战、不真死)+ 骚扰持续在线,是『积累数量有质变收益』的底层原因"
+    deps: [F19]
+    evidence: "regen 快 → 受伤单位可循环回场;用户 2026-07-13 强调这是攒数量有质变收益的原因"
+    status: verified
+
+  # ---- 由 F24(baseline 输)拆出:own-code 事实 + 因果链 + 结论 ----
+  - id: F29
+    title: "baseline HarassWorkerLineAct 把死神永久 Reserve 去骚扰"
+    domain: mass-reaper
+    kind: fact
+    provenance: own-code
+    statement: "baseline mass_reaper 的 HarassWorkerLineAct 把所有死神每帧永久 Reserve 去骚扰(无 release_after)"
+    deps: []
+    evidence: "读 mass_reaper plan / HarassWorkerLineAct:无 release,死神恒 Reserved"
+    status: verified
+
+  - id: I15
+    title: "死神全去骚扰导致攒不成军队、家被一波推空"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "所有死神永久 Reserve 去骚扰(F29) ∧ 产能满负荷但 REAPER count 卡低、末 army=0(F24) → 死神产出即送死、攒不成军队、家里空、被一波推空家(bases 崩)"
+    deps: [F29, F24]
+    evidence: "code 行为 F29 + telemetry F24(count 卡 2-9/末 army=0)推出的因果链"
+    status: verified
+
+  - id: I16
+    title: "爆死神连 Medium 都输的真根因是 build 坏,非打不过 AI"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "baseline 全-reserve-骚扰导致攒不成军队被推空家(I15) → 输的真根因是 build 坏(死神不攒军队),不是『打不过强 AI』"
+    deps: [I15]
+    evidence: "I15 的因果链把『连 Medium 都 0/6』归因到 build 坏(可修)而非战略天花板"
+    status: verified
+
+  # ---- 由 D20(release_after)拆出:效果实测 + 质变印证 ----
+  - id: F30
+    title: "release_after=240 使 vs Medium 由 0/6 升到 6/6"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance mass_reaper --opponent medium/hard/veryhard --runs 6(release_after=240 版)"
+    statement: "设 release_after=240 后真机 vs Medium 由 0/6 变 6/6 Victory、死神峰值从 5-12 攒到 30-118;vs Hard 0-1/6、VeryHard 0/6"
+    deps: [D20]
+    evidence: "autonomous 迭代 v1 2026-07-13:vs Medium 6/6(基线0/6)、死神峰值30-118(基线5-12)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs medium)"
+    status: verified
+
+  - id: I17
+    title: "死神胜率质变来自放手攒成军队,非花哨微操"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "release_after 放手后死神攒成 30-118 军队、Medium 由 0/6 升到 6/6(F30) → 印证『死神积累数量才有质变战斗力』;质变来自放手攒成军队,非花哨 harass 微操"
+    deps: [F30]
+    evidence: "对照:花哨 harass 微操版本都回退了,见效的是放手攒军队(F30)"
+    status: verified
+
+  # ---- 由 D21(MicroReaper)拆出:效果实测 + 有害推论 ----
+  - id: F31
+    title: "MicroReaper 使 vs Medium 从 6/6 回归到 3/6"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "common_bot 注册 MicroReaper 版 build_acceptance mass_reaper --opponent medium/hard --runs 6"
+    statement: "注册 MicroReaper 后真机 vs Medium 由 6/6 回归到 3/6、vs Hard 仍 0/6 无改善"
+    deps: [D21]
+    evidence: "真机 vs Medium 6局 3胜3负(D20基线6/6)、vs Hard 6局0/6;2026-07-13 v2,已 revert；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs medium/hard)"
+    status: verified
+
+  - id: I18
+    title: "军队 kite 微操(MicroReaper)有害无益,救不了兵种硬克"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "MicroReaper 血<15% 才退(F42)使死神在硬克战里待太久多送死、破坏 D20 放手攒军队、招致 vs Medium 回归(F31) → MicroReaper 有害无益,微操救不了死神军队正面被 Hard 坦克/AoE 兵种硬克"
+    deps: [I25, F31, D20]
+    evidence: "run_percentage=0.15(F42)+ Medium 回归(F31)→ 微操无法弥补兵种硬克"
+    status: verified
+
+  # ---- 由 D22(边界)拆出:轻甲硬克实测 + 兵种天花板推论 ----
+  - id: F32
+    title: "纯死神军队 vs Hard/VeryHard 仍 0-1/6,正面遇坦克/AoE 秒崩"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance mass_reaper --opponent hard/veryhard --runs 6;telemetry 死神峰值41-118、遭遇战 68→3"
+    statement: "纯轻甲死神军队(峰值 41-118)vs Hard/VeryHard 仍 0-1/6,正面遇 Hard 混编坦克/AoE 从 68 只秒崩到 3"
+    deps: []
+    evidence: "真机 vs Hard/VeryHard 0-1/6 + telemetry(死神峰值41-118、遭遇战瞬崩)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs hard/veryhard)"
+    status: verified
+
+  - id: I19
+    title: "爆死神打不破 Hard/VeryHard 是兵种组合天花板,非杠杆可破"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "死神纯轻甲、正面被 Hard 坦克/AoE 硬克秒崩(F32) ∧ 经济/timing/微操杠杆全试过仍 0-1/6(I17,I18) → Hard+ 是兵种组合天花板,非经济/timing/微操可破;破 Hard+ 唯一路=转兵种组合(死神转生化/机械)"
+    deps: [F32, I17, I18]
+    evidence: "轻甲硬克实测(F32)+ 自主杠杆耗尽(I17质变已达/I18微操无效)→ 天花板归因兵种组合"
+    status: verified
+
+  # ---- 由 D23(3/3+防空)拆出:胜率实测 + 防空生效实测 + 输在地面推论 + 强化天花板推论 ----
+  - id: F33
+    title: "3/3+防空胜率实测与基线基本持平,无实质提升"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance mass_reaper --opponent medium/hard/veryhard --runs 6 ×2轮(枪兵only / 枪兵+炮塔),2026-07-14"
+    statement: "两轮 build_acceptance 各6局:枪兵only 组 VeryHard 0/5·Hard 1/6·Medium 5/6;枪兵+炮塔组 VeryHard 1/6·Hard 0/6·Medium 6/6(与基线基本持平)"
+    deps: [D23, D30]
+    evidence: "build_acceptance mass_reaper 两轮各6局 vs medium/hard/veryhard(2026-07-14)；log: scripts/build_acceptance.py 回归产物 logs/build_acceptance/(mass_reaper vs medium/hard/veryhard)"
+    status: verified
+
+  - id: F34
+    title: "防空三件套真机生效:炮塔建出+枪兵出+无回归"
+    domain: mass-reaper
+    kind: fact
+    provenance: empirical
+    repro: "build_acceptance mass_reaper(2026-07-14 防空版)真机终态:telemetry 炮塔 per-base 计数、枪兵 latch、DefensiveBuilding 状态"
+    statement: "真机终态:防空三件套都生效/都正常工作——遇空军的局建出导弹炮塔 6-29 个 + 出枪兵、DefensiveBuilding 不崩、无空军局零触发无回归、Medium 5 个空军局全胜"
+    deps: [D30]
+    evidence: "telemetry:炮塔per-base建出6-29、枪兵latch触发、无空军局零触发、Medium 5空军局全胜；log: logs/game_<id>/telemetry.jsonl(炮塔per-base/枪兵latch/DefensiveBuilding)"
+    status: verified
+
+  - id: I20
+    title: "防空守住『空』维但胜率不动,Hard+ 真正输在『地』面"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "防空守住空维(F34)但胜率不动(F33) → Hard/VeryHard 输在地面兵种硬克,非空维"
+    deps: [F33, F34]
+    evidence: "防空生效(F34)与胜率不动(F33)并存 → 瓶颈在地面兵种硬克、非空维;5/6 Hard 局遇空军都建炮塔仍全负、坦克/AoE 地面碾过;3/3 对 Hard+ 惰性(死神中期崩、只完成 L1)"
+    status: verified
+
+  - id: I21
+    title: "防空补不上兵种硬克天花板,自主杠杆已穷尽"
+    domain: mass-reaper
+    kind: inference
+    derivation: defeasible
+    statement: "防空补不了地面组合硬克(I20) → 强化 D22 兵种硬克天花板:经济/timing/微操/防空自主杠杆全穷尽;防空值得留(堵『敌走空=必败』、零回归)但非 Hard+ 胜率杠杆"
+    deps: [I20, I19]
+    evidence: "防空作为第4个自主杠杆仍不动 Hard+ 胜率 → 加固 I19 的兵种组合天花板结论"
+    status: verified
+
+  # ==================================================================
+  # domain: zvp-macro-opt —— zvp_macro build 胜率优化(2026-07-16 起)
+  # ==================================================================
+  - id: Q6
+    kind: question
+    domain: zvp-macro-opt
+    status: answered
+    answered_by: F48
+    title: "zvp_macro vs VeryHard 胜率靠调 plan/core_units 能自主提升到哪里为止?"
+    statement: "zvp_macro(从未优化)vs VeryHard 的胜率能提升到什么程度、瓶颈在哪、何时涨不动?"
+    deps: []
+    evidence: "答:降暴农一处(D31)即从 0/3 → 6/6(100%,到天花板);见 F48"
+
+  - id: F44
+    kind: fact
+    provenance: empirical
+    domain: zvp-macro-opt
+    status: verified
+    title: "zvp_macro 沙盒经济健康:bank 201、larva_idle 0.01、唯一短板 supply_block 31s"
+    statement: "veryeasy 沙盒 900s:avg_excess_bank 201、avg_larva_idle 0.01、supply_block 31.2s(worst=supply)"
+    deps: []
+    evidence: "logs/eff_zvp_macro_s1_1784212175_2800_8984/telemetry.jsonl"
+    repro: "build_efficiency.py run zvp_macro --seeds 1 --opponent veryeasy --seconds 900"
+
+  - id: F45
+    kind: fact
+    provenance: empirical
+    domain: zvp-macro-opt
+    status: verified
+    title: "zvp_macro vs VeryHard 3局全败,军队严重落后(5:30 army值 97 vs 敌 300)"
+    statement: "3局 VeryHard 全 Defeat;5:30 我方 army 值 97 vs 敌 300;supply 峰值仅 66"
+    deps: []
+    evidence: "logs/build_acceptance/zvp_macro_veryhard_20260716_223156.txt"
+    repro: "build_acceptance.py zvp_macro --runs 3 --parallel 3 --opponent veryhard"
+
+  - id: F46
+    kind: fact
+    provenance: empirical
+    domain: zvp-macro-opt
+    status: verified
+    title: "蜂后严重迟到:首个 321s 才出(pool 125s 已好),queen_pair@240s=0/3"
+    statement: "telemetry:QUEEN=0 直到 t=321s;pool 125s 完工;minerals 长期贴 0"
+    deps: []
+    evidence: "logs/game_20260716_223030_20196_e10e0f/telemetry.jsonl(t=321 首个 QUEEN);build_acceptance queen_pair 0/3"
+    repro: "解析该 telemetry snapshot 序列:首个 QUEEN 出现在 t≈321"
+
+  - id: F47
+    kind: fact
+    provenance: empirical
+    domain: zvp-macro-opt
+    status: verified
+    title: "zvp_macro 峰值 DRONE 62、armySup 仅 48(农民数远超军队供给)"
+    statement: "t=429 峰值:DRONE 62、armySup 48;农民数远超军队供给"
+    deps: []
+    evidence: "logs/game_20260716_223030_20196_e10e0f/telemetry.jsonl(t=429 DRONE 62/armySup 48)"
+    repro: "解析该 telemetry:t≈429 DRONE 62 armySup 48"
+
+  - id: I27
+    kind: inference
+    derivation: defeasible
+    domain: zvp-macro-opt
+    status: verified
+    title: "hatch-first 过贪 + 过度暴农 → 军队成型太慢,被 VeryHard 时机一波打死"
+    statement: "larva/矿被农民+扩张占满 → 蜂后/蟑螂军队远晚于敌方时机 → 军队没成型就被压死"
+    deps: [F45, F46, F47, F54]
+    evidence: "三条实测叠加:军队落后 F45 + 蜂后迟到 F46 + 农民超军队 F47;机制为经验归纳非演绎;drone 目标 66 > F54 饱和线 48"
+
+  - id: D31
+    kind: decision
+    by: agent
+    domain: zvp-macro-opt
+    status: active
+    title: "首次优化:降前期暴农(drone 24→20、66→48)让 larva 更早流向蟑螂军队"
+    statement: "降 plan 两处 drone 目标(parallel 24→20、mid 66→48=base×16),空出 larva/矿更早转军队提高存活"
+    deps: [I27]
+    targets: [Q6]
+    evidence: "已验证有效:改后 6/6 全胜(F48);单此一处即到胜率天花板"
+
+  - id: F48
+    kind: fact
+    provenance: empirical
+    domain: zvp-macro-opt
+    status: verified
+    title: "D31 改后 vs VeryHard 6/6 全胜(baseline 0/3),军队及时成型"
+    statement: "降暴农(D31)后 2×3 局 VeryHard 全 Victory(6/6);supply 峰值 66→200、roach 38、attack 出门 335s;queen_pair/spore 仍 0/3"
+    deps: []
+    evidence: "logs/game_20260716_2240*(3V)+ _2245*(3V);build_acceptance zvp_macro --runs 3 --opponent veryhard ×2"
+    repro: "build_acceptance.py zvp_macro --runs 3 --parallel 3 --opponent veryhard(跑 2 轮共 6 局)"
+
+  # ==================================================================
+  # domain: doctrine-reopt —— brood/ultralisk doctrine re-opt(2026-07-16)
+  # ==================================================================
+  - id: F49
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "brood_corruptor 经 roach_hydra 实测 bank 233、larva 0.04(健康,§10 的 1311 不复现)"
+    statement: "build_efficiency run roach_hydra --auto-switch-to persistent_brood_corruptor:avg_excess_bank 233、avg_larva_idle 0.04、supply_block 24.5s"
+    deps: []
+    evidence: "logs/eff_roach_hydra_TO_persistent_brood_corruptor_s1_1784213487_26796_3092/telemetry.jsonl;method-log 无 brood 测法记录"
+    repro: "build_efficiency.py run roach_hydra --auto-switch-to persistent_brood_corruptor --seeds 1 --opponent veryeasy --seconds 900"
+
+  - id: F50
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "ultralisk 经 macro_hatch 实测 bank 486、larva_idle 2.76(larva 大量闲置=真问题)"
+    statement: "build_efficiency run macro_hatch --auto-switch-to persistent_ultralisk:avg_excess_bank 486、avg_larva_idle 2.76、supply_block 40s"
+    deps: []
+    evidence: "logs/eff_...persistent_ultralisk... telemetry(larva_idle 2.76)"
+    repro: "build_efficiency.py run macro_hatch --auto-switch-to persistent_ultralisk --seeds 1 --opponent veryeasy --seconds 900"
+
+  - id: I28
+    kind: inference
+    derivation: defeasible
+    domain: doctrine-reopt
+    status: verified
+    title: "实测 bank 与 §10 记录量级不符 → §10 doctrine 经济基线不可信"
+    statement: "实测 bank(F49=233、F50=486)与 §10 记录(brood 1311/ultra 837)量级不符 → §10 doctrine 基线不可信,以实测为准"
+    deps: [F49, F50, F52]
+    evidence: "F49 brood 233 vs §10 1311、F50 ultra bank 486 vs §10 837;method-log 无 doctrine 测法背书 → 以实测为准"
+
+  - id: D32
+    kind: decision
+    by: agent
+    domain: doctrine-reopt
+    status: active
+    title: "ultralisk plan 小狗上限 30→80 当矿/larva 出口(压 larva 闲置)"
+    statement: "把 ultralisk plan 的 ZergUnit(ZERGLING) 上限 30→80,用小狗(mineral-only)吸走雷兽 gas 受限时富余的矿/larva"
+    deps: [I30, F53]
+    evidence: "已验证有效见 F51"
+
+  - id: F51
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "小狗 30→80 后 larva_idle 2.76→~1.28、bank 486→~358(3 seed 确认)"
+    statement: "改后 3 seed:larva_idle 1.12/1.32/1.41(均 ~1.28,降 54%)、bank 326/381/368(均 ~358,降 26%);剩余闲置主要 supply-block"
+    deps: []
+    evidence: "build_efficiency run macro_hatch --auto-switch-to persistent_ultralisk --seeds 1/2/3 的 telemetry"
+    repro: "build_efficiency.py run macro_hatch --auto-switch-to persistent_ultralisk --seeds 1 2 3 --opponent veryeasy --seconds 900"
+
+  - id: F52
+    kind: fact
+    provenance: doc
+    domain: doctrine-reopt
+    status: verified
+    title: "runbook §10 记录 brood_corruptor bank 1311、ultralisk bank 837(旧基线)"
+    statement: "docs/build-optimization-runbook.md §10 上轮基线表记 brood_corruptor bank 1311、ultralisk bank 837"
+    deps: []
+    evidence: "docs/build-optimization-runbook.md §10 上轮基线段"
+
+  - id: I29
+    kind: inference
+    derivation: defeasible
+    domain: doctrine-reopt
+    status: verified
+    title: "brood_corruptor 经济健康,无需优化"
+    statement: "brood 经 roach_hydra 实测 bank 233、larva 0.04(F49)→ 经济健康,本轮无可优化真问题"
+    deps: [F49]
+    evidence: "F49 健康 → 跳过"
+
+  - id: I30
+    kind: inference
+    derivation: defeasible
+    domain: doctrine-reopt
+    status: verified
+    title: "ultralisk larva 大量闲置(2.76)是真问题,需修"
+    statement: "ultralisk 实测 larva_idle 2.76(F50)→ larva 大量闲置、军队产不满,是真问题需修"
+    deps: [F50]
+    evidence: "F50 larva 2.76 → 需修"
+
+  - id: F53
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "plan 类 build 产兵由 plan 内 ZergUnit 上限驱动,yaml target_composition 仅元数据"
+    statement: "改 target_composition.Zergling 30→80 后 bank_integral 逐帧一致(零效果)→ doctrine 产兵驱动在 plan 类 ZergUnit,target_composition 只是显示元数据"
+    deps: []
+    evidence: "target_composition 改前后 bank_integral 437555.6 逐帧相同(零效果)"
+    repro: "改 yaml target_composition.Zergling 重跑 build_efficiency,bank_integral 与改前逐位相同"
+
+  - id: F54
+    kind: fact
+    provenance: doc
+    domain: zvp-macro-opt
+    status: verified
+    title: "虫族农民饱和线约 base×16"
+    statement: "虫族单矿约 16 农民饱和,N 矿饱和线约 base×16(既有约定)"
+    deps: []
+    evidence: "既有工程约定(memory feedback_worker_count_scales_with_bases);3 base=48、5 base=80"
+
+  - id: F55
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "ultralisk 攻击门槛 34 后 macro_hatch→ultra vs VeryHard 5/6(改前 0/3);胜局 peakUltra=0"
+    statement: "改攻击门槛后 2×3 局:5 胜 1 负(改前 0/3);所有胜局在 11-13 分结束、peakUltra=0(小狗群打赢,雷兽死阵未成主力);败局拖到 23 分雷兽仍只 2 只"
+    deps: []
+    evidence: "logs/game_2026*(macro_hatch→persistent_ultralisk 两轮);build_acceptance persistent_ultralisk --runs 3 --opponent veryhard ×2"
+    repro: "build_acceptance.py persistent_ultralisk --runs 3 --parallel 3 --opponent veryhard(spec: tests/build_acceptance/persistent_ultralisk.yaml)"
+
+  - id: I31
+    kind: inference
+    derivation: defeasible
+    domain: doctrine-reopt
+    status: verified
+    title: "裸 PlanZoneAttack 门槛低 → 军队 piecemeal 送、attrition 输;提门槛成群再打 → 胜率大涨"
+    statement: "ultralisk 原用裸 PlanZoneAttack(默认低门槛+attack_on_advantage)→ 军队没攒成就送、雷兽从没过 2 只 → 提 start_attack_power=34+关 advantage 让军队成群再打 → 0/3→5/6"
+    deps: [F50, F55]
+    evidence: "F50 attrition 症状 + F55 改后 5/6;与 zvp_macro/macro_hatch 同一'经济强军队中等 sharpy 默认龟或乱送'修复模式"
+
+  - id: D33
+    kind: decision
+    by: agent
+    domain: doctrine-reopt
+    status: active
+    title: "ultralisk plan attack 门槛 裸 PlanZoneAttack → start_attack_power=34 + attack_on_advantage=False"
+    statement: "ultralisk.py 用 _make_deathball_attack():start_attack_power=34(高于 zvp 蟑螂 22,雷兽死阵更贵更晚)+ 关 attack_on_advantage,军队成群再打不零敲碎打"
+    deps: [I31]
+    evidence: "已验证:改后 vs VeryHard 5/6(F55)"
+
+  - id: F56
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "vs VeryHard 后期 doctrine 的招牌兵种(BL/雷兽)几乎不决定比赛,中期军队先结束战斗"
+    statement: "brood 3 胜 peakBL=0(蟑螂 11 分赢)、ultralisk 5 胜 peakUltra=0(小狗 11-13 分赢)——vs VeryHard 比赛在招牌兵种(11-13 分成型)前就被中期军队决定"
+    deps: []
+    evidence: "brood roach_hydra→brood 3V peakBL=0、ultra macro_hatch→ultra 5V peakUltra=0 的 telemetry;两 doctrine 同现象"
+    repro: "解析各 doctrine 胜局 telemetry:结束时间 11-13 分、招牌兵种(BROODLORD/ULTRALISK)peak=0"
+
+  - id: F57
+    kind: fact
+    provenance: empirical
+    domain: doctrine-reopt
+    status: verified
+    title: "brood 攻击门槛抬到 150 逼等 BL,3 局 peakBL 仍全 0;一局纯被动 8 分被打死"
+    statement: "roach_hydra→brood 把攻击门槛 40→150 逼军队等 BL:3 局 peakBL 仍全 0(BL 需大刺翼 ~11-12 分+腐化+转化 ~13-14 分,晚于 VeryHard 局的 8-12 分终局);其中 1 局纯被动 8 分即被打死"
+    deps: []
+    evidence: "roach_hydra→brood 门槛 150 实验 3 局 telemetry(peakBL 全 0,1 败 8 分);测后门槛已还原 40"
+    repro: "brood_corruptor.py _make_attack_act start_attack_power=150 跑 build_acceptance persistent_brood_corruptor --opponent veryhard"
+
+  # ==================================================================
+  # domain: opening-winrate-opt —— 低胜率 opening 批量优化(2026-07-17)
+  # ==================================================================
+  - id: F58
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "roach_ravager 套用 attack 门槛修法(I31)vs VeryHard 1/4→5/6"
+    statement: "roach_ravager 裸 PlanZoneAttack→start_attack_power=22+attack_on_advantage=False;vs VeryHard 1/4→5/6(baseline VE/M 全胜、H 3/4;变化点 hard)"
+    deps: []
+    evidence: "应用 I31 的攻击门槛杠杆;build_acceptance roach_ravager --opponent veryhard 改前 1/4、改后 5/6(2 轮)"
+    repro: "build_acceptance.py roach_ravager --runs 3 --parallel 3 --opponent veryhard"
+
+  - id: F59
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "mutalisk_harass 深改(升级+release_after+门槛)vs VeryHard 0/3→4/6"
+    statement: "mutalisk_harass 加 +1/+1 飞攻飞甲 + HarassWorkerLineAct release_after=450 + 门槛 6→18;vs VeryHard 0/3→4/6"
+    deps: []
+    evidence: "build_acceptance mutalisk_harass --opponent veryhard 改前 0/3、改后 2 轮 4/6"
+    repro: "build_acceptance.py mutalisk_harass --runs 3 --parallel 3 --opponent veryhard"
+
+  - id: I32
+    kind: inference
+    derivation: defeasible
+    domain: opening-winrate-opt
+    status: verified
+    title: "骚扰型输强 AI 的深因是单位永久 harass 送死不攒军队;修法=放手攒军队+升级+提门槛"
+    statement: "骚扰 build 用 HarassWorkerLineAct 永久锁单位骚扰农民 → 被逐个防掉、从不攒成军队(F59 mutalisk 就是)→ 加 release_after 到点放手归队 + 补兵种关键升级 + 提攻击门槛,让骚扰后攒成军队一起打 → 0/3→4/6"
+    deps: [F59]
+    evidence: "mutalisk 深改 0/3→4/6(F59);印证记忆 feedback_harass_build_early_harass_then_army 的'早骚扰后攒成军队';与 macro 型只需提门槛(I31)互补,骚扰型还需 release+升级"
+
+  - id: F60
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "all-in/骚扰 build 带转型评测:mass_reaper→bio_max 5/6(roach_allin 早期 0/3 已被 F66 3/6 超越)"
+    statement: "auto-switch spec 开局→切运营早期评测:mass_reaper→bio_max 5/6(单独跑 0/3);ling_bane→muta_ling_bane 1/6。(roach_allin→roach_hydra_viper 当时 3 局小样本 0/3,后经大样本+触发核对被 F66 更新为 3/6,此分句已被 F66 超越)"
+    deps: []
+    evidence: "tests/build_acceptance/{mass_reaper,roach_allin,ling_bane}_macro.yaml;roach_allin 分句更新见 F66(6局3/6、HYDRA t=513 成型)——原 3 局 0/3 判读'转型太慢'不成立"
+    repro: "build_acceptance.py <build>_macro --runs 3 --parallel 3 --opponent veryhard"
+
+  - id: I33
+    kind: inference
+    derivation: defeasible
+    domain: opening-winrate-opt
+    status: verified
+    title: "all-in/骚扰 build 必须带转型评测/游玩(开局→切运营 doctrine),单独跑=纯 all-in 当然死"
+    statement: "all-in/骚扰 build 设计上开局压制后转运营 doctrine(先 all-in 再转运营)→ 单独跑整局纯 all-in 不公平必死;带转型评测才对(F60 mass_reaper 0/3→5/6)→ 胜率取决于目标 doctrine 能否从继承经济部署招牌兵(详见 I35;ling_bane→muta 部署不出飞龙即例)"
+    deps: [F60]
+    evidence: "mass_reaper 带转型 5/6 vs 单独 0/3(F60);用户 2026-07-18 指路'先all in再转运营,按科技/兵种现状选转型体系'(狗雷→龙狗雷、蟑螂→蟑刺蛇)"
+
+  - id: F61
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: retracted
+    retracted_by: I36
+    title: "(已撤)banshee→bio_max 转型评测 1/6——实为无效转型测试,转型根本没触发"
+    statement: "banshee_harass 开局→切 persistent_bio_max,6 局 VeryHard 战绩 1 胜"
+    deps: []
+    evidence: "撤回原因见 F64:这 6 局里 banshee 旧触发条件永不满足→auto_switch 从未发生,所谓'转型 1/6'其实是没转型的残废开局,不是有效的转型评测。真·转型评测见 F65(8/12)"
+    repro: "build_acceptance.py banshee_harass_macro --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: F62
+    kind: fact
+    provenance: own-code
+    domain: opening-winrate-opt
+    status: verified
+    title: "mass_reaper 开局的科技/产线(死神走兵营)与 bio_max 步兵产线共用,开局投入直接复用"
+    statement: "mass_reaper 开局靠兵营产死神,bio_max 也靠兵营产枪兵/掠夺者;两者共用兵营产线,开局的建筑/科技投入转型后被 bio_max 直接沿用"
+    deps: []
+    evidence: "读 plan:terran/plans/mass_reaper.py 死神从 BARRACKS 出;persistent_bio_max 步兵同走 BARRACKS"
+
+  - id: F63
+    kind: fact
+    provenance: own-code
+    domain: opening-winrate-opt
+    status: verified
+    title: "banshee_harass 开局需星港+科技实验室的独立空军产线,与 bio_max 步兵产线不共享"
+    statement: "banshee_harass 开局把资源(尤其气)投入星港+科技实验室+女妖这条独立空军产线;bio_max 靠兵营步兵,两条产线不共享,女妖那笔投入转型后不被沿用"
+    deps: []
+    evidence: "读 plan:terran/plans/banshee_harass.py 女妖从 STARPORT+TECHLAB 出;persistent_bio_max 无空军需求"
+
+  - id: I34
+    kind: inference
+    derivation: defeasible
+    domain: opening-winrate-opt
+    status: retracted
+    retracted_by: F65
+    title: "(已撤)转型成败取决于开局产线能否复用进目标 doctrine——机制被证伪"
+    statement: "(原假设)mass_reaper 兵营产线与 bio_max 共用故转型成、banshee 独立空军产线不共享故转型败"
+    deps: [F60, F62, F63, I33]
+    evidence: "证伪:F65 显示 banshee(独立空军产线)→bio_max 修好触发后 8/12、转型完全能打——'产线不共享→转型失败'的机制不成立;banshee 之前 1/6 真因是触发从不 fire(F64),与产线复用无关。正确机制见 I35。F62/F63 作为产线事实仍真,但不再支撑'决定转型成败'的结论"
+
+  - id: F64
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "banshee 旧版一局里女妖峰值只有 1 架"
+    statement: "banshee_harass(旧触发版)整局女妖峰值只有 1 架(女妖产线被 priority 枪兵抢矿)"
+    deps: []
+    evidence: "telemetry logs/game_20260718_112428_1944_1bfb9e:BANSHEE 峰值 1;佐证同局 MARAUDER 全程 0(bio_max 从没接管)、t=804 M=3848(囤矿)"
+    repro: "build_acceptance.py banshee_harass_macro --runs 6 --opponent veryhard 后读 telemetry BANSHEE/MARAUDER 序列"
+
+  - id: I36
+    kind: inference
+    derivation: deductive
+    domain: opening-winrate-opt
+    status: verified
+    title: "banshee 旧触发要 2 女妖 ready 但整局只造出 1 → 转型从不触发"
+    statement: "banshee_harass 旧 _opening_done 要求'2 女妖 ready + 隐形',而整局只造出 1 架女妖(F64)→ 条件永不满足 → opening_completed 从不触发 → auto_switch 转 bio_max 从未发生;所谓'banshee→bio_max 1/6'实为无转型的残废开局"
+    deps: [F64]
+    evidence: "读 banshee_harass.py 旧 _opening_done(要 2 女妖);F64 女妖峰值 1 + MARAUDER 全程 0(bio_max 从没接管)即演绎结论"
+
+  - id: F65
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "banshee 触发降到'≥1 女妖+6 兵'即转型 → bio_max 真正接管 → vs VeryHard 8/12"
+    statement: "banshee_harass _opening_done 降到'第一波(≥1 女妖 ready + ≥6 兵)出来即转'后,转型 t=402 触发、bio_max 接管从 t=522 起产 MARAUDER、军队涨到 200 供给 bio 大球;vs VeryHard 8/12(合并两批12局)"
+    deps: [I36]
+    evidence: "commit f1323ac;telemetry logs/game_20260718_113825_16700_350c9e:t=402 BANSHEE=1→转型、t=522 MARAUDER 冒出、sup 涨到 200"
+    repro: "build_acceptance.py banshee_harass_macro --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: F66
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "roach_allin→roach_hydra_viper 6局 3/6,胜局蟑刺蛇 doctrine 成功成型(HYDRA t=513、200 供给大军)"
+    statement: "roach_allin(触发 ROACH≥10 正常 fire)→roach_hydra_viper 6 局 VeryHard 3/6;胜局蟑螂第一波 t=335 出 16→转型→HYDRA t=513 冒出、农民涨到 62、蟑刺蛇 200 供给大军"
+    deps: []
+    evidence: "telemetry 2026-07-18 roach_allin_macro 6局VH;胜局单位时间线 game log:t=335 ROACH16→t=513 HYDRA 冒出"
+    repro: "build_acceptance.py roach_allin_macro --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: F68
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "widow_mine→bio_max 6局 3/5,bio doctrine 成功成型(峰值 marine57/marauder16/medivac12 大军)"
+    statement: "widow_mine_drop(触发正常 fire)→bio_max 6 局 VeryHard 3/5;胜局峰值 marine 57、marauder 16、medivac 12 的 bio 大军成型"
+    deps: []
+    evidence: "telemetry 2026-07-18 widow_mine_macro 6局VH;胜局单位峰值 game log"
+    repro: "build_acceptance.py widow_mine_macro --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: F67
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "ling_bane 降触发后转型触发、但 muta_ling_bane 整局 MUTALISK=0、6局0/6(反不如原 2/8)"
+    statement: "ling_bane 触发降到'狗≥8 即转'后转型确实触发(妖虫大量产出),但目标 muta_ling_bane 整局 MUTALISK 峰值为 0;6 局 0/6,反比原 2/8 更差(已还原触发改动)"
+    deps: []
+    evidence: "telemetry 2026-07-18 ling_bane_macro 降触发批6局:全 Defeat、MUTA 峰值全 0;还原 git checkout ling_bane.py。【2026-07-19 反向审查修正】当初把 MUTA=0 归因'1矿经济喂不起Spire'是**错的**——真因是 F70 的 doctrine bug(Spire 无 Lair 前置永远建不了),那几局气其实囤到 1453 abundant、不缺气;正确机制见 F70。且这 6 局整个 muta doctrine 是坏的(F70 confound)→ 本实验对'降触发本身好不好'无判据,不能据此说降触发更差"
+    repro: "ling_bane.py _opening_done 降到 ling>=8 后 build_acceptance.py ling_bane_macro --runs 6 --opponent veryhard"
+
+  - id: I35
+    kind: inference
+    derivation: defeasible
+    domain: opening-winrate-opt
+    status: unverified
+    title: "早转型救 all-in/骚扰的两个必要条件:①触发条件真能 fire ②目标 doctrine 能从继承经济部署出足量招牌兵(必要非充分)"
+    statement: "'第一波出来就转型'(用户原则)要有效,①开局 _opening_done 触发要能真达成、②目标 doctrine 要能从继承的开局经济部署出足量招牌兵——两条都是必要条件(缺①转型根本不发生、缺②转型进残废 doctrine 反更差),但**非充分**:ling_bane 修 muta bug 后 ①能 fire、②也出了飞龙,仍只 2/6(足量与否/兵种硬克是第三层未定因素)"
+    deps: [F65, F66, F68, F67, F70, F71, I36, I33]
+    evidence: "条件①:banshee 单改触发隔离出触发能否 fire,1/6→8/12(I36/F65);条件②:ling_bane 先因 doctrine bug 部署不出(F70 Spire 无 Lair→MUTA=0)、修复后飞龙能出但只 8-10 且仍 2/6(F71)——部署'足量'与否受 1 矿经济限制、或已是兵种硬克(sup~150 near-max 仍输),未定;对照 roach_allin/widow 部署成功各 3/6、3/5(F66/F68)。仍 defeasible、未穷尽,标 unverified;取代已撤的 I34"
+
+  - id: F70
+    kind: fact
+    provenance: own-code
+    domain: opening-winrate-opt
+    status: verified
+    title: "muta_ling_bane 科技链 Spire 无 Lair 前置(doctrine bug)→ 整局 MUTALISK=0"
+    statement: "muta_ling_bane.py 原版科技链'母池→妖虫巢→进化腔→Spire'里 Spire 直接 GridBuilding、没先 MorphLair;而 Spire 的 SC2 硬 tech 前置是 Lair → Spire 永远放不下 → 整局 MUTALISK=0(那几局气囤到 1453 abundant、不缺气,证明不是经济问题)"
+    deps: []
+    evidence: "读 muta_ling_bane.py 原版科技链(无 MorphLair);telemetry ling_bane_macro 局 MUTA 全程 0 + G 囤 1453;commit c76d2eb 加 Step(UnitReady(POOL),MorphLair()) 修复"
+
+  - id: F71
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "修 muta Lair bug 后 ling_bane→muta 飞龙真部署(MUTA 8-10)但仍 2/6"
+    statement: "muta_ling_bane 补 MorphLair 后,ling_bane→muta 转型胜局 MUTALISK 峰值 8-10、飞龙真部署;但 6 局仍 2/6,多局 sup 128-149 带 8-12 飞龙仍 Defeat(为何输是经济封顶还是兵种硬克未定,见 I35)"
+    deps: [F70]
+    evidence: "commit c76d2eb 后 telemetry ling_bane_macro 6局VH:胜局 MUTA 8-10、败局多为 sup 128-149 带飞龙仍输 或 sup 42 早死"
+    repro: "muta_ling_bane 补 MorphLair 后 build_acceptance.py ling_bane_macro --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: F72
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "two_base_tanks 改防守 macro(attack_on_advantage=True+多矿扩张)vs VeryHard 2/6→4/5"
+    statement: "two_base_tanks 把 attack_on_advantage 从 False 改 True(只经济+军队领先才出门、否则缩家展开坦克线龟防)+ start_attack_power 30→60 + Expand(3)/(4) + 坦克上限 8→16 + 农民 70,vs VeryHard 从 2/6(强出门 timing push 枪兵球正面崩)升到 4/5(坦克海 out-macro、对面撞死在防线上)"
+    deps: []
+    evidence: "commit c76d2eb;telemetry 2026-07-19 two_base_tanks 6局VH(1局t=0启动失败):4胜1负,胜局坦克峰16、供给~170"
+    repro: "build_acceptance.py two_base_tanks --runs 6 --parallel 6 --opponent veryhard"
+
+  - id: I37
+    kind: inference
+    derivation: defeasible
+    domain: opening-winrate-opt
+    status: unverified
+    title: "坦克双矿这类运营 build 用优势门控出门(attack_on_advantage=True)、门槛型 build 用军力阈值,两种门控殊途同归'够力再打'"
+    statement: "共同原理是'别零敲碎打、够力/成群再打';实现门控有两种——优势门控(attack_on_advantage=True,算出经济+军力优势才出门,two_base 坦克龟防运营用它)vs 军力阈值门控(关 advantage + 高 start_attack_power,攒够一坨再出,I31 的 ultralisk/roach 用它)。哪种门控更合适疑与 build 是运营型还是压制型有关,但此为粗分类待验"
+    deps: [F72, I31]
+    evidence: "F72 two_base_tanks 改优势门控(attack_on_advantage=True)配套一组改动 2/6→4/5;对照 I31 用军力阈值门控。**归因未隔离**:F72 同时改了 5 个参数(门控+门槛+扩张+坦克上限+农民),不能把 4/5 单归 attack_on_advantage 一个旋钮;'运营型 vs 压制型'的轴也可疑(ultralisk 非 all-in)。故 unverified、粗分类"
+
+  - id: F73
+    kind: fact
+    provenance: empirical
+    domain: opening-winrate-opt
+    status: verified
+    title: "ling_bane 改 2 矿(经济+飞龙 tech 都拉起)军队真成型(MUTA 12、sup 151)仍 1/6 → 输在兵种硬克非经济"
+    statement: "把 ling_bane 从 1 矿 all-in 改成 2 矿(二矿+Lair 提前到第一波前),转型时经济/飞龙 tech 都到位、军队真成型(有局 MUTA 12 + sup 151 近满人口),vs VeryHard 仍 1/6;军队规模上来了照样输,证明 ling_bane→muta_ling_bane 的瓶颈是**兵种被 VeryHard 硬克**、不是经济/部署不足(已还原 2 矿改动)"
+    deps: [F71]
+    evidence: "telemetry 2026-07-19 ling_bane 2矿版6局VH:1胜5负,败局有 MUTA 12/sup 151 仍 Defeat;还原 git checkout ling_bane.py。解决 F71/I35 留的'经济 vs 兵种硬克'悬案→指向硬克(相关记忆 兵种硬克天花板别磨微操)"
+    repro: "ling_bane Expand(2) 提前到 ZERGLING>=6 后 build_acceptance.py ling_bane_macro --runs 6 --opponent veryhard"
+
+  - id: F74
+    kind: fact
+    provenance: env-game
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰是 move-shot 单位:下 move 命令、敌人在攻击射程内就自动开火,无需下 attack 命令"
+    statement: "凤凰(及同类能移动中攻击的单位)执行 `move` 命令时,只要有敌人进入其攻击射程,武器会自动开火——不需要显式下 `attack`/`attack_move` 命令。所以'只发 move'的微操本身就在边移动边攻击"
+    deps: []
+    evidence: "用户(资深 SC2 玩家)2026-07-19 明确指出;SC2 凤凰武器机制(移动中可攻击,同类如维京空对空、部分单位)。纠正之前误判'PhoenixSquadMicro 只发 move/lift=不开火'"
+
+  - id: F75
+    kind: fact
+    provenance: own-code
+    domain: phoenix-micro
+    status: verified
+    title: "PhoenixSquadMicro 只输出 move/lift 动作、不输出 attack —— 依赖凤凰 move-shot 自动开火(设计正确)"
+    statement: "PhoenixSquadMicro.solve_squad 决策树只返回 move/lift 两种动作,kite 步(step4)返回移到射程边缘的 move 点;凤凰在该 move 途中对射程内敌人自动开火(F74)。故'不发 attack'不是 bug,是利用 move-shot 的正确设计"
+    deps: [F74]
+    evidence: "读 phoenix_squad_micro.py _solve_unit 决策树 + _kite_waypoint(移到 air_range-0.5 处);phoenix_squad_act.py execute 只执行 move/lift"
+
+  - id: F76
+    kind: fact
+    provenance: env-game
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰武器只能对空(air-only),打地面单位只能靠 Graviton Beam 吊起来再射"
+    statement: "凤凰的普通攻击只能打空中单位;对地面单位(农民/坦克等)无法直接攻击,只能用 Graviton Beam 吊到空中后再射(被吊单位变'空中'即成可攻击目标)"
+    deps: []
+    evidence: "SC2 凤凰单位机制;PhoenixSquadMicro 决策树 step3 lift(GRAVITONBEAM)专门处理地面目标、step4 kite 处理空中目标"
+
+  - id: D34
+    kind: decision
+    by: agent
+    domain: phoenix-micro
+    status: active
+    title: "凤凰对空 kite 改为全队共享绕敌群 orbit 点(集群 + 永动 + 射程边缘 move-shot)"
+    statement: "PhoenixSquadMicro step4(对空 kite)从'每只凤凰对自己最近空敌单独 _kite_waypoint'改为 _group_kite_waypoint:围绕 squad_center 扫敌空军群、全队共享一个绕敌群中心 orbit 点(同 anchor + 同 ai.time 角度 → 全队同一目标点),半径=射程-0.5。实现用户 2026-07-19 两点要求:①集群群体一起移动(全队同点,不各自散)②一直移动不停 + 保持射程(orbit 永动 + 停在射程边缘靠 move-shot 自动开火 F74)"
+    deps: [F74, F75, F76]
+    evidence: "commit(见下);单测 test_group_kite_air_shared_waypoint 断言多凤凰拿同一 kite 点;用户要求参考人族大剑 move-shot 但补齐其没有的集群移动"
+
+  - id: F77
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "phoenix_2base 原本纯气兵组合(凤凰/追猎),中期矿富余囤到 600-870"
+    statement: "phoenix_2base 原版只出凤凰(150矿/100气)+ 追猎(125矿/50气)——都吃气,整局 ZEALOT=0;真机 telemetry 中期(t=616-670)矿囤到 600-870,气才 186-474,即气在出凤凰、矿花不掉"
+    deps: []
+    evidence: "telemetry 2026-07-19 phoenix_2base 局:t=616 M=600、t=643 M=870;读 plan 兵种生产段无 ZEALOT"
+    repro: "build_acceptance.py phoenix_2base --runs 6 --opponent veryhard 后读 telemetry minerals/vespene 序列"
+
+  - id: D35
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "phoenix_2base 加叉子(纯矿)+ 议会冲锋:吃富余矿 + 补地面军"
+    statement: "凤凰是纯气兵、矿富余(F77)且凤凰是空军守不了地(F76)→ 加叉子(ZEALOT 100矿/0气,不抢凤凰的气)soak 富余矿 + 撑地面正面/守家;配议会+冲锋(一次性100/100气)让叉子能贴上去(裸叉被风筝)。ProtossUnit(ZEALOT,14) 非priority(只吃富余矿)、gate 在 8 凤凰后(不耽误开局)"
+    deps: [F76, F77]
+    evidence: "commit 6496330;真机6局VH:叉子出到13、中期矿压到30-530(富余矿被吃)、最终42凤凰+13叉子+4追猎=200供给;胜率2/5≈2/6(组合微调对VeryHard中性,价值在组合完整+地面防守)。用户2026-07-19定"
+
+  - id: D36
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "phoenix_2base 靠运营提升胜率:四矿暴农(农民76)+ 后期不朽收尾"
+    statement: "凤凰战术的胜负不由凤凰本身决定,而由运营——凤凰控场杀农民=压制对方经济+保自己扩张安全,我方多开矿(四矿)+暴农(60→76)滚经济优势,后期用不朽(Immortal 6,现有重工出、强vs重甲)把经济优势变成能收尾的军队。四矿 gate 12凤凰(控场成型)、不朽 gate 三矿非priority(吃富余气)"
+    deps: [F76, F77]
+    evidence: "commit 02e9859;真机12局VH 5/12(42%,基线2/6=33%);不朽出5-6、农民76、组合=凤凰+叉子+追猎+不朽。用户2026-07-19'靠运营提升'定"
+
+  - id: F78
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "phoenix_2base 运营版残留两败因:早死(农民30崩) + 发展了却正面输(农民75+不朽5仍败)"
+    statement: "phoenix_2base 加四矿暴农+不朽后 12局VH 5/12;7 个败局分两类:①2局早死(农民才30就崩,开局脆被早压)②5局发展了却正面输(农民75+、不朽5 齐了仍败;胜局凤凰24-45 vs 这些败局凤凰仅12-22,凤凰数/交战强度是差距)"
+    deps: [D36]
+    evidence: "telemetry 2026-07-19 phoenix_2base 12局:胜局PHOENIX24-45/PROBE76,败局分早死(PROBE30)与发展输(PROBE75+PHOENIX12-22)两簇"
+    repro: "build_acceptance.py phoenix_2base --runs 12 --parallel 6 --opponent veryhard 读结果按PROBE峰/PHOENIX峰分簇"
+
+  - id: D37
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "phoenix_2base 凤凰后期归队双条件:时间(10分)+ 敌方大部队来攻召回"
+    statement: "凤凰早-中期锁定骚扰(控场杀农民保自己扩张),后期归队参加决战。归队双条件:①release_after=600(10分兜底)②敌方大部队来攻(我方基地30格内≥6敌方战斗单位,排除农民)召回回防。根因:原 release_after=None 让凤凰整局锁死骚扰、决战地面军单打 VeryHard 全军"
+    deps: [F78]
+    evidence: "commit d13b936;PhoenixSquadAct 加 recall_threshold/recall_radius + 单测 test_recall_on_home_threat/test_recall_ignores_workers。用户2026-07-19'不光10分钟,大部队来攻也回来'定"
+
+  - id: F79
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "phoenix_2base 胜负的关键差异是凤凰存活数:胜局凤凰34-39、败局≤28(与运营/组合/召回无关)"
+    statement: "phoenix_2base 加运营+不朽+召回后多批12局VH 稳定 ~4-5/12(33-42%);所有批次一致规律:胜局凤凰峰值 34-39、败局峰值 ≤28(含发展了却输的 PROBE75+ 局)。凤凰数是胜负分水岭——败局凤凰在骚扰中被对空打掉/产能被扰;运营(农民76)、组合(不朽)、召回都已到位但撞这个天花板,进一步提胜率要攻凤凰存活/早期安全"
+    deps: [D36, D37]
+    evidence: "telemetry 2026-07-19 phoenix_2base 多批12局:胜局PHOENIX34-39、败局11-28,PROBE峰同为75-76(经济一样),差在凤凰数"
+    repro: "build_acceptance.py phoenix_2base --runs 12 --opponent veryhard 按结果分组看PHOENIX峰值"
+
+  - id: F80
+    kind: fact
+    provenance: empirical
+    domain: player-command-micro
+    status: verified
+    title: "玩家指令飞龙骚扰二矿时飞龙一直往主基地飞、够不着二矿农民(真机观察)"
+    statement: "muta_ling_bane 局,玩家指令让飞龙(射程3空军)骚扰对方二矿农民,飞龙到二矿时一直打不到农民/基地、浪费时间往主基地方向飞"
+    deps: []
+    evidence: "用户 2026-07-20 真机观察(龙狗毒爆局)"
+    repro: "真局玩家指令'派飞龙骚扰对方二矿农民',观察飞龙是否engage二矿还是飞向主基"
+
+  - id: F81
+    kind: fact
+    provenance: own-code
+    domain: player-command-micro
+    status: verified
+    title: "飞龙骚扰微操参考点硬编码 enemy_start_locations[0](敌主基),far 逻辑按到主基距离判"
+    statement: "player_harass_micro(harass_act.py:172) 的 far 判定用 unit.distance_to(enemy_main)>22;director._execute_worker_harass_micro(director.py:9959) 传的 enemy_main = bot.enemy_start_locations[0] 硬编码=敌方主基地,不随玩家骚扰目标/农民实际位置变。骚扰非主基地(二矿,离主基>22)时 far=True→一直 move(主基地)、不 engage 目标农民"
+    deps: []
+    evidence: "读 harass_act.py:188-197 far分支 + director.py:9959 enemy_main=enemy_start_locations[0];是 F80 观察的根因"
+
+  - id: F82
+    kind: fact
+    provenance: own-code
+    domain: player-command-micro
+    status: verified
+    title: "飞龙骚扰 kite 距离硬编码(_KITE_STEP=5/_KITE_TRIGGER=11)不按单位射程自适应"
+    statement: "harass_act.py:65-70 的 _KITE_TRIGGER=11/_KITE_STEP=5 是给死神/女妖(射程5-6)调的固定值,全代码无按 unit.air_range/ground_range 自适应;射程3的飞龙遇真对空(女王)会后撤5格→退出自己射程3→够不着农民。F80 的次要病因"
+    deps: []
+    evidence: "读 harass_act.py:65-70 常量 + player_harass_micro:199-210 kite;grep 无 air_range/ground_range 读取(除 target_in_range)"
+
+  - id: F83
+    kind: fact
+    provenance: own-code
+    domain: player-command-micro
+    status: verified
+    title: "gather verb 只 move 不采矿 + 先 Reserved → '闲置农民采矿'反把农民锁死闲置"
+    statement: "玩家'闲置农民采矿'→ unit_claim(Drone,gather);gather verb 在 execute_unit_action(common_bot.py:697) 落 else:unit.move()、从不发采矿(harvest)命令;且 _apply_unit_claim(director.py:10128) 先把农民设 LLM_CONTROLLED(Reserved)→ DistributeWorkers 不再自动派它采矿、claim 又只 move → 农民彻底卡 Reserved 闲置。正确'还给采矿池'应走 unit_release。真机整局几个农民闲置多半是旧 claim 没 release"
+    deps: []
+    evidence: "读 common_bot.py:697-700(gather落unit.move)+ director.py:10128(_apply_unit_claim先Reserved)+ models.py:783(WorkerTaskPayload无'闲置农民回采矿'action);用户2026-07-20观察'叫农民采矿没用'"
+    repro: "真局玩家'闲置农民采矿',观察 drone 是否真采矿(应否)+ telemetry idle_workers 是否降"
+
+  - id: F84
+    kind: fact
+    provenance: env-game
+    domain: player-command-micro
+    status: verified
+    title: "SpeedMining(采矿优化微操)只管 UnitTask.Gathering 农民、Reserved 农民不碰,且从不留农民闲置"
+    statement: "vendor/sharpy speed_mining.py:SpeedMining 只对 UnitTask.Gathering 任务的农民操作(line 45 all_from_task(Gathering)),Reserved(LLM_CONTROLLED)农民它跳过;且每次是 worker.move(微调点)+ SMART(矿,queue=True) 排队续采,从不留下无指令的农民。故 SpeedMining 与 gather bug(F83)无关、不冲突——排除'闲置农民是采矿微操导致'的假设"
+    deps: []
+    evidence: "读 vendor/sharpy/sharpy/plans/tactics/speed_mining.py:35-76;回答用户2026-07-20'闲置农民和采矿微操优化有没有关系'的质疑"
+
+  - id: F85
+    kind: fact
+    provenance: empirical
+    domain: player-command-micro
+    status: retracted
+    retracted_by: F86
+    title: "(已撤)干净局 idle_workers≈0 → 农民闲置是玩家 claim 非 build——结论错,指标本身瞎"
+    statement: "(原结论)跑干净 muta_ling_bane 局 economy.idle_workers≈0 → 农民闲置不是 build 是玩家 claim 造成"
+    deps: [F83]
+    evidence: "撤回原因见 F86:economy.idle_workers=ai.workers.idle 只算'完全无 order'的农民,**测不到'有 order 却没干活'的真闲置**(用户 UI 看得见的那种)。据此得的'干净局无闲置→非build'是假阴性误判;真根因是 muta_ling_bane 缺 IdleWorkerToMineAct 兜底(nydus 有、别的 build 没有)"
+    repro: "(已撤,原 repro)build_acceptance.py ling_bane_macro --runs 1 --opponent veryeasy 读 economy.idle_workers——但该指标测不到真闲置,故此 repro 无效"
+
+  - id: F86
+    kind: fact
+    provenance: own-code
+    domain: player-command-micro
+    status: verified
+    title: "ai.workers.idle 只算'完全无 order'农民,测不到'有 order 却没干活'的真闲置;该检测+派采矿的兜底只在 nydus"
+    statement: "SC2 `ai.workers.idle`/telemetry `economy.idle_workers` 只 flag'完全无 order'的农民;真机那些'有 order 却没在干活'(发呆 move/stop、采到一半卡住)的农民 SC2 不 flag idle → 指标测 0、UI 却看得见。更鲁棒的'有效闲置'检测(不 gathering/carrying/returning、非建造、持续≥3s)+ 派最缺矿 的兜底 act(IdleWorkerToMineAct)2026-07-12 首见于 nydus,但**别的 build(muta_ling_bane 等)没挂**→ 卡住的闲置农民无人管。这才是用户龙狗毒爆整局几个农民闲置的真根因"
+    deps: []
+    evidence: "读 nydus.py _IdleWorkerToMine(2026-07-12)docstring + 只 nydus 挂它;用户 2026-07-20 记忆'之前修过、定期检测派采矿'指向此;撤 F85 的假阴性结论"
+
+  - id: D40
+    kind: decision
+    by: agent
+    domain: player-command-micro
+    status: active
+    title: "闲置农民兜底全局化:核心抽纯函数,common_bot on_step 对所有 build 每帧跑"
+    statement: "修 F86:把 nydus 的 _IdleWorkerToMine 抽成 idle_worker_rescue.py 的纯函数 rescue_idle_workers(ai,state)(不依赖 sharpy,ActBase import try/except fallback);**common_bot._on_step_body 里对所有 build 每帧调它**=全局兜底(任何 build 不再漏);nydus/muta_ling_bane 从 plan 撤掉(改走全局,避免双跑);IdleWorkerToMineAct plan-act 保留但不再必需。加 test_idle_worker_rescue 3 测"
+    deps: [F86]
+    evidence: "commit dd2c2b9;真机 smoke 干净 muta 局 IDLEWORKER 日志出现 14 次、exit0 不崩——坐实干净局一直有真闲置农民(workers.idle 测不到)、全局兜底救回,反证 F86 根因 + F85 假阴性;40 单测过"
+
+  - id: D38
+    kind: decision
+    by: agent
+    domain: player-command-micro
+    status: active
+    title: "修飞龙骚扰:参考点改扑农民所在矿区(非死主基)+ kite 距离按单位射程自适应"
+    statement: "修 F81/F82:①director._execute_worker_harass_micro 传给 player_harass_micro 的参考点从 enemy_start_locations[0] 改成'离本单位最近的敌方农民位置'(enemy_workers.closest_to),无农民 fallback 主基→飞龙扑向农民所在矿区(含二矿);②加 _pm_kite_params 按 unit.air_range/ground_range 自适应 kite trigger/step(飞龙射程3→step~2.7 不退出射程,死神/女妖 fallback 近原值),player_harass_micro + HarassWorkerLineAct._micro 两处镜像同步"
+    deps: [F81, F82]
+    evidence: "commit 47a322a;单测 harass 41 全过(含参考点=农民位置、短射程kite不退出射程);真机视觉验证待用户 live 测(server已起)"
+
+  - id: D39
+    kind: decision
+    by: agent
+    domain: player-command-micro
+    status: active
+    title: "修 gather 农民闲置:双管-①gather verb 真采矿 ②'闲置农民回采矿'话术改映射 unit_release"
+    statement: "修 F83 两条:①execute_unit_action 的 gather verb 加真采矿分支(找矿 unit.gather,三级选矿),不再只 move;②(正解)prompt 把'闲置/多余农民回去采矿/农民归队'映射到 unit_release(selector={unit_type:农民})交回经济池,而非 gather claim(会 Reserved 锁死)。不动高风险 claim 生命周期(persistent/ephemeral 双路径 re-Reserve)——用 unit_release 现成正确路径"
+    deps: [F83, F84]
+    evidence: "commit 47a322a(gather真采矿)+ 4944645(prompt);facade audit 绿 + gather单测16过;真LLM voice_spot_check '闲置农民回采矿'→unit_release PASS(补selector后)"
+
+  - id: F94
+    kind: fact
+    provenance: own-code
+    domain: army-rally
+    status: verified
+    title: "vibecraft 主力集结靠 sharpy PlanZoneGather + 出门 cohesion gate,等部队集齐/凝聚够才发起行动"
+    statement: "vibecraft 各 build 的主力靠 sharpy PlanZoneGather(共用集结 tactic)+ 出门 cohesion gate(如 phoenix _ready_to_push 的 REJOIN_DIST 凝聚判定)等部队集齐/凝聚够才发起行动"
+    deps: []
+    evidence: "读代码即证:phoenix _ready_to_push 的 REJOIN_DIST 凝聚 gate(自家代码)+ 各 build tactics 里的 PlanZoneGather"
+
+  - id: F95
+    kind: fact
+    provenance: own-code
+    domain: army-rally
+    status: verified
+    title: "sharpy 主力集结点(GatherPointSolver)恒取己方最前沿 owned 扩张的 gather_point / 己方 ramp 后一点,始终在己方一侧,不落敌方高地"
+    statement: "读源码:GatherPointSolver._find_gather_point 从己方 ramp 后一点起、遍历己方 owned 扩张取最前沿那个的 zone.gather_point,集结点恒在**己方一侧**;PlanZoneGather 只在其上加 retreat/defend/hold 的 intent 覆盖(均为己方点),无任何把点推到敌方/高地的逻辑。故'主力集结点落在敌方高地'被证伪"
+    deps: []
+    evidence: "读源码 vendor/sharpy/.../gather_point_solver.py:_find_gather_point + zone_gather.py:execute(2026-07-22 核对);推翻了'主力 gather 落敌方高地'的先前假设"
+
+  - id: Q8
+    kind: question
+    domain: army-rally
+    status: open
+    title: "既然主力集结点恒在己方一侧(F95),用户 live 看到的'集结点落在敌方高地上不安全'对应的是哪个机制?"
+    statement: "用户 2026-07-22 live 观察到'集结点在对方高地上很不安全'。但主力 gather 已证在己方一侧(F95)。那用户看到的是哪个机制?候选:①凤凰骚扰的 staging/hold 点(harass_stage_point / _hold_point 靠近敌方);②进攻 move-out 时军队压上敌方高地(那是进攻不是集结);③某 build 特定 forward rally。待用户澄清是哪个 build 阶段/是凤凰还是主力,再定位"
+    deps: [F95]
+    evidence: "待用户澄清 + 定位对应代码路径"
+
+  - id: D50
+    kind: decision
+    by: player
+    domain: army-rally
+    status: active
+    title: "集结点要放在敌方地面部队够不到的安全位置(贴敌方矿区墙外/高地外),绝不放敌方高地上"
+    statement: "军队集结点必须选在敌方地面部队打不到的安全位置——例如贴着敌方主矿矿区的墙往外、选一个站在高地上的地面部队一定够不到的点集结,不把集结点放在敌方高地上挨打"
+    deps: [F95]
+    evidence: "用户 2026-07-22:'集结的话点放高地外面,对方主矿矿区贴着墙往外走,选一个地面部队站高地上一定打不到的位置去集结'。注:F95 已证**主力 gather 已在己方一侧、安全**,故本决策(集结点要安全)对主力 gather 无需改;真正的落地对象是 Q8 待定位的靠敌机制(凤凰 staging/hold 等)。作为通用原则玩家拍板成立"
+
+  - id: D51
+    kind: decision
+    by: player
+    domain: army-rally
+    status: active
+    title: "集结是进攻手段;要看形势随机应变——判断要防守 或 集结点被敌人占住时,别认死理去集结/等齐,改换策略(换安全集结点/撤退/待会再来)"
+    statement: "集结(集中兵力等齐再走)是为**进攻**服务的,进攻时这样集结效果好。但要看形势:若判断这一波要**防守**、或**集结点被敌人占住了**,还去那儿集结/死等所有部队到齐就是认死理、犯傻——这时要换策略:放弃这个集结点、换一个(安全的)集结点,或撤退,或待会再来。不能对一个被占/不合时宜的集结点认死理"
+    deps: [F94]
+    evidence: "用户 2026-07-22:'进攻要集结效果好,但判断要防守或集结点被占,还去集结不是傻吗?要换策略:不要这个集结点换一个/撤退/待会再来,不能认死理'"
+
+  - id: F88
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "活着的骚扰部队本身就是威慑:敌方主力怕露空/被偷家不敢离家远征 → 己方扩张才安全;骚扰部队送掉,威慑消失,敌方腾出手打你分矿"
+    statement: "骚扰部队(尤其高机动空军)的价值大头不在'这一波多杀几个',而在它活着=一个持续威胁:只要它在,敌方主力不敢离家远征(怕后院被偷),己方开的分矿就安全;骚扰部队被送掉,威慑消失,敌方就腾出手来打你刚开的空虚分矿。保存部队与保护己方经济指向同一件事"
+    deps: []
+    evidence: "用户2026-07-20 强调:'你的战斗力在,别人才不敢出门,你的开矿才安全';通用于所有高机动骚扰战术"
+
+  - id: D42
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "所有高机动骚扰战术的最高原则:保存实力第一,控制战损优先于杀农民;杀不到就撤/不硬骚扰,绝不送;唯一可接受战损时机=能清掉对方对空后杀大量农民"
+    statement: "任何骚扰战术(尤其凤凰这类高机动空军)的第一原则永远是**保存战斗实力**:控制战损优先于杀农民收益。哪怕这波杀不到农民,也宁可不骚扰/撤走,绝不把部队送掉(重要:不要送×3)。唯一可以承受战损的时机——判断打光对方对空部队后能杀掉大量农民,这时的战损才值。任何时候不得违背此原则,它统领凤凰 6 条规则(D41)"
+    deps: [F88]
+    evidence: "用户2026-07-20 强调,通用于所有高机动骚扰战术(不止凤凰);违背表现=凤凰直穿敌基几下打光(见 F87)"
+
+  - id: F90
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰骚扰(修到达门前)真局 trace 实测:整局 posture 恒 approach、0 次 fight、0 次 lift,danchor 在主↔二矿间振荡不收敛"
+    statement: "凤凰骚扰(到达门修复前)真局 trace 实测:整局 posture 恒为 approach、0 次 fight、0 次 lift(从没真正交战);squad 的 aim 与到当前目标矿后锚点距离 danchor 在主矿↔二矿之间反复振荡(danchor 23↔34),始终不收敛、从不降到 _ARRIVE_DIST(22)以下"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 + VIBECRAFT_SERVER_LOG_PATH 跑 build_acceptance phoenix_2base --opponent veryhard,grep PHOENIXTRACE 看 posture / danchor 序列"
+    evidence: "scratchpad/phoenix_trace.log(修前)。诊断(根因,见 D45):_pick_harass_geom 无到达门、每帧按'农民多'重选目标矿——农民一被骚扰就逃/切另一矿 → 主/二矿目标每几秒横跳 → 接近路径每帧从当前位置重算 → squad 追移动靶、永远进不了矿后区"
+
+  - id: D45
+    kind: decision
+    by: agent
+    domain: phoenix-micro
+    status: active
+    title: "到达门:凤凰 squad 抵达当前目标矿后锚点前锁死目标不切,只有已抵达矿后区才按评分+滞回穿梭主/二矿"
+    statement: "修 F90:凤凰接近途中,squad 距当前目标矿后锚点 > _ARRIVE_DIST(还没抵达)时锁死当前目标矿不切;只有已抵达(在矿后区里)才按农民/对空评分 + 滞回考虑换矿。避免接近途中追横跳目标。这是'目标坐标一次锁定别每帧重选'纪律在**目标矿区**层的落地,照 BC GroupHarassAct 的到达门范式。**注(D46 收窄)**:锁只作用于'仍能打(harassable)'的目标矿;当前矿变得打不过(军队来镇)→ 解锁重挑(切别的能打的矿或退待命),不锁死在打不过的矿上"
+    deps: [F90, D41, D46]
+    evidence: "修后 trace(scratchpad/phoenix_trace2.log):posture 出现 fight(lift=13/atk=7 真交战)+ flee(打完撤),0 异常;单测 test_pick_harass_geom_locks_until_arrived"
+
+  - id: I38
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: unverified
+    title: "从 F90 看,接近型空军骚扰的走位/接近路径几何,纯逻辑单测 + 聚合 telemetry 照不出,真局 greppable trace 能一眼看穿(暂 n=1,待更多实例佐证)"
+    statement: "F90 这类接近型空军骚扰的走位/接近路径几何:纯逻辑单测(只测决策函数)+ 聚合 telemetry(存活数 / 杀农民数)都判不出'squad 到底有没有进区交战',而真局 greppable 走位 trace(posture / danchor 序列)一眼看穿。暂据 F90 单实例归纳,scope 限接近型空军骚扰,待更多实例(女妖/飞龙等)再升 verified"
+    deps: [F90]
+    evidence: "F90 实例:同一 bug 单测全绿 + telemetry harass_worker_kills 还 PASS,trace 却 0 fight。这条(连同其它自验纪律)促成了 CLAUDE.md「空军骚扰 build 必插 greppable trace」纪律——那条纪律本身是 decision,住在 CLAUDE.md、不在图里复述"
+
+  - id: D48
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "凤凰限量抬人:平时最多 2 只抬(留够攻击凤凰把抬起来的打死再换目标),地对空火力猛才多抬压制;抬太多攻击力不够、打不死又掉下去白费"
+    statement: "凤凰 lift(GRAVITONBEAM)按凤凰多少限量,不能能抬的全抬:平时最多 1-2 只抬,留够足够多的攻击凤凰把抬起来的 1-2 个打死、再换目标;只有对方地对空火力实在太猛才同时抬 3+(抬起对空兵压制保命)。根因:抬太多则剩下的攻击力不够,抬起来打不死、时限一过又掉回去,全白费"
+    deps: [D41, F87]
+    evidence: "用户 2026-07-22:'能抬的全抬了只剩一个打不行,抬人不要超过两个,火力太猛才抬三个以上,平时一到两个抬、打死一两个再换';实现 _assign_lifts(上限 _MAX_LIFTERS_NORMAL=2 + 去重目标)/ _max_lifters(对空猛放宽);trace5:fight 时 lift 数恒 ≤2、另有 2-4 只攻击"
+
+  - id: D49
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "空军骚扰在敌方多矿间迁移要绕矿后/贴高地边缘走(主矿矿后→绕到二矿矿后),不穿基地内部——多借对方地面够不到的高地边缘保命"
+    statement: "空军骚扰在敌方基地间迁移(如从主矿矿后转去二矿矿后),路线要绕外侧、贴对方高地边缘走(地面部队去不了的地方),不从基地内部穿过。落地:接近路径避开**所有**敌方基地中心(除目标矿自己),不只主基。这是 D44(空军利用矿后空域保命)的路线细化"
+    deps: [D44, F87]
+    evidence: "用户 2026-07-22:'从主基内部去二矿不好,应该绕到主矿矿后再绕去二矿矿后,空军多借助对方高地边缘地面去不了的地方保护自己';实现 _avoid_centers_except(避所有非目标基地中心)"
+
+  - id: F92
+    kind: fact
+    provenance: own-code
+    domain: phoenix-micro
+    status: verified
+    title: "重写前的凤凰 _squad_posture 把 fight/flee(can_fight)判定 gate 在 squad 已到矿后区(in_zone)之后才评估,接近途中一律 approach、不判威胁"
+    statement: "重写前的凤凰 _squad_posture 只在 squad 已到矿后区(距锚点 <= _ARRIVE_DIST)时才评估 can_fight(打不打/跑不跑);接近途中一律 approach,不评估威胁"
+    deps: []
+    evidence: "读代码即证(旧 _squad_posture 结构)。后果(用户 2026-07-22 live 观察,army-parked 场景 build_acceptance 未复现):敌方军队镇守目标矿时 squad 飞到跟前既不打也不走、原地反复拉扯(flee 只 orbit 到区边缘、一 orbit 退出区、approach 又拽回同一点)——比旧版更差,促成 D46 全程判。间接旁证 phoenix_trace3.log(旧版仅 2 fight tick、不 commit)"
+
+  - id: D46
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "骚扰状态全程每帧判'能不能打/该不该跑',不是到点才判:act 层去之前判哪个矿去得起(打不过退待命),micro 层每帧判 squad 附近打不过就 flee(接近途中被拦也走)"
+    statement: "凡是进入骚扰状态 / 背着骚扰指令的凤凰,'能不能打、该不该跑'必须**全程每帧判**,不是飞到那个点之后才判。两层落地:①act 层——去之前就按'对空 <= 凤凰总数×gate'预判哪个矿去得起,打不过的矿根本不选、都打不过退安全待命点(要么打要么走,别飞到军队跟前);②micro 层——每帧先判 squad 附近对空压制打不过没,打不过一律 flee 绕敌撤(无论接近途中还是已到区)。修 F92 的最坏选择(把 D41 规则②⑤操作化成每帧判定)"
+    deps: [F92, D42, D41]
+    evidence: "用户 2026-07-22:'能不能打该不该跑,应该是进入骚扰状态的凤凰全程都要判,不是到点才判';实现 _pick_harass_geom harassable 预判 + _squad_posture 每帧 can_fight 先判;trace4 flee 0→9、atk 5→55"
+
+  - id: F93
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰用'总血(血+护盾)阈值'做 recover 判据时,打一波掉血后 danchor 卡在 80-114(在家)约 250s、整局 0 再交战"
+    statement: "凤凰 recover(解除撤退)判据用'(血+护盾)/满值 >= 阈值(0.6)'时,真机 trace 实测:打一波(fight)掉血后 squad 的 danchor 卡在 80-114(=在家)约 250s 不动、整局 0 次再交战"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:fight 后 posture 恒 approach 但 danchor 卡 80-114(在家)不再回落"
+    evidence: "scratchpad/phoenix_trace3.log(修前)"
+
+  - id: I39
+    kind: inference
+    derivation: deductive
+    domain: phoenix-micro
+    status: verified
+    title: "血不回只护盾回 → 掉血凤凰总血比永达不到 recover 阈值 → 用总血做 recover 会把它卡死在撤退态"
+    statement: "凤凰掉血后血永久不回(仅护盾回,F89),(残血+满护盾)/满值 可能永远 < recover 阈值;故用'总血比 >= 阈值'做 recover 判据,会让掉血凤凰永远解除不了撤退态"
+    deps: [F89, F93]
+    evidence: "演绎:F89(神族血不回只护盾回)推出掉血凤凰总血比有上限 < 阈值;F93 实测(卡死 250s)与之一致确认。修法见 D47"
+
+  - id: D47
+    kind: decision
+    by: agent
+    domain: phoenix-micro
+    status: active
+    title: "凤凰 recover 判据改看'护盾比'(护盾才会脱战回复),不看含'不回的血'的总血 → 血低但护盾回满就再战"
+    statement: "修 I39/F93:凤凰 bail 触发仍看总血危急(< bail_hp),但 recover(解除撤退、重新出击)改成只看**护盾比 >= 阈值**——护盾才是脱战会自动回的 buffer,回满就有再战本钱;血低是永久的,不该拿它当 recover 门槛卡死。神族其它'掉血靠护盾扛'的单位同理"
+    deps: [F93, I39]
+    evidence: "落地 D43 的意图(D43 已定 recover 键控护盾,实现却跑偏成总血→I39 卡死,D47 纠正);实现 _should_bail 用 _shield_ratio;单测 test_should_bail_recover_by_shield(血30但护盾0.8→解除撤退);trace4:打一波后 danchor 反复回落 28-37 再交战(不再卡家)"
+
+  - id: F89
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "神族凤凰的续命机制只有'护盾脱战自动慢回',没有人族 BC 的战术传送回家 + SCV 修理"
+    statement: "各族空军续命手段不同:人族 BC 有战术传送(瞬间脱离回家)+ SCV 修理(快速回血);神族凤凰两者都没有,唯一续命=神族护盾机制(脱离交战一段时间后护盾自动慢慢回满,血不回);凤凰的'养血'只能靠飞出交战到安全空域晾护盾"
+    deps: []
+    evidence: "SC2 机制:BC=EFFECT_TACTICALJUMP + SCV repair;Protoss 护盾脱战 regen;凤凰无自愈/无被修"
+
+  - id: D43
+    kind: decision
+    by: agent
+    domain: phoenix-micro
+    status: active
+    title: "凤凰骚扰的 heal/续命不照搬 BC(传送+修),改为:脱战飞到安全空域晾护盾,护盾回到 recover 阈值再上(护盾滞回)"
+    statement: "凤凰微操借鉴 BC 的整队状态机 + 矿后侧切接近路径,但**heal 路径必须改**:BC 靠传送回家 + SCV 修,凤凰没有 → 凤凰的 bail/heal = 血危(HP+护盾比 < bail_hp)飞离交战、到安全空域晾护盾,护盾滞回回到 recover 阈值再重新出击。不写传送、不写找农民修"
+    deps: [F89]
+    evidence: "用户2026-07-20:'不能照抄,大件有传送和农民能修,凤凰只有护盾回复';实现见 phoenix_squad_micro._should_bail(HP+护盾滞回)"
+
+  - id: D44
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "空军骚扰通用生存法则要逐个落地:凡是空军骚扰 build(女妖/飞龙/BC/凤凰…)都要在其要求里写上'利用矿后空域脱战续命、保存实力',续命机制按各族自己的写不可照搬"
+    statement: "决定:凡是空军骚扰 build(女妖/飞龙/BC/凤凰…),都要在其 build 要求里落地'利用矿后空域脱战续命、保存实力'这一条(承接 D42 保存实力 + F87 矿后续命精髓);而续命的具体机制各族不同(承接 F89:BC 传送+修 / 凤凰晾护盾 / 女妖脱战靠治疗),落地时按各自机制写、不可照搬凤凰。后续把这套逐个 build 落地"
+    deps: [D42, F87, F89]
+    evidence: "用户2026-07-20:'各种空军骚扰都按这个原则写要求,都要利用矿区后面的空间确保存活';待落地到 banshee/mutalisk 等 build"
+
+  - id: F87
+    kind: fact
+    provenance: env-game
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰骚扰的精髓:靠空军优势在敌方矿后拉扯续命(地面军够不到),持续压制敌方经济 + 换己方安全开矿"
+    statement: "凤凰是早出的空军,骚扰的价值不在'冲进去多杀几个'而在用空军优势活得久:敌方矿区后方有一片只有空军能进、地面单位过不去的空域,凤凰切主矿/二矿的这块矿后空域杀农民,敌方增援就穿梭到另一个矿后拉扯,地面军够不到、凤凰因而活得久,持续压对方经济、己方趁机安全开矿,这才是战术精髓"
+    deps: []
+    evidence: "用户2026-07-20 详述;类比人族 BC(大剑/大舰)侧切骚扰 + 神族棱镜(引刀)空投从主矿背后切的路线。反面(重写前的病):凤凰直穿敌方主基、几下被打光 → 己方开的矿空虚、对方腾出手打己方矿——正是本次重写要修的"
+
+  - id: D41
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "凤凰骚扰统一状态机 spec(phoenix_2base 开局 + phoenix_control 控场共用同一套 6 条规则)"
+    statement: "凤凰微操统一逻辑,6 条:①凑够≥5 才进骚扰流程,永不单个/不足5去骚扰;②骚扰小队(靠得近的)共享一个状态机,整队二选一——要打就一起打(部分抬人、其余不再保持距离而是一直贴身攻击,保距=DPS不够)、不打就全队一起跑,不半吊子(有的抬有的又kite);③决定跑→到安全范围别原路返回(敌人还在→来回拉扯),以敌为圆心绕到别处再切;④接近路径别直穿主基/直冲矿线,走矿后侧切(空军优势区,复用BC/棱镜路线);⑤优先杀农民,杀完可走;敌方对空少+己方凤凰多才果断清掉少量地面对空再安心杀农民;没好机会别硬切、别反复试;⑥不骚扰时别和大部队脱节,大部队接敌后再冲进去抬人/杀敌空军/医疗船,别单独冲前排先送"
+    deps: [F87, D42]
+    evidence: "用户2026-07-20 详述完整规范,要求 phoenix_2base 与 phoenix_control 共用;待确认理解后实现"
+
+  - id: D53
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "前线一波凤凰在一起不分开:新出/掉队的先追赶已集结的主群再一起推进(方向遵循 D57 少数迁就多数,不让新出的自己先冲)"
+    statement: "凤凰前线 wave 是大前提——聚在一起、不分开推进。新产出/掉队的凤凰要先飞去追赶**已集结的主群**再一起骚扰,不能自己先冲。聚拢方向遵循 D57「少数迁就多数」:主群继续推进/到点打,落单的少数去追主群,绝不让主群回头停步/后撤迁就落单者"
+    deps: [D41, D57]
+    evidence: "用户2026-07-25:'第一个最新出来那个凤凰会先去没和其他汇合,前线那一波最好在一起不要分开';2026-07-25 复审:原'全体向质心等齐'条款经 F96 证伪(主群被落单者拽回)→ 改为主群不停、落单追主群(D57/D58)。旧实现 _squad_cohesive→move(全体质心)是根因(F99 折进 D58)"
+
+  - id: D56
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "空军骚扰的整条走位/接近路径尽量走地面部队去不了的地方(利用空军优势),别走地面能经过/能拦截的路线——不只终点安全、路线本身也要避开地面可达区"
+    statement: "空军骚扰通用原则:不只终点(矿后)要安全,**整条走位/接近/绕行路线本身**也要尽量走**地面部队去不了的地方**(悬崖上空、高地边缘外等空军优势区),别走地面部队能经过、能拦截的路线。绕开敌方基地时,绕行段也别落进地面军能走/能堵的开阔地。充分利用空军'能飞地面到不了的地方'这个优势保命。对凤凰/女妖/飞龙/BC 等所有空军骚扰都成立"
+    deps: [F87, D44]
+    evidence: "用户2026-07-25:'避开对方基地中心,不要从地面部队能经过的地方去绕,要利用空军优势,空军骚扰尽量不要走地面部队能走的地方'。落地:完整实现需地形感知(ground pathing grid 选空军独占格),当前 _avoid_enemy_centers 只是绕基地中心的部分近似"
+
+  - id: D54
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "凤凰接近/迁移路径要绕到矿后再切入、贴边溜、尽量靠后,绝不从主二矿中间直穿(避开所有敌方矿中心含目标矿)"
+    statement: "凤凰切矿要从**矿后**切入、贴对方高地边缘溜边(参考大件/棱镜引刀空投贴边路线,不照搬),尽量靠后;绝不从主矿二矿**中间**直穿过去。落地:接近路径 plan_avoid_path 避开**所有**敌方矿中心(**含目标矿自己**)→ 绕到目标矿背后再切;主矿没机会回防后从主矿矿后溜边到二矿矿后。是 D41 rule④的强化(之前排除目标矿中心导致直穿,已改成含目标矿)。注:是 D56(整条路线走地面去不了处)在凤凰的具体落地,但当前只做到绕基地中心,'绕行段也走空军独占区'待地形感知补"
+    deps: [D41, F87, D56]
+    evidence: "用户2026-07-25:'还从主二矿中间穿过去了,要从矿后切入贴边,参考大件';实现 _avoid_enemy_centers(含目标矿);trace(tr10)实锤:打主矿 wps 绕南边y=16再切矿后、主→二矿迁移沿y=16溜边不穿中间,n_wp 7-8"
+
+  - id: D55
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "有单位被凤凰抬起来时,其他凤凰必须集火 A 死它、绝不走开——这是'凤凰平时只 move 不 A'的唯一例外"
+    statement: "凤凰平时只 move(自动攻击射程内的)、不 attack-move(不 A、不追)。唯一例外——维护一个'正在被抬'的单位集合(带 GRAVITONBEAM buff=正在被抬还没结束的,加上本 tick 刚抬的),**只要该集合非空,其他凤凰就都过来优先 A 集合里的单位、一起打死**(不是抬的那一瞬间才 A,而是整个被抬期间只要没结束就一直 A)。绝不在有单位被抬时自己跑去打别的/移走——否则抬起来打不死、掉下去白抬(接 D48 限量抬人)"
+    deps: [D48]
+    evidence: "用户2026-07-25:'但凡还有凤凰正在抬那个单位还没结束,其他凤凰优先a被抬的,维护一个集合,集合非空其他凤凰都来a';实现 _lifted_targets(本tick抬+GRAVITONBEAM buff 每帧重算=该集合)+ fight分支非空则集火;单测 test_fight_others_focus_fire_lifted"
+
+  # ── 2026-07-25 用户真机反馈:少数迁就多数原则 + 三反常复审 ──────────────────
+  - id: D57
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "骚扰小队聚拢遵循'少数迁就多数':落单/新出的少数追赶已集结的多数主群,绝不让多数回头停步/后撤迁就少数"
+    statement: "骚扰(乃至任何机动小队)聚拢的铁律:始终**少数迁就多数**——落单的、新出的少数单位去追赶**已集结的多数主群**;绝不让多数主群回头停步、后撤、向落单者靠拢来迁就少数。主群该推进就推进、该到点打就打,落单者路上自己跟上;跟不上就留下,不拖累整队节奏。反面(多数迁就少数)=为等一两只把已到位的主群整体后拉,既拖慢又暴露主群,绝不允许"
+    deps: [D42]
+    evidence: "用户2026-07-25 强怒:'前面凤凰已经在那边集结了,为了等后面一个又往后拉,绝对不允许,要少数去迁就多数,不要多数去迁就少数,始终遵守这个原则'。通用于所有骚扰/机动小队聚拢,phoenix 的 D53/D58 是其落地"
+
+  - id: F96
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:前线凤凰已在目标矿集结,为等一只落后的凤凰,已集结主群整体后拉去迁就它(多数迁就少数)"
+    statement: "真机观察:凤凰前线一波已在目标矿区集结到位,却因一只凤凰落在后面,已集结的主群整体向后拉去和它汇合——多数迁就少数,违背 D57"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:approach 阶段 squad_center/danchor 出现'先接近再回弹'(有落单者时主群 aim 往回),或肉眼看主群到点后又后退"
+    evidence: "用户2026-07-25 live 观察。代码机制根因见 F99;修见 D58"
+
+  - id: F97
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机:凤凰接近仍从对方主基地面部队可达处直穿,没绕到矿后贴高地边缘切入(D54/D56 未落地)"
+    statement: "真机观察:凤凰接近敌方矿区仍'直来直去'——从对方主基附近**地面部队能走/能拦截的开阔地**直穿过去,没有绕到矿后、贴高地边缘(地面够不到处)切入。D54/D56 意图对但没在真机落地"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXPATH/PHOENIXTRACE:approach 阶段 dmain(到敌主基距)塌到很小=直穿主基;或肉眼看接近路线从主基-二矿中间地面开阔地穿过"
+    evidence: "用户2026-07-25 强怒:'又是直来直去,从对方主基地地面部队能走的地方去走'。代码机制根因见 F101;修见 D60"
+
+  - id: F98
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:有凤凰正在抬(GRAVITONBEAM 未结束)敌方单位时,其他凤凰仍飞走没集火 A 被抬单位(违背 D55)"
+    statement: "真机观察:有凤凰正在抬(GRAVITONBEAM buff 未结束)敌方单位时,其他凤凰没有集火 A 死被抬单位,而是飞走了——违背 D55"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:出现 lifted>0 但同 tick posture=flee/approach 且 atk=0(有单位被抬却没人 A);或肉眼看抬起来的单位没被打死又掉下去"
+    evidence: "用户2026-07-25 强怒:'有凤凰在抬的时候,其他凤凰还是飞走了没有管它'。代码机制根因见 F100;修见 D59"
+
+  - id: F99
+    kind: fact
+    provenance: own-code
+    domain: phoenix-micro
+    status: verified
+    title: "用含落单者的全体质心(phoenixes.center)作聚拢目标,主群会被落单者拽回(质心偏向落单者)"
+    statement: "凡是拿'含落单者的全体质心'(如 phoenixes.center)作整队聚拢/归队的目标点,落单单位会把质心偏向自己,主群若朝该质心移动就被拽回——多数迁就少数的通用代码机制,不限凤凰"
+    deps: []
+    evidence: "读码 + 几何:旧 phoenix_squad_micro._solve_unit approach 分支不聚拢时全体 move 向 phoenixes.center(行 414-420)。防重踩:聚拢目标要用'主群中心',别用全体质心。已由 D58 修正"
+
+  - id: F100
+    kind: fact
+    provenance: own-code
+    domain: phoenix-micro
+    status: verified
+    title: "把'集火被抬单位'判定 gate 在单一 posture,posture 翻转时被抬集合置空→其他单位弃抬飞走"
+    statement: "凡是把'集火某持续状态目标(如被抬单位)'的判定 gate 在单一整队 posture 里计算/消费,一旦 posture 翻成别的,该目标集合被置空,其他单位就按新 posture 各自散去、抛下未打死的目标——跨状态责任丢失的通用代码机制"
+    deps: []
+    evidence: "读码:旧 phoenix_squad_micro lifted_targets 仅在 posture==fight 时算+消费(solve_squad 189 + _solve_unit 432)。防重踩:持续状态的集火集合要无条件每帧算、跨 posture 生效。已由 D59 修正"
+
+  - id: F101
+    kind: fact
+    provenance: own-code
+    domain: harass-doctrine
+    status: verified
+    title: "plan_avoid_path 只把敌方基地当圆避,绕行段仍可落在地面可达开阔地(无地形感知)"
+    statement: "当前 plan_avoid_path(drop_path.py)只把敌方基地中心当圆形障碍绕,不读地形(pathing_grid),绕出来的路段仍可能落在地面部队能走/能拦截的开阔地——没有'只走地面去不了处'的能力"
+    deps: []
+    evidence: "读码 drop_path.py plan_avoid_path:仅按 avoid_centers 圆心+半径垂推拐点。待 D60 引入地形感知选路修正"
+
+  - id: F102
+    kind: fact
+    provenance: env-api
+    domain: harass-doctrine
+    status: verified
+    title: "SC2 pathing_grid 原始值极性有歧义(sharpy vendor 注释 ==0 可走 / python-sc2 in_pathing_grid ==1 可走),别自己读原值猜——用 in_pathing_grid 封装"
+    statement: "SC2 game_info.pathing_grid 的原始格值极性两处来源相反:sharpy vendor grids/grid.py 注释写 `==0` 才可通行,python-sc2 bot_ai.in_pathing_grid 用 `==1` 可通行。直接读原值硬编码极性=赌 50%、错了整个地形逻辑反向且测不出。规避:用 ai.in_pathing_grid(Point2)→bool 封装('True=地面可走'已被 proxy/nydus 等真机功能在用、验证过),不自己解读原值"
+    deps: []
+    evidence: "读码:vendor sharpy grids/grid.py:29 注释 `==0 pathable` vs .venv sc2/bot_ai.py in_pathing_grid `==1`。真机反证:plan_air_path 用 in_pathing_grid 后 air_frac 0.36-0.43 < straight 0.75-1.0(snap 真贴到地面够不到处),极性若反 air_frac 会更高。属 CLAUDE.md「读源码≠运行时真值」坑(同 salvage SALVAGEBUNKER),独立设计评审 F1 拦下"
+
+  - id: D58
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "凤凰聚拢按'主群'不按全体质心:主群继续沿 approach_wp 推进/到点打,落单/新出的追主群中心,绝不让主群回拉等落单者"
+    statement: "凤凰聚拢用**主群(最大 cohesive 簇)中心**判定,不用含落单者的全体质心。主群里的凤凰继续沿 approach_wp 推进(到点则打),不因落单者停步/后撤;落单/新出的凤凰去追**主群中心**。永不出现'全体 move 向质心等齐'"
+    deps: [D57, D53, F96, F99]
+    evidence: "实现:_solve_unit approach 分支改为算 _main_body_center(主群推进 / 落单追主群);单测 test_approach_majority_advances_minority_catches_up(主群不后退、落单向主群、铁证不回拽全体质心)。待真机 trace 验主群 danchor 单调不回弹"
+
+  - id: D59
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "lifted 集火跨 posture 生效:lifted_targets 每帧无条件算,集合非空则非抬手凤凰一律 A 最近被抬单位(优先级高于 approach/flee,仅低于个体 bail)"
+    statement: "被抬集合(GRAVITONBEAM buff 未结束的 + 本 tick 抬的)每帧**无条件计算**,不 gate 在 posture==fight。只要集合非空,非抬手凤凰一律去 A 最近的被抬单位——优先级**高于 approach/flee**、仅低于个体 bail(保命 D42)。绝不在有单位被抬时跟 flee_wp/approach 飞走"
+    deps: [D55, F98, F100]
+    evidence: "实现:solve_squad 无条件算 lifted_targets;_solve_unit 在 bail 之后、approach/flee 之前插集火分支;单测 test_focus_fire_lifted_persists_when_posture_flee(flee 下仍全体 A 被抬)。待真机 trace 验抬人期间 atk>0 且其他凤凰不 flee"
+
+  - id: D60
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "空军骚扰接近用地形感知 snap 选路(几何 base 路径上把中间点局部贴到地面 unpathable 悬崖格),落地 D56'只走地面去不了处'"
+    statement: "空军骚扰接近选路吃 SC2 地形(is_pathable=ai.in_pathing_grid),在已验证的几何路径(plan_avoid_path,保矿后切入)上把每个中间点**局部 snap 到最近的地面不可走(悬崖)格**——半径受限(不全局改道)+ 全局绕路守卫(snap 后 > base×1.35 就弃 snap),真正'只走地面去不了处'又不绕大圈。**弃全局 A***(独立评审:A* 会重演被否的 edge_path 绕大圈、丢矿后切入角、极性未验证)。极性不自己猜——用 in_pathing_grid(其'True=可走'已被 proxy/nydus 真机功能验证)"
+    deps: [D56, D54, F97, F101, F102]
+    evidence: "实现 plan_air_path(drop_path.py,snap 版)+ 单测 test_air_path_*。真机验证(build_acceptance phoenix_2base veryhard,scratchpad_phoenix3.log):PHOENIXPATH air_frac 0.36-0.43 << straight_frac 0.75-1.0(接近路径少走地面 50-64%),detour 1.15-1.86 是 base 合法矿后绕行非 edge_path(waypoint 都在基地附近未甩地图边)。air_frac<straight 同时反证 F102 极性运行时正确"
+
+  # ── 2026-07-26 用户真机反馈:三反常 + hit-and-run 精髓 ──────────────────────
+  - id: F103
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:凤凰没第一时间去矿区,先暴露行踪、在外面(敌方能看到的中场)集结干等"
+    statement: "真机观察:凤凰一波没有第一时间奔向敌方矿区,而是先飞到敌方能看到的外围/中场暴露了行踪、在那集结干等——没趁隐蔽快速抵达矿后,行踪先曝光,是骚扰大忌"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:早期 tgt=all_defended/hold + squad 长时间停在中场(danchor 大、dmain 中等)不进矿后;或肉眼看凤凰在敌方视野内外围盘旋"
+    evidence: "用户2026-07-26 强怒:'没有第一时间去矿区,先暴露了自己的行踪,又在外面集结,这是大忌'。代码根因:all_defended → _hold_point 退中场干等(暴露)。修见 D62/D63"
+
+  - id: F104
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机:凤凰接近仍从敌方地面部队可达处走、没绕矿后概隐(D60 snap 真机仍暴露)"
+    statement: "真机观察:凤凰接近仍从对方基地地面部队能走的地方穿过、没绕到矿后概隐切入。D60 的 snap 只在几何路径上局部微调贴崖,真机里没真正把整条接近改成'绕矿后、走地面到不了处'——问题仍在"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXPATH:air_frac 仍偏高 / 路径中段仍穿主基-矿之间地面开阔地;或肉眼看接近直穿敌方部队区"
+    evidence: "用户2026-07-26:'又没走矿后去绕,又从别人基地地面部队能走的地方去'。D60 snap 半径受限只微调、力度不够。修见 D63(强化绕矿后)"
+
+  - id: F105
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:凤凰在敌方枪兵旁又不抬又不跑、杵着被枪兵白打掉血(违背'要么抬要么跑')"
+    statement: "真机观察:凤凰到敌方枪兵旁,既没抬人(fight)也没撤(flee),而是杵在那被枪兵免费打掉血。根因:_solve_unit fight 分支里抬不成(枪兵抬不动/能量不足/农民已跑)且无被抬目标时,只 move 到矿后锚点杵着,既不抬也不跑"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:posture=fight 但 lift=0 且 lifted=0 且 atk=0(纯 move)、同时 squad 在掉血;或肉眼看凤凰站枪兵堆里挨打不动"
+    evidence: "用户2026-07-26 强怒:'我说凤凰要么抬要么跑,结果又没抬又没跑,被枪兵白打'。代码根因:phoenix_squad_micro _solve_unit fight 分支 fallback 是 move(harass_anchor)。修见 D61"
+
+  - id: F106
+    kind: fact
+    provenance: env-game
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰血多甲多 + 护盾脱战回,能扛几下枪兵、抬杀几个、护盾掉了退回回盾、待会再来——hit-and-run 反复占便宜是骚扰精髓"
+    statement: "凤凰血量高、护甲不低,且护盾脱战自动回(F89)。故可用护盾当 buffer:冲进去扛几下枪兵火力、抬杀几个枪兵/农民,护盾快掉光就退出敌方射程回盾,回满再来占便宜——这种 hit-and-run(拿会回的护盾换战果、绝不拿不回的血去送)正是凤凰骚扰精髓,不是干等也不是硬耗"
+    deps: [F87, F89]
+    evidence: "用户2026-07-26 详述:'凤凰血多甲多,可以打死几个枪兵再退回回盾,待会再来占便宜,这才是凤凰骚扰精髓'"
+
+  - id: D61
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "'要么抬要么跑'操作化:枪兵旁能抬就抬杀(护盾当buffer扛)、护盾掉到阈值就退回回盾;抬不成/对空太多就直接跑;绝不又不抬又不跑杵着挨打"
+    statement: "凤凰在敌方对空(枪兵)旁必须二选一,绝不杵着挨打(修 F105):①能抬 → 抬杀几个(用高血甲扛住、护盾当 buffer),护盾掉到阈值就退出射程回盾(拿会回的护盾换战果,别耗到掉血送命);②抬不成(抬不动/能量不足/无目标)或对空太多打不过 → 直接跑(绕敌撤)。落地:fight 分支的 fallback 从'move 到锚点杵着'改成'附近有对空威胁就 flee';retreat 判据用护盾(护盾低就退回盾,不等血危)"
+    deps: [F105, F106, D42, D46]
+    evidence: "用户2026-07-26。落地:phoenix_squad_micro _solve_unit fight fallback 改 flee(有 AA 时) + 护盾阈值 retreat;待真机 trace 验 posture=fight 时不再出现 lift=0/lifted=0/atk=0 干挨打"
+
+  - id: D62
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "不在暴露中场 hold 干等:矿被镇 → 要么绕矿后概隐接近抬杀几个再退,要么退回概隐点回盾,绝不在敌方能看到/够到的中场集结暴露行踪"
+    statement: "所有矿都被镇守(defended)时,绝不退到敌方能看到的中场 _hold_point 干等暴露行踪(修 F103)。要么走矿后概隐路线切进去抬杀几个再退(D61),要么退到敌方够不到的概隐点回盾等窗口——待命/集结点必须在敌方视野外、地面够不到处,不在中场"
+    deps: [F103, D42, F87]
+    evidence: "用户2026-07-26。落地:act 层 all_defended 分支从 _hold_point(中场 standoff)改成概隐回盾点(近 _regroup_point 但强制概隐);待真机验凤凰不在敌方视野内中场盘旋"
+
+  - id: D63
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "凤凰第一时间走矿后概隐路线直奔矿区,别先暴露行踪再外面集结;强化 D60 让接近真绕矿后走地面到不了处"
+    statement: "凤凰一波该第一时间走概隐(矿后、地面到不了处)路线直奔矿区,不先飞暴露处再集结(修 F103)。且要强化 D60/D54——当前 snap 力度不够、真机仍穿地面可达区(F104),接近选路要更强地绕到矿后、贴悬崖走,而非只在直线附近微调"
+    deps: [F103, F104, D54, D60]
+    evidence: "用户2026-07-26。落地:强化接近选路(snap 半径/力度或改路由起点为矿后)+ 去掉暴露集结;待真机 PHOENIXPATH air_frac 显著下降 + 肉眼不穿敌部队区"
+
+  - id: F107
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:敌方来兵时凤凰在原地 orbit 打转,没在高地外/矿后空间(地面够不到处)拉扯、没在一矿↔二矿矿后来回腾挪(F87 精髓未落地)"
+    statement: "真机观察:敌方增援来到凤凰所在矿区时,凤凰只在当前威胁附近原地 orbit 打转,没有穿梭到**另一个矿的矿后**(一矿↔二矿矿后之间腾挪)拉扯。F87 的精髓——'敌方增援就穿梭到另一个矿后,地面军够不到、凤凰活得久'——没在 flee 逻辑里落地"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 grep PHOENIXTRACE:flee 期间 squad 位置在当前矿附近小幅 orbit、danchor 不切向另一矿;或肉眼看敌方来兵凤凰原地绕不换矿后"
+    evidence: "用户2026-07-26:'敌方来兵时凤凰要在高地外地面够不到处拉扯、在一矿二矿矿后来回腾挪,这个也没实现'。代码根因:_flee_orbit_waypoint 绕当前威胁 orbit,不relocate 到另一矿后。修见 D64"
+
+  - id: D64
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "敌方来兵时凤凰穿梭到另一矿后拉扯:保持在高地外/地面够不到的矿后空间,在一矿↔二矿矿后之间来回腾挪,不原地 orbit、不退回家、不进地面可达区"
+    statement: "敌方增援来到当前矿区时(flee),凤凰不在原地 orbit 打转,而是**穿梭到另一个矿的矿后**(一矿↔二矿矿后之间腾挪)继续拉扯——始终待在高地外、地面部队够不到的矿后空间,让地面增援追不上、凤凰活得久持续压制。落地:flee 目标优先取'另一个安全(低对空)矿的矿后点'(act 的 harass_anchor 换矿后即是它),朝它 relocate 穿梭;只有该点也被威胁(两矿都被镇)才 orbit 逃离/退概隐点"
+    deps: [F87, F106, F107]
+    evidence: "用户2026-07-26。落地:micro flee 分支——harass_anchor(act 已切成安全矿后点)若不被对空威胁 → flee 朝它 relocate(穿梭到另一矿后);否则才 orbit。待真机验 flee 时 squad 在两矿后之间腾挪、不原地转"
+
+  - id: F108
+    kind: fact
+    provenance: env-game
+    domain: phoenix-micro
+    status: verified
+    title: "凤凰 GRAVITONBEAM 抬不动建筑,静态防空(炮塔/孢子/光子炮)对凤凰是搞不定的硬墙——不能对地又抬不起,只能绕"
+    statement: "凤凰武器只打空(F76)、GRAVITONBEAM 又抬不动建筑,所以敌方静态防空(导弹炮塔/孢子匍匐/光子炮)对凤凰既打不着、又抬不走 = 搞不定的硬墙;硬闯只会被白打掉血送命,唯一应对是绕开、从没防空的角度/矿下手"
+    deps: [F76]
+    evidence: "SC2 机制:GRAVITONBEAM 目标须是非建筑地面/空中单位;静态防空是建筑。用户2026-07-26:'凤凰不能对地,对方有防空就别硬闯要绕开'"
+
+  - id: D65
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "凤凰遇搞不定的防空(静态防空/对空过多抬不完)不硬闯:接近选路 + 目标选择主动绕开防空,找没防空的角度/矿下手"
+    statement: "凤凰不能对地(F76)、抬不动静态防空(F108),故遇到搞不定的防空(静态防空,或对空多到抬不完)绝不硬闯——①接近选路把静态防空位置也当避障中心绕开(不从防空火力网穿);②目标选择跳过防空镇守的矿、找没防空的角度/矿下手。宁可不打也不往防空上送(接 D42 保存实力)"
+    deps: [F76, F108, D42, F106]
+    evidence: "用户2026-07-26:'凤凰不能对地,对方有防空就别硬闯要绕开'。落地:_avoid_enemy_centers 纳入静态防空位置(接近绕开)+ harassable 门对静态防空更硬。与 D63(绕矿后)同属接近避防空一套"
+
+  # ── 2026-07-26b 用户精确定义"安全集结点" + flee/退/选点四点 ────────────────
+  - id: F109
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "凤凰'安全集结点'定义:①敌方建筑+部队都看不到(出视野) ②敌方地面部队打不到(够不着) ③在高地外;主/二/三矿附近都能找到这种概隐口袋"
+    statement: "凤凰的回退/集结/回盾点必须是'安全集结点'——同时满足三条:①出敌方视野(敌方建筑和部队都看不到该位置)②敌方地面部队够不到(该位置地面走不到/被悬崖隔开)③在敌方高地(主基台地)外。敌方主基外、二矿三矿附近的矿后/悬崖外都能找到这种概隐口袋。在这种点集结/回盾不挨打,攒够又能骚扰一波"
+    deps: [F87, F108]
+    evidence: "用户2026-07-26 精确定义:'安全集结点第一敌方建筑和部队都看不到,第二地面部队打不到,在主框外,二矿三矿附近也能找这种位置'。是 F87 矿后空域精髓的可判定化"
+
+  - id: D66
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "flee 要和敌方部队保持距离、绕开走(不直线穿/不飞部队头顶):决定躲就先拉开距离再退,别直线撤"
+    statement: "凤凰撤退(flee)不走直线穿过/飞过敌方部队头顶,要**和敌方部队保持距离、绕着走**。逻辑顺序:决定躲 → 先拉开与敌方部队的距离(远离威胁方向)→ 再往安全集结点退。修:D64 的穿梭'直线飞去另一矿'正好从敌方部队头上直穿了,要改成绕开敌方部队的避让路径"
+    deps: [F87, D64, F108]
+    evidence: "用户2026-07-26:'看到对方回防往回逃居然直线走,你从对方部队头上过去干啥,要和对方部队保持距离,绕着'。落地:flee 目标/路径用避敌(部队+AA)routing,先远离威胁再走"
+
+  - id: D67
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "骚扰没结束不退回家,退到敌方基地附近的安全集结点(F109)回盾/集结,攒够再骚扰一波;或从矿后绕到二矿"
+    statement: "骚扰还没结束时,凤凰撤退**有安全集结点可去时绝不退回家**(浪费时间、放弃压制),而是退到**敌方基地附近的安全集结点**(F109)回盾/集结,盾回够、兵攒够又骚扰一波;或直接从矿后绕到二矿继续。修:之前 flee/bail 退回 start_location(家)。**终局兜底(评审 F8)**:各矿都被镇、_safe_gather_point 返回空/全被威胁时,才退回家或收骚扰卡归队(有安全点时不回家,无安全点时允许回家)"
+    deps: [F87, F109, D64]
+    evidence: "用户2026-07-26:'骚扰没结束你退家里干什么,退他们基地附近安全区域集结回盾,攒够又骚扰一波,或从矿后绕到二矿'"
+
+  - id: D68
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "集结/回退点必须选安全集结点(F109),不选敌方部队能打到的点——之前 regroup 点仍在敌方可达区一直挨打"
+    statement: "凤凰的集结/回退/回盾点必须按 F109 选(出视野+地面够不到+高地外),绝不选敌方部队能打到的位置。修 F103 + 之前 _regroup_point 的缺陷:它只朝家方向退到'无对空'为止,没判'地面够不到/出视野',常落在敌方地面部队能走到、能打到的开阔地 → 在那集结一直被打"
+    deps: [F109, F103]
+    evidence: "用户2026-07-26:'集结点怎么还在对方基地附近部队能打到的地方,在那集结不是一直被打吗'。落地:_regroup_point 改用 F109 判据(pathing_grid 地面够不到 + 远离敌方视野)"
+
+  - id: D69
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "地对空少时可强抬一波打(护盾换战果),但先选好安全集结点(F109)作退路;别再犯又不打又不逃"
+    statement: "敌方地面对空部队不多时,可以强行抬一波打(用高血甲+护盾扛,抬杀几个,接 D61/F106);但前提是**先选好安全集结点(F109)作退路**——打完/护盾掉了退到那儿回盾。绝不再犯'又不打又不逃'杵着挨打的错。安全集结点是整套 hit-and-run 的锚:出击从它出发、回退回到它"
+    deps: [F109, D61, F106]
+    evidence: "用户2026-07-26:'地对空少时可以强抬一波打,结果又犯了又不打又不逃的错;建议先选一个高地外安全集结点'"
+
+  # ── 实验结果(把之前的真机自验推进图谱) ──────────────────────────────────
+  - id: F110
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "实验:D60 snap 版真机 air_frac 0.36-0.43 < 直线 0.75-1.0(少走地面 50-64%)，但真机肉眼仍穿地面可达区(F104)→ 局部贴崖微调不足,需全局绕矿后概隐"
+    statement: "D60 snap 版 build_acceptance 真机实测:PHOENIXPATH air_frac 0.36-0.43 << straight_frac 0.75-1.0(接近路径落地面格比例降 50-64%)。但同版用户真机肉眼仍见接近穿敌方地面可达区(F104)。结论:'在几何直线附近半径受限局部贴崖'力度不够,要全局改道绕到矿后/走地面够不到处才行"
+    deps: [F104]
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 build_acceptance phoenix_2base veryhard；grep PHOENIXPATH air_frac vs straight_frac"
+    evidence: "scratchpad_phoenix3.log(2026-07-25)：air_frac 0.37/0.43/0.36。反向审查:D60 status 仍 active 但其'局部 snap'被证不足,由 D72(全局避敌绕矿后选路)取代/扩展"
+
+  - id: F111
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "实验:D61 落地后真机 fight 干挨打(lift=0 lifted=0 atk=0)tick=0,'要么抬要么跑'生效"
+    statement: "D61(要么抬要么跑 + 护盾换战果)落地后 build_acceptance 真机实测:posture=fight 但 lift=0 且 lifted=0 且 atk=0(纯杵着挨打)的 tick = 0;flee 期间 squad 位置大范围移动(腾挪)。确认 F105 那个'又不抬又不跑'的病已修"
+    deps: [D61]
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 build_acceptance phoenix_2base veryhard；grep 'posture=fight ' 里 'lifted=0 lift=0 atk=0' 计数应为 0"
+    evidence: "scratchpad_ph4.log(2026-07-26)：fight 干挨打 tick=0;posture approach120/fight2/flee13,flee squad 位置在 x127-151/y78-99 大范围移动"
+
+  # ── 基于图谱推演出的地形感知重构设计(2026-07-26b) ──────────────────────
+  - id: D70
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "建'敌人+地形'判定基元:_ground_unreachable(敌地面**射程内**无可达可走格,基于预计算可达距离场) / _vision_exposed(复用 cannon_proxy 现成、迷雾下当软分) / _aa_threatened(合并现有4份为1)"
+    statement: "把 F109 三条判据代码化(评审 F2/F5/F6/F15 + 探针 F114 修正):①_ground_unreachable(pt,R)——**判定基=矿后悬崖(terrain_height 突降)**(F114 真机定:静态栅格不编码矿脉,靠悬崖不靠矿脉);即 pt 的 R(≈敌地面 AA 射程)内**没有敌方地面可达的可走格**(用 D79 预计算的'敌地面可达距离场'查 O(1);距离场由**从敌基可走格起步**的 pathing BFS 生成,越过悬崖的矿后段自然 BFS 不可达);②_vision_exposed(pt)——**复用现成 forward_cannon_proxy._in_enemy_vision**(已处理迷雾:含静态视野源),且迷雾下不可靠 → 只当**软分 tiebreak**,不当硬门;③_aa_threatened(pt,radius)——**合并现有4份不一致实现**(act _aa_threatens r13 / micro _point_aa_threatened r12 / _aa_near r12 / _squad_can_fight)成单一共享。硬门=①地面够不到+③可见AA;软分=②视野。三者供选点(D71)+选路(D72)。**前置:先 D80 探针敲定 pathing 语义**"
+    deps: [F109, F108, F102, D80]
+    evidence: "推演自 F109;**独立评审 F2/F5/F6/F15 修正**:改'射程内无可达格'(单格不够)、复用 cannon_proxy 视野(别重写)、视野迷雾下当软分、AA判定合一。落地种族中性模块(非 protoss 专有);单测合成 pathing_grid+敌方单位"
+
+  - id: D71
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "_safe_gather_points(复数):各敌方矿算出一组安全集结点(每矿1+备选),状态机看情况选去哪个;通用于所有空军骚扰、非凤凰专有"
+    statement: "实现 _safe_gather_points(**复数,维护一组**,用户 2026-07-26b):对每个已知敌方矿(主/二/三)沿矿后+悬崖外采样候选,用 D70 判据(地面够不到硬门 + 无AA硬门 + 出视野软分)筛出**该矿的安全集结点**,汇成一组候选点(各矿 + 备选)。状态机(D73)**看情况选去哪个**:默认蹲最近的;哪个矿有机会(农民多/对空少)就去那个的集结点出击;敌从哪来就离哪个;腾挪时切到另一矿的集结点。替代现在'退回家/中场 hold/朝家退的 _regroup_point'单点逻辑。**这套选点通用于所有空军骚扰(凤凰/女妖/飞龙/BC)**,住在通用/地形层、非凤凰专有"
+    deps: [F109, D70, F87, D81]
+    evidence: "**真机验证(2026-07-26 PHOENIXSAFE):3个敌方矿全算出真悬崖口袋——矿h223→口袋h127(落差96)/h207→h135/h207→h127,terrain_harass.find_mineback_pocket 靠悬崖判定基真机有效**。推演自 F109+F87;用户2026-07-26b:'可以多选几个安全集结点看情况去哪个''这种安全集结点对所有空军骚扰通用'。落地种族中性模块出一组点,状态机 D73 按 D81 心法情境选择;替换 _regroup_point/_hold_point"
+
+  - id: D72
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "选路算法=预计算走廊(经矿后口袋),非A*非纯局部snap:approach 只避**静态**威胁(基地+静态防空)走过矿后口袋并锁定;移动敌军交给每帧 posture(flee),不进 approach 路径"
+    statement: "接近选路用**预计算走廊**(评审后修正,非 A* 非纯局部 snap):approach = start →(避静态:基地中心+静态防空)→ 目标矿的预计算安全矿后口袋(D71/D79 产物,显式 waypoint)→ 矿后点。每段短、几何约束在矿脉背后、**一次锁定幂等重发**(遵守目标锁定纪律)。**移动敌军不当 avoid 中心**(会每帧漂移抖动,违反纪律)——移动敌军挡路交给每帧 posture 状态机处理(军队来了 posture 翻 flee)。撤退(flee)先朝远离威胁方向拉距离,再走避静态路由退到安全点/另一矿口袋。否 A*(D60 已证绕大圈+丢矿后角);否纯局部 snap(F110 证力度不足)。若日后走廊不足,才考虑受严格 detour 上限约束的 A*"
+    deps: [F104, F110, D66, D63, D65, D71]
+    evidence: "推演自 F110+D66+D63;**独立评审 F9/F10/F17 修正**:移动敌军当 avoid=每帧漂移抖动(纪律①)→ 改静态路由+posture 处理动敌;算法定为预计算走廊(复用 D71 口袋),非 A*(D60 否过)。落地扩 plan_air_path 插矿后口袋 waypoint;真机 grep air_frac 降 + 肉眼不穿敌部队(per-instance/终态验证,别只看 air_frac)"
+
+  - id: D73
+    kind: decision
+    by: agent
+    domain: phoenix-micro
+    status: active
+    title: "状态机以安全集结点为锚重构:regroup/flee 退到最近安全集结点(不回家)+ 走避敌路径;出击从安全集结点出发;两矿安全点之间穿梭腾挪"
+    statement: "凤凰状态机以'安全集结点(D71)'为锚、按心法 D81 重构——**默认态=蹲安全区(不悬停矿区)**:①默认/未骚扰/兵不够/打散 → 蹲在最近安全集结点集结回盾(不回家 D67);②**伺机出击** → 看到能杀且对空少,才从安全集结点沿避敌路径(D72)窜到可打矿的矿后(D69,先备好退路),杀一波;③fight → 要么抬要么跑(D61 已落地);④**敌来即退** → 走避敌路径(D72,先拉距离)退回安全集结点、或经安全区穿梭到另一矿(D64 腾挪改避敌路径,不直线)。整套 = F87/F106 hit-and-run + D81 心法落地"
+    deps: [F109, D67, D69, D71, D72, D61, D64, D81]
+    evidence: "推演自全域:F87(矿后拉扯)+F106(hit-and-run)+F109(安全点)+D61/64/67/69。落地 phoenix_squad_act _harass_anchor_and_approach/regroup/flee 接线;真机验凤凰不回家、在安全点集结、绕敌撤退、两矿腾挪"
+
+  # ── 2026-07-26c 用户真机:心法 D81 落地三问(bail回家/过早re-engage/没能量还晃)──────
+  - id: F115
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:凤凰没血/护盾了仍逃回家(不去安全点),且各只独立回家破坏'待在一起'原则"
+    statement: "真机观察:凤凰血/护盾低时(_should_bail)仍飞回家(start_location),没退到近敌的安全悬崖口袋回盾;且是**每只独立**回家 → 整队被拆散,违反'前线在一起'(D53/D57)。根因:_solve_unit bail 分支目标写死 ai.start_location,且逐只判"
+    deps: []
+    repro: "肉眼:凤凰掉血后一只只往家飞、不聚在安全口袋;或 grep bail 目标=start_location"
+    evidence: "用户2026-07-26c:'凤凰没血了还往家逃,我说了去安全点待着就完了;这违反凤凰必须在一起'。修见 D82"
+
+  - id: F116
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:退到安全点后,敌方大部队还在目标矿,凤凰马上又回去(过早 re-engage)——harassable 只数对空没数敌方部队在不在矿区"
+    statement: "真机观察(用户称'新发现的优化点'):凤凰退到安全点后,敌方大部队还镇在目标矿,凤凰却马上又 approach 回去。根因:退到安全点后 squad 附近无对空 → can_fight True + _pick_harass_geom 的 harassable 门**只数对空(_aa_count_near),没数敌方非对空大部队在不在矿区** → 大军还在也判'能去' → 立刻回被镇的矿。心法 D81'伺机才上'的'机会'判定缺了'敌方部队是否已离开'"
+    deps: []
+    repro: "肉眼:凤凰退安全点后敌军没走就又飞回;或 grep tgt 从 regroup/all_defended 很快变回 ok"
+    evidence: "用户2026-07-26c:'在那待着之后,人家大部队还没走,怎么又马上回去了';这是心法 D81 default-safe 的'机会'判定要加'敌部队离开'。修见 D83"
+
+  - id: F117
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机:没能量抬时凤凰还在敌人旁 orbit 晃(又没抬又没走),该直接退安全口袋"
+    statement: "真机观察:凤凰没(足够)能量抬人时,面对敌人还在旁边 orbit 转圈晃(既没抬也没真走),被白打。根因:flee 的 orbit 是'绕当前威胁转圈保持射程外',看着就是原地晃;没能量抬/打不成时应**直接退到安全口袋**离开,不 orbit。是 F105'要么抬要么跑'在'没能量'这个 case 的残留"
+    deps: []
+    repro: "肉眼:凤凰能量空时在敌军旁绕圈不走;或 grep posture=flee 但 squad 位置在威胁附近小幅绕、不向安全口袋移动"
+    evidence: "用户2026-07-26c:'没能量抬你就走啊,一直在那晃干啥';修见 D84"
+
+  - id: D82
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "撤退/回盾退到最近安全悬崖口袋(不回家)+ 整队一起退(保持在一起),不各只独立回家"
+    statement: "凤凰血/护盾低要回盾时,退到**最近的安全悬崖口袋**(D71,近敌、地面够不到)回盾,**不回家**(start_location);且**整队一起退到同一安全点**(保持在一起,D53/D57),不各只独立飞回家把队拆散。落地:_solve_unit bail 分支目标从 start_location 改成最近 safe_point;回盾也在安全口袋等(不回家)"
+    deps: [D81, D67, D53, F115]
+    evidence: "用户2026-07-26c:'去安全点待着就完了,别往家逃;违反在一起原则'。落地:bail 目标改 safe_point + 整队同点"
+
+  - id: D83
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "被镇的矿别飞回去,但'defended'对凤凰=有对空(AA),不是有地面军(F120);机会不靠原地等,靠主动穿梭去没对空的矿(D85)"
+    statement: "心法 D81'伺机才上'的机会判定:harassable 门看**对空(AA)**——对空多的矿=打不过=别飞回去。**注(F120 反向审查):对凤凰'defended'= 有对空,不是有地面军**——凤凰不能被地面打,地面军再多也照样 snipe 农民,所以 harassable **只数对空、不数地面军**(实测把地面军当 defended 会过度回避、骚扰 KPI 掉半)。**机会不靠原地等**(原地=僵局)——而是**主动穿梭到对空少的另一矿**打(D85)。安全靠 bail/flee→安全口袋(D82)保,不靠回避有地面军的矿"
+    deps: [D81, F116, F87, D85, F120]
+    evidence: "用户2026-07-26c'蹲守等'→2026-07-26d 修正主动拉扯。实现踩坑(F120):加'数地面军'force 门,真机 harass_worker_kills 4→2、53% 时间 regroup → 回退,只留 AA 门"
+
+  - id: D84
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "没能量抬/打不成时直接退安全口袋(不 orbit 晃在敌人旁);orbit 只作最后兜底"
+    statement: "凤凰没(足够)能量抬人、或打不成时,**直接退到最近安全口袋离开**(D82),不在敌人旁 orbit 转圈晃(又没抬又没走)。flee 目标优先安全口袋(已 D82),orbit 只在'无安全口袋且被威胁'时作最后兜底。补 F105'要么抬要么跑'在'没能量'case 的残留(F117)"
+    deps: [D61, D82, F117]
+    evidence: "用户2026-07-26c:'没能量抬就走,别一直晃';落地:flee/fight-fallback 无能量/打不成 → 退安全口袋,不 orbit"
+
+  - id: F123
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "真机 PvZ:凤凰面对女王(可抬对空)从头到尾不抬,即便凤凰数占优,9 只被女王逐步磨到 0"
+    statement: "真机 PvZ 局观察:凤凰面对女王整局不抬,即便凤凰数明显多于女王;最终 9 只被女王逐步磨到 0,无有效 hit-and-run。"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 有女王的局 grep 'lift=[1-9]' 恒 0(全 lift=0);telemetry PHOENIX 计数单调降到 0"
+    evidence: "用户2026-07-26f + 真机 game_20260726_091532 telemetry(PHOENIX 9→4→3→1→0)。机制根因见 F125,修见 D89"
+
+  - id: F125
+    kind: fact
+    provenance: own-code
+    domain: phoenix-micro
+    status: verified
+    title: "旧 _squad_can_fight 单门 n_aa<=n_ph×0.5 把可抬对空(女王)与抬不掉的静态防空混算、可抬对空一多即 flee;而 _assign_lifts 只在 fight posture 跑 → 一旦 flee 永不抬"
+    statement: "改动前 _squad_can_fight 用单一门 `对空数(女王+静态一起数) <= 凤凰数×0.5` 判打不打,不区分可抬/不可抬对空;可抬对空(女王)一多就返回 False → posture=flee。而抬人分配 _assign_lifts 只在 posture=fight 时执行,故 flee 时永远不抬。"
+    deps: []
+    evidence: "读 phoenix_squad_micro.py 改动前 _squad_can_fight + _squad_posture + solve_squad 抬人分派路径"
+
+  - id: F124
+    kind: fact
+    provenance: doc
+    domain: phoenix-micro
+    status: verified
+    title: "游戏数值:凤凰180有效血(120+60盾)/对非轻甲~12.6DPS/移速5.95;抬50能量瘫痪1地面单位(静态防空抬不掉);女王175血~12.6DPS射程7可抬;孢子~17/光子炮20/导弹塔~14 DPS射程7抬不掉;基准4凤凰+1抬秒1女王"
+    statement: "LotV 现版本(Liquipedia)关键数值:凤凰 120血+60盾=180有效血,武器7伤(轻甲12)×2发cd1.11→对女王(非轻甲)≈12.6DPS,移速5.95,只对空。GRAVITONBEAM:50能量抬起1个地面单位完全瘫痪,静态防空建筑抬不掉;5凤凰~17.7s攒1次抬能量。女王:175血,对空~12.6DPS,射程7,是单位可抬。静态防空(抬不掉):孢子~17DPS/光子炮20DPS/导弹塔~14DPS,射程都7。基准:4凤凰+1次抬=秒1女王(4×12.6=50.4DPS,175/50≈3.5s)"
+    deps: []
+    evidence: "Liquipedia LotV Phoenix/Queen/Spore Crawler/Graviton Beam 页面;patch 4.2.4 凤凰7(12轻甲);'4 Phoenixes kill a Queen with one graviton beam'"
+
+  - id: D89
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "骚扰主目标=杀农民(别忘);可抬对空(女王)有富余且带能量抬得动就抬清(女王<凤凰数且带能量凤凰≥女王数),没能量就撤;静态防空区别对待(D90)"
+    statement: "①**骚扰的最主要目的是杀农民**(F87,别被走位/躲避带偏忘了)。②**可抬对空**(女王/枪兵/刺蛇等非建筑地面对空):N只带能量凤凰可**同时**抬起N个(F124)→ **可抬对空数 < 凤凰总数(有富余)且 带能量凤凰数 ≥ 可抬对空数(抬得动全部)** → 一次抬光→零对空火力→**零损失**+富余凤凰杀农民 → 果断打+抬清场(D41 rule5)。带能量不足=抬不动=会挨打 → 撤回去回能量('除非没能量',用户2026-07-26)。不再一味躲女王被磨死(F123)。③**静态防空**(抬不掉)区别对待见 D90。落地:_squad_can_fight + act harassable 同口径(n_可抬<n_ph 且 n_energy>=n_可抬),_try_lift Gate A 放宽到 n_threat<=n_lift(序贯清场)"
+    deps: [F87, D41, F123, F125, F124, F120, F106]
+    evidence: "用户2026-07-26f:'女王个数比凤凰少可以击杀不能逃避,除非没能量';用游戏数值算阈值。落地:_squad_can_fight 能量感知 + _try_lift Gate A 1:1 + act _aa_split_near。D89 = 把 D41 rule5 操作化 + 修 F123/F125 揭示的旧门缺陷"
+
+  - id: D90
+    kind: decision
+    by: player
+    domain: phoenix-micro
+    status: active
+    title: "静态防空(孢子/光子炮/导弹塔,抬不掉)不是一律不能去:≤2座可靠护盾硬闯突袭杀农民(没盾早撤全身而退),>2座硬闯必损失→避开换矿"
+    statement: "静态防空(孢子/光子炮/导弹塔,三族静态防空,GRAVITONBEAM 抬不掉)**不该一律躲**:凤凰有护盾(F124 60盾脱战会回),数量够时**没盾的凤凰先撤、其余顶着防空伤害轮转**,冲进去能秒好多农民(用户2026-07-26)。**阈值(游戏数值算)**:凤凰180有效血,单座静态防空~18DPS,飞出射程7约~2s→硬闯一趟每只挨~静态数×36伤;≤2座(_STATIC_RAID_MAX)护盾扛+早撤能全身而退,≥3座焦点火力~1s穿盾撤不出→硬闯必损失→避开换矿。**铁律:硬闯前提是能全身而退、不损失凤凰**(保存实力 D42),靠 _should_bail 没盾即撤保证。落地:_squad_can_fight 静态>预算才 flee,≤预算允许(接护盾 bail);act harassable 同"
+    deps: [F124, F108, F106, D42]
+    evidence: "用户2026-07-26f:'有静态防空也可硬闯杀农民,前提能全身而退不损失凤凰;防空太多进去会有损失'。落地:_STATIC_RAID_MAX=2 + _should_bail"
+
+  # ── phoenix-optimize 域:凤凰骚扰指标驱动优化(用户 2026-07-26 目标:归队前杀农民↑损失↓看 VeryHard 胜率) ──
+  - id: F126
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机 VeryHard-Zerg 基线(抬女王修复后无门,16局可靠样本):骚扰阶段(归队前 t≤620)均值杀农民 6.5/损失 16.3、胜率 20%(3W-11L);胜负强相关骚扰阶段杀农民数(胜局 11-35、败局 0-8);全局损失 58.9(mass phoenix 喂 Zerg 反空军)"
+    statement: "phoenix_2base vs VeryHard Zerg **16 局**:骚扰阶段(t≤620=release_after 归队前)均值杀农民 6.5、凤凰损失 16.3、kills/loss 0.40;胜率 20%(3W-11L)。胜局骚扰阶段杀 11-35、败局杀 0-8 → 胜负强相关'骚扰阶段杀农民数'。**败局骚扰阶段就在喂兵**(损 19-25、杀 0-8)。全局累计损失 58.9(bot mass-phoenix,峰值 40-56,持续喂 Zerg 反空军[女王/刺蛇/腐化])。⚠方差极大:早先 8 局样本偶得 38%/杀13.8 是走运,16 局才是真面目——判回归/改进必须大批次(≥16)。"
+    deps: []
+    repro: "VIBECRAFT_OPPONENT_RACE=Zerg build_acceptance phoenix_2base --runs 16 --opponent veryhard;scripts/phoenix_harass_metrics.py 读 telemetry enemy_workers_killed/phoenix_lost(骚扰窗口 t≤620)"
+    evidence: "logs/game_20260726_1212*~1215* 16局(1局45min退化局剔除,15局有效);phoenix_harass_metrics.py"
+
+  - id: F127
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:迭代1'生产力门'(连续70s没杀新农民→退自家深安全点hold45s)是回归——骚扰阶段杀农民 13.8→4.4、损失 11.9→16.3、胜率 38→27%"
+    statement: "给 PhoenixSquadAct 加生产力门(连续 _STALE_HARASS_S=70s 没杀到新农民就退往自家方向深安全点 hold 45s 再试)后,VeryHard Zerg 12 局:骚扰阶段均值杀农民 4.4(降)、损失 16.3(升)、胜率 27%(降)。退往自家打断骚扰节奏、来回飞空耗、反而被沿途截杀。"
+    deps: []
+    repro: "同 F126 但代码含生产力门;logs 迭代1 局 + phoenix_harass_metrics.py"
+    evidence: "迭代1 12局(--recent 12);已回退该门。中间失败尝试,教训进 I40"
+
+  - id: I40
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "提升凤凰对 Zerg 胜率的杠杆是'骚扰阶段多杀农民'(压制经济),不是'多保存凤凰'——骚扰阶段损失本就小、保存门反而抑制杀农民"
+    statement: "由 F126(胜负相关骚扰阶段杀农民数、骚扰阶段损失只 11.9)+ F127(保存门抑制杀农民致胜率降)推:优化重心应放在**骚扰阶段杀更多农民**(farming 效率/破被镇矿/多矿轮转),而非保存实力式的少损失(骚扰阶段没多少可省,且会误伤杀农民节奏)。归队后团战损失是另一回事(兵种硬克天花板,超出'归队前'优化窗口)。"
+    deps: [F126, F127]
+    evidence: "F126/F127 提出;**下游事后印证(正交)**:redirect'去打得过的矿多杀农民'真提胜率 20%→33%(F131/I43),而各保存/撤退式方案(F131 retreat 变体、I42 早撤)胜率反降 6-17% → '多杀'方向被独立实验证实、'多保存'被证伪。"
+
+  - id: F128
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机 trace:凤凰 ~76% tick 在 approach(飞来飞去接近)、只 24% fight;且 fight 时 43%(113/265)tick 无动作(atk=0 lift=0)——到了矿后却没杀农民"
+    statement: "PHOENIXTRACE 统计:posture approach 839 / fight 265 / flee 31(76% 在接近)。fight 里 113/265(43%)tick `lifted=0 lift=0 atk=0` = 到了矿后区却没抬到任何东西、没开火。凤凰只能对空,杀农民必须抬工人(Gate B);fight 却零动作 → 到矿后没工人可抬(敌方 pull 农民出 LIFT_SCAN_RANGE / 无能量),凤凰杵在静态 harass_anchor 干等。这是'杀农民卡~15'的机制:farming 效率低,不是打不过。"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 跑真局 grep PHOENIXTRACE;统计 posture 分布 + fight 里 atk=0/lift=0 占比"
+    evidence: "iter1 12局 trace(含已回退的生产力门,approach% 被门略抬高,但 fight-idle 43% 与门无关、是矿后 farming 问题);待 baseline trace 复核"
+
+  - id: I41
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "fight 无空中目标时移向最近敌农民(带进抬射程)而非杵锚点:机械上修好 fight-idle(43%→9%),但**24局尺度骚扰杀农民无提升**(6.5,=基线)——16局的9.3是噪声。作为正确行为保留、聚合中性"
+    statement: "由 F128(fight 43% 零动作=矿后没工人可抬)+ I40 推:凤凰到矿后无可抬工人(被 pull 走)应移向最近敌农民群带进 LIFT_SCAN_RANGE 再抬,而非杵 harass_anchor 干等。**真机**:机械上 fight-idle 43%→9%(确实不干等了)。但杀农民 16局得 9.3(走运)、**24局确认回落到 6.5(=F126基线,无提升)**——瓶颈不在 fight-idle,在**根本到不了有农民的矿**(接近途中喂兵 F129)。作为'不干等'的正确行为保留(_nearest_worker_pos,聚合无害),但**不是胜率杠杆**。⚠变差教训:16局批次不可信(9.3→6.5),判改进必须 ≥24 局。"
+    deps: [F128, I40]
+    evidence: "iter2 16局(9.3,走运)+ confirm 24局(6.5,=基线);已保留 I41(正确行为、中性)。真瓶颈见 F129/F130"
+
+  - id: F129
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "诊断 trace(含 I41):fight-idle 43%→9%(I41 修好矿后 farming);但喂兵在**接近阶段**——flee 仅 3%、approach 68%,凤凰飞向矿途中撞 hydra 军没到矿就死(fight 阶段反不怎么死)"
+    statement: "带 trace 诊断局(含 I41):fight-idle(atk=0 lift=0)7/76=9%(比 F128 的 43% 大降,I41 生效)。但 posture approach 185(68%)/ fight 76(28%)/ **flee 仅 9(3%)**。结合喂兵局 4923bd 时间线(t368 敌军 8 单位现→t402 凤凰 9→4 掉 5,之后损失 7→26 而杀农民恒 0、e_workers=0):**凤凰喂在接近阶段**——飞向'矿口 AA 少看着能打'的矿,接近途中撞上漫游 hydra 军、农民又被拉走(没得杀),没到矿就死;can_fight 只扫 squad 周围 12 半径、几乎不判 flee(3%)。fight 本身经 I41 已不太死。"
+    deps: [F128]
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 跑 VeryHard Zerg;统计 posture 分布 + 对喂兵局 telemetry 看凤凰数/损失/e_workers 随时间"
+    evidence: "diag_trace 2局 + iter2 game_...4923bd telemetry 时间线"
+
+  - id: I42
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: retracted
+    title: "[证伪] 早撤(BAIL_SHIELD 0.2→0.4)减不了喂兵——真机杀农民 9.3→4.0(退太早少杀)、损失 18.8→19.0(没降)、胜率 12→6%"
+    statement: "假设:调高个体 bail 护盾阈值(0.2→0.4)让凤凰接近途中挨打更早退→减损失。**真机 16 局证伪**:骚扰阶段杀农民 9.3→4.0(退太早、在场时间短、farming 崩)、损失 18.8→19.0(几乎没降)、胜率 12→6%。机制:喂兵不是'待太久被磨',是**飞向矿途中撞进 hydra 军被抓/被 burst**,早撤只让凤凰更早离开工人(少杀)、却escape 不掉军队(照死)。→ 个体 bail 谨慎救不了接近阶段结构性喂兵(F130)。已回退 BAIL_SHIELD=0.2。"
+    deps: [F129, F124, F106]
+    evidence: "iter3 16局(logs/game_20260726_123[3-9]*);证伪,回退。教训进 F130"
+
+  - id: F130
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:凤凰骚扰阶段损失(16-19)几乎不随个体 bail 阈值变(0.2→0.4:18.8→19.0),但随'在场杀农民时间'正相关(早撤=少杀也少不了死)"
+    statement: "两批实验(BAIL_SHIELD 0.2 vs 0.4)骚扰阶段凤凰损失都 ~18-19,不随个体撤退阈值变;而随凤凰在场(harass)时间正相关——早撤只减了杀农民、没减损失。"
+    deps: [F129]
+    repro: "改 BAIL_SHIELD(0.2↔0.4)各跑 16 局 VeryHard Zerg,phoenix_harass_metrics 比骚扰阶段损失:两者都 ~18-19,不随阈值变"
+    evidence: "iter2(I41,9.3杀/18.8损)+iter3(I42早撤,4.0杀/19.0损)对比:损失对 bail 阈值不敏感、对在场时间敏感。logs iter2/iter3"
+
+  - id: I43
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "选矿层避开大股漫游对空军(_ARMY_SCAN=22 > 凤凰数就跳过该矿)= 从源头不飞进军队 → 真机 24 局全指标改善:杀农民 6.5→9.6(+48%)、损失 19.1→17.1(-10%)、胜率 21%→33%"
+    statement: "由 F130(喂兵是接近途中飞进 hydra 军的结构性损失、个体 bail 救不了)推:在**选矿层**用更宽半径(22)预判——矿附近大股漫游对空军(> 凤凰数)就避开这个矿;军队覆盖所有矿 → all_defended → 退安全点(复用现有)、从源头不飞进军队。**真机 24 局 vs confirm 基线(6.5/19.1/21%)**:骚扰阶段杀农民 9.6(+48%)、损失 17.1(-10%)、kills/loss 0.34→0.56、**胜率 33%(8W-16L)**。三指标同向改善 + 机制自洽(避军=F129根因修复)→ 第一个真正推动胜率的改动。与失败的个体谨慎(I42)本质不同:squad级'别去军队那儿'而非'去了再退'。待另一 24 局排除matchup运气后定论(I41 教训:单批可能走运)。"
+    deps: [F129, F130]
+    evidence: "iter4 24局(9.6杀/17.1损/33%)+ 复现 24局(9.7杀/20.3损/33%):**两次独立 24 局胜率都 33%、杀农民 9.6-9.7,复现稳健**(vs 基线 6.5/19/21%)。已保留 _mobile_aa_near/_ARMY_SCAN=22。第一个真正推动胜率的改动,根因 F129 修复。半径极敏感:iter5 _ARMY_SCAN=18(少避)→ 崩到 4%/1W,证'避军越到位越好'。几何局限见 I44。"
+
+  - id: I44
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: retracted
+    title: "[证伪] '以 squad→矿接近路径走廊'避军 劣于'以矿为心圈':走廊 12→25%、20→8%,都 < 矿圈 22 的 33%——绕长线段的走廊过度排除矿"
+    statement: "假设:判 squad→矿线段沿途走廊内对空军来避军(覆盖半路拦截)比以矿为心圈更好。**真机证伪**:走廊 _PATH_AVOID_R=12 → 25%(16局)、20 → 8%(24局),都 < 以矿为心 22 的 33%,且**走廊越宽越差**(与以矿为心'越宽越好'相反)。根因:squad→矿是**长线段**,宽走廊绕整条线覆盖巨大面积 → 几乎任何位置有军队都排除该矿 → 凤凰啥矿都不去、不 harass → 0杀。'避半路拦截'的直觉对,但'绕整条接近线段走廊'的实现会过度排除。改用**以 squad 为心的点判定躲大军**(I45)兼顾。已回退路径版代码。"
+    deps: [I43, F129]
+    evidence: "iter7(走廊12,25%)+iter8(走廊20,8%);对比 I43 矿圈22 的 33%(两次)。已回退,改 I45。"
+
+  - id: I45
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "选矿避军判据用图谱'能不能打过'(能量抬capacity + 护盾容差 + 抬完剩余火力,F124/D89/D90),不是拍脑袋'对空数>凤凰数'——最终生效(杀农民最多 10.4),用户 2026-07-26 定"
+    statement: "选矿避军判据 `_can_beat_aa`,按真实机制**两关都过**才算打得过、才去打:**①压制得住**——N 只带能量(≥50)凤凰能同时抬起 N 个对空(F124),抬光→零对空火力→零损失;抬不完的靠 60 护盾多扛 _SHIELD_TANK_MARGIN(2)个火力不掉血(F124);即 `能抬数+护盾容差 ≥ 对空数`。**②抬完还有输出火力**(用户 2026-07-26 补):抬人凤凰 channel graviton beam 时**不开火**,抬掉 min(能抬数,对空数)个占这么多抬手 → 剩下凤凰要 ≥ _MIN_FREE_SHOOTERS(2),才有 DPS 打死被抬的+杀农民。落地 `_can_beat_aa` 用于**选矿层避军**(redirect 改去打得过的矿)。**真机 iter13:杀农民 10.4(全部方案最高)、胜率 25%**;与简单 count(I43,33%)统计不可分但杀农民更高 → **用户 2026-07-26 定用此方案(杀农民最多)**。注:曾也想用于'躲大军'(以 squad 为心退安全点),但撤退式一律伤 harass(F131),已去掉、只留选矿层。"
+    deps: [F124, F129, F130, I43]
+    evidence: "iter9 拍脑袋躲大军(>凤凰数,退20圈)→13%;iter12 _can_beat_aa+躲大军 → 17%/杀7.6;**iter13 隔离去掉躲大军、只留图谱化选矿避军 → 25%(6W)/杀10.4(最高)**。→ **躲大军(退)是主坑**(去掉 17→25、杀 7.6→10.4);图谱化选矿避军(_can_beat_aa)与简单版 I43(n_army<=n_ph,33%/8W)统计不可分(6vs8/24 方差内),杀农民略高。结论见 F131/D91:撤退式避军一律伤 harass,选矿层 redirect 才是 win;判据简单/图谱化差别在噪声内。"
+
+  - id: F131
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:'redirect(选矿层改去打得过的矿、继续harass)'把胜率 20%→33%;'retreat(任何撤退式避军)'一律 6-17%,都比不撤退差"
+    statement: "VeryHard Zerg 每配置 24 局:选矿层避开打不过的矿、redirect 去打得过的矿(不撤退、继续 harass)→ 胜率 20%(基线)提到 33%(iter4 两次复现)。任何'军队来了就退安全点'的撤退式避军 → 6-17%(生产力门 iter1、早撤 bail iter3、路径走廊 iter7/8、躲大军 iter9/12),都比不撤退差。"
+    deps: []
+    repro: "VIBECRAFT_OPPONENT_RACE=Zerg build_acceptance phoenix_2base --runs 24 --opponent veryhard 各配置各跑;phoenix_harass_metrics 比胜率"
+    evidence: "基线 iter(20%)→ iter4 redirect(33%×2);retreat 变体:iter1 生产力门、iter3 早撤(6%,见 [[I42]])、iter7/8 路径走廊(25%/8%,见 [[I44]])、iter9/12 躲大军(13%/17%)。logs/game_20260726_*"
+
+  - id: F132
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:凤凰避军'以矿为心'半径极敏感——18→胜率4%、22→33%(半径越到位、避得越准越好)"
+    statement: "以候选矿为心的漫游对空军检测半径:_ARMY_SCAN=18 → 胜率 4%(避得不够、飞进军队喂兵)、22 → 33%。避军半径是强敏感参数。"
+    deps: []
+    repro: "同 F131;改 _ARMY_SCAN(18/22)各跑 24 局比胜率"
+    evidence: "iter5(半径18)→4%/1W;iter4(半径22)→33%×2。logs/game_20260726_*"
+
+  - id: F133
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:避矿判据 简单count(对空数<凤凰数,I43)与 图谱化_can_beat_aa(能量+护盾+剩余火力,I45)在 N=24 尺度统计不可分(各 6-8 胜/24),图谱化杀农民略高(10.4 vs 9.6)"
+    statement: "两种避矿判据 24 局对比:简单 `对空数<凤凰数`(I43)→ 33%/8W、杀农民 9.6;图谱化 `_can_beat_aa`(I45)→ 25%/6W、杀农民 10.4。6 vs 8 胜/24 在方差内、统计不可分;图谱化杀农民略高。"
+    deps: [I43, I45]
+    repro: "同 F131;两判据各跑 24 局比杀农民/胜率"
+    evidence: "iter4/iter4复现(简单,33%/杀9.6)+ iter13(图谱化,25%/杀10.4)。logs/game_20260726_*"
+
+  - id: D91
+    kind: decision
+    by: agent
+    domain: phoenix-optimize
+    status: active
+    title: "凤凰避军最终落地:选矿层用 _can_beat_aa(图谱D89/D90/F124:能量抬+护盾+剩余火力)避开打不过的矿改去打得过的(redirect);**不做撤退式躲大军**(retreat 一律伤 harass);半径 _ARMY_SCAN=22"
+    statement: "据 F131/b/c 落地:①保留**选矿层避军**(_pick_harass_geom 用 _can_beat_aa 判每个矿'打不过就不去、改去打得过的',redirect);判据用图谱化 _can_beat_aa(能量抬capacity+护盾容差2+抬完剩余火力≥2,D89/D90/F124)——虽与简单 count 统计不可分(F133),但理论正确、杀农民略高(10.4)、可解释,**用户 2026-07-26 定用杀农民最多的此方案**。②**移除 squad 级'躲大军退安全点'**(retreat,F131 证一律伤 harass)。③避军半径 _ARMY_SCAN=22(F132 半径敏感、22 最优)。当前实测:胜率 25-33%(vs 基线 20%),杀农民 9.6-10.4。**胜率天花板 ~33% 受兵种硬克封顶**(mass phoenix vs VeryHard Zerg 反空军,微操到顶,超出需换兵种/build)。"
+    deps: [F131, F132, F133, I45, I43, D89]
+    evidence: "iter4(33%)+iter13(25%,杀10.4);落地 _pick_harass_geom+_can_beat_aa,去 dodge。相关 [[feedback_composition_ceiling_stop_grinding_micro]]"
+
+  - id: F134
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机 live vs 神族:凤凰一波7只出门撞14追猎军,看到8-27农民却杀0、损7、6分钟被end——本轮优化+自验全程只打虫族,从没测神族/人族"
+    statement: "live 局(对手神族):凤凰 t=324 launch 7只 → t=332 到敌方(见 8-27 农民)→ t=340 撞 14 追猎军 → t=382 磨到剩3、损7、**杀农民0**。本轮所有自验设了 VIBECRAFT_OPPONENT_RACE=Zerg,只优化+验证了虫族(女王/hydra);神族追猎(可 blink、无女王可抬清、成军14+)完全没测。选矿避军挡不住'出门后军队才压上',且上一步移除的 squad 级躲避大军(D91)恰是应对'军队半路压上/到了才出现'的唯一保护 → 神族局无保护、喂光。"
+    deps: []
+    repro: "logs/match_20260726_152206_p0/telemetry.jsonl:凤凰 timeline t=324→382,killed=0/ph_lost=7/e_army=14(对手神族)"
+    evidence: "用户 live 局 + 该 match telemetry。教训:优化一族不通用,战术须适配三族(D92)"
+
+  - id: F135
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机诊断:当前(虫族调的)凤凰 build vs 神族 VeryHard 12局 = 胜率 0%(0W-12L)、杀农民 6.7、损失 21.4;approach 81%(比虫族76%更飞、更少打)——build 只对虫族有效"
+    statement: "当前代码 vs Protoss VeryHard 12 局:**胜率 0%(0W-12L)**、骚扰阶段杀农民 6.7(vs 虫族 10.4)、损失 21.4(vs 虫族 ~18)。posture approach 81%/fight 13%/flee 6%——比虫族(76%)更飞、更少打;fight 时会抬追猎(好)但太少。**0% 说明不只 harass 微操**:phoenix-heavy build 打神族 VeryHard 整体弱势(追猎 blink 成军/不朽/白球克凤凰,harass 也做不成)。印证 F134/D92:只测虫族的优化对神族基本不适用。"
+    deps: []
+    repro: "VIBECRAFT_OPPONENT_RACE=Protoss build_acceptance phoenix_2base --runs 12 --opponent veryhard;phoenix_harass_metrics"
+    evidence: "logs 15:38 诊断12局;对比虫族 iter13(杀10.4/胜25-33%)"
+
+  - id: D92
+    kind: decision
+    by: player
+    domain: phoenix-optimize
+    status: active
+    title: "凤凰骚扰战术必须适配三族对手(虫族/神族/人族),不能只针对虫族——自验须三族都测;重新审视'移除躲大军'(D91仅据虫族自验,神族/人族漫游军可能必须它)"
+    statement: "用户 2026-07-26 定:凤凰 build 须打三族都行。①自验从只测虫族改为**三族分别测**(build_acceptance 各 race)+ RandomBuild 混测。②各族对空/军队差异大(虫族女王慢可抬清/hydra腐化;神族追猎blink/光子炮;人族枪兵/导弹塔/雷神维京),避战/抬清/概隐策略可能要按族分化。③重新审视 D91 的'移除躲大军'——它只据虫族自验降胜率就删了,但神族追猎军/人族军漫游压上时凤凰需要它保护(F134 神族喂光即无此保护),可能该按'能不能打过'保留而非一刀切删。落地待三族诊断后定。"
+    deps: [F134, F131, D91]
+    evidence: "F134 神族喂光;用户'战术须适配三族'。下一步:三族诊断当前代码表现 → 按族适配"
+
+  - id: D93
+    kind: decision
+    by: player
+    domain: phoenix-optimize
+    status: active
+    title: "优化目标改为'骚扰得分'(归队前杀农民↑ + 存活凤凰↑/损失↓),**不管胜率**;三族都要适应——用户 2026-07-26 拍板"
+    statement: "用户 2026-07-26 定新目标:优化凤凰**前期骚扰得分** = 归队(release_after≈600,凤凰自动归队)之前『杀农民数 − 权重×凤凰损失数』越高越好(杀越多 + 存活越多)。**不以胜率为目标**(胜率被整个 build 组合/兵种硬克封顶,超 harass 微操范围,I46;而骚扰得分是纯微操可优化的)。三族都要适应。**推论(反转 D91)**:既然不管胜率,之前'撤退式避军/躲大军降胜率所以删'(D91/F131)的结论**对新目标失效**——撤退/保存实力**减损失、提存活 → 提得分**,该加回来。当前三族得分全大负(神-14.8/人-15.8/虫≈-8:损20+ >> 杀6-10,凤凰疯狂喂兵)→ 最大杠杆是**大幅减损失(自保/别喂)**。落地 phoenix_harass_metrics 加'骚扰得分';重新加回躲避大军(_can_beat_aa)+ 更狠避军,按得分三族优化。"
+    deps: [F136, I46, D91]
+    evidence: "F136 三族胜率;当前三族骚扰得分全大负(损远大于杀)。度量:phoenix_harass_metrics --loss-weight"
+
+  - id: I47
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: retracted
+    title: "D93 新目标(骚扰得分,不管胜率)下,加回 squad 级躲避大军(_can_beat_aa 判打不过就退)应提高得分——砍掉主导负项(损失);这反转 F131'retreat 有害'的结论(那是胜率口径)"
+    statement: "由 D93(得分=杀农民−损失,损20+>>杀6-10、减损失是最大杠杆)+ F134/F136(凤凰飞进 P/T 军队疯狂喂兵)推:加回 squad 级躲避大军(附近对空军按 _can_beat_aa[D89/D90/F124 抬capacity+护盾+剩余火力]判打不过就退安全点自保)应**砍掉喂兵损失 → 提高骚扰得分**。**关键口径区分**:F131'retreat 一律有害'只对**胜率**成立(退了不 harass 少杀→胜率降);对 D93 的**得分**口径,少杀的代价 < 少损的收益(损失是主导负项)→ retreat 反而提分。待三族真机验证得分。"
+    deps: [D93, F134, F136, D89]
+    evidence: "待实验:加回 dodge(_can_beat_aa,半径18)三族各12局,phoenix_harass_metrics 比骚扰得分 vs 无dodge基线(神-14.8/人-15.8/虫≈-8)"
+
+  - id: F137
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "证伪 I47:加回 squad 躲避大军但退到'矿后口袋'(_regroup_point,仍在敌方侧),vs 神族得分反更差(-14.8→-17.7,损21.4→23.8)——退的地方还在敌军够得着,照样被 blink 追猎逐个打死、oscillate 送死"
+    statement: "vs 神族真机诊断(神族局 t=335 起就有 16-39 追猎大军在 harass 区):加回躲避大军(_can_beat_aa 判打不过就退)dodge 触发 258 次,但退到 _regroup_point(矿后口袋,还在敌方侧)后凤凰 oscillate(退→再approach→退)被 blink 追猎逐个打死,损失 0→54、得分 -17.7(比无dodge基线 -14.8 还差)。→ **退的地方必须是敌军真够不着且看不到的**,矿后口袋不够(I47 的 dodge 有效性依赖 hold 点真安全,证伪)。"
+    deps: [F134]
+    repro: "VIBECRAFT_OPPONENT_RACE=Protoss build_acceptance phoenix_2base 加 dodge(退regroup_point);phoenix_harass_metrics --loss-weight 看得分 + 凤凰timeline"
+    evidence: "s1_protoss_dodge 12局(得分-17.7);对比无dodge -14.8。凤凰timeline 见 game_...9ca14e"
+
+  - id: I48
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: unverified
+    title: "躲避/自保 hold 点应取'离敌方矿最近的、地面够不到(矿后悬崖)+ 出敌建筑视野'的点——敌地面军够不着+看不到你(不会追来),藏那儿等窗口;不回家(浪费位)也不退暴露口袋(F137证伪)"
+    statement: "由 F137(退暴露口袋照样被打)+ D93(减损失是最大杠杆)+ 用户 2026-07-26 几何指导推:躲避/自保的 hold 点=**离敌方矿最近的、地面 BFS 够不到(矿后悬崖,F114)+ 出敌建筑视野(_in_enemy_building_vision False)**的悬崖口袋。**关键:出敌建筑视野=敌方看不到凤凰在哪→不会派军来追**,凤凰藏这种点里敌地面军够不着又看不见,真安全,等下手窗口。不退回家(浪费骚扰位)、不退敌方侧暴露口袋(F137)。落地 _dodge_hold_point(_safe_gather_points 悬崖口袋 ∩ 出建筑视野 ∩ 离squad最近)。预测:真降损失 → 提得分。待三族验证。"
+    deps: [F137, D93, F114]
+    evidence: "待实验:_dodge_hold_point 三族各12局比得分 vs 无dodge基线(神-14.8/人-15.8/虫≈-8)"
+
+  - id: F138
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机 vs神族:躲避大军退到'悬崖口袋+出建筑视野'(I48)对比退矿后口袋(F137)——得分 -17.7→-14.6、杀农民 6.1→9.2(+50%),但损失还是 23.8 没降"
+    statement: "vs 神族12局,dodge 退 _dodge_hold_point(悬崖口袋∩出建筑视野∩离squad近)对比退 _regroup_point(矿后口袋):得分 -17.7→-14.6(也微好过无dodge -14.8);**杀农民 6.1→9.2(+50%)**——藏进真安全点让凤凰活着再切、杀更多(验证 I48 hold 点选对了)。但**损失仍 23.8**(无dodge 21.4)——藏得住可一 engage 追猎(blink机动)还是被抓,损失结构性难降。诊断:77% approach、tgt=ok 69%、squad 多3-9只(非纯trickle)、损失持续(军队一直在)。"
+    deps: [F137]
+    repro: "VIBECRAFT_OPPONENT_RACE=Protoss build_acceptance phoenix_2base(dodge退_dodge_hold_point)12局;phoenix_harass_metrics --loss-weight"
+    evidence: "s2_protoss_cliffhold 12局(得分-14.6/杀9.2/损23.8);对比 F137(-17.7)、无dodge(-14.8)"
+
+  - id: I49
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "落地 D86 迂回拉扯(此前从没实现,用户 2026-07-26 指出)= 突破:vs神族骚扰得分 -14.8→-3.5、杀农民 6.7→14.3(翻倍)、损失 21.4→17.8(降)、胜率 0→25%。接近路线绕开漫游对空军去矿后悬崖 + dodge滞回藏住"
+    statement: "由 F138(凤凰一 engage 军队就被 blink 追猎抓、损失结构性难降)+ D86(穿梭走空军优势/地面够不到地形)+ 用户'迂回拉扯没实现'推:①**路线绕军**——_avoid_enemy_centers 除基地中心/静态防空外,把**漫游对空军中心(≥_ARMY_AVOID_MIN=4)**也当避障 → plan_air_path 迂回绕开军队、去地面够不到的矿后悬崖口袋,而非直穿军队;approach 缓存 key 含量化敌军位(÷12)→ 军队机动 >12 格重规划路线(迂回随之更新、不 jitter)。②**dodge 滞回**——判打不过藏悬崖口袋(_dodge_hold_point,地面够不到+出建筑视野)并锁 _DODGE_HOLD_S=25s 不再切,打断'退→再approach→被抓'oscillate。预测:凤凰绕开军队 + 藏真安全点 → 减损失 → 提骚扰得分。待三族验证。"
+    deps: [F138, D86, D93]
+    evidence: "三族12局(用户:12场够判):神族 得分-14.8→-3.5/杀6.7→14.3/损21.4→17.8/胜0→25%(大涨);虫族 -8→-7.5/杀10.4→10.7(持平);人族 -15.8→-16.9/杀6.4→10.1/损22.2→27.0(微降,**维京air追进悬崖口袋、地面躲避对会飞的无效**=人族专属,见 F139)。**杀农民三族全涨**是稳的。落地 _enemy_aa_army_center 加路线避障 + 缓存key含量化敌军位重规划 + dodge滞回。"
+
+  - id: F139
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机:迂回拉扯(绕地面军+藏地面够不到的悬崖口袋)对**会飞的对空**(人族维京)失效——vs人族损失反涨(22→27),因维京 air 能追进悬崖口袋;对神族(地面追猎)大有效"
+    statement: "迂回拉扯(I49)前提=敌对空军是**地面单位**(够不到悬崖口袋)。vs 神族(追猎地面)大有效(得分-14.8→-3.5);vs 人族**维京是 air**、飞进凤凰藏的悬崖口袋追杀 → 地面躲避无效,损失 22→27、得分微降。→ 对会飞的对空(维京/腐化/飞龙)地面躲避不够,需另想(air-to-air 打不过就早撤/换目标);地面躲避只对地面对空军管用。"
+    deps: [I49]
+    repro: "三族各12局迂回比得分/损失;人族看维京出现后损失是否飙"
+    evidence: "s5_terran(得分-16.9/损27)vs s4_protoss(-3.5/损17.8)"
+
+  - id: D94
+    kind: decision
+    by: player
+    domain: phoenix-optimize
+    status: active
+    title: "骚扰得分最大化方法=持续在敌方多矿间拉扯找不对称优势(军队同时只守一个矿→转到军队不在的矿抓农民),不是纯保分/被动藏——用户 2026-07-26 否决 cash-out"
+    statement: "用户 2026-07-26 更正:D93(得分=杀农民−损失)的**最大化方法不是'见好就收/被动藏'(cash-out)**,而是**持续在敌方多个矿之间拉扯、找不对称优势占便宜**——敌方漫游对空军同时只能守一个矿,凤凰就转到军队不在的那个矿抓农民杀,那边军队转过来了再转走,循环。只有当**所有矿都被守**时才藏安全口袋(真保存)。这否决了旧 dodge 的'打不过就藏最近口袋 25s 干等'(被动藏=浪费机动优势),改成'打不过当前位置就路由到当前最开的矿(军队不在的)'。"
+    deps: [D93, F88, D57, D75]
+    evidence: "用户 2026-07-26:'不要纯保分,需要一直在敌方多个矿之间拉扯,寻找不对称优势,找机会占便宜'"
+
+  - id: F140
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机(用户 2026-07-26):凤凰躲避/接近路线仍常在敌方高地台面(地面部队够得着),没从高地边缘以外的低地迂回到二矿矿后"
+    statement: "用户 2026-07-26 真机观察:凤凰的躲避(dodge)与接近路线很多时候仍在敌方高地(地面部队够得着的台面)上,没有从高地边缘以外的低地迂回到二矿矿后再杀农民。"
+    deps: [F122, F110]
+    repro: "肉眼看真局凤凰路线是否跨敌高地台面;VIBECRAFT_PHOENIX_TRACE grep posture=approach 的 vis=1 占比"
+    evidence: "用户 2026-07-26 真机反馈"
+
+  - id: F141
+    kind: fact
+    provenance: own-code
+    domain: harass-doctrine
+    status: verified
+    title: "凤凰 dodge 分支 `return dp, dp`(裸直线目标、不经 plan_air_path),撤退段无地形选路;仅 approach 段走 snap 路径"
+    statement: "phoenix_squad_act._harass_anchor_and_approach 的 dodge/藏匿分支 `return dp, dp`(锚点=路径点同一点),micro 据此朝 dp 直线 move——撤退/dodge 段不经 plan_air_path 地形选路、是裸直线,穿过 squad 与目标间的一切(含敌高地);只有 approach 段经 _approach_waypoint→plan_air_path 贴悬崖。"
+    deps: []
+    evidence: "phoenix_squad_act.py dodge 分支 return dp,dp;approach 分支走 _approach_waypoint→plan_air_path"
+
+  - id: D95
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: inactive
+    title: "(已回退)凤凰 dodge 目标从'藏最近口袋干等'改为'路由到当前军队不在的、能打的矿'(落地 D94 拉扯);仅全矿被守才藏悬崖口袋"
+    statement: "落地 D94(多矿拉扯):判打不过当前位置时,dodge 目标不再是藏最近口袋干等,而是复用 _pick_harass_geom 的 per-mine 开放判定 → 路由到当前军队不在的、能打的矿;只有 all_defended(全矿被守)才藏悬崖口袋。**已回退(inactive)**:实测(F142)拔掉 I49 的滞回藏住 → 凤凰暴露拉扯送死、得分回退(-3.5→-14.1)。拉扯要成立须先有低地路由(I50),不能在暴露路线上纯拉扯。"
+    deps: [D94, D86, F138]
+    evidence: "F142 实测回退;代码已 revert 回 I49"
+
+  - id: D96
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: inactive
+    title: "(已回退)凤凰撤退/dodge 转移路径接进 plan_air_path 地形选路(snap 贴低地),不再裸直线穿高地(修 F141)"
+    statement: "修 F141(撤退裸直线):撤退/藏匿目标点经 plan_air_path 算路由再逐 waypoint 下发,撤退也贴低地迂回。**已回退(inactive)**:①随 D95 一起 revert;②实际上 dodge 时 micro posture=flee 会用自己的 flee_wp 覆盖 act 的 routed_wp(F143),act 层路由撤退基本无效,须在 micro 层改才真生效——归入 F122 低地路由重构统一做,不单独打补丁。"
+    deps: [F141, D86, F138]
+    evidence: "随 D95 回退;micro flee 覆盖见 F143"
+
+  - id: F142
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "实测:'纯拉扯不藏'(D95/D96)vs I49 神族 12 局:骚扰得分 -3.5→-14.1、杀农民 14.3→7.7、损失 17.8→21.75,退回迂回突破前水平"
+    statement: "D95/D96(去掉 I49 的 dodge 滞回藏住、改成一直路由到开着的矿拉扯)vs 神族 12 局:骚扰得分 -3.5→-14.1、杀农民 14.3→7.7、损失 17.8→21.75。"
+    deps: [D95, I49]
+    repro: "VIBECRAFT_OPPONENT_RACE=Protoss build_acceptance phoenix_2base --runs 12 --opponent veryhard;phoenix_harass_metrics"
+    evidence: "acc_protoss.log 12局(杀92/损261→-14.1)"
+
+  - id: F150
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "实测(1局trace):'纯拉扯不藏'(D95/D96)下 dodge_hide 仅触发 2 次、vis=1 占 55%(路线一半以上在敌建筑视野/高地上暴露)"
+    statement: "D95/D96 改动 1 局 trace:dodge_hide(藏悬崖口袋)仅触发 2 次(几乎不藏)、vis=1 占 55%(PHOENIXTRACE 一半以上帧 squad 在敌建筑视野内=高地上暴露)。"
+    deps: []
+    repro: "VIBECRAFT_PHOENIX_TRACE grep dodge_hide 次数 + posture 帧的 vis=1 占比"
+    evidence: "trace_protoss.log(vis=1 74/135=55%,dodge_hide=2)"
+
+  - id: I54
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "'一直拉扯不藏'在暴露路线上是净亏:拔掉滞回藏住(F142得分腰斩)+ 路线仍暴露(F150 vis55%)→ 暴露拉扯 → 损失高、总打击次数少 → 杀农民腰斩"
+    statement: "由 F142(纯拉扯不藏得分 -3.5→-14.1、杀农腰斩)+ F150(dodge_hide仅2次、vis55%暴露)推:拔掉 dodge 滞回藏住后凤凰改成一直暴露拉扯 → 损失高、总打击次数少 → 杀农民腰斩 → '一直拉扯不藏'在暴露路线上是净亏。这否掉了 D95/D96,并推出 I50(拉扯需低地路由做前提)。"
+    deps: [F142, F150]
+    evidence: "F142 得分 + F150 暴露机制;推理支撑 I50/D95回退"
+
+  - id: I50
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: verified
+    title: "'持续多矿拉扯'(D94)要提得分必须先有低地路由(F122)做前提——拉扯路线走高地=暴露送死(F142);用户两个要求(路线不穿高地 + 多矿拉扯)是同一个真解"
+    statement: "由 I54(纯拉扯不藏在暴露路线上是净亏)+ F140(路线仍穿高地 vis 55%)+ F122(真解=按 terrain_height 走低地路由)推:**D94 的'持续多矿拉扯'要能提得分,前提是拉扯/转移路线走低地(敌看不到、地面够不到)**——否则拉扯就是把凤凰持续暴露在高地上送死。故用户的两个要求'路线别穿高地'与'多矿拉扯找机会'不是两件事,是**同一个真解 = F122 低地路由重构**:有了它,凤凰才能在多矿间安全穿梭拉扯;没有它,拉扯必须靠'藏住'(I49)兜底、无法持续。"
+    deps: [I54, F140, F122]
+    evidence: "F142 实测 + F140 vis 55%;推论:低地路由是安全拉扯的使能前提。待 F122 落地后验证拉扯+低地路由联合得分"
+
+  - id: F143
+    kind: fact
+    provenance: own-code
+    domain: harass-doctrine
+    status: verified
+    title: "micro 层 flee 用自己的 flee_wp(最近安全口袋/orbit),覆盖 act 层给的 approach_wp——act 层单独改撤退路由不生效,须 micro 层同改"
+    statement: "phoenix_squad_micro._squad_posture 判 can't_fight → posture=flee,_solve_unit flee 分支 `return ('move', flee_wp)` 用 micro 自算的 _flee_waypoint(最近非威胁安全口袋 / orbit),**不使用 caller(act)传的 approach_wp**。故 act 层把撤退目标改成'路由到开矿'或'地形选路 waypoint'时,只要 squad 打不过(正是撤退时),micro 就 flee 覆盖掉 → act 层单独改撤退路由基本无效。要让撤退真走地形选路/真朝目标矿转移,必须在 micro flee 层同步改(把 act 目标喂进 micro flee 选点)。"
+    deps: []
+    evidence: "phoenix_squad_micro.py _squad_posture flee 分支 + _solve_unit flee 分支用 flee_wp 非 approach_wp"
+
+  - id: D97
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "落地 F122 低地路由:敌方高地代价栅格(terrain_height 高地 ∩ 敌方半场) + A*(叠加静态防空/漫游军动态惩罚),接入 approach 主选路、超限回退 snap"
+    statement: "落地 F122/I50 低地路由(terrain_harass.build_enemy_highground_cells + plan_lowground_path):①敌方高地代价栅格 = terrain_height 和敌基同台面(>= h_enemy - CLIFF_MARGIN)且在敌方半场(离敌 start 近),纯几何、一局一算缓存;②A* 8连通,代价=步长×(1+高地惩罚+AA惩罚),叠加静态防空/漫游军动态惩罚点;③接入 _approach_waypoint 主选路,超 max_expand/max_detour → 回退 snap 版 plan_air_path;④detour 运行时守卫。仅 approach(Phase 1);撤退/dodge 因 micro flee 覆盖(F143)留 Phase 2。"
+    deps: [I50, F122, F121, F143]
+    evidence: "设计 docs/plans/2026-07-26-phoenix-lowground-routing-design.md;独立 opus 评审补 3 阻塞项(①去掉 enemy_ground_reachable 交集[BFS 淹没误罚自家高地]→改敌方半场;②纯地形丢 AA 避让→叠动态惩罚;③不并存两路由器→主选+超限回退);单测 test_terrain_harass 11 过;效果见 F144"
+
+  - id: F144
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "低地路由 approach 路线实测(1局trace):router 100% lowground、路径落敌高地格比例 20%→2%、approach段 vis 55%→14%、detour中位1.41、step 0-2ms无卡顿——路线穿高地(F140)approach段技术解决"
+    statement: "D97 低地路由 vs 神族 build_acceptance(1局 trace):approach 选路 router=lowground 10/10(100%触发不回退)、路径落敌高地格比例 hg_frac 直线 0.20→路由 0.02、approach 段 vis=1 占比 55%→14%(接近路线基本出敌建筑视野)、detour median 1.41 max 1.84(不爆圈)、A* step 0-2ms 无卡顿。**路线穿高地(F140/F142 vis 55%)在 approach 段技术上解决**。注:此为路线几何指标(相对确定性);骚扰得分(杀-损)另需 12 局聚合判(见后续),且撤退段 vis 仍差(Phase 2 未做)。"
+    deps: [D97]
+    repro: "VIBECRAFT_OPPONENT_RACE=Protoss VIBECRAFT_PHOENIX_TRACE=1 build_acceptance phoenix_2base;grep PHOENIXPATH router/hg_frac + posture=approach 的 vis"
+    evidence: "trace_lg.log:router=lowground 10/10,hg_frac 0.02 vs 0.20,vis approach 86/100 vis=0"
+
+  - id: F145
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "受控 A/B(同条件12局):低地路由得分 -12.7(杀11.5/损24.2) vs I49禁用 -8.5(杀10.9/损19.4)——差4.2<1SE,得分统计中性;I49真实基线是-8.5非-3.5(上session高样本)"
+    statement: "受控 A/B(VIBECRAFT_PHOENIX_NO_LOWGROUND 开关,同条件各12局):低地路由 得分-12.7(杀11.5/损24.2) vs I49(禁用低地路由) -8.5(杀10.9/损19.4)。差 4.2、各局-25~+9(SE~4.5,差<1SE)→ 得分统计上中性;杀农民持平,损失趋势偏高(24 vs 19)。I49 真实基线 -8.5,非上 session 的 -3.5(那是高样本)。"
+    deps: [F144]
+    repro: "VIBECRAFT_PHOENIX_NO_LOWGROUND=1 build_acceptance phoenix_2base 12局 vs 不设;phoenix_harass_metrics 比得分"
+    evidence: "acc_lg_protoss.log(低地-12.7) vs acc_i49_protoss.log(I49 -8.5);同 Protoss veryhard 各12局"
+
+  - id: I53
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: unverified
+    title: "(假说,待 Q9 验)低地路由损失没降因它避'高地建筑视野'非'地面取不了处':低地仍可走、漫游军在此→避高地却撞低地游荡军"
+    statement: "假说(由 F145 损失没降 + F114 低地仍地面可达 推,待 Q9 实验证实/证伪):低地路由避的是敌方'高地建筑视野'(terrain_height 高),不是用户原意'地面部队取不了的地方';低地照样 in_pathing_grid True(地面能走)、漫游追猎军在低地游荡 → 路线避了高地却撞低地游荡军,故损失没降。**未独立证实**——改成奖励 ground-impassable 格能否真降损失是 Q9 的实验。"
+    deps: [F145, F114]
+    evidence: "待 Q9 实验:低地 cost 加 ground-impassable 奖励后 A/B 比损失;当前仅由 F145/F114 推、无正交证据 → unverified"
+
+  - id: Q9
+    kind: question
+    domain: harass-doctrine
+    status: open
+    title: "低地路由该避的是'地面部队取不了的地方'(in_pathing_grid False,悬崖下,ground-impassable)还是当前的'低地(terrain_height低)'?后者仍地面可走、漫游军在此,损失没降"
+    statement: "用户原意是'到高地边缘以外、**地面部队取不了的地方**迂回拉扯'。当前 D97 低地路由避的是敌方高地台面(=避建筑视野),但低地仍地面可走、漫游军在此、损失没降(I53)。是否该改成**奖励/优先 ground-impassable 格**(in_pathing_grid False,悬崖下/缺口,地面真过不去 F114)让路线贴悬崖走敌地面军够不到处?待验:这样能否真降损失。"
+    deps: [I53, F114]
+    evidence: "待实验:低地 cost 加 ground-impassable(in_pathing_grid False)奖励,A/B 比损失是否降"
+
+  - id: F146
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机死亡-posture 关联:总损93/局,80% 发生在骚扰窗口外(归队后);骚扰阶段内 fight14%/approach5%/flee1%,归队后损失暴涨(t580损17→t1161损93)"
+    statement: "死亡-posture 关联(1局 trace + telemetry):总损失 93/局,其中 80% 死亡时刻 posture='?'(=骚扰阶段窗口之外,归队后 act 不再 trace),骚扰阶段内只 14% fight/5% approach/1% flee。全局损失曲线:harass ~570s 结束释放后暴涨(t580损17→t1027损74→t1161损93)。"
+    deps: []
+    repro: "1局 trace + death_posture.py 关联 phoenix_lost 增量与 posture;telemetry 看归队后损失暴涨"
+    evidence: "trace_death.log + game telemetry:总损93,80%死亡在骚扰窗口外"
+
+  - id: F149
+    kind: fact
+    provenance: own-code
+    domain: harass-doctrine
+    status: verified
+    title: "sharpy MicroPhoenixes 退却分支(micro_phoenixes.py L82-90)只射空军、不进抬逻辑;lift 要 energy>50"
+    statement: "sharpy vendor micro_phoenixes.py:归队后凤凰归 MicroPhoenixes 控制;其 move_type=DefensiveRetreat/PanicRetreat 分支(L82-90)只对最近空军射击、不进入抬(GRAVITONBEAM)逻辑;抬还要求 unit.energy>50(L104)。"
+    deps: []
+    evidence: "vendor/sharpy/sharpy/combat/protoss/micro_phoenixes.py L82-90 退却分支 + L104 has_energy"
+
+  - id: I51
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: verified
+    title: "崩局主力长期退却 + sharpy 退却不抬(F149) + 能量枯竭 → 归队后凤凰≈废物被送掉;归队前得分只占损失小头(F146),凤凰打不到地面不抬=纯废物"
+    statement: "由 F146(80% 损失在归队后)+ F149(sharpy 退却分支不抬、抬需 energy>50)推:bot 打 VeryHard 崩局、主力长期 DefensiveRetreat → 归队后凤凰跟着退不抬 + 骚扰烧光能量归队后抬不了 → 归队后≈废物+被送掉。故'归队前得分'(此前优化目标)只占损失小头、大头在归队后;凤凰打不到地面,不抬=纯废物,这是 lift-defend(D98)要解决的问题。"
+    deps: [F146, F149]
+    evidence: "F146 死亡分布 + F149 退却不抬 → 归队后废物;推理支撑 D98 lift-defend"
+
+  - id: D98
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "归队后不裸交 sharpy 退却,保留'抬地防守'micro:凤凰持续抬敌方地面高价值单位(高坦/坦克/不朽)集火+拦截空军;区分玩家×(真release)/自动超时(latch)/召回(临时)——用户 2026-07-26"
+    statement: "用户 2026-07-26(针对 I51 归队后凤凰废物送掉):归队后凤凰**不裸交 sharpy 退却**,保留 solve_lift_defend micro——按 _LIFT_PRIORITY 抬敌方地面高价值单位(高坦10/坦克9/哨兵8/不朽…)集火 + 拦截敌方空军(凤凰是唯一机动 AA)。控制交接分三语义:①自动超时(release_after/harass deadline 到点)→ 永久 latch lift-defend;②玩家×卡片早收(deadline 没到)→ 真 release 归还(尊重玩家显式收回);③召回(敌军扑家)→ 临时 lift-defend(不 latch,敌退恢复骚扰)。保守型:附近对空轻才抬、重就退守养能量保存。"
+    deps: [I51, F89, D42]
+    evidence: "用户 2026-07-26 拍板 lift-defend;独立 opus 评审补 4 洞(①regen 点改己方侧[原复用敌方矿后口袋→家挨打飞敌方回盾 bug];②靠近威胁前加 _squad_can_fight/_defend_safe_to_engage 门;③留 _MIN_DEFEND_SHOOTERS=2 集火手;④纳入空军威胁+attack 不 move);单测 lift-defend 5条 + act 3条;效果见 F147/F148"
+
+  - id: F147
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "lift-defend A/B(Protoss各12局):ON 全局均总损56.3/胜1 vs OFF(交sharpy)47.4/胜0;归队前均损25 vs22;trace 归队后34%帧凤凰真抬地(D98行为落地生效)"
+    statement: "受控 A/B(VIBECRAFT_PHOENIX_NO_LIFTDEFEND 开关,Protoss各12局):ON(lift-defend)全局均总损 56.3/胜1、OFF(禁用=交sharpy退却)47.4/胜0;归队前均损 25 vs 22。行为落地:trace 归队后 34%帧凤凰真抬敌方地面单位(D98 生效,修 F146 归队后不抬)。损失比较的定性见 I52(噪声主导、分辨不出)。"
+    deps: [D98, F146]
+    repro: "VIBECRAFT_PHOENIX_NO_LIFTDEFEND=1 build_acceptance phoenix_2base 12局 vs 不设;phoenix_harass_metrics 比全局总损(第6列 ph_lost)+胜率"
+    evidence: "ab_on.log(ON 56.3/胜1) vs ab_off.log(OFF 47.4/胜0);trace_defend.log 34%帧 lift>0"
+
+  - id: I55
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: verified
+    title: "lift-defend vs 交sharpy = '死着贡献 vs 活着发呆'的权衡(非 bug):lift-defend 留下 engage、抬人 channel 不能动挨打→死得多;交sharpy 跟退跑掉→活久但不干活"
+    statement: "由 F147(ON 总损略高于 OFF、但行为上凤凰真抬地)+ F149(交sharpy退却不抬)推:lift-defend 让凤凰留下 engage 敌军、抬人时 channel graviton beam 不能动会挨打 → 死得多;OFF(交sharpy)是凤凰跟主力退却跑掉 → 活得久但啥也不干。二者是'死着贡献 vs 活着发呆'的本质权衡,非 bug。注:该损失差的显著性受噪声限制(I52),此处只陈述机制方向不下量化定论。"
+    deps: [F147, F149]
+    evidence: "F147 A/B + F149 退却不抬;机制推理,量化显著性让位 I52"
+
+  - id: F148
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "三版 lift-defend A/B(Protoss各12局)全局均总损 OFF47.4/激进56.3/保守64.2;lift-defend 不影响的骚扰阶段(t<=620)损失却是 22.1/25.0/20.2"
+    statement: "三版 lift-defend A/B(Protoss各12局)全局均总损:OFF(交sharpy)47.4、激进56.3、保守64.2。lift-defend 完全不影响的骚扰阶段(t<=620)损失,三版是 22.1/25.0/20.2。"
+    deps: []
+    repro: "同条件多版 A/B 各12局比全局总损 + 看同一骚扰阶段损失的 swing 估噪声底"
+    evidence: "ab_off/ab_on/ab_cons 各12局:总损47/56/64,骚扰阶段20-25"
+
+  - id: I52
+    kind: inference
+    derivation: defeasible
+    domain: harass-doctrine
+    status: verified
+    title: "归队后损失指标12局噪声主导、无法分辨:同代码骚扰段就 swing5=噪声底 → 全局47/56/64的差是噪声放大;胜率0-1全线→post-harass行为非胜负杠杆,按原则定别追噪声"
+    statement: "由 F148(骚扰阶段同代码却 swing5)+ F136(build 对 P/T VeryHard 0-1胜)推:骚扰阶段 lift-defend 完全不影响、三版损失却 swing5 = 噪声底,故全局总损 47/56/64 的差(17)是这噪声放大 → 12 局分辨不出谁损失低;胜率 0-1 全线 → post-harass 凤凰行为不是胜负杠杆(天花板在 build)。故 post-harass 行为应按 D42 保存原则定(能安全就抬),别追这个噪声指标;要真判优劣需几十局或换低方差信号(如被抬敌方关键单位数)。"
+    deps: [F148, F136, D42]
+    evidence: "F148 骚扰段 swing5=噪声底;推理:noise floor 放大到全局差 → 分辨不出"
+
+  - id: F136
+    kind: fact
+    provenance: empirical
+    domain: phoenix-optimize
+    status: verified
+    title: "真机三族诊断:当前凤凰 build 胜率 虫族25-33% / 神族0%(0W-12L) / 人族0%(0W-12L)——只对虫族有效,打神族人族全败"
+    statement: "同一 phoenix_2base build vs VeryHard 三族各12+局:虫族 杀农民10.4/胜率25-33%;神族 杀6.7/损21.4/**胜率0%**;人族 杀6.4/损22.2/**胜率0%**。build 完全虫族特化,打神族/人族每局都输。"
+    deps: []
+    repro: "VIBECRAFT_OPPONENT_RACE=<Zerg|Protoss|Terran> build_acceptance phoenix_2base --runs 12 --opponent veryhard 各跑;phoenix_harass_metrics 比胜率"
+    evidence: "logs 15:38(神族)/15:41(人族)诊断 + iter13(虫族)"
+
+  - id: I46
+    kind: inference
+    derivation: defeasible
+    domain: phoenix-optimize
+    status: verified
+    title: "凤凰 build 打神族/人族 0% 的根因不是 harass 微操,是**凤凰只能对空、打不到对方地面军**→ mass-phoenix 组合对神族(追猎/不朽/白球)人族(枪兵/坦克/雷神)无法杀伤其主力 → 必须转地面军(凤凰只做前期骚扰+制空,不当主力)"
+    statement: "由 F136(神族/人族 0%)+ F76(凤凰只能对空)推:vs 神族/人族,phoenix-heavy 组合(persistent_phoenix_control массphoenix)**根本打不到对方地面主力**(追猎/不朽/白球/枪兵/坦克),凤凰只能吊/杀空军+骚扰农民,决战时地面军空 → 每局输。**这是 build/doctrine 组合问题,不是 harass 避军微操**(harass 我调好的 redirect 只在虫族有意义)。方向:凤凰对**神族/人族的 doctrine 应转地面军**(叉子/不朽/白球 immortal_archon、闪追 blink_harass),凤凰退回'前期骚扰 + 制空'角色、不当决战主力;对**虫族**保留 phoenix_control(harass 压制经济能赢)。属 doctrine 按族分化,架构级,需玩家确认(CLAUDE.md 不许自动切战术)。"
+    deps: [F136, F134, F76]
+    evidence: "F136 三族胜率;凤凰对地=0(F76)。待玩家定 doctrine 按族分化方向"
+
+  - id: F122
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "避基地中心+半径(哪怕用 plateau 半径)实现不了'走低地概隐'——只在距中心 R 处绕弧、弧仍可能在高地上被看到;真正避视野要按 terrain_height 走低地(悬崖下)的地形路由"
+    statement: "实测教训:接近避视野**不能靠'避敌基地中心 + 某半径'**(试过 r_avoid=16 → 单局 KPI 0;试过 plateau 半径 → approach vis 11%→14%、detour 1.1→2.2 更差)。根因:center+半径只是在距中心 R 处绕弧,那条弧要还在敌方**高地上**就照样被建筑看到——它根本没把路由拉到**低地**(悬崖下,建筑看不进去)。真正避视野=**按 terrain_height 走低地/悬崖影的地形路由**(low-ground routing),是独立的地形代价路由重构,不是调避障半径。凤凰核心行为(抬人/杀农民/腾挪)已验证好,这是接近概隐这一块的待做项"
+    deps: [F121, F112]
+    repro: "VIBECRAFT_PHOENIX_TRACE=1 build_acceptance phoenix_2base veryhard;grep 'posture=approach ' 里 vis=1 比例 + detour——改 r_avoid/plateau 半径后 approach vis 不降反升、detour 上升"
+    evidence: "2026-07-26e 两次实测:r_avoid=16 / plateau_radius 都没降 approach vis(反升)、只增 detour → 回退。教训:概隐是 terrain_height(低地)问题,不是 center 距离问题;stop 调半径,要做低地路由"
+
+  - id: F121
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "避敌视野的正确目标是敌方高地(plateau)边缘,不是基地中心+模糊半径——建筑只能在高地上,凤凰待敌高地外(留够视野距)就避开所有可能建筑视野;贴高地边缘外绕进矿"
+    statement: "空军避敌建筑视野的正确几何:目标是绕开敌方**高地(plateau)边缘**,不是'避基地中心+拍脑袋半径'(用户 2026-07-26e 纠正我 r_avoid 瞎猜)。因为建筑只能建在高地上,凤凰只要待在敌方**高地外**(低地/悬崖下,留够建筑视野距 ~11)就避开了所有可能的建筑视野区。接近走敌高地边缘外、贴边绕进矿区。**目标只是'进矿区之前别被牵制/发现'**——进了矿区必被发现无所谓,快速杀几个农民就跑(hit-and-run,发现就发现)"
+    deps: [F112, F113, F119]
+    evidence: "用户2026-07-26e:'避那个高地边缘就行,最坏边缘有建筑也看不到你,绕开所有视野区,贴边进矿;进矿前别被发现,进矿肯定被发现,快速杀几农民就跑'。落地:接近避障用敌方高地(terrain_height plateau)边缘,不用基地中心半径"
+
+  - id: F120
+    kind: fact
+    provenance: empirical
+    domain: phoenix-micro
+    status: verified
+    title: "对凤凰(不能被地面打)'矿被镇/defended'=有对空(AA),不是有地面军;把地面军当 defended 会过度回避、真机骚扰 KPI 掉半"
+    statement: "凤凰是空军、地面单位打不到它,所以对凤凰而言一个矿'被镇/defended'的判据是**有对空(AA)**,不是有地面军——地面军再多也够不着凤凰,凤凰照样 snipe 农民。真机验证:harassable 门若额外'数敌方地面战斗部队>N 就判 defended',会把有地面军无对空的矿也排除 → 凤凰过度回避、53% 时间在 regroup、harass_worker_kills 4→2。故 harassable 只看对空,安全靠 bail/flee 退安全口袋(D82),不靠回避有地面军的矿"
+    deps: []
+    repro: "build_acceptance phoenix_2base veryhard:加 _force_count_near 门 → tgt 分布 71 regroup/62 ok、kills 2;去掉 → kills 4"
+    evidence: "2026-07-26d 实现 D83 时踩:force 门 _FORCE_DEFEND_N=5 真机 kills 4→2 → 回退。教训:空军的'威胁/被镇'判据只算能打到它的(对空),别算打不到它的(地面军)"
+
+  - id: F118
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "空军骚扰靠多线主动拉扯制造局部以多打少;原地等=僵局(你不动敌也不动),主动穿梭迫敌分兵/移动才有窗口"
+    statement: "空军骚扰的价值不在原地对峙,在**多线主动拉扯**:敌方部队镇守某矿时,原地等它走=僵局(你不动、敌也没理由动)。主动穿梭到敌方**另一个矿区**下手,迫使敌方部队分兵/移动去追/去防 → 某个矿区暂时空虚(敌军顾此失彼)→ 那里就是**局部以多打少**的窗口 → 切进去杀一波 → 敌军来了再换另一处。以空军机动性换局部兵力优势,是骚扰制造机会的根本手段"
+    deps: [F87, F112]
+    evidence: "用户2026-07-26d:'原地待着敌部队也不会动,要主动拉扯才能找到局部以多打少的空间';对空军骚扰通用"
+
+  - id: D85
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】主动多线拉扯:主动在敌多个矿区间穿梭下手,迫敌分兵/移动,找局部以多打少的窗口切进去杀;不原地等"
+    statement: "所有空军骚扰的机会制造手段=**主动多线拉扯**:不原地等敌军走(僵局),而是主动在敌方多个矿区间穿梭(此矿被镇→绕去彼矿下手),迫敌方部队分兵/移动 → 抓某矿暂时空虚(局部以多打少)切进去杀一波 → 敌来再换。修正 D83 的'被动蹲守等'为'主动穿梭拉扯'。与 D64(穿梭腾挪)一体,但强调**主动性**(是制造窗口的手段,不只是被逼时的躲避)"
+    deps: [F118, D74, D78, D64]
+    evidence: "用户2026-07-26d。落地:被镇矿不去(D83 harassable 数部队)+ 主动切到没镇的矿(不停在原地/安全点干等)"
+
+  - id: D86
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】穿梭到另一矿的路线走空军优势地形(矿后/地面够不到),不从敌基地面可达处直插;参考 BC(大和舰)骚扰绕行"
+    statement: "主动拉扯穿梭到另一矿时,路线尽量走**空军优势地形**(矿后、地面部队打不到的悬崖外空域),不从对方基地里地面部队能到的地方直插过去,要绕。参考 BC(速成大和舰/大件)骚扰的贴边绕行路线。是 D72(避敌+地形选路)/D63(绕矿后)在'矿间穿梭'这一段的具体化——穿梭段也要贴空军独占区,别为了快直穿敌军"
+    deps: [D72, D63, F112, D85]
+    evidence: "用户2026-07-26d:'绕到另一矿走空军有优势的地方,矿后地面打不到的路线,不从敌基地面可达处直插,参考速大和舰骚扰'"
+
+  - id: F119
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机:去集结点的路上被敌方主基建筑视野发现→敌方增援→在集结点等的时候就不安全了(集结点+路线没避开建筑视野)"
+    statement: "真机观察:凤凰去敌方附近集结点的路上,被敌方**主基建筑的视野**发现了 → 敌方据此增援(调兵来防)→ 凤凰在集结点等的时候敌援就到了、集结点不再安全。根因:接近路线 + 集结点选择没避开敌方**静态建筑视野**(主基建筑视野位置已知、可靠;区别于战争迷雾里不可靠的游走单位视野——评审 F6 指的是后者)"
+    deps: []
+    repro: "肉眼:凤凰接近路上进了敌主基视野圈、随后敌方增援赶到集结点"
+    evidence: "用户2026-07-26d:'去的路上会被发现,导致在集结点等时敌方增援了;把点设更隐蔽,路上绕开主基建筑视野'。修见 D87"
+
+  - id: D87
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】集结点 + 接近路线避开敌方**静态建筑视野**(主基建筑,可靠、位置已知),别被发现→免敌增援;集结点设更隐蔽(出建筑视野)"
+    statement: "空军骚扰的集结点和接近路线避开敌方建筑视野。**正确几何(F121 纠正):避开敌方高地(plateau)边缘,不是避基地中心+半径**——建筑只能在高地,凤凰走敌**高地外**(低地/悬崖下,留够视野距)就避开所有可能建筑视野;贴高地边缘外绕进矿。落地:①接近路线的避障用敌方**高地(terrain_height plateau)**——路由走敌高地外低地,不穿高地;②集结点(D71 悬崖口袋)本就在高地外,天然概隐。**目标只是进矿前别被发现**(进矿必被发现无所谓,快杀几农民就跑,hit-and-run)。只用静态建筑/高地(可靠),游走单位视野迷雾下不可靠仍当软分(不和评审 F6 冲突)"
+    deps: [D70, F109, F119, D86, F121]
+    evidence: "用户2026-07-26d/e。落地:接近避障用敌方高地 plateau(terrain_height)边缘,走高地外低地;不用基地中心拍脑袋半径(那个 r_avoid=16 已撤)"
+
+  - id: D88
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】接近途中遇敌方部队 → 主动往矿后切(地面部队到不了处)躲,更安全,再从矿后绕去二矿"
+    statement: "空军骚扰接近途中遇到敌方部队时,不硬闯也不原路退,而是**主动往最近的矿后切**(地面部队到不了的悬崖外空域)先躲安全,再从矿后绕去另一个矿(二矿)继续拉扯。利用空军能进地面到不了处的优势,遇敌就往那躲,是接近段的保命 + 转线手段。是 D85(主动拉扯)/D86(走空军优势地形)在'途中遇敌'这一 case 的具体动作"
+    deps: [D85, D86, F112]
+    evidence: "用户2026-07-26d:'遇到对方部队应该主动往矿后切,地面到不了的地方比较安全,再从矿后绕去二矿'"
+
+  # ══ 通用空军骚扰 doctrine(unit-agnostic,可复用) ═════════════════════════════
+  # 从凤凰实践提炼的共性原则,未来女妖(隐身回复)/飞龙(集群)/BC(大件传送)等空军骚扰复用同一套。
+  # 凤凰是其一个实例 = 通用 doctrine + 凤凰特性(抬人 GRAVITONBEAM / 护盾回复 / 不能对地),
+  # 见 phoenix-micro 域 D41/D48/D55/D59/D61/D64/D66/D69/D73 等。
+  - id: F112
+    kind: fact
+    provenance: env-game
+    domain: harass-doctrine
+    status: verified
+    title: "空军能飞到地面单位到不了的空域(悬崖上空/高地边缘外/矿后),地面部队够不着那里的空军——空军先天优势"
+    statement: "空军单位能飞越/停留在地面单位走不到的空域(悬崖上空、高地边缘外、矿区后方等被地形隔开处),地面部队够不着停在那里的空军。这是空军相对地面的先天优势,是一切空军骚扰'活得久'的物理基础"
+    deps: []
+    evidence: "SC2 地形机制:飞行单位无视 pathing_grid,地面单位受悬崖/不可通行地形限制。凤凰 F87 是其在'矿后空域'的具体化"
+
+  - id: D74
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】空军骚扰第一优势原则:尽量待在/走地面部队够不到的空域拉扯,地面军够不着=活得久、持续压制"
+    statement: "所有空军骚扰的第一优势原则:移动和停留尽量待在**地面部队够不到的空域**(悬崖上空/高地边缘外/矿后),让地面增援够不着 → 活得久、持续压制敌方经济。凤凰/女妖/飞龙/BC 通用。各兵种具体'矿后空域/绕行路线'是此原则的实例"
+    deps: [F112, D42]
+    evidence: "从凤凰 F87/D44 提炼的通用版。未来空军骚扰 build 复用此根原则"
+
+  - id: D75
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】hit-and-run 循环:从安全集结点(F109)出击→打一波→退回安全集结点回复(不回家)→回复够/攒够再出击"
+    statement: "所有空军骚扰的核心节奏 = hit-and-run 循环:①从安全集结点(F109)出击 → ②切入打一波(杀农民/关键单位)→ ③打完或续航掉了**退回安全集结点回复**(绝不退回家浪费时间、放弃压制)→ ④回复够/兵攒够再出击。回复机制按兵种不同(神族回盾 / 人族离开脱战 / 女妖隐身脱离),但'从安全点出击、退回安全点回复、不回家'的循环通用"
+    deps: [F109, D42, D74]
+    evidence: "从凤凰 D67/D69/F106 提炼的通用版。女妖/BC 复用时把回复机制替换成隐身/离开"
+
+  - id: D76
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】要么打要么走:进敌火力范围二选一——能有效输出就打(用续航扛)、否则撤,绝不又不打又不逃杵着挨打"
+    statement: "所有空军骚扰进入敌方火力范围必须二选一:能有效输出(有目标能杀/能压制)就打,用己方续航(护盾/血甲/隐身)扛住,打完退;不能有效输出就撤。**绝不又不打又不逃杵在敌火力里被白打**。凤凰'要么抬要么跑'(D61)是此原则在'抬人'输出方式上的实例"
+    deps: [D42]
+    evidence: "从凤凰 D46/D61/D69 提炼的通用版"
+
+  - id: D77
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】撤退绕敌保持距离:决定撤就先朝远离威胁方向拉开距离,再沿避敌路径退,不直线穿过/不飞越敌方部队头顶"
+    statement: "所有空军骚扰撤退时,先朝**远离威胁**方向拉开与敌方部队的距离,再沿避敌路径(D72)退向安全集结点或另一矿,**绝不直线穿过/飞越敌方部队头顶**(会被沿途白打)。和敌方部队保持距离是撤退的第一动作"
+    deps: [D74, D42, D72]
+    evidence: "从凤凰 D66 提炼的通用版"
+
+  - id: D78
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用】攒够一波(≥N)且聚成一团再出击,不单个/散兵去送;新出的先归队汇合"
+    statement: "所有空军骚扰:攒够一波(≥某数量,按兵种定)且聚成一团再出击,不单个或散兵去送;新产出的单位先飞去和主群汇合(少数迁就多数),不自己先冲。聚成团才有足够输出打一波、也才扛得住扛得住撤"
+    deps: [D42]
+    evidence: "从凤凰 D41 规则①/D53/D57 提炼的通用版。各兵种 N 不同(凤凰≥5)"
+
+  - id: F113
+    kind: fact
+    provenance: env-api
+    domain: harass-doctrine
+    status: verified
+    title: "SC2 高地边缘可由 terrain_height + pathing_grid 算出,且静态(一图不变)→ 可预计算缓存"
+    statement: "SC2 game_info.terrain_height(高度图)+ pathing_grid(可通行)能算出'高地边缘'——高地 plateau 与低地/悬崖的交界带(高度突变处 / pathable 高地格挨着 unpathable 悬崖格)。地形是静态的,一局内不变 → 高地边缘可**一图预计算一次、缓存**,不必每帧重算"
+    deps: [F102]
+    evidence: "SC2 地形静态;项目 nydus_landing_planner 已有'高地边缘=挨着≥CLIFF_DROP 悬崖的可放格'逻辑可参考。terrain_height/pathing_grid 见 game_info"
+
+  - id: D79
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "【通用/预计算】每局预计算'敌地面可达距离场'+高地边缘几何作公共参考,按局懒加载缓存,种族中性模块,供选路选点复用"
+    statement: "**每局预计算一次**(评审 F2/F3/F4 修正):①**敌地面可达距离场**——从敌方各基地出发对 pathing_grid 做 flood-fill,得'敌地面能走到哪/距离',供 _ground_unreachable(D70①)O(1)查'射程内有无敌可达格';②高地边缘几何(F113,**复用 nydus enemy_plateau_edges 但把 in_placement_grid 换成 in_pathing_grid**)。缓存**按局(按实例)不按 map name**(敌方开到第几矿每局变;跨局磁盘缓存收益近零、违反单一源纪律);**各基地懒加载**(逐步侦察到才算,别第0帧扫4000格卡顿)。几何抽到**种族中性模块**(bot/terrain.py 或扩 drop_path),nydus+phoenix 共用,别 protoss import zerg planner。对所有空军骚扰通用共享"
+    deps: [F113, F112, D70, D80]
+    evidence: "用户2026-07-26b:'预计算敌方高地边缘作寻路参考,对很多空军骚扰有用'。**独立评审 F2/F3/F4 修正**:产物改'可达距离场'(不只边缘格)、按局缓存(非 map name)、种族中性模块复用 nydus 几何(换 pathing)、懒加载。参考 nydus_landing_planner._static_edge_cache(按局)"
+
+  - id: D80
+    kind: decision
+    by: agent
+    domain: harass-doctrine
+    status: active
+    title: "【前置】先真机地形探针敲定 in_pathing_grid 对矿脉/悬崖/矿后的语义,再建地形层——否则 _ground_unreachable 判定基未定=在未验证引擎假设上盖楼"
+    statement: "动手写地形层(D70/D71/D79)前,**必须先真机探针**(扩 nydus_terrain_probe.py):打印 (a) 矿脉格上 in_pathing_grid 返回值 (b) 悬崖外低地格 (c) 已知'矿后空域'点 的返回值,敲定'地面够不到'的判定基。关键未知(F114):很多平坦矿的'矿后'是**矿脉挡路**不是悬崖挡,而 pathing_grid 多半不把矿脉格标不可走 → 若不验就写,平坦矿的矿后精髓可能永远判不出来。属 CLAUDE.md『读源码≠运行时真值/别猜引擎语义』(F102/salvage 同类)"
+    deps: [F102, F109, F114]
+    evidence: "独立评审 F1/F19 必改。**探针已完成(2026-07-26,scripts/phoenix_terrain_probe.py)→ F114 verified**:判定基敲定=靠悬崖(terrain_height 突降),不靠矿脉(静态栅格不编码矿脉);BFS 从可走格起步。地形层可动工"
+
+  - id: F114
+    kind: fact
+    provenance: empirical
+    domain: harass-doctrine
+    status: verified
+    title: "真机探针(DaybreakLE):in_pathing_grid 静态栅格不编码矿脉(自然矿脉格 pg=1),但矿后悬崖(terrain_height 突降+pg=0+地面BFS够不到)是可靠地面屏障→_ground_unreachable 靠悬崖不靠矿脉"
+    statement: "phoenix_terrain_probe.py 真机实测(DaybreakLE):①`game_info.pathing_grid` 静态栅格**不把矿脉(mineral field)标成不可走**——自然矿(无建筑)的矿脉格 pg=1,证明矿脉不在静态 pathing 里,**不能靠 in_pathing_grid 判'矿脉挡地面'**;②但可靠地面屏障是**矿后悬崖**:主矿/二矿的'矿后+8'都是 terrain_height 突降(223→127 / 207→135)+ pg=0 + 地面 BFS 够不到;③安全口袋=矿脉背后越过悬崖那段(矿后~6-10格),地面爬不上+出地面射程,空军停那儿正好。故 _ground_unreachable **靠 terrain_height 突降(悬崖)判**,不靠矿脉。**实现坑:地面 BFS 要从可走格起步**(基地位常是建筑 pg=0,从它 BFS 卡死→全 False 假象)"
+    deps: []
+    repro: "scripts/phoenix_terrain_probe.py(vs VeryEasy non-realtime,~1min);读 scratchpad UTF-8 输出:矿脉格/矿后+4/+8/+12 的 pg + terrain_height + 地面BFS可达"
+    evidence: "2026-07-26 真机:主矿矿脉格 pg=0(实为 Nexus 建筑footprint,非矿脉)、自然矿脉格 pg=1(矿脉不进静态栅格);矿后+8 两矿都悬崖(h突降+pg0+BFS False)。证实评审 F1 假设(别靠矿脉,靠悬崖)"
+
+  - id: D81
+    kind: decision
+    by: player
+    domain: harass-doctrine
+    status: active
+    title: "【通用统领·心法】空军骚扰默认蹲在安全区,伺机上去杀农民/部队,敌来就退回安全区或经安全区绕开,在一矿↔二矿安全区之间腾挪"
+    statement: "空军骚扰状态机的统领心法(定义默认态与转移):**默认态 = 蹲在安全集结点(F109,地面够不到、出视野)**,不是飞到矿区悬停干等;**伺机才上(sortie)**——看到有农民/部队能杀且对空够少,才从安全区窜上去杀一波;**敌来即退**——敌方部队/援军一来,立刻退回安全区,或**经由安全区绕开**(不硬碰);**腾挪**——在一矿、二矿(乃至三矿)的安全区之间来回穿梭,哪边有机会去哪边、哪边危险离哪边。核心:安全是常态、出击是例外、退回是本能。对所有空军骚扰通用"
+    deps: [F109, D74, D75, D42]
+    evidence: "用户2026-07-26b 心法:'空军尽量一直待在安全的地方,有机会再上去杀农民或部队,别人来的时候回到安全区或经安全区绕开,在一矿二矿之间腾挪'。是 D73 状态机的统领——默认态定为'蹲安全区'而非'悬停矿区'"
+# ======================================================================
+# 变更日志(插入/复审记录)—— 迁自 docs/knowledge-graph.md「## 变更日志」小节
+# (md 本身暂未删,本段为机读权威源;后续批次删 md 后此段成为唯一源)
+# ======================================================================
+changelog:
+  - date: "2026-07-27a"
+    change: |
+      真机查出 is_worker 假属性坑并入图。正向:F176(env-api:python-sc2 的 Unit 没有 is_worker,
+      也没有 __getattr__ 兜底)、F177(own-code:16 处在用它)、I69(故找农民的分支从没走到过)、
+      D115(判据统一走 type_id + 加静态门)。
+      对照证据:修前 tgt=worker 恒 0%(0/163),修后 66/133(50%)。
+      连带影响:nydus_landing_planner 判「主力在不在落点区」时靠它排除农民,恒 False 意味着农民
+      被当军队计数,该判定条件一直比设计更严格。
+      注:本批节点在 2026-07-27 盖戳之后加入,尚未过独立复评。
+  - date: "2026-07-26k"
+    change: |
+      第二轮独立复评(49 个变动节点)的必改项落地。最重的三条:
+      (1) 40 秒冷却那版被就地改写、图上零留痕 -> 建 D112(status=inactive)留痕,I64 改挂它。原先 I64
+      的前提是 F165 描述的 2 秒冷却 —— 2 秒否决不了任何窗口,链条是断的。
+      (2) I64 的证据不对题 -> 它引的 server_20260726_230748.log 那段跑的是 2 秒冷却,且该局没投出去
+      的根因按 F170 是候选全废,与本推论是竞争性假设;拿它盖章等于以相关当因果。降为 unverified。
+      (3) 旧决策与新决策直接打架却都还 active:D3(取最外围格)被 I66 判错却仍生效 -> 改取「最外围的
+      可落格」;D6 的「必在视野内 + 可放」被 F152 证伪、changelog 写了节点却没动 -> 删该断言;
+      D7(超时硬落)与 D108(重投禁硬落)矛盾 -> D7 限定为首次投放;D25 补记被 D109 收窄。
+      另:I3「~10 格」超出自身证据且与 F13 互斥 -> 收回 ~8 格,F13 去掉对 I3 的循环依赖;D100 删掉被
+      F13 反驳的「push 9 < 视野 11 故覆盖」;I62 的所谓正交证据是单测(内部自洽) -> 降 unverified;
+      F165 拆出 F172(25 秒硬落兜底);D109/D110 各拆二(D113/D114);I65/D111/I59/I56/I63 按判据补前提。
+      补基础事实:F171(高台扫描半径 30)、F172、F173(菌毯加速与视野)、F174(ability 名查不到即静默
+      失效)、F175(flee 半径取 7)。复评据图推出「高台在 23 格、扫描半径 18 故扫不到」的矛盾 —— 核
+      代码后确认是图谱漏记了 _PERCH_SCAN_R=30,产品无此问题,补 F171 + I68 消解。
+  - date: "2026-07-26j"
+    change: |
+      真局(server_20260726_230748)"虫被拆后再没投出去 + 语音指令没反应"的根因与修复入图。
+      正向:F166(窗口持续开着)、F170(唯二有视野的候选放不下、其余没视野)、F167(own-code:拉黑原为
+      永久且半径 3 连坐)、F165(own-code:2s 即重下 + 25s 硬落兜底)、F169(LLM 给的 ability 名不存在、
+      执行链静默失效)、F168(扫描半径 26 时边缘格 148→211)、I64(定时器重投会否决佯攻创造的窗口)、
+      I65(放坑道虫不是对单位放技能)。决策:D109(拉黑限时 60s + 全废时无视拉黑重用老点)、
+      D110(落点候选过 3x3 筛 + 每只 OL 贡献多个候选)、D111(玩家喊放坑道虫转强制投放意图)、
+      D107(招募封顶按存活数)、D108(重投禁用硬落)。
+      反向审查:D104 从"冷却 40s 当门"改写为"只做 8s 防抖、时机交给窗口门"——40s 那版被真机证伪。
+  - date: "2026-07-26i"
+    change: |
+      独立 subagent 复评(27 个变动节点)的 12 条必改全部落地。
+      拆分:F159 原 title/statement 是因果诊断 → 拆成纯观察(F159)+ 诊断推论(I62),D103 改依赖 I62;
+      I56 拆成"最外围格放不下"(I56)与"由它反推站位会挑到放不下的落点"(I66),D99/D100 改指 I66;
+      I59 三步箭头收成一句结论;D103/D106 各自收成单一断言。
+      补缺失前提(全是反事实测试满分的纯游戏规则,原先烂在 evidence 散文里):F161(女王射程 7)、
+      F162(坑道虫占地 3x3)、F163(坑道虫落地自带菌毯)、F164(菌毯瘤只能种在菌毯上)。
+      D1 订正到位:statement 收成一句,判据「9<视野11 故可见」被自己的 dep F13 反驳(push=10 也 <11
+      却不可见)→ 改为"7 与 10 之间的折中、9 本身未实测"并开 Q11;evidence 里"7 太贴边给不上视野"
+      与 F13/D6 冲突 → 按代码注释原文改写,真机制立为 I63(驻守距离须大于 flee 半径)。
+      D102 的隐蔽性判据本是未验假设却写在 evidence 散文里 → 立为 I61(unverified)当 dep,Q10 收成纯问题。
+      F158 title 从普遍命题改为带地图限定;I58(瞭望塔那条)按"留 lesson 不留 attempt"降级删除,机制
+      保留在 F156(改造成 env-game 规则)+ F157。
+      可追溯性:探针输出归档到 logs/probes/2026-07-26-*,7 条实测 fact 的 evidence 改指具体文件。
+  - date: "2026-07-26h"
+    change: |
+      真局(server_20260726_192600.log)暴露「狗被反复拉扯」+ 用户三条新要求,一并落地。
+      正向:F159(佯攻队激活即抢走坑道队已认领的狗,total_staged 卡 6、装载空发 70s)、
+      F160(own-code:招募封顶终身累计不回落)、I59(故第二波结构上不可能)。
+      决策:D103(两 act 双向互斥 + STAGE 可让渡交接)、D104(虫被拆后冷却 40s 再重投,重投
+      禁用硬落兜底、冷却期佯攻继续引主力)、D105(钻出的女王在敌方家铺菌毯,靠坑道虫自带菌毯)、
+      D106(坑道链卡住时多余女王铺菌毯 + 到最外分矿交回 sharpy 防守)。
+      同批落地 D102(小高台优先驻守)与「开局第 0 帧就派第一只 OL」:侦查 act 从
+      `Step(UnitReady(LAIR,1))` 提到 BuildOrder 顶层,派遣下限从 0 改 1。
+  - date: "2026-07-26g"
+    change: |
+      坑道虫供视野可视化探针(nydus_vision_viz_probe.py:真机放 OL + 画框 + 逐扇区截图)带回四条实测,
+      连带发现站位算法的系统性缺陷。正向:F151(边缘 148 格里 3x3 全可放仅 42)、F152(旧站位最近边缘格
+      5/5 可见却放不下)、F155(有站位视野圈内可落格=0、最近的在圈外 21 格)、F153(静态 3x3 判据漏判 0、
+      误报 6/27)、F154(own-code:扫描半径 _SCAN_R=18)、I56(最外围格与 3x3 可放系统性互斥)、
+      I57(静态判据可作无视野预筛,单图单局→unverified)。决策:D99(用户:落点必须在该站位视野圈∩高地
+      交集内,取不到就换站位)、D100(站位由可落格反推,取代最外围边缘格反推;探针已验,产品未改)、
+      D101(用户:只用朝我方一侧的站位,不绕敌方主基)。
+      追加(同日):用户澄清「小高塔」指的是他在图上圈出的**孤立小高台**、不是瞭望塔。正向 F158(该高台
+      223 高、离最近可落格 10.8 格)+ D102(站位优先取落点 11 格内的小高台上方,够不到才退回外推 9 格)+
+      Q10(高台上方的飞行单位是否真被地形遮蔽,待验)。误读瞭望塔那轮的产物保留为可复用游戏事实:
+      F156(瞭望塔只认地面单位:塔上仅 OL 时可见 421 格、加一只小狗 1528 格)、F157(该图塔离敌方主基
+      49.9/73.2 格、覆盖落点 0/148)、I58(故派 OL 上瞭望塔供视野不成立)。
+      反向审查:D1 长期写「外推 7 格」而代码 _OL_PUSH=9.0,按代码订正为 9 并补判据(9<视野11 可见、
+      9>女王射程7 不挨打);D6「取离 OL 最近的可放边缘格必在视野内+可放」被 F152 冲击——「最近」挑到的
+      恰是放不下的格,其「必可放」措辞由 D100 取代(D6 本体保留:落点耦合到真实视野这条仍成立)。
+  - date: "2026-07-26f"
+    change: |
+      用户三条修正 + 用游戏数值定阈值:①主目标=杀农民别忘(D89 首句)。②可抬对空(女王)有优势就抬清:
+      N 只带能量凤凰可同时抬起 N 个(F124 数值)→ 可抬对空数<凤凰数 且 带能量凤凰≥可抬对空数 → 一次抬光
+      零对空火力零损失,富余凤凰杀农民(D89);没能量抬不动→撤回能量('除非没能量')。③静态防空(孢子/光炮/
+      导弹塔,抬不掉)≤2座可靠护盾硬闯突袭杀农民(全身而退),>2座避开(D90,阈值:180有效血/单座~18DPS/
+      飞出射程~2s→挨~静态数×36伤)。正向:F123(真机 PvZ 凤凰不抬女王 9→0,empirical)+ F125(own-code:旧
+      单门混算可抬/静态对空、flee 时永不抬)+ F124(游戏数值,doc)。落地:_squad_can_fight 能量感知+静态预算、
+      _try_lift Gate A 放宽 1:1 序贯清场、act _aa_split_near 同口径。真机 trace 验证:58 tick 有抬动作、
+      68 tick 有单位被抬(对手 Protoss;之前 PvZ 那局恒 0)。单测 84 passed/ruff/mypy 绿。
+      反向审查:F123/F125 冲击旧的 ×0.5 无差别对空门(D46 rule① 的 can_fight 定义),D89/D90 已 supersede
+      其定义;D46 核心(每帧判 can_fight)、D61(打不成就跑)不变,保持 active 不翻 status。
+  - date: "2026-07-26e"
+    change: |
+      概隐路由探索(F121/F122):用户纠正 r_avoid 瞎猜——避的应是敌方**高地(plateau)边缘**不是基地中心
+      拍脑袋半径(F121);实测 r_avoid=16 / plateau_radius 两次都没降 approach vis(反升)+ 只增 detour →
+      回退(F122:概隐是 terrain_height 低地路由问题,非 center 距离问题,stop 调半径要做低地路由)。此条待实现。
+  - date: "2026-07-26d"
+    change: |
+      心法落地续 + 踩坑回退:①D82 bail/回盾退最近安全悬崖口袋(不回家)+ 整队一起(_nearest_safe_point),
+      修"没血还往家逃";②D85 主动多线拉扯(harassable 只看对空→自然去对空少的矿)。③**踩坑 F120**:
+      实现 D83'harassable 数敌方地面部队'→ 真机 harass_worker_kills 4→2、53% 时间 regroup(VeryHard
+      矿区总有地面军)→ 回退,只留 AA 门。教训:对凤凰(不能被地面打)'defended'=有对空不是有地面军,
+      空军威胁判据只算能打到它的。④用户又提 D86(穿梭走空军优势地形)/D87(避静态建筑视野)/D88(遇敌切
+      矿后)+ F118/F119,记入图谱待实现(几何细节配真机评估)。真机 3 局中位 harass_worker_kills=3 PASS。
+  - date: "2026-07-26c"
+    change: |
+      地形感知重构实现 + 真机验证(步骤①-⑤):①探针(phoenix_terrain_probe.py)敲定判定基=靠悬崖
+      不靠矿脉→F114 verified;②地形基础层 bot/terrain_harass.py(find_mineback_pocket/bfs_ground_
+      reachable/point_ground_reachable,种族中性,单测);③_safe_gather_points(各矿矿后悬崖口袋,按局
+      缓存)接 regroup 槽,真机 PHOENIXSAFE 3矿全算出真口袋(落差72-96)→D71 verified;④_approach_
+      waypoint 目标换成悬崖口袋,真机 air_frac 0.33-0.48;⑤flee 退最近安全口袋(心法 D81/D67)。
+      效果:真机 harass_worker_kills 1→4(需≥3),验收全 PASS。D61/D59/lift/bail 未动。待续:完整默认
+      蹲坑状态机(D73/D81 全量) + flee 全避敌绕行(D72 当前直线到口袋),配用户真机评估调。
+  - date: "2026-07-26b"
+    change: |
+      空军骚扰地形感知重构:图谱记全用户完整精髓(F103-114 反常/机制/实验 + D61-79 决策,三层=通用
+      doctrine/地形基础/凤凰实例)+ 从图谱推演出设计(D70-73)+ 独立 opus 评审后修正。评审必改已处理:
+      - D80 前置:先真机探针敲定 in_pathing_grid 对矿脉/悬崖/矿后语义(F114 未验)再建地形层——平坦矿
+        '矿后'可能靠矿脉挡非悬崖,pathing_grid 多半不标矿脉不可走,不验就写=整层悬空(F102/salvage 同类)。
+      - D72 算法定为**预计算走廊(经矿后口袋)**,非 A*(D60 已否绕大圈)非纯 snap(F110 力度不足);
+        **移动敌军不当 avoid 中心**(每帧漂移抖动违纪律①)→ 交给每帧 posture/flee 处理。
+      - D70 _ground_unreachable 改'敌地面射程内无可达可走格'(单格不够)+ 复用 cannon_proxy 视野(迷雾下
+        当软分)+ 合并现有4份 AA 判定;D79 产物改'敌地面可达距离场'+按局缓存+种族中性模块复用 nydus 几何。
+      - D67 收窄:有安全点才不回家,无安全点终局兜底回家/收卡。
+      - YAGNI(评审 F12):通用 doctrine 层(D74-78)保留为**图谱原则**,凤凰具体实现;**不建通用代码基类**,
+        等第二个空军单位(女妖)落地有两真实例再据实提炼。地形基础层(纯几何)现在抽、种族中性。
+      实现顺序:①真机探针(D80)②地形基础层(种族中性,复用 nydus edges 换 pathing + cannon_proxy 视野
+      + 可达距离场,按局懒加载)③_safe_gather_point 接 regroup 槽 ④approach 穿矿后口袋+锁定(F104/F110
+      最痛最可验的首片)⑤flee 避敌路由。D61/D59/lift/bail(F111 已验证)不动。待实现+真机验证。
+  - date: "2026-07-25b"
+    change: |
+      #2 接近路线落地(D60):地形感知 snap 选路。独立设计评审(opus)否掉全局 A*(会重演被否的
+      edge_path 绕大圈 F2、丢矿后切入角 F3、极性未验证 F1),改**局部 snap**——几何 base 路径上把
+      中间点贴到最近悬崖格,半径受限 + 全局绕路守卫(>base×1.35 弃 snap)。极性坑立 F102(sharpy
+      vendor 注释 ==0 可走 vs python-sc2 ==1,用 in_pathing_grid 封装规避)。D60 evidence 补真机
+      验证(air_frac 0.36-0.43 << straight 0.75-1.0,少走地面 50-64%,同时反证极性运行时正确)。
+      实现 plan_air_path + air_path_ground_frac(drop_path.py)+ 单测 test_air_path_*。
+  - date: "2026-07-25"
+    change: |
+      用户真机反馈凤凰三反常 + 立"少数迁就多数"原则,双向更新:
+      - 正向:加 D57(少数迁就多数:少数追多数,绝不多数迁就少数,通用骚扰/机动小队)+ 三条 2026-07-25
+        真机 empirical fact(F96 主群被落单者拽回 / F97 接近直穿地面可达区没绕矿后 / F98 抬人时其他
+        凤凰飞走没集火)+ 三条修正决策(D58 聚拢按主群不按全体质心 / D59 lifted 集火跨 posture 生效 /
+        D60 接近改 pathing_grid 地形感知选路真正走地面去不了处)。
+      - 反向审查 D53:原'不够聚拢就全体向质心靠拢等齐'条款 = 多数迁就少数,被 F96 真机证伪 → 重写为
+        '主群不停、落单追主群',deps 加 D57;evidence 记复审。
+      - 教训(元):此前把凤凰战术节点当'事后记笔记'堆进图,没从 D41/D42 正向推演落地、也没验代码真
+        实现 → D53 留了歧义机制被错误落地(多数迁就少数),图没拦住。D58/D59/D60 落地 + 真机 trace
+        验证前保持 unverified。待独立 subagent 复评本次刷新。
+  - date: "2026-07-19"
+    change: |
+      two_base_tanks + ling_bane 收尾(用户拍板:坦克防守别进攻 / ling_bane 打一波转运营)。
+      **反向审查修正 F67**:之前把 ling_bane→muta 的 MUTALISK=0 归因"1矿经济喂不起Spire"是错的——
+      真因是 muta_ling_bane 的 doctrine bug(F70:科技链 Spire 没先升 Lair、Spire 硬前置是 Lair→永远
+      建不了),那几局气囤 1453 abundant、不缺气。F67 evidence 已加【反向审查修正】标注、指向 F70。
+      新增 F70(own-code bug)/F71(修 Lair 后飞龙真出 MUTA8-10 但 1矿经济仍封顶 2/6)/F72(two_base 改
+      防守 macro attack_on_advantage=True+多矿 2/6→4/5)/I37(纯 macro 龟防 out-macro vs all-in 强出门,
+      同一 attack_on_advantage 旋钮取相反值,对照 I31)。I35 条件②证据改引 F70/F71(部署失败先因 bug 后因
+      经济)。修 I35 早前遗留的重复 evidence 键。commit c76d2eb(码)。
+  - date: "2026-07-18b"
+    change: |
+      **反向审查 + 撤 I34/F61,立 I35**(用户原则「第一波出来就马上转型」驱动的系统重测):
+      发现 banshee 旧触发条件(隐形+2女妖)整局只造出 1 女妖→永不满足→**转型从不发生**(F64),
+      降到"第一波1女妖即转"后 bio_max 真接管→**1/6 跃至 8/12**(F65,commit f1323ac)。这个新事实
+      **证伪了 I34**(原假设"banshee 独立空军产线不共享→转型失败"):banshee→bio_max 其实完全能打,
+      之前 1/6 真因是触发没 fire、与产线复用无关。故 **I34 retracted**(retracted_by F65)、**F61 retracted**
+      (retracted_by F64,那 6 局是无效转型测试)。F62/F63 作为产线事实仍真但成孤儿(不再支撑结论)。
+      **立 I35 取代 I34** 的正确机制:早转型有效当且仅当 ①触发真能 fire ②目标 doctrine 能从继承经济
+      部署招牌兵——banshee 单改触发隔离了条件①(1/6→8/12);ling_bane 触发已 fire 但 muta_ling_bane
+      从 1 矿经济部署不出飞龙(MUTA=0)隔离了条件②(0/6 反更差,F67,已还原)。roach_allin 3/6、
+      widow_mine 3/5 两条件都满足故有效(F66)。I35 标 unverified(近受控但未穷尽 doctrine×经济组合)。
+  - date: "2026-07-18"
+    change: |
+      opening-winrate-opt 收尾(**注:本条的 I34 已于 2026-07-18b 被撤,见上条**):banshee_harass→bio_max
+      转型实测 1/6(F61),加两条产线机制 fact(F62/F63)+ 工作假设 I34(转型成败疑因开局产线能否复用)。
+      I34 当时定 unverified;后续 banshee 触发修复(8/12)证伪 I34、撤回,产线复用机制被 I35 取代。
+  - date: "2026-07-15"
+    change: |
+      "回声式verified"策略(用户拍板):历史数据不较真、未来强制。加 derivation 后 rg_audit 对 17 个
+      defeasible+verified+evidence 无独立实验 log 的推论(I4/I5/I6/I8/I11/I13/I14/I15/I16/I17/I18/
+      I19/I20/I21/I22/I23/I26)报"回声式verified"——这些是历史遗留,**grandfather 不动**(不降级、不补假
+      log)。审计软门只提示不阻塞,故不影响。**未来新增**的 defeasible+verified 必须 evidence 指到独立
+      实验 log,加节点时按审计提示补。
+  - date: "2026-07-14"
+    change: |
+      inactive 墓碑决策去叙事(用户定 A 方案:留节点、挪叙事):D13/D14/D17/D19 的 statement 里
+      "用户 2026-07-13 拍板/观察…"这类会话叙事挪进 evidence,statement 只留决策本身(rubric #8)。
+      不删这 7 个 inactive 决策——它们被 open 问题 Q4/Q5 与 fact F31 引用(承重),且按"留 lesson
+      不留 attempt"判据本身有防重踩价值,够格留下;删除会破坏 Q4/Q5 的提问脉络。
+  - date: "2026-07-14"
+    change: |
+      独立复评刷新(第二轮):把上一批"原子化重构"里仍残留的推理链/多决策塞一节点的地方继续拆边、
+      拆分决策,推理住进依赖边、可反向审查。
+      - 推理拆边:F18(move 打断 attack 前摇)拆出 I23(骚扰每帧 move → harassed 恒 0);F22(unit.move
+        寻路)拆出 F39(in_pathing_grid≠引擎执行路)+ I24(reaper 原生支持跳崖的推论);F25(死神默认
+        micro)拆出 F42(MicroReaper 机制)+ F43(未注册)+ I25(从不扔手雷的推论),并修正 F25 原
+        deps=[F23] 这个错依赖(改 []);F26(注入时机)拆出 I26(神族 micro 从没真跑的推论)+ F40
+        (正确注册写法);F23(ZoneManager API)剥离末尾"选目标"用法推理,收窄为纯字段枚举;F20/F21
+        两个 umbrella fact 去内嵌推理与前向引用(F19/F9/F7);I5 补上隐藏前提 F38(canal morph ~14s
+        无自卫);I4 收窄为纯"暴露"事实,拆出 I22(暴露→主力回防→窗口不开)承接原推论,I11/Q1 的
+        deps 随之改挂 I22;I9 拆出 I10(隔离 unverified 的"骚扰能拉动主力"假设),I9 收窄为
+        "回防→窗口开"单步;F8/I8 去掉多余的数字/第一跳叙事。
+      - 多决策拆分:D4(判定门)拆出 D24(命中锁点)+ D25(拆了换点);D8(OL 侦查)拆出 D26(绕主基)+
+        D27(选最隐蔽点);D9(佯攻狗)拆出 D28(前期不收编)+ D29(投送窗口才收编);D23(3/3+防空)
+        拆出 D30(防空三件套,单独承接堵『敌走空=必败』判据),F33/F34 的 deps 随之改挂 D23/D30。
+        D7 的 deps 从 F13 改挂 D4(叙事挪 evidence);D21 的 deps 随 F25 拆分改挂 I25;I18 的 deps
+        随 F25 拆分改挂 I25(并修正正文引用从 F25→F42);D19 的 deps 随 F22 拆分改挂 I24;I20 剥离
+        "3/3中期崩只完成L1"等无关观察挪 evidence。
+      - **id 命名偏离**:清单原设想的 D4b/D4c/D8b/D8c/D9b/D9c/D23b 不满足本文件 config 的
+        `node_id_pattern: "^[FIDQ]\\d+$"`(前缀+纯数字,不允许字母后缀),改用下一批可用整数 id
+        (D24-D30)承接同样的拆分内容,语义不变。
+      - 净变化:新增 18 节点(F38-F40/F42/F43、I10/I22-I26、D24-D30),无节点删除;
+        rg_audit WARN 38→24。
+  - date: "2026-07-14"
+    change: |
+      nydus-landing domain 原子化重构(LLM 深评刷新):把 F13/F14/D1/I11/D11 等
+      "调试会话总结体"节点拆成原子 fact + 显式引用边,让推理住进依赖边、可被反向审查。
+      - F13「OL 站多远/落点视野」:一节点塞 3 claim(①②③)拆三个原子——F13 留 claim①
+        (push 距离↔视野,empirical);新 F35(worm 落点须 snap 格心,empirical);新 F36
+        (落地失败主因是视野几何非 can_place,empirical)。D6 deps 加 F35+F36 并删去对格心/视野
+        约束的复述;F27 deps F13→F35 并删前向引用「见 F13/D6」。
+      - F14「OL 接近寻路」:三次迭代过程叙事(旧默认13→22→大包围圈→退回)从 statement 移进
+        evidence;F14 收窄为单一机制 fact(避障半径≤主基半径→穿基地被杀),provenance 由误标的
+        env-api 改判 empirical(补 repro);第二机制拆出新 F37(大包围圈把落点圈进禁区→0落地)。
+        D8 deps 加 F37,并把「r_avoid=22」改标为 D8 自身选值(F14 只留机制、不再复述决策参数)。
+      - D1「OL 站位」:修订叙事(push=10→改7)从 statement 移进 evidence,statement 直接是当前值
+        (外推7格)+判据(I3 实测 8.2-8.4)。
+      - I11「隐蔽vs抢视野」:派生执行规则①②(有视野即停/暴露即撤,本就在 D8)从 statement 删除,
+        收窄为单一 inference(被发现→主力回防秒 canal ⟹ 隐蔽优先);F14 不再 dep I11。
+      - D11「VN 按时」:2026-07-13 真机复盘数字叙事移进 evidence,statement 留决策核心
+        (VN priority=True)+机制引用(F15)。Q1 statement 删「解见 D5」(答案走 answered_by),
+        deps 去掉对自身答案 D5 的依赖。
+      - 净变化:nydus-landing 39→42 节点(+3 empirical fact F35/F36/F37),无节点删除;
+        未动质量本就高的 F1-F12/I1-I9 及 F21 umbrella。
+  - date: "2026-07-14"
+    change: |
+      mass-reaper domain 原子化重构(LLM 深评刷新):把 F16/F17/F19/F24/D20/D21/D22/D23 等
+      "调试会话总结体"节点拆成原子 fact + 显式 inference,让推理住进依赖边、可被反向审查。
+      - F16「矿飘」:原 env-game fact 藏推理链 + 前向引用 D16 + telemetry 走私。拆为——F16
+        改判 empirical(真机矿飘 36421/gas飘/prod_util 0.99,补 repro);新 F28(隐藏前提:气采集
+        慢于矿,env-game)；新 I12(F20 造价 ∧ F28 → 气瓶颈 → 矿飘)。造价不复述、引用已有 F20。
+        D16/D18 的 deps 从 F16 改挂到推论 I12。
+      - F17「产能」:拆出 I13(满负荷但数不涨 → 瓶颈是存活非产能);D15 deps F17→I13。
+      - F19「回血」:regen 机制并入 F20(F20 已 consolidate),F19 收窄为"回血速率"原子 fact;
+        新 I14(regen → 质变战斗力);D17/Q5 的 deps 从 F19 改挂 I14。
+      - F24「baseline 输」:一段话四 claim 拆四个——F24 留 empirical(胜率+telemetry);新 F29
+        (own-code:HarassAct 全 Reserve);新 I15(因果链:全 reserve→送死→空家→崩);新 I16
+        (结论:build 坏非打不过 AI)。Q4/D20 的 deps 从 F24 改挂 I16(D20 也 dep F29)。
+      - D20/D21/D22/D23:decision 只留"选了什么+判据",效果数字拆成独立 empirical fact(带 repro)、
+        诊断/结论拆成 inference。新增 F30-F34(effect 实测)、I17-I21(印证/天花板/输在地面等)。
+        D22 deps 改挂 I17+I19;D23 deps 改挂 D18+D22。D21/D22/D23 冗长实验叙事移入 evidence。
+      - 顺带:Q4/Q5/D13/D19 的会话历史叙事移入 evidence;Q5「铁证战略天花板」按反向审查软化
+        (D20 证明放手攒军队才见效,纯骚扰打不破≠战略天花板)。
+      - 净变化:mass-reaper 24→41 节点(+7 fact F28-F34、+10 inference I12-I21),无节点删除。
+  - date: "2026-07-12"
+    change: |
+      建图。domain `nydus-landing` 录入 F1-F11 / I1-I7 / D1-D4 / Q1-Q2。
+      - 复审动作:D1「OL 站位」由「离基地中心 25 格」**修正**为「离高地边缘 ~10 格、顺悬崖下坡」——
+        因 I6(用户纠正:中心距离是废参照)冲击了旧表述。旧「25 格」作废,以 D1 现表述为准。
+  - date: "2026-07-12"
+    change: |
+      去分层 + 通用化。①原按 L0/L1/L2/U 分层的表述**改成纯 DAG**(节点只靠依赖边组织,不分
+      level);`layer` 字段删除,改软标签 `kind`(fact/inference/decision/open,仅描述性质、不排序)。
+      理由:一个"底层事实"+一个"上层结论"可推出新结论,强分层反而不好归类。②图谱**通用化**:文件从
+      `nydus-knowledge-graph.*` 改名 `knowledge-graph.*`,每节点加 `domain` 字段(F/J/D/U 全 `nydus-landing`),
+      格式对齐 `.claude/skills/knowledge-graph/SKILL.md`。节点集合/依赖边/证据/状态不变。
+  - date: "2026-07-12"
+    change: |
+      Q1 定解。加 F12(速狗机动骚扰)/ I8(骚扰空虚分矿=经济伤害)/ I9(骚扰逼分兵回防开④窗口,
+      ⚠️unverified 待真机)/ D5(Q1 的解:主力赖家时不硬下 canal、改速狗骚扰分矿吃经济 + 引主力开窗)。
+      **Q1 由 D5 回答**(Q1→D5 依赖边,问题保留、实解 D5 待真机验)。**反向复审 D4**:canal 保持
+      「主力不在才落」**不改硬下**,D4 依旧但不再是死结(D5 负责在赖家时创造窗口/占便宜)。不确定性传播:
+      D5 依赖 I9(unverified)→ D5 标 unverified(未标 verified)。
+  - date: "2026-07-13"
+    change: |
+      死神 harass 微操整体回退(反向审查):会话中 D12/D13/D14/D15/D17/D19 描述的一串死神微操
+      迭代(fire-first/双模式/智能撤退/攒够再打/正面顶住/软目标/秒农民/mobility/cliff-jump)反复 revert 后把
+      微操折腾进无法干净还原的回归态(VeryEasy harass 25→0),已把 `harass_act.py` 整体 checkout 回会话前基线。
+      这些 D 节点**保留为"尝试记录"**(statement 描述当时试了什么、真机结果),但**对应代码已回退不在**——引用
+      时按"已回退的历史尝试"看,别当"当前生效的已验证决策"。保留生效的是 mass-reaper 的经济/科技(D16/D18,
+      在 mass_reaper.py 未回退)。教训:违反"反复修=停下质疑架构/别自己骗自己"纪律,无干净 checkpoint 下反复改。
+  - date: "2026-07-14"
+    change: |
+      加 D23(3/3 + 防空枪兵测试结果)。玩家指定两处死神增强,build_acceptance 各6局测:VeryHard 0/5、
+      Hard 1/6、Medium 5/6,无实质提升。诊断:3/3 对 Hard+ 惰性(死神中期崩、只完成 L1)、防空枪兵正确触发
+      但单独不够(缺炮塔检测/机动)。**印证 D22 兵种硬克天花板**(D23 deps D22/D20,未冲击、是正向补强)。
+      防空枪兵仍留(补『敌走空=必败』分支);要真防空需配导弹炮塔(defensive,不碰转兵种铁律),留玩家可选。
+  - date: "2026-07-14"
+    change: |
+      迁移到推理图谱新分类模型:open→question(Q1-Q5);decision status 改生命周期
+      (adopted/superseded/retired,7 个已回退的 D12-15/D17/D19/D21 标 retired、其余 adopted);
+      Q2 走私犯(fact 挂 U 前缀)改 id F27;Q5 去掉对 question Q4 的依赖;D23 by 修正 player;
+      config 加 id_prefix_by_kind + provenance own-code。statement 内容原子化留 rg_audit 增量清偿。
+  - date: "2026-07-14"
+    change: |
+      status 词表精简 + title 问句改陈述句(对齐 skill SCHEMA.md 最新通用骨架)。
+      - status:decision `adopted`→`active`(16 处)、`retired`→`inactive`(7 处;当前无
+        `superseded` 用例,同一映射预留);fact/inference 当前无 `assumed` 用例(词表仍映射到
+        `unverified`,留作规约)。全文已无旧词表残留(grep 确认 0 命中)。
+      - title:74 个非 question 节点(fact/inference/decision)的问句体 title 改写成陈述句
+        (依各自 statement 压缩概括),只改 title、不动 statement/deps/status。4 个 question
+        节点(Q1/Q3/Q4/Q5)title 保留问句,符合「只有 question 才写问句」的新约定。
+      - 验证:rg_validate.py OK(exit 0);rg_audit.py 无新增 WARN(0 处「title 问句」告警,
+        现存 147 条 WARN 均为既有 statement 长度/多断言/provenance 走私问题,与本次 title/status
+        改动无关、留待后续 statement 原子化批次清偿);test_reasoning_graph.py 1 passed。

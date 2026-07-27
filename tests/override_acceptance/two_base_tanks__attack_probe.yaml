@@ -1,0 +1,27 @@
+# two_base_tanks + 玩家 6:00 试探性进攻 (mode=probe)
+# → 120s 后主力推进到敌方半场(probe 不强求直冲主矿)
+#
+# build_acceptance/two_base_tanks.yaml: attack_moveout by=10:00 (9:00-11:00
+# attack_window: 6 坦克 + 12 兵 + 2 医疗船)。玩家 6:00 force probe attack:
+# 此时只有 2-3 坦克 + 少量兵,probe 模式应保留兵足才推进的判断,劣势会撤。
+#
+# 8:00 取样: probe attack 推进到地图中线(主基地距 ~半场 ~80-100 格)。
+# within=100 给 probe 模式留兵力评估空间。
+
+strategy_id: two_base_tanks
+my_race: Terran
+
+player_actions:
+  - at: "6:00"
+    verb: attack
+    mode: probe
+    target_area: enemy_main
+
+checks:
+  - id: army_advanced_after_probe
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 120
+    near: enemy_main
+    within: 100.0
+    op: "<="

@@ -1,0 +1,110 @@
+kind: opening_build
+id: 1g_robo_immortal
+core_units:
+  - {unit: STALKER, policy: mass}
+  - {unit: IMMORTAL, policy: cap, value: 6}
+display_name_zh: "1bg两矿不朽一波"
+display_name_en: "1-Gate Robo Immortal Timing"
+summary_zh: "稳健万金油开局：14 PROBE → 单 BG + BY → 20 双矿 → ROBO → 持续 chrono Immortal + Charge。主力 3-5 不朽 + Zealot 推进，对所有种族都能用"
+summary_en: "Solid all-around opener: 14 Probe → single Gateway + Cybernetics Core → 20-supply expand → Robotics Facility → continuous chrono Immortals + Charge. 3-5 Immortal + Zealot push works vs. all races."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.robo_1gate:Robo1GateImmortal"
+aliases:
+  - "1bg两矿不朽一波"
+  - "1门Robo"
+  - "1门 Robo"
+  - "1g Robo"
+  - "1G Robo"
+  - "1 Gate Robo"
+  - "单BG VR"
+  - "单BG VR出不朽"
+  - "单BG出不朽"
+  - "1BG VR不朽"
+  - "1门机械"
+  - "速不朽"
+  - "速不朽开"
+  - "不朽开局"
+  - "稳一点"
+  - "稳一手"
+  - "万金油"
+  - "稳健开局"
+matchup: [PvT, PvZ, PvP]
+
+# Phase 切换基于 supply 节点 + 时间兜底（PhaseTracker 自动推断当前 phase）
+phases:
+  - id: opening
+    display: "单 BG 开局"
+    display_en: "Single Gateway"
+    subtitle: "14 PROBE → BE → 16 PROBE → 气矿 → BG"
+    subtitle_en: "14 Probe → Pylon → 16 Probe → gas → Gateway"
+    start_at_supply: 13
+  - id: tech
+    display: "上 BY + 双矿"
+    display_en: "Cybernetics Core + Expand"
+    subtitle: "20 PROBE → 二矿 → BY → 21 PROBE → 气矿 2"
+    subtitle_en: "20 Probe → expand → Cybernetics Core → 21 Probe → 2nd gas"
+    start_at_supply: 20
+  - id: robo_up
+    display: "上 ROBO + 折跃"
+    display_en: "Robotics Facility + Warp Gate"
+    subtitle: "BY 完成 → 研折跃 → TC → ROBO + 第 1 个 OB"
+    subtitle_en: "Cybernetics Core done → Warp Gate research → Twilight Council → Robotics Facility + 1st Observer"
+    start_at_supply: 24
+  - id: immortal_mass
+    display: "暴 Immortal"
+    display_en: "Mass Immortals"
+    subtitle: "持续 chrono Immortal（target 3-5）+ Zealot 主力"
+    subtitle_en: "Continuous chrono Immortals (target 3-5) + Zealot core"
+    start_at_supply: 36
+    start_at_time: 300
+  - id: pressuring
+    display: "出门压制"
+    display_en: "Push"
+    subtitle: "3+ Immortal + 折跃完成 → 出门"
+    subtitle_en: "3+ Immortals + Warp Gate done → move out"
+    start_at_supply: 50
+    start_at_time: 420
+
+# 仅用于 PWA 显示与 LLM 上下文,真实 build 由 Robo1GateImmortal.create_plan 控制
+steps:
+  - "14 build BE"
+  - "16 build BA"
+  - "16 build BG"
+  - "20 build BN"
+  - "20 build BY"
+  - "21 build BA"
+  - "22 train 暗使 @chrono"
+  - "23 research 折跃 @chrono"
+  - "26 build VR"
+  - "28 train 追猎"
+  - "30 train OB"
+  - "32 train 不朽 @chrono"
+  - "36 build VC"
+  - "38 research 冲锋 @VC"
+  - "42 train 不朽 @chrono"
+
+scout_at: "17 send_probe enemy_natural"
+
+# bot 默认时机 abort：明确情报触发硬转
+abort_signals:
+  - sees: "enemy.units.phoenix.count >= 2"
+    then: "transition:1g_stargate"
+  - sees: "enemy.units.zergling.count >= 8 AND game.time < '3:00'"
+    then: "transition:4_gateway_pressure"
+  - sees: "enemy.units.dark_templar.count >= 1"
+    then: "react:cannon_defense"
+
+# 默认中期转场建议（玩家可手动覆盖）
+default_transitions:
+  - midgame_id: iac_2base
+    when: "default"
+  - midgame_id: iac_2base
+    when: "enemy.has_mech_units"
+
+# 后期路线选项（VR 已有，加 VB+VC+VT 接巨像；VC 已有接闪追）
+lategame_transitions:
+  - lategame_id: persistent_colossus_immortal
+    when: "default"
+  - lategame_id: persistent_blink_harass
+    when: "self.tech.blink.done OR enemy.ground_mobile"
+  - lategame_id: iac_2base
+    when: "player.requests_all_in"

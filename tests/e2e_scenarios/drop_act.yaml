@@ -1,0 +1,21 @@
+# E2E directive scenario 8 — L4 drop_act (棱镜空投)
+#
+# dt_drop_iac strategy 早期 ~3:30 棱镜 ready。
+# drop_act 走 9 状态机(FLY → DEPLOY_PHASING → WARP → LOAD → FLY → UNLOAD → DONE),
+# 走完需 60-90s。
+#
+# 由于 dt_drop_iac plan 内部已有 PrismWarpDropAct(自动),玩家显式 drop_act
+# directive 可能跟 plan 内 act 复用棱镜冲突。用 expect_lifecycle=committed
+# 只验 LLM 解析 + 进 production_overrides list,不验完整状态机走完。
+strategy_id: dt_drop_iac
+description: drop_act 棱镜空投指令解析 + commit
+
+schedule:
+  # ── 3:30 drop_act ──
+  # LLM 应解析 "棱镜空投对面二矿" → drop_act(style=simple|warp_then_drop,
+  # cargo_unit=DT/Zealot, drop_target=enemy_natural:mineral)
+  - at_s: 210
+    text: 棱镜空投对面二矿
+    expect_directive_types: [drop_act]
+    expect_lifecycle: committed
+    expect_done_within_s: 30

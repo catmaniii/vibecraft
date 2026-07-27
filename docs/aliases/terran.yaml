@@ -1,0 +1,193 @@
+# 人族中央别名表（M6.3a）
+#
+# 格式跟 protoss.yaml 完全一致(buildings / units / upgrades 三组,
+# default_display + aliases + hotkey)。
+#
+# 人族建筑 hotkey：SCV build menu 分两层 B（基础）+ V（高级）
+# B 系：CommandCenter(BN) / SupplyDepot(BS) / Barracks(BB) / Refinery(BR)
+#        Factory(BF) / Starport(BP) / EngineeringBay(BE) / Bunker(BU)
+#        MissileTurret(BT) / SensorTower(Bn) / GhostAcademy(BG) / Armory(BA)
+# 注意：FusionCore 在兵营升级菜单 B+C；CommandCenter 也是 B+N
+
+buildings:
+  CommandCenter:
+    default_display: "BN"
+    aliases: [BN, 指挥中心, 主基地, 大本, CommandCenter, CC]
+    hotkey: "B+N"
+  OrbitalCommand:
+    default_display: "OC"
+    aliases: [OC, 轨道指挥, 轨道, OrbitalCommand]
+  PlanetaryFortress:
+    default_display: "PF"
+    aliases: [PF, 行星要塞, 要塞, PlanetaryFortress]
+  SupplyDepot:
+    default_display: "BS"
+    aliases: [BS, 补给站, 补给, SupplyDepot, Depot]
+    hotkey: "B+S"
+  Refinery:
+    default_display: "BR"
+    aliases: [BR, 气矿, 气, Refinery]
+    hotkey: "B+R"
+  Barracks:
+    default_display: "BB"
+    aliases: [BB, 兵营, Rax, Barracks]
+    hotkey: "B+B"
+  Factory:
+    default_display: "BF"
+    aliases: [BF, 工厂, Factory]
+    hotkey: "B+F"
+  Starport:
+    default_display: "BP"
+    aliases: [BP, 星港, 机场, Starport]
+    hotkey: "B+P"
+  EngineeringBay:
+    default_display: "BE"
+    aliases: [BE, 工程基地, EBay, EngineeringBay]
+    hotkey: "B+E"
+  Bunker:
+    default_display: "BU"
+    # 低保/地保/碉保/堤坝：ASR 把"地堡"(dìbǎo)听成的同音误转，全部归到 Bunker
+    # （否则 LLM 拿到"低保"等无意义词会乱猜成补给站/房子）。
+    aliases: [BU, 地堡, 碉堡, Bunker, 低保, 地保, 碉保, 堤坝]
+    hotkey: "B+U"
+  MissileTurret:
+    default_display: "BT"
+    aliases: [BT, 防空炮, 防空塔, 飞弹塔, MissileTurret]
+    hotkey: "B+T"
+  SensorTower:
+    default_display: "BW"
+    aliases: [BW, 感应塔, 雷达塔, SensorTower]
+    hotkey: "B+W"
+  GhostAcademy:
+    default_display: "BG"
+    aliases: [BG, 幽灵学院, GhostAcademy]
+    hotkey: "B+G"
+  Armory:
+    default_display: "BA"
+    aliases: [BA, 兵工厂, 升级厂, Armory]
+    hotkey: "B+A"
+  FusionCore:
+    # 2026-06-18 修历史遗留错 hotkey:聚变芯 hotkey 是 VC(V+C),不是 BC(BC=战巡/Battlecruiser)。
+    # 删掉 "BC" alias(让给战巡),default_display 改 VC。
+    default_display: "VC"
+    aliases: [VC, 聚变芯, 聚变核心, 战巡核, FusionCore]
+    hotkey: "V+C"
+  TechLab:
+    default_display: "TechLab"
+    aliases: [科技室, 实验室, TechLab]
+  Reactor:
+    default_display: "Reactor"
+    aliases: [反应堆, 双产, Reactor]
+
+units:
+  SCV:
+    default_display: "农民"
+    aliases: [农民, 工人, SCV]
+  Marine:
+    default_display: "枪兵"
+    aliases: [枪兵, 机枪兵, Marine, M]
+  Marauder:
+    default_display: "掠夺者"
+    aliases: [掠夺者, 抢劫者, 光头, Marauder]
+  Reaper:
+    default_display: "死神"
+    aliases: [死神, Reaper]
+  Ghost:
+    default_display: "幽灵"
+    aliases: [幽灵, Ghost]
+  Hellion:
+    default_display: "恶火"
+    aliases: [恶火, 火蜥蜴, Hellion]
+  Hellbat:
+    default_display: "蝙蝠"
+    aliases: [蝙蝠, 地狱蝙蝠, Hellbat]
+  WidowMine:
+    default_display: "寡妇雷"
+    aliases: [寡妇雷, 寡妇, WidowMine]
+  Cyclone:
+    default_display: "旋风"
+    aliases: [旋风, Cyclone]
+  SiegeTank:
+    default_display: "坦克"
+    aliases: [坦克, 攻城坦克, SiegeTank, Tank]
+  Thor:
+    default_display: "雷神"
+    aliases: [雷神, 雷神步行兵, Thor]
+  Viking:
+    default_display: "维京"
+    aliases: [维京, Viking]
+  Medivac:
+    default_display: "医疗船"
+    aliases: [医疗船, 医疗运输, 运输船, Medivac, MV]
+  Liberator:
+    default_display: "解放者"
+    aliases: [解放者, Liberator]
+  Raven:
+    default_display: "渡鸦"
+    aliases: [渡鸦, Raven]
+  Banshee:
+    default_display: "女妖"
+    aliases: [女妖, Banshee]
+  Battlecruiser:
+    default_display: "大和舰"
+    # 民间叫法:大舰/大和/大和舰(同日本战列舰)/航母(人族语境;神族语境=Carrier,按 --my-race 表消歧)/BC
+    # 大件 = 大舰同音(dà jiàn),ASR 常误转,收为别名兜底(2026-07-05 用户)。
+    aliases: [战巡, 战列巡洋舰, 船长, 大舰, 大件, 大和, 大和舰, 航母, BC, Battlecruiser]
+  MULE:
+    default_display: "骡"
+    aliases: [骡, MULE]
+  AutoTurret:
+    default_display: "自动炮塔"
+    aliases: [自动炮塔, 渡鸦炮, AutoTurret]
+
+upgrades:
+  Stimpack:
+    default_display: "兴奋剂"
+    aliases: [兴奋剂, Stimpack, Stim, 嗑药]
+  CombatShield:
+    default_display: "战斗护盾"
+    aliases: [战斗护盾, 枪兵盾, CombatShield]
+  ConcussiveShells:
+    default_display: "减速弹"
+    aliases: [减速弹, ConcussiveShells]
+  InfernalPreigniter:
+    default_display: "蓝焰"
+    aliases: [蓝焰, 蝙蝠攻, InfernalPreigniter]
+  SmartServos:
+    default_display: "变形升级"
+    aliases: [变形升级, SmartServos]
+  NitroPacks:
+    default_display: "死神速"
+    aliases: [死神速, NitroPacks]
+  DrillingClaws:
+    default_display: "地雷升"
+    aliases: [地雷升, DrillingClaws]
+  CycloneLockOnDamageUpgrade:
+    default_display: "旋风升"
+    aliases: [旋风升, CycloneLockOnDamageUpgrade]
+  SiegeBreakers:
+    default_display: "坦克甲"
+    aliases: [坦克甲, SiegeBreakers]
+  TerranInfantryWeapons:
+    default_display: "步兵攻击"
+    aliases: [步兵攻, 步攻, TerranInfantryWeapons]
+  TerranInfantryArmor:
+    default_display: "步兵护甲"
+    aliases: [步兵甲, TerranInfantryArmor]
+  TerranVehicleWeapons:
+    default_display: "机械攻击"
+    aliases: [机攻, TerranVehicleWeapons]
+  TerranVehiclePlating:
+    default_display: "机械护甲"
+    aliases: [机甲, TerranVehiclePlating]
+  TerranShipWeapons:
+    default_display: "空军攻击"
+    aliases: [空攻, TerranShipWeapons]
+  TerranShipPlating:
+    default_display: "空军护甲"
+    aliases: [空甲, TerranShipPlating]
+  Yamato:
+    # 战巡亚马托炮研究(Weapon Refit / 武器改装)。民间叫法:大和炮/亚马托。
+    # 真实 UpgradeId=BATTLECRUISERENABLESPECIALIZATIONS(见 director._UPGRADE_NAME_MAP)。
+    default_display: "大和炮"
+    aliases: [大和炮, 亚马托, 亚马托炮, 武器改装, Yamato, WeaponRefit]

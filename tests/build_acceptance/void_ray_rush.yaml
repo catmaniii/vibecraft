@@ -1,0 +1,161 @@
+strategy_id: void_ray_rush
+my_race: Protoss
+# 数据来源：
+#   - 用户设计（2026-05-29）：1 BG + 2 VS，攒 4 虚空舰骚扰，同时二矿运营
+#   - https://liquipedia.net/starcraft2/Void_Ray
+#     (Void Ray: 60s build time; chrono ~40s; 2 VS 双排约 40s/个)
+#   - https://lotv.spawningtool.com/build/48299/
+#     (double VS 2-base variant; 骚扰 + 扩张节奏参考)
+#
+# timing 窗口设计原则：
+#   - 这是骚扰 + 经济 build，不是 all-in，允许较宽松窗口
+#   - VeryEasy 对手局短（5-7min），验早期 build 顺
+#   - VeryHard 对手局长（10+min），验中后期 timing
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:35"
+    # 9 BE：game time ≈ 0:14-0:22 开始建
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:30"
+    tol: 20
+    # supply 13 开建（65s 建造）；约 1:20-1:40 完成
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "1:55"
+    # supply 14 建第 1 气；BG 之后立刻建，约 1:25-1:50 完成
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:30"
+    tol: 20
+    # BG ready 后建（supply 17）；约 2:10-2:35 完成（50s 建造）
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:20"
+    # supply 19 第 2 气；BY 存在时建，约 1:55-2:15 完成
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:00"
+    # BY ready 立刻研，chrono；约 3:30-3:50 完成
+
+  - id: stargate_1
+    type: building_complete
+    unit: STARGATE
+    at: "3:05"
+    tol: 20
+    # 2 VS 同时建（BY ready 后）；第 1 VS 约 2:20 开建 → 完成约 2:50-3:10
+
+  - id: stargate_2
+    type: building_count
+    unit: STARGATE
+    at: "3:15"
+    tol: 25
+    min: 2
+    # 第 2 VS 与第 1 VS 同时建；完成约 3:00-3:20
+    # building_count 验 2 个 VS 均存在
+
+  # --- 虚空舰产出 ---
+  - id: void_ray_first
+    type: unit_count
+    unit: VOIDRAY
+    at: "3:20"
+    tol: 25
+    min: 1
+    # 第 1 虚空舰：VS ready（~3:05）+ chrono（40s）→ 约 3:00-3:35
+
+  - id: void_ray_two
+    type: unit_count
+    unit: VOIDRAY
+    at: "3:45"
+    tol: 25
+    min: 2
+    # 第 2 虚空舰（第 2 VS 持续排队）；约 3:30-4:00
+
+  - id: void_ray_four
+    type: unit_count
+    unit: VOIDRAY
+    at: "4:45"
+    tol: 30
+    min: 4
+    # 4 虚空舰 ready（出门骚扰 wave threshold）；
+    # 2 VS 双排 chrono，约 4:30-5:00
+
+  # --- 追猎（防守用 1 只）---
+  - id: stalker_home_guard
+    type: unit_count
+    unit: STALKER
+    at: "3:30"
+    tol: 30
+    min: 1
+    # 追猎：折跃完成后只出 1 个（家里守门）
+    # 折跃完成约 3:00-3:30，首只追猎约 3:10-3:40
+
+  # --- 经济 ---
+  - id: worker_count_3min
+    type: worker_count
+    at: "3:00"
+    tol: 20
+    min: 17
+    # 骚扰 + 运营 build：补农到饱和；3 分钟约 17-20 探机
+
+  - id: worker_count_5min
+    type: worker_count
+    at: "5:00"
+    tol: 30
+    min: 24
+    # 5 分钟二矿运营中；约 24-30 探机
+    # 骚扰 build 不裁员，持续补农
+
+  # --- 二矿 ---
+  - id: nexus_2
+    type: building_complete
+    unit: NEXUS
+    at: "5:30"
+    tol: 40
+    # 第 1 VS ready 后开二矿（约 3:05 触发 Expand(2)）
+    # NX 建造 71s；约 4:30-5:30 完成
+    # 宽松窗口（经济 build，矿石节奏有波动）
+
+  - id: assimilator_3
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "6:00"
+    # 二矿气矿（BuildGas(3)）；NX 落地后建
+
+  # --- 出门骚扰 ---
+  - id: attack_moveout
+    type: attack_moveout
+    by: "5:30"
+    # 出门：4 虚空舰 ready（约 4:30-5:00）→ 移出
+    # 兜底 5:30（vs 旧版 4:30，骚扰 build 不是 all-in，允许更宽）
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "6:30"
+    within: 40
+    # 虚空舰空中移速快；出门后约 60-90s 到达对方高地
+
+  # --- 后期 4 BG ---
+  - id: gateway_4
+    type: building_count
+    unit: GATEWAY
+    at: "8:15"
+    tol: 75
+    min: 4
+    # 2026-06-02 用户调节奏：4 BG 从"二矿落地(~3:30)"延后到"至少 6 虚空(~6:00)"。
+    # 6 虚空 ~6:00 → 触发 GridBuilding(GATEWAY,4) → 4 BG 完成 ~7:30-8:30。
+    # 宽松窗口（VOIDRAY≥6 门有 timing 变数）。

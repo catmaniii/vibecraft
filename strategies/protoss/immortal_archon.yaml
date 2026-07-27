@@ -1,0 +1,109 @@
+kind: persistent_doctrine
+id: persistent_immortal_archon
+display_name_zh: "不朽白球(电兵合/HT)"
+display_name_en: "Immortal Archon (High Templar)"
+summary_zh: "不朽硬盾 + 白球 AoE + 冲锋叉子，棱镜多线骚扰；VR + VC→VT，Charge + 地面攻防 3/3，中等偏进攻的正面地面推进流"
+summary_en: "Immortal shield wall + Archon AoE + Charge Zealots, Warp Prism multi-prong harass; Robotics + Twilight Council → Templar Archives, Charge + 3/3 ground upgrades; aggressive ground deathball."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.immortal_archon:ImmortalArchon"
+gas_intensity: medium
+aliases:
+  - "不朽白球"
+  - "白球流"
+  - "叉球运营"
+  - "不朽叉球"
+  - "IAC运营"
+  - "白球不朽"
+  - "白球压制"
+  - "Archon球"
+  - "IAC"
+
+# 后期阶段进度
+phases:
+  - id: tech_up
+    display: "上 VR + VC→VT"
+    display_en: "Robotics + Twilight Council → Templar Archives"
+    subtitle: "VR×1 / VC / VT 建筑链 + 2 BF / 6 BG + Charge 研究"
+    subtitle_en: "1 Robotics / Twilight Council / Templar Archives chain + 2 Forges / 6 Gateways + Charge research"
+    start_at_time: 0
+  - id: massing
+    display: "暴不朽白球"
+    display_en: "Mass Immortals + Archons"
+    subtitle: "VT 完成 → 持续 不朽 + HT（合 Archon）+ 冲锋叉子 + 哨兵；棱镜接入"
+    subtitle_en: "Templar Archives done → continuous Immortals + High Templar (merge to Archon) + Charge Zealots + Sentries; Warp Prism online"
+    start_at_time: 60
+  - id: push
+    display: "不朽白球出门"
+    display_en: "Immortal-Archon Push"
+    subtitle: "不朽 + Archon 合计 8 → 出门多线骚扰推进"
+    subtitle_en: "8+ Immortals + Archons combined → multi-prong harass and push"
+    start_at_time: 200
+
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data.py 对齐
+target_composition:
+  Immortal: 6
+  Archon: 6         # sharpy 自动把没能量的 HT 合成 Archon
+  HighTemplar: 4    # 训 HT 当 Archon 原料（合 Archon 后 count 计 Archon）
+  Zealot: 14
+  Sentry: 4
+  WarpPrism: 1
+  Observer: 2
+
+required_tech:
+  - Charge
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+  - ProtossGroundArmorsLevel1
+  - ProtossGroundArmorsLevel2
+  - ProtossGroundArmorsLevel3
+
+required_structures:
+  RoboticsFacility: 1
+  TwilightCouncil: 1
+  TemplarArchives: 1
+  Forge: 2
+  Gateway: 6
+  Nexus: 3
+
+engagement_doctrine:
+  - "immortal_front priority=tank_damage   # 不朽硬盾顶前排吃伤害"
+  - "archon_spread spread=true             # 白球展开，最大化 AoE 覆盖"
+  - "zealot_charge priority=surround       # 冲锋叉包围软目标"
+  - "sentry_ff priority=choke             # 哨兵力场卡狭道 / 分割对方大军"
+  - "warpprism_harass mode=multi_prong    # 棱镜多线骚扰生产线"
+  - "retreat when=army_hp<30%            # 兵少时撤回重整"
+engagement_doctrine_en:
+  - "immortal_front priority=tank_damage   # Immortals shield wall front line, soaking damage"
+  - "archon_spread spread=true             # Spread Archons to maximize AoE splash coverage"
+  - "zealot_charge priority=surround       # Charge Zealots to surround and flank soft targets"
+  - "sentry_ff priority=choke             # Sentry Force Fields to block chokes and split enemy army"
+  - "warpprism_harass mode=multi_prong    # Warp Prism multi-prong harass into enemy production"
+  - "retreat when=army_hp<30%            # Retreat and regroup when army HP is low"
+
+win_condition:
+  type: composition_advantage
+  description: "不朽硬盾 + 白球溅射 AoE 正面推不过，Charge 叉包围软目标；棱镜多线让对方顾此失彼"
+  signals:
+    - "self.units.immortal.amount >= 4"
+    - "self.units.archon.amount >= 4"
+    - "self.upgrade.charge == true"
+    - "self.upgrade.ground_weapons >= 1"
+
+counters_against:
+  - zerg_roach_hydra
+  - terran_bio
+  - zerg_ling_bane
+  - mass_ground
+  - zerg_roach_ravager
+
+weak_against:
+  - mass_air
+  - terran_mech_heavy
+  - zerg_brood
+  - mass_disruptor
+
+abort_signals:
+  - sees: "enemy.units.air_attacker.amount >= 10 AND self.units.warpprism.amount < 1"
+    then: "warn:air_threat_no_prism"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

@@ -1,0 +1,92 @@
+kind: persistent_doctrine
+id: persistent_muta_ling_bane
+display_name_zh: "飞龙小狗毒爆"
+display_name_en: "Mutalisk-Ling-Bane"
+summary_zh: "飞龙 + 小狗 + 毒爆三件套高机动滚雪球：飞龙多线骚扰收割，小狗毒爆正面团战，飞龙群打 timing；靠机动性蚕食对方经济，适合克制地面机械"
+summary_en: "Mutalisk + Zergling + Baneling triple-threat high-mobility snowball: Mutalisks multi-prong harvest, Zerglings + Banelings frontline team fights, Mutalisk timing waves; chip away opponent economy through mobility."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.muta_ling_bane:MutaLingBane"
+gas_intensity: medium
+aliases:
+  - "飞龙小狗毒爆"
+  - "飞龙流"
+  - "三件套"
+  - "muta"
+  - "飞龙海"
+  - "暴飞龙"
+  - "飞龙毒爆"
+
+phases:
+  - id: tech_up
+    display: "上刺翼 + 妖虫巢"
+    display_en: "Spire + Baneling Nest"
+    subtitle: "BS → Lair → VS(刺翼) + BB(妖虫巢) + BV(进化腔)×2，研小狗速度 + 毒爆速度"
+    subtitle_en: "Pool → Lair → Spire + Baneling Nest + 2 Evolution Chambers; research Zergling Speed + Centrifugal Hooks"
+    start_at_time: 0
+  - id: massing
+    display: "暴飞龙 + 毒爆"
+    display_en: "Mass Mutalisks + Banelings"
+    subtitle: "VS 完成 → 持续出飞龙；BB 完成 → 小狗变毒爆；滚飞行攻防"
+    subtitle_en: "Spire done → continuous Mutalisks; Baneling Nest done → morph Banelings; rolling air upgrades"
+    start_at_time: 330  # 2026-06-18 #548 同步代码: 90→330 (VS spec ~5:30, 5:30 锚)
+  - id: snowball
+    display: "多线滚雪球"
+    display_en: "Multi-prong Snowball"
+    subtitle: "12+ 飞龙分线骚扰 + 小狗毒爆正面 timing → 蚕食对方地图控制"
+    subtitle_en: "12+ Mutalisks multi-line harass + Zergling-Baneling frontal timing → chip away map control"
+    start_at_time: 480  # 2026-06-18 #548 同步代码: 240→480 (8+飞龙 spec ~8:00, 8:00 锚)
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Mutalisk: 12
+  Zergling: 24
+  Baneling: 12
+  Queen: 6
+
+required_tech:
+  - ZerglingMovementSpeed     # 小狗速(BV进化腔研)
+  - ZerglingAttackSpeed       # 小狗攻速
+  - CentrificalHooks          # 毒爆速度(妖虫巢研)
+  - ZergFlyerWeaponsLevel1
+  - ZergFlyerWeaponsLevel2
+  - ZergFlyerWeaponsLevel3
+  - ZergFlyerArmorsLevel1
+  - ZergFlyerArmorsLevel2
+  - ZergFlyerArmorsLevel3
+
+required_structures:
+  Hatchery: 5    # 含 Lair
+  SpawningPool: 1
+  BanelingNest: 1
+  Spire: 1
+  EvolutionChamber: 2
+
+engagement_doctrine:
+  - "飞龙分成 2-3 组多线骚扰，优先打对方矿工和生产建筑"
+  - "小狗毒爆在主力方向正面团战，毒爆优先炸集群单位"
+  - "飞龙血少及时回撤，靠机动性拉开距离治愈"
+  - "飞龙群 timing 配合小狗毒爆同时发起进攻，制造多线压力"
+  - "对方地面追不上飞龙时，飞龙直接越过防线打基地经济"
+engagement_doctrine_en:
+  - "Split Mutalisks into 2-3 groups for multi-prong harassment; prioritize enemy workers and production buildings"
+  - "Zerglings and Banelings frontline team fights on the main vector; Banelings prioritize clustered units"
+  - "Retreat Mutalisks when HP is low; use mobility to gain distance and regenerate"
+  - "Coordinate Mutalisk timing with Zergling-Baneling frontal push for simultaneous multi-prong pressure"
+  - "When enemy ground cannot chase Mutalisks, fly past defenses to hit the economic base directly"
+
+win_condition:
+  type: map_control
+  description: "飞龙骚扰消耗对方经济，小狗毒爆正面蚕食；机动性优势滚成兵力差距"
+  signals:
+    - "self.units.mutalisk.amount >= 10"
+    - "self.units.zergling.amount >= 20"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - terran_mech
+  - protoss_ground_mech
+  - mass_ground
+
+weak_against:
+  - mass_air
+  - terran_bio
+  - protoss_phoenix

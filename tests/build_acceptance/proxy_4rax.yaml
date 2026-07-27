@@ -1,0 +1,58 @@
+strategy_id: proxy_4rax
+my_race: Terran
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/82647/
+#     (4 Rax All-In TvZ: 3 野营在 1:02 前落地完成, ~2:30 出门 6-8 枪兵 + SCV)
+#   - https://liquipedia.net/starcraft2/Double_Proxy_Barracks
+#     (Double Proxy Rax: BB1 完成 ~1:05-1:10, 野 BB 完成 ~1:30-1:50)
+#
+# 本 build 特征（1 家 + 3 野 BB proxy rush）:
+#   - 家 BB ~1:20 完成（正常位置，迷惑对手）
+#   - 3 野 BB ~1:50-2:10 完成（隐蔽 proxy 点）
+#   - 4 BB 合计 ~2:30 有 8 枪兵 → 第一波出门
+#   - 农民约 16 不再增长（all-in 单矿）
+
+checks:
+  - id: barracks_home
+    type: building_complete
+    unit: BARRACKS
+    at: "1:20"
+    tol: 25
+    # 家 BB 约 1:10-1:30 完成（depot 14 → BB 立刻下）
+
+  - id: barracks_4
+    type: building_count
+    unit: BARRACKS
+    at: "2:10"
+    tol: 40
+    min: 4
+    # 4 个兵营（1 家 + 3 野）在 2:10 ± 40s 内出现
+    # 野营到点约 1:50-2:10；宽松窗口容错 proxy 赶路时间差异
+
+  - id: marine_8
+    type: unit_count
+    unit: MARINE
+    at: "2:40"
+    tol: 35
+    min: 8
+    # 4 BB 从 ~1:20 起产兵；2:40 时约 8-12 枪兵
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "4:00"
+    # proxy 兵营在敌方门口，出门 timing 比 marine_rush 早；
+    # 给 4:00 上界兜底（start_attack_power=6，少量兵即触发）
+
+  - id: worker_16
+    type: worker_count
+    by: "3:00"
+    min: 13
+    # 单矿 all-in，3 SCV 派去 proxy（不采矿）；
+    # 剩余 mining SCV ≥ 13（初始 12 - 借出 3 + 补到 13+）
+
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "5:00"
+    within: 25
+    # proxy rush：截至 5:00 主力必须压到前线（proxy 兵营本就在敌方门口）

@@ -1,0 +1,32 @@
+# bio_stim + 玩家 8:00 按"全军撤退"→ 45s 后单位回家
+#
+# build_acceptance/bio_stim.yaml: attack_moveout by=9:00 (Stim + CS + +1 武器
+# + 5BB 就位)。
+# 选 8:00 (出门前 0-60s):此时部队应在集结或刚出门,retreat 让单位 stay home。
+#
+# 2026-05-26 首跑 at=9:00 第一次实测 30.4 PASS (within 30 边缘),第二次
+# game 早结束 (VeryEasy 方差) snapshot 偏离 9s → FAIL。改 at=8:00
+# 让取样点 8:30 远早于 game end,且 within 放宽到 35 增加 PASS 稳定性。
+#
+# 2026-05-27 after_s 30→45 物理校准:bio_stim 一波出门 game variance
+# d_home 67-81 跨度大(实测 5/27 0918 fire 时 d_home=81,30s 撤回到 43.8 FAIL;
+# 之前 5/27 0647 fire 时 d_home=67,30s 撤回到 29.7 just PASS)。bio 部队
+# 撤回速度 ~1.2/s 稳定,起点深度 game variance → 45s 给足物理撤回时间,
+# within=35 仍严格("已回 ramp/home 圈")。同 4bg__retreat 物理校准思路。
+
+strategy_id: bio_stim
+my_race: Terran
+
+player_actions:
+  - at: "8:00"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 45
+    near: home
+    within: 35.0
+    op: "<="

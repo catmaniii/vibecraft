@@ -1,0 +1,31 @@
+# E2E directive scenario 6 — 持续型 directive (done_when=None, 玩家撤销才关)
+#
+# 这些 directive 没有"自动完成"概念,验 submitted + committed 即算端到端通。
+# expect_lifecycle: committed
+strategy_id: 1g_robo_immortal
+description: 持续型 L1 strategy_set + L2 attack/defend + L3 standing
+
+schedule:
+  # ── 0:30 L1 strategy_set: 切剧本进 board midgame slot ──
+  # 不会 released(剧本 phase 持续生效),验 submitted + committed
+  - at_s: 30
+    text: 切到 IAC
+    expect_directive_types: [strategy_set]
+    expect_lifecycle: committed
+    expect_done_within_s: 30
+
+  # ── 1:30 L2 attack(A 类 done_when=None,玩家 × 撤销) ──
+  # tactical_objective(verb=attack) 进 _tactical_overrides + facade override flag
+  - at_s: 90
+    text: 全军进攻对方主基地
+    expect_directive_types: [tactical_objective]
+    expect_lifecycle: committed
+    expect_done_within_s: 30
+
+  # ── 2:30 L3 unit_claim persistent (standing,玩家撤销) ──
+  # 1g_robo_immortal 早期就有 Probe 可以 standing
+  - at_s: 150
+    text: 1 农民在主基地待命
+    expect_directive_types: [unit_claim]
+    expect_lifecycle: committed
+    expect_done_within_s: 30

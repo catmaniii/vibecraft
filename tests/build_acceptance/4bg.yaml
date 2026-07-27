@@ -1,0 +1,89 @@
+strategy_id: 4bg
+my_race: Protoss
+# research 来源:
+#   - https://liquipedia.net/starcraft2/4_Warpgate_Rush_(Legacy_of_the_Void)
+#     (LoTV 4 Warpgate Rush 标准 build order，supply/时序参考)
+#   - https://lotv.spawningtool.com/build/120197/
+#     (精确时间戳: Pylon@0:17/14, Gateway@0:41/15, Core@1:33, WGR start@2:07,
+#      4 stalker warp@3:51, attack@~4:20)
+#   - src/vibecraft/bot/auto_combat/protoss/plans/gate4_pressure.py 文件头 build order
+#     (本项目实现: 9 Pylon / 13 Gateway / 16 CyberneticsCore / 21 WGR chrono /
+#      ~50% WGR → 补 BG / ~3:00 proxy BE+野BG / WGR完成→折跃→出门)
+#
+# 注意: 本项目 build 比标准 4gate 略厚(先出 14 探机再 Pylon),
+# Gateway/Core 时序比 spawningtool 参考晚 ~10-15s，
+# 出门条件: WGR完成 + BG≥3 ready + Stalker≥4 ready → 实测约 4:20-4:50。
+
+checks:
+  # --- 开局基础 ---
+  - id: pylon_1
+    type: building_started
+    unit: PYLON
+    by: "0:40"
+    # supply 9 下 Pylon；项目实现先出 14 探机再下，约 0:25-0:35
+
+  - id: gateway_1
+    type: building_complete
+    unit: GATEWAY
+    at: "1:40"
+    tol: 20
+    # supply 13 开建，完成约 1:30-2:00；spawningtool 参考完成 ~1:35
+
+  - id: assimilator_1
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:15"
+    # supply 15 建第 1 气矿，完成约 2:00-2:10
+
+  - id: cyber_core
+    type: building_complete
+    unit: CYBERNETICSCORE
+    at: "2:10"
+    tol: 20
+    # supply 16 开建；spawningtool 参考 Core 完成 ~2:00；项目略晚给 tol 宽一点
+
+  - id: warpgate_research
+    type: upgrade_complete
+    upgrade: WARPGATERESEARCH
+    by: "4:10"
+    # Core 完成后立刻研究 + 全 chrono；spawningtool 参考 WGR start@2:07，
+    # WGR 研究时间 ~104s(chrono 加速)；预计完成 ~3:50-4:05，宽松给到 4:10
+
+  - id: assimilator_2
+    type: building_complete
+    unit: ASSIMILATOR
+    by: "2:45"
+    # supply 20 建第 2 气矿，保证持续 Stalker 产能
+
+  - id: four_gateways
+    type: building_count
+    unit: GATEWAY
+    at: "4:00"
+    tol: 30
+    min: 3
+    # building_count 验 GATEWAY,verifier 自动合并 WARPGATE(折跃后 morph)。
+    # 家 3 BG,补 BG 条件 WGR≥50%+矿≥300,约 3:00-3:30 补齐
+
+  - id: four_stalkers_ready
+    type: unit_count
+    unit: STALKER
+    at: "4:30"
+    tol: 30
+    min: 4
+    # 出门触发条件之一：≥4 个 STALKER ready（含 pre-warpgate home stalker +
+    # ForwardWarpStalker 折跃的 stalker）
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "5:00"
+    # _ready_to_pressure: WGR完成 + BG≥3 + Stalker≥4 ready → 出门；
+    # spawningtool 参考首波 ~4:20；项目因 build 略厚给到 5:00
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "6:00"
+    within: 25
+    # 4BG 一波压制：截至 6:00,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。

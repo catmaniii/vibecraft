@@ -1,0 +1,77 @@
+strategy_id: mass_reaper
+my_race: Terran
+
+# research 来源:
+#   - https://terrancraft.com/2013/05/03/tvt-2-rax-reaper/  (2 Rax Reaper: 10 SD / 12 BB+Reaper /
+#     12 Refinery / 14 BB+Reaper / 17 Orbital / constant Reaper production)
+#   - https://terrancraft.com/2020/11/28/byuns-revolutionary-builds/  (ByuN 3 Rax mass reaper:
+#     14 SD / 16 BB / 16 Ref / 17 BB / 20 BB / continuous Reapers / 21 Ref)
+# 用户 2026-07-13 拍板:双气满采 + 2 兵营持续死神 + kite 保命积累 + 余钱扩张。
+# Fable5 评审修正:死神建造 32s(不是 45s)→ 2 气只喂得起 2 裸兵营,反应堆推迟到二矿双气后;
+#   首死神不为挂反应堆停产;开矿用累计/银行门防战损死锁。
+
+checks:
+  # --- 双气满采命脉(死神吃气,两口气背靠背早开)---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:35"
+    tol: 20
+
+  - id: refinery_1
+    type: building_complete
+    unit: REFINERY
+    by: "2:00"
+
+  - id: refinery_2
+    type: building_complete
+    unit: REFINERY
+    by: "2:30"
+    # 双气背靠背 → 第 2 口气也要早(≤2:30);单气 build 到不了这条
+
+  - id: orbital_command
+    type: building_count
+    unit: ORBITALCOMMAND
+    at: "2:15"
+    tol: 40
+    min: 1
+
+  - id: barracks_2
+    type: building_count
+    unit: BARRACKS
+    at: "2:40"
+    tol: 40
+    min: 2
+    # 一基期 2 裸兵营
+
+  # --- 死神持续产(核心:气够就一直出,不断线)---
+  - id: reaper_early
+    type: unit_count
+    unit: REAPER
+    at: "3:00"
+    tol: 40
+    min: 3
+    # 2 裸兵营从 ~2:05 起持续出 → 3:00 应有 ≥3
+
+  - id: reaper_mass
+    type: unit_count
+    unit: REAPER
+    at: "4:45"
+    tol: 45
+    min: 6
+    # 持续产 + kite 存活 → 4:45 成规模 ≥6(战损后仍在;体现"积累数量")
+
+  # --- 滚雪球:二矿 + 死神骚扰打到经济 ---
+  - id: expand_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "4:00"
+    tol: 60
+    min: 1
+    # 死神≥6 或 3:45 兜底开二矿(主基已 morph 星轨,二矿是 COMMANDCENTER)
+
+  - id: reaper_harass
+    type: harass_damage
+    by: "6:00"
+    min: 3
+    # 死神 kite 骚扰应打到敌方工人/经济(harass_damage 验真打到 ≥3 工人,不只造出来)

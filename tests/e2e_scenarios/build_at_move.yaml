@@ -1,0 +1,28 @@
+# E2E directive scenario 4 — build_at + tech_override 重测
+#
+# 验证新 auto-fill:
+# - build_at done_when=structure_count_built_since(structure_type, >=, 1)
+#   建筑落地即关单。LLM 不需要给 done_when。
+strategy_id: 1g_robo_immortal
+description: build_at + tech_override 自动关单
+
+schedule:
+  # ── 0:30 L2 build_at: 建一个气矿(Assimilator) → auto-fill done_when ──
+  # 1g_robo_immortal 默认 1 BG + 1 Assimilator,玩家说"在主基地造个气"
+  # → build_at(Assimilator, main_gas) → 落地 1 个即 release
+  - at_s: 30
+    text: 在主基地造一个气矿
+    expect_directive_types: [build_at, structure_override]
+    expect_done_within_s: 90
+
+  # ── 1:30 L4 tech_override 折跃门(再测 PASS) ──
+  - at_s: 90
+    text: 研折跃门
+    expect_directive_types: [tech_override]
+    expect_done_within_s: 180
+
+  # ── 2:30 L4 production_override 不朽(再测 PASS) ──
+  - at_s: 150
+    text: 下个 Robo 出 1 个不朽
+    expect_directive_types: [production_override]
+    expect_done_within_s: 180

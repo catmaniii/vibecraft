@@ -1,0 +1,109 @@
+kind: opening_build
+id: roach_ravager
+display_name_zh: "蟑螂破坏者"
+display_name_en: "Roach-Ravager Timing"
+summary_zh: "3 矿蟑螂 + 破坏者 timing：母池 → 蟑螂窝 → 双气 → 持续蟑螂 + Ravager morph + 提速狗，~7:00 带 ~150 人口出门压制"
+summary_en: "3-base Roach + Ravager timing: Pool → Roach Warren → double gas → continuous Roaches + Ravager morphs + Zergling Speed; ~7:00 push with ~150 supply."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.roach_ravager:RoachRavager"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: ROACH, policy: mass}
+  - {unit: RAVAGER, policy: cap, value: 6}
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "roach_ravager"
+  - "蟑螂破坏者"
+  - "蟑螂ravager"
+  - "蟑螂胆汁"
+  - "RR"
+  - "roach ravager"
+  - "蟑螂+破坏者"
+matchup: [ZvT, ZvZ, ZvP]
+
+# Phase stepper（PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "三矿经济开局"
+    display_en: "3-Base Economy"
+    subtitle: "13 农 → 单气 → BS → 二矿 → RoachWarren → 双气 → 三矿"  # 2026-06-18 #548 同步代码:BuildGas(1) 在 BS 前，Expand(2) 在 Warren 前，Expand(3) 在并行段
+    subtitle_en: "13 workers → gas → Pool → expand → Roach Warren → double gas → third base"
+    start_at_time: 0
+  - id: roach_mass
+    display: "暴蟑螂 + morph 破坏者"
+    display_en: "Mass Roaches + Ravager Morphs"
+    subtitle: "~4:00 蟑螂主力 + Ravager morph 启动"
+    subtitle_en: "~4:00 Roach main force + Ravager morphs begin"
+    start_at_time: 240
+  - id: upgrade_window
+    display: "升级窗口"
+    display_en: "Upgrade Window"
+    subtitle: "~5:00 地面 +1 攻防 + 狗速（不研 Glial，7 分一波不升 Lair）"  # 2026-06-18 同步实现: roach_ravager.py 故意不研 GLIALRECONSTITUTION
+    subtitle_en: "~5:00 ground +1 attack/armor + Zergling Speed (no Glial Reconstitution; 7-min timing, no Lair)"
+    start_at_time: 300
+  - id: attack_timing
+    display: "7:00 出门压制"
+    display_en: "7:00 Push"
+    subtitle: "10 蟑螂 + 10 破坏者 + 30 狗推对方二矿"
+    subtitle_en: "10 Roaches + 10 Ravagers + 30 Zerglings push enemy natural"
+    start_at_time: 420
+
+steps:
+  - "13 build Extractor"
+  - "13 build SpawningPool"
+  - "16 build Overlord"
+  - "17 build Hatchery"
+  - "17 build Queen"
+  - "18 build RoachWarren"
+  - "20 build Extractor"
+  - "22 build Overlord"
+  - "22 train Zergling"
+  - "22 train Zergling"
+  - "26 research ZerglingMovementSpeed"
+  - "28 build Hatchery"
+  - "30 train Roach"
+  - "30 train Roach"
+  - "34 build EvolutionChamber"
+  # 2026-06-18 同步实现: GlialReconstitution 步骤删除 — 7 分 timing 不升 Lair，不研蟑螂速
+  - "38 research ZergMissileWeaponsLevel1"
+  - "40 research ZergGroundArmorsLevel1"
+  - "50 train Ravager"
+  - "50 train Ravager"
+
+commitments:
+  units:
+    roach: 10
+    ravager: 10
+    zergling: 30
+    queen: 4
+    overseer: 1
+  tech: [ZerglingMovementSpeed, ZergMissileWeaponsLevel1, ZergGroundArmorsLevel1]  # 2026-06-18 同步实现: 移除 GlialReconstitution（7 分 timing 不升 Lair，不研蟑螂速）
+  structures:
+    spawning_pool: 1
+    roach_warren: 1
+    evolution_chamber: 1
+    hatchery: 3
+  expansions: 3
+
+attack_window:
+  open_at: "7:00"
+  close_at: "8:30"
+  target_priority: [natural, army, production]
+
+micro_doctrine:
+  - "破坏者 Corrosive Bile 打建筑 / 挡路单位"
+  - "蟑螂前排吸伤，破坏者后排持续 Bile"
+  - "狗速升完后包抄翼侧"
+  - "对 bio：Bile 打丛集枪兵，蟑螂正面顶住"
+  - "Queen 留守主矿 + 二矿注射"
+
+lategame_transitions:
+  - lategame_id: persistent_brood_corruptor
+    when: "default"
+  - lategame_id: persistent_brood_corruptor
+    when: "game_time >= 10:00"
+
+completion:
+  timeout_s: 480
+  goal_when:
+    unit_count:
+      RAVAGER: 8

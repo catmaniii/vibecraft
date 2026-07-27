@@ -1,0 +1,81 @@
+strategy_id: bc_late
+my_race: Terran
+
+# 战列巡洋舰后期验收 spec
+#
+# 调研来源：
+#   1. Liquipedia — Battle Cruiser
+#      https://liquipedia.net/starcraft2/Battle_Cruiser
+#   2. spawningtool #141498 — TvZ BC drop
+#      https://lotv.spawningtool.com/build/141498/
+#   3. spawningtool #155299 — 3CC Battlecruiser
+#      https://lotv.spawningtool.com/build/155299/
+#   4. terrancraft — BC Opening
+#      https://terrancraft.com/2019/09/12/tvz-sky-terran-battlecruiser/
+#
+# 策略：bc_late.yaml（后期战巡 + Raven + Ghost）
+#   build 骨架：4CC 四矿后期经济 → 2 VS + FusionCore → BC × 6 + Raven × 3
+#   出门编制：4-6 BC + Raven + Ghost + Viking，~9:00-10:00 制空出门
+#
+# 关键 timing（从 bc_late.py SequentialList 推导）：
+#   command_center_2：SequentialList 串行，SCV 36 → BuildGas(4) → Expand(4) → ...
+#   实际是深后期 doctrine，假设已有二矿基础，Expand(4) 在 ~5:00-6:00 触发
+#   starport_1：GridBuilding(STARPORT, 2) 在 SequentialList 中，约 5:00-6:00
+#   fusion_core：VS TechLab 好后建，约 6:00-7:00
+#   battlecruiser_first：FusionCore 好后生产，约 8:00-9:00 第 1 BC
+
+checks:
+  # --- 基础骨架 ---
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "3:30"
+    tol: 60
+    min: 2
+    # bc_late 是后期 doctrine，快扩 CC 约 2:30-4:00 落地
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "5:30"
+    tol: 90
+    # SequentialList 串行到 GridBuilding(STARPORT, 2)；约 4:30-6:30 完成首个 VS
+
+  - id: fusion_core_1
+    type: building_complete
+    unit: FUSIONCORE
+    at: "7:30"
+    tol: 90
+    # StarportTechLab 完成后 → FusionCore；约 6:30-8:30 完成
+
+  # --- BC 出兵验收 ---
+  - id: battlecruiser_first
+    type: unit_count
+    unit: BATTLECRUISER
+    at: "9:00"
+    tol: 90
+    min: 1
+    # FusionCore ~7:30 + BC 生产 86s → 第 1 BC 约 8:46-9:30
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "11:00"
+    # 战巡后期：4+ BC 就位后出门；策略 attack_window ~9:00-11:00
+
+# 经济曲线标准值
+# bc_late 是后期 doctrine，农民持续积累，资金大量投入科技 + 建筑
+economy_profile:
+  - at: "4:00"
+    workers: 30
+    minerals: 300
+    # 后期经济爬坡期：农民 30，余矿 300
+
+  - at: "7:00"
+    workers: 44
+    minerals: 400
+    # 四矿运转 + 大量建筑 + 攻防升级消耗：农民 44，余矿 400
+
+  - at: "10:00"
+    workers: 55
+    minerals: 500
+    # 出门前：农民接近饱和 55，余矿 500（持续造 BC + Viking 消耗）

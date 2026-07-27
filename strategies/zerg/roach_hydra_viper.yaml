@@ -1,0 +1,99 @@
+kind: persistent_doctrine
+id: persistent_roach_hydra_viper
+display_name_zh: "蟑螂刺蛇毒蛇"
+display_name_en: "Roach-Hydra-Viper"
+summary_zh: "蟑螂顶肉 + 刺蛇火力 + 毒蛇拉扯的中后期最通用地面军队：蟑螂顶前排承伤，刺蛇拉开射程输出，毒蛇 Abduct 拉出对方关键单位、绿水废掉远程火力；虫族「我要一支能打的军队」首选"
+summary_en: "Mid-to-late game most versatile ground army: Roaches front-line tanking, Hydralisks at range, Vipers Abducting key enemy units + Blinding Cloud disabling ranged fire; Zerg's go-to 'I want a strong army' composition."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.roach_hydra_viper:RoachHydraViper"
+gas_intensity: high
+aliases:
+  - "蟑螂刺蛇毒蛇"
+  - "蟑刺毒"
+  - "蟑螂刺蛇"
+  - "roach hydra viper"
+  - "中后期通用"
+  - "蟑刺"
+
+# 后期阶段进度（game_time 触发）
+# BH(孵化场)×4 经济 → Lair/VI(感染坑)/Hive 科技链 → 毒蛇解锁 → 死阵成型
+phases:
+  - id: tech_up
+    display: "升 Lair → Hive 科技链"
+    display_en: "Lair → Hive Tech Chain"
+    subtitle: "BS(母池) → Lair → BR(蟑螂窝) → VH(刺蛇巢) → VI(感染坑) → Hive；BV(进化腔)×2 滚远程攻防"  # 2026-06-18 #548 同步代码:SequentialList 中 MorphLair 紧接 BS，先于 RoachWarren
+    subtitle_en: "Pool → Lair → Roach Warren → Hydralisk Den → Infestation Pit → Hive; 2 Evolution Chambers rolling ranged attack/armor"
+    start_at_time: 0
+  - id: massing
+    display: "暴蟑螂 + 刺蛇 + 毒蛇"
+    display_en: "Mass Roaches + Hydralisks + Vipers"
+    subtitle: "Hive 完成 → 毒蛇解锁；持续出蟑螂/刺蛇/毒蛇；女王注射保供应"
+    subtitle_en: "Hive done → Vipers unlocked; continuous Roach/Hydralisk/Viper production; Queens inject"
+    start_at_time: 90
+  - id: deathball
+    display: "蟑刺毒死阵推进"
+    display_en: "Roach-Hydra-Viper Death Army Push"
+    subtitle: "16 蟑螂 + 16 刺蛇 + 3 毒蛇 + 远程攻防 3/3 → 毒蛇绿水废远程，Abduct 拉关键单位"
+    subtitle_en: "16 Roaches + 16 Hydralisks + 3 Vipers + 3/3 ranged upgrades → Blinding Cloud disables ranged, Abduct pulls key units"
+    start_at_time: 300
+
+# target_composition / required_* 用 sc2 SDK UnitTypeId / UpgradeId 名（PascalCase）
+target_composition:
+  Roach: 16
+  Hydralisk: 16
+  Viper: 3
+  Queen: 6
+
+required_tech:
+  - GlialReconstitution           # 蟑螂速（BR 研究）
+  - EvolveGroovedSpines           # 刺蛇射程（VH 研究）
+  - EvolveMuscularAugments        # 刺蛇速（VH 研究）
+  - ZergMissileWeaponsLevel1      # 远程攻击 1（BV 研究）
+  - ZergMissileWeaponsLevel2      # 远程攻击 2
+  - ZergMissileWeaponsLevel3      # 远程攻击 3
+  - ZergGroundArmorsLevel1        # 地面护甲 1（BV 研究）
+  - ZergGroundArmorsLevel2        # 地面护甲 2
+  - ZergGroundArmorsLevel3        # 地面护甲 3
+  # 毒蛇从 Hive 解锁，Abduct / Blinding Cloud 是技能，无独立研究升级
+
+required_structures:
+  Hatchery: 4       # BH：孵化场（含 Lair / Hive 升级链）
+  SpawningPool: 1   # BS：母池，女王前置
+  RoachWarren: 1    # BR：蟑螂窝，蟑螂前置
+  HydraliskDen: 1   # VH：刺蛇巢，刺蛇前置
+  EvolutionChamber: 2  # BV：进化腔×2，滚远程攻防
+  InfestationPit: 1    # VI：感染坑，Hive 前置
+
+engagement_doctrine:
+  - "roach_front priority=tank_damage    # 蟑螂顶前排承伤，优先打坦克"
+  - "hydralisk_back safe_distance=6      # 刺蛇保持射程距离持续输出"
+  - "viper_abduct target=immortal,colossus,thor,siege_tank  # 毒蛇拉出对方关键重型单位"
+  - "viper_blinding_cloud target=marines,stalkers,zealots   # 绿水废掉对方远程输出"
+  - "queen_transfuse target=roach        # 女王输血给血少的蟑螂"
+  - "retreat when=army_hp<25%           # 死阵血崩立刻撤，别送"
+engagement_doctrine_en:
+  - "roach_front priority=tank_damage    # Roaches tank front line damage; focus Siege Tanks first"
+  - "hydralisk_back safe_distance=6      # Hydralisks maintain range and sustain damage output"
+  - "viper_abduct target=immortal,colossus,thor,siege_tank  # Vipers Abduct key enemy heavy units into the army"
+  - "viper_blinding_cloud target=marines,stalkers,zealots   # Blinding Cloud disables enemy ranged units' output"
+  - "queen_transfuse target=roach        # Queens Transfuse low-HP Roaches to sustain the front line"
+  - "retreat when=army_hp<25%           # Retreat immediately when army collapses; never throw the death ball"
+
+win_condition:
+  type: composition_advantage
+  description: "毒蛇绿水废远程 + Abduct 拉关键单位进军队打死，蟑螂肉盾撑住刺蛇持续输出"
+  signals:
+    - "self.units.viper.amount >= 2"
+    - "self.units.roach.amount >= 12"
+    - "self.units.hydralisk.amount >= 10"
+    - "self.upgrade.missile_weapons >= 2"
+
+# enemy_tags.py canonical tag
+counters_against:
+  - terran_bio
+  - protoss_gateway
+  - mass_ground
+
+weak_against:
+  - mass_air
+  - protoss_skytoss
+  - terran_liberator

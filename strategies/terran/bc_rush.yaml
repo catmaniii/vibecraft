@@ -1,0 +1,62 @@
+kind: opening_build
+id: bc_rush
+display_name_zh: "二本速战巡"
+display_name_en: "2-Base Fast Battlecruiser Rush"
+summary_zh: "二本速战巡 BC Rush：depot→rax→gas1→CC2(~1:50)→Factory→gas2→Starport→FusionCore+TechLab→首舰~4:20；兵营 Reactor 枪兵+Cyclone 早期防守，BC 飞去敌矿横跳骚扰、残血 Jump 回家、修满再飞出"
+summary_en: "2-base BC Rush: Depot → Barracks → gas → CC (~1:50) → Factory → gas → Starport → Fusion Core + Tech Lab → first BC ~4:20; Reactor Marines + Cyclone for early defense; BC raids enemy, Tactical Jump home when low health, repair and repeat."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.bc_rush:BcRush"
+# 注: gas 需求极高(FusionCore + BC 双重消耗),但 OpeningBuild schema 不接受 gas_intensity
+# 字段(那是 persistent_doctrine 的字段)→ 删掉,否则 catalog 校验 ValidationError 直接崩。
+aliases:
+  - "bc_rush"
+  - "速战巡"
+  - "大舰快攻"
+  - "BC rush"
+  - "速大和"
+  - "二本速战巡"
+  - "战巡速攻"
+  - "BC快攻"
+  - "速战列巡洋舰"
+  - "bc fast"
+matchup: [TvP, TvZ, TvT]
+
+phases:
+  - id: opening
+    display: "科技链建设"
+    display_en: "Tech Chain Build"
+    subtitle: "depot→rax→gas1→快扩 CC2→Factory→gas2→Starport→FusionCore+TechLab"
+    subtitle_en: "Depot → Barracks → gas → fast CC → Factory → gas → Starport → Fusion Core + Tech Lab"
+    start_at_supply: 14
+  - id: first_bc
+    display: "首舰出场"
+    display_en: "First Battlecruiser"
+    subtitle: "FusionCore 完成 → 第一艘 BC ~4:10-4:40"
+    subtitle_en: "Fusion Core done → first BC ~4:10-4:40"
+    start_at_supply: 40
+    start_at_time: 240
+  - id: bc_raid
+    display: "持续骚扰"
+    display_en: "Continuous Raiding"
+    subtitle: "BC 无限循环骚扰敌矿 → 残血 Tactical Jump → SCV 修 → 满血再出"
+    subtitle_en: "BC loop: raid enemy mineral line → Tactical Jump home when low → SCV repair → full health fly out again"
+    start_at_supply: 60
+    start_at_time: 300
+
+steps:
+  - "14 build SupplyDepot"
+  - "15 build Barracks"
+  - "16 build Refinery"
+  - "18 train Reaper"
+  - "20 build CommandCenter"
+  - "20 build Reactor @Barracks1"
+  - "21 build Factory"
+  - "21 build Refinery"
+  - "22 train Cyclone"
+  - "23 build Starport"
+  - "24 build FusionCore"
+  - "24 build TechLab @Starport"
+  - "26 train Battlecruiser"
+
+default_transitions:
+  - midgame_id: persistent_skyterran
+    when: "default"

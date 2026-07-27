@@ -1,0 +1,104 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# venv
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+.uv-cache/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project-specific
+logs/
+# 根目录调试 log 文件(临时 paste 分析的 sharpy/loguru 输出,不入版本控制)
+l4_log_*.txt
+*_train_log.txt
+*.SC2Replay
+.env
+.env.local
+secrets/
+.secrets/
+*.pem
+config/secrets.*.yaml
+config/secrets.yaml
+
+# 私有运营工具：独立嵌套 git 仓，主仓绝不跟踪它（防它含密钥/草稿被开源投影泄漏）。
+# 它有自己的 .git + .gitignore；主仓只把它当未跟踪目录。详见 vibecraft-ops/DESIGN.md §2。
+/vibecraft-ops/
+# LLM provider 配置可能含 API key（即使现在 api_key_env 走 env var，未来可能误塞 key）
+# → 走 config/llm.yaml.example 模板，复制后改成 config/llm.yaml 本地用
+config/llm.yaml
+# 本地化/含 token 的 server 配置变体（config/servers/<name>.yaml 可入库；
+# *.local.yaml 不入库，给本地自定义/含敏感值的副本用）
+config/servers/*.local.yaml
+
+# Claude Code worktrees（subagent 隔离副本，临时目录，不进版本控制）
+.claude/worktrees/
+
+# Frontend (M1+)
+node_modules/
+dist/
+.parcel-cache/
+
+# pre-commit
+.pre-commit-cache/
+
+# 推理图谱复评旁车(operational 哈希缓存,可重建,不提交)
+*.review.json
+
+# ── SC2 美术资源:不随仓库分发（2026-07-27 开源前合规）──────────────────────
+# 单位/建筑/升级图标是暴雪版权美术(从 Liquipedia 抓的),THIRD_PARTY_NOTICES 明确声明本项目
+# 不分发任何 Blizzard 资源 —— 所以它们**不入库**,由 scripts/download_sc2_icons.py 在本地拉取。
+# (static/ 是 vite 的 outDir,那份本来就是构建产物。)
+web/public/icons/sc2/
+src/vibecraft/server/static/icons/sc2/
+# 同理:vendored sharpy 自带的 ladder 地图是暴雪地图包,不入库(跑 bot 用你自己 SC2 安装里的地图)
+vendor/sharpy/maps/*.SC2Map

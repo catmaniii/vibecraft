@@ -1,0 +1,36 @@
+# E2E directive scenario — 早期 L4 + L2 指令(0:30 - 2:30,VeryEasy 易完成)
+#
+# 一局只塞 3 条指令,各自 done_when 短期能触发,不互相干扰。
+# 注入时间用 game_time(秒),非 wall_clock。
+#
+# 调整 (2026-05-24):
+# - 避开 build_at(LLM 偶发不给 done_when,且 build_at 语义本就是一次性放置,
+#   没"自动完成"概念,该靠玩家 × 撤销 — 单独测)
+# - production_override / structure_override / tech_override / expansion_override
+#   都有 done_when 自动兜底(parser._normalize_directive_raw 2026-05-24 补)
+strategy_id: 1g_robo_immortal
+description: 早期 3 个 L2/L4 指令(structure_override / 产能 / scout)
+
+schedule:
+  # ── 0:30 expansion_override → done_when=expansion_count(auto-fill) ──
+  # "开二矿"语义明确,target_count=2 必给。1g_robo_immortal 本就开 2 矿,
+  # 自然达成约 1:30-2:00。auto-fill done_when={kind:expansion_count, op:>=, value:2}
+  - at_s: 30
+    text: 开二矿
+    expect_directive_types: [expansion_override]
+    expect_done_within_s: 120
+
+  # ── 1:30 production_override → done_when=unit_count_built_since(auto-fill) ──
+  # 1g_robo_immortal 早期 ~1:30 后 cyber_core 完成可造 Sentry。
+  # parser auto-fill done_when={kind:unit_count_built_since, unit_type:Sentry, op:>=, value:1}
+  - at_s: 90
+    text: 下个 BG 出 1 个哨兵
+    expect_directive_types: [production_override]
+    expect_done_within_s: 120
+
+  # ── 2:30 L2 scout → done_when=vision_acquired hold_seconds=1(LLM 给) ──
+  # 上次验证 PASS,保留。
+  - at_s: 150
+    text: 派 1 农民看一眼对方主基地
+    expect_directive_types: [scout, tactical_objective]
+    expect_done_within_s: 90

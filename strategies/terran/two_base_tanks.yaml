@@ -1,0 +1,96 @@
+kind: opening_build
+id: two_base_tanks
+display_name_zh: "双基地坦克压制"
+display_name_en: "2-Base Tank Push"
+summary_zh: "双矿坦克 + 枪兵阵地战：坦克展开防守线 + Marine 保护坦克，逐步推进对方；双兵营双 Reactor 持续暴兵 + 工程湾步兵攻防 +1；对付蟑螂 / 不朽的核心手段"
+summary_en: "2-base Tank + Marine siege: Tanks set siege line + Marines protect flanks, gradually advance; dual Barracks + dual Reactors mass Marines + Engineering Bay infantry +1; core counter to Roach / Immortal."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.terran.plans.two_base_tanks:TwoBaseTanks"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: SIEGETANK, policy: cap, value: 10}
+  - {unit: MARINE, policy: light, value: 8}
+  - {unit: VIKINGFIGHTER, policy: light, value: 4}
+aliases:
+  - "two_base_tanks"
+  - "双基坦克"
+  - "坦克流"
+  - "坦克压制"
+  - "mech"
+  - "机械流"
+  - "tank push"
+  - "推进坦克"
+
+enter_when:
+  - "self.tech.siege_tech.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [marine_rush, reaper_expand]"
+
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿 + 双 Factory"
+    display_en: "2-Base + Dual Factory"
+    subtitle: "二矿 / Refinery×2 / Factory×2"
+    subtitle_en: "Natural / 2 Refineries / 2 Factories"
+    start_at_time: 0
+  - id: tank_tech
+    display: "建 TechLab + 起坦"  # 2026-06-18 #548 同步代码: 现代 SC2 已移除 SiegeTech 升级，Factory TechLab 完成即可出坦
+    display_en: "Factory Tech Lab + Tank Production"
+    subtitle: "~3:30 FactoryTechLab 完成 → 坦克开始出炉"  # 2026-06-18 #548 同步代码: 无 SiegeTech 升级，plan.py 无 Tech(SIEGETECH)；spec factory_techlab≈3:10±30
+    subtitle_en: "~3:30 Factory Tech Lab done → Tanks begin rolling out"
+    start_at_time: 240
+  - id: tank_mass
+    display: "暴坦克 + 维京"
+    display_en: "Mass Tanks + Vikings"
+    subtitle: "~6:30 4 坦克到位；医疗船跟进；维京稍后积累"  # 2026-06-18 #548 同步代码: Medivac priority=True，维京在 Medivac×2 满后(≈7:00)才开产；spec tank_count_4≈6:30±60
+    subtitle_en: "~6:30 4 Tanks online; Medivacs follow; Vikings accumulate after Medivacs"
+    start_at_time: 360
+  - id: combined_arms
+    display: "MMM + 坦克阵地"
+    display_en: "MMM + Tank Siege Line"
+    subtitle: "~7:30 6 坦克 + 12 兵 + 2 医疗船就位"
+    subtitle_en: "~7:30 6 Tanks + 12 Marines + 2 Medivacs ready"
+    start_at_time: 450
+  - id: attack_timing
+    display: "9:00 推进"
+    display_en: "9:00 Push"
+    subtitle: "坦克展开慢推，配合维京制空、医疗船救援"
+    subtitle_en: "Tanks siege slow push, Vikings air control, Medivacs rescue"
+    start_at_time: 540
+
+commitments:
+  units:
+    marine: 12
+    siege_tank: 6
+    medivac: 2
+    viking: 4
+  tech: [SiegeMode, Stimpack, TERRANINFANTRYWEAPONSLEVEL1, TERRANINFANTRYARMORSLEVEL1]
+  structures:
+    factory: 2
+    barracks: 2
+    starport: 1
+    engineering_bay: 1
+  addons:
+    barracks_reactor: 1
+    barracks_tech_lab: 1
+    factory_tech_lab: 1
+    starport_reactor: 1
+  expansions: 2
+
+attack_window:
+  open_at: "9:00"
+  close_at: "11:00"
+  target_priority: [army, natural, production]
+
+micro_doctrine:
+  - "坦克展开后 Marine 保护侧翼"
+  - "推进时坦克交替展开，始终保持火力覆盖"
+  - "Viking 护卫对方空军 / 清视野"
+  - "Medivac 在坦克阵地后方治疗 Marine"
+  - "对方 Colossus：Viking 点名"
+
+lategame_transitions:
+  - lategame_id: persistent_skyterran
+    when: "default"
+  - lategame_id: persistent_skyterran
+    when: "game_time >= 14:00"

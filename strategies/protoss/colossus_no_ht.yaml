@@ -1,0 +1,100 @@
+kind: persistent_doctrine
+id: persistent_colossus_no_ht
+display_name_zh: "巨像不朽(无电兵)"
+display_name_en: "Colossus-Immortal (No High Templar)"
+summary_zh: "纯 VR+VB 路线：去掉 HT/VT 链路，保留 VC 仅用于 Charge；巨像自身 AoE 足以覆盖地面，省下 VT 建造时间让巨像更快上车；对比原版转型窗口缩短约 60s"
+summary_en: "Pure Robotics Bay path: skip High Templar/Templar Archives, keep Twilight Council only for Charge; Colossus AoE covers ground splash without Storm; transition window ~60s shorter than full HT version."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.colossus_no_ht:ColossusNoHT"
+gas_intensity: high
+aliases:
+  - "无电兵巨像不朽"
+  - "纯巨像不朽"
+  - "colossus no ht"
+  - "无HT巨像"
+  - "纯巨像"
+  - "巨像无电兵"
+  - "快出巨像"
+
+phases:
+  - id: tech_up
+    display: "上 VR + VB"
+    display_en: "Robotics Facility + Robotics Bay (No Templar Archives)"
+    subtitle: "VR×2 / VB / VC 建筑链（无 VT）+ 巨像射程 + Charge + 地面攻防 1"
+    subtitle_en: "2 Robotics / Robotics Bay / Twilight Council chain (no Templar Archives) + Colossus range + Charge + ground 1/1"
+    start_at_time: 0
+  - id: massing
+    display: "暴巨像不朽"
+    display_en: "Mass Colossus + Immortals"
+    subtitle: "VB 完成 → 持续 巨像 + 不朽 + 冲锋叉子；chrono 巨像"
+    subtitle_en: "Robotics Bay done → continuous Colossus + Immortals + Charge Zealots; chrono Colossus"
+    start_at_time: 60
+  - id: deathball
+    display: "死球成型(无风暴)"
+    display_en: "Deathball Ready (No Storm)"
+    subtitle: "6 巨像 + 6 不朽 + 冲锋叉 + 地面攻防 3/3 → 强 timing 出门"
+    subtitle_en: "6 Colossus + 6 Immortals + Charge Zealots + 3/3 ground upgrades → strong timing push"
+    start_at_time: 200
+
+target_composition:
+  Colossus: 6
+  Immortal: 6
+  Stalker: 12
+  Zealot: 10
+  Observer: 2
+  # 无 HighTemplar / Archon — 巨像 AoE 覆盖地面 splash，不依赖 HT
+
+required_tech:
+  - ExtendedThermalLance      # 巨像射程
+  - Charge
+  - ProtossGroundWeaponsLevel1
+  - ProtossGroundWeaponsLevel2
+  - ProtossGroundWeaponsLevel3
+  - ProtossGroundArmorsLevel1
+  - ProtossGroundArmorsLevel2
+  - ProtossGroundArmorsLevel3
+  # 不含 PsiStorm / TemplarArchives
+
+required_structures:
+  RoboticsFacility: 2
+  RoboticsBay: 1
+  TwilightCouncil: 1
+  Forge: 2
+  Gateway: 5
+  Nexus: 3
+
+engagement_doctrine:
+  - "colossus_back keep_behind=true   # 巨像站后排，怕被集火 / 被维京秒"
+  - "immortal_front priority=tank_damage   # 不朽硬盾顶前排吃伤害"
+  - "zealot_charge priority=surround   # 冲锋叉包围软目标"
+  - "retreat when=army_hp<35%   # 死球血崩就撤，别送"
+engagement_doctrine_en:
+  - "colossus_back keep_behind=true   # Keep Colossus in back line; avoid Viking snipes and focus fire"
+  - "immortal_front priority=tank_damage   # Immortals shield wall front line, soaking damage"
+  - "zealot_charge priority=surround   # Charge Zealots to surround and flank soft targets"
+  - "retreat when=army_hp<35%   # Retreat when deathball HP drops; never throw the ball away"
+
+win_condition:
+  type: composition_advantage
+  description: "巨像 AoE + 不朽硬盾正面无解，转型比含 VT 的版本快约 60s；Charge 叉减员"
+  signals:
+    - "self.units.colossus.amount >= 5"
+    - "self.upgrade.ground_weapons >= 2"
+    - "enemy.units.air_attacker.amount < 6"
+
+counters_against:
+  - zerg_roach_hydra
+  - terran_bio
+  - zerg_ling_bane
+  - mass_ground
+
+weak_against:
+  - mass_air
+  - zerg_brood
+  - terran_liberator
+  - mass_viking
+
+abort_signals:
+  - sees: "enemy.units.viking.amount >= 8 AND self.units.colossus.amount >= 3"
+    then: "warn:viking_sniping_colossus"
+  - sees: "self.economy_score < 0.3"
+    then: "warn:economy_collapse"

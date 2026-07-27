@@ -1,0 +1,138 @@
+strategy_id: zvp_macro
+my_race: Zerg
+
+# research 来源（spawningtool ZvP Standard Hatch First, build/199494）：
+#   14 extractor(drone trick) → 15 OL → 16 hatch(natural) → 17 pool → 18 gas2 →
+#   21 queen×2 @1:57 → metabolic boost @2:12 → 31 queen(nat) → 34 hatch3 @2:43 →
+#   45 queen → 47 spore crawler main+nat @3:27 → 60 roach warren @3:40 →
+#   71 gas×3 @4:36 → 75 lair @4:40 → 暴农 → 蟑刺运营
+#
+# 本项目 build (zvp_macro.py):
+#   16 hatch(扩) → 17 pool → 18 gas → queen×2 → ling speed → hatch3 →
+#   孢子×2(主)+孢子×2(二矿) → gas3 → roach warren → BV×2 → Lair → glial → roach 量产
+# ZvP 运营核心检验：快二/三矿、孢子防空(ZvP 命根子)、女王注射、蟑螂战线、Lair 科技、宏观农民。
+# 局长预计 7-12 分钟(vs VeryHard)；早期 check 兼顾 VeryEasy(5-7 分钟)。
+
+checks:
+  # ── 早期经济框架 ──────────────────────────────────
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "2:10"
+    tol: 40
+    min: 2
+    # 16 农 hatch-first 二矿(plan: Expand(2))；BH 71s；约 0:45 发 → 完成约 2:00。
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "2:20"
+    tol: 40
+    # 母池：hatch2 后接 GridBuilding(SPAWNINGPOOL)；BS 65s；约 1:10 发 → 完成约 2:20。
+
+  - id: extractor_1
+    type: building_count
+    unit: EXTRACTOR
+    at: "2:30"
+    tol: 40
+    min: 1
+    # plan: BuildGas(1) 在 pool 之后；气矿 21s；验 plan 有吃气(Lair/提速/蟑螂需气)。
+
+  - id: queen_pair
+    type: unit_count
+    unit: QUEEN
+    at: "4:00"
+    tol: 50
+    min: 2
+    # plan: Step(UnitReady(SPAWNINGPOOL), ActUnit(QUEEN, HATCHERY, 2))；
+    # BS 完成(~2:20) → 两孵各一女王(50s) → 双女王约 3:20-3:40 完成。
+
+  # ── ZvP 命根子：孢子防空 ──────────────────────────
+  - id: spore_crawler
+    type: building_count
+    unit: SPORECRAWLER
+    at: "4:30"
+    tol: 90
+    min: 1
+    # ★ ZvP 标志：plan DefensiveBuilding(SPORECRAWLER) 主矿+二矿，母池 ready 即建；
+    # spawningtool @3:27；plan 等 pool ready(~2:20) + 资源 → 实际 3:00-5:00 落地。
+    # 防 Oracle/DT 骚扰，验 plan 真有出孢子(不出=ZvP 防空裸奔)。窗口 3:00-6:00。
+
+  # ── 中期扩张 + 科技 ───────────────────────────────
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "5:00"
+    tol: 90
+    min: 3
+    # 三矿 Expand(3) 加 Step(UnitExists(HATCHERY,2)) gate；spawningtool @2:43，
+    # plan 等二矿存在再派 → 延后 3:00-4:30；窗口 3:30-6:30 兼顾快慢局。
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "4:30"
+    tol: 90
+    # plan: Step(UnitExists(HATCHERY,2), GridBuilding(ROACHWARREN,1))；
+    # spawningtool @3:40；窗口 3:00-6:00。
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "5:30"
+    tol: 90
+    min: 1
+    # MorphLair(building_count 不漏 morph)；BS ready 后触发(Lair 100s)；窗口 4:00-7:00。
+
+  - id: zergling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "4:30"
+    tol: 90
+    # ling speed：BS ready 后研(110s)；完成约 4:10；窗口 3:00-6:00。
+
+  # ── 蟑螂主力 ──────────────────────────────────────
+  - id: roach_army
+    type: unit_count
+    unit: ROACH
+    at: "8:00"
+    tol: 90
+    min: 6
+    # plan: Step(UnitReady(ROACHWARREN), ZergUnit(ROACH, 80)) 持续产；
+    # VeryEasy 局可能已结束允许未触发；窗口 6:30-9:30，min=6 中段积累。
+
+  # ── 农民数（macro 关键）────────────────────────────
+  - id: worker_count_early
+    type: unit_count
+    unit: DRONE
+    at: "2:00"
+    tol: 25
+    min: 12
+    # hatch-first 开局抽农建二矿；@2:00 约 14-16 drone；min=12 给容错。
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "4:30"
+    tol: 40
+    min: 18
+    # plan ActUnit(DRONE, LARVA, 66) 持续暴农；三矿后加速；@4:30 约 18-24。
+
+  # ── 出门 timing（运营流晚出门）──────────────────────
+  - id: attack_moveout
+    type: attack_moveout
+    at: "7:30"
+    tol: 120
+    # 运营蟑刺流：等蟑螂 + 提速 + 蟑螂速规模再出门；vs VeryHard 6:30-9:00；窗口 5:30-9:30。
+
+# 经济曲线（hatch-first 经济流；三矿 3:30-5:00 落地）
+economy_profile:
+  - at: "1:30"
+    workers: 13
+    minerals: 150
+  - at: "3:00"
+    workers: 17
+    minerals: 200
+  - at: "5:30"
+    workers: 24
+    minerals: 300

@@ -1,0 +1,24 @@
+# roach_hydra + 玩家 5:00 强制全体进攻 (mode=all_in)
+# → 90s 后主力到敌方主矿区
+#
+# build_acceptance/roach_hydra.yaml: attack_moveout by=11:00,默认要 Lair +
+# Den + Glial + GroovedSpines 全升完才出门(~10:00)。玩家 5:00 force attack:
+# 此时刚有蟑螂,no 刺蛇 → all_in 应绕过 power check 让蟑螂直接出门。
+
+strategy_id: roach_hydra
+my_race: Zerg
+
+player_actions:
+  - at: "5:00"
+    verb: attack
+    mode: all_in
+    target_area: enemy_main
+
+checks:
+  - id: army_at_enemy_after_all_in
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 90
+    near: enemy_main
+    within: 60.0
+    op: "<="

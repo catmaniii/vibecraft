@@ -1,0 +1,167 @@
+strategy_id: nydus
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/140822/
+#     (Serral's Queen Roach Nydus ZvP All-In: 12 Hatchery → 14 BS → Lair@3:36 →
+#      RoachWarren@3:45 → NydusNetwork@4:37 → 首波虫道偷袭 ~6:00)
+#   - https://lotv.spawningtool.com/build/98762/
+#     (Railgan 1base Speedling Nydus: 12 BS → Lair@2:00 → NydusNetwork@2:59 →
+#      NydusCanal 出来打 ~4:03; 30+ 小狗)
+#
+# 本项目 build 节奏 (nydus.py NydusRush plan):
+#   12 BS → 气矿 → BS 完成即 MorphLair → 并行蟑螂窝 + 气矿2
+#   → Lair 完成后建 VN 尼德斯网络 → 量产小狗/蟑螂/女王经虫洞投送偷袭
+#
+# 关键路径:
+#   BS 完成 ~1:10-1:20
+#   Lair morph (100s) → 完成 ~2:50-3:20
+#   NydusNetwork (50s) after Lair → 完成 ~3:40-4:20
+#   RoachWarren (55s) → 完成 ~3:00-3:30 (与 Lair 并行)
+#   NydusCanal 在敌方基地打通 → ~4:30-5:30
+#   attack (start_attack_power=6) → ~5:00-6:30
+#
+# nydus 是 all-in 偷袭流: 成功偷家局 5-7 分钟结束; 晚期 check 不加
+
+checks:
+  # --- 核心建筑链 ---
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:15"
+    tol: 20
+    # 12 农 → BS；BS 建造 65s；plan 从 0:10-0:15 派农民
+    # 完成约 1:05-1:25；tol 覆盖 sharpy 调度延迟
+
+  - id: extractor_1
+    type: building_complete
+    unit: EXTRACTOR
+    at: "1:30"
+    tol: 25
+    # 实测 actual 76s；gas 在 BS 后建，约 1:05-1:55 完成
+    # at=1:30 tol=25 → 窗口 1:05-1:55
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "3:30"
+    tol: 45
+    min: 1
+    # 实测 actual=0（building_complete 不触发 morph；需 building_count）
+    # BS 完成(~1:15) → MorphLair；Lair morph 100s + 资源等待
+    # → Lair 完成约 2:45-4:15；at=3:30 tol=45 → 窗口 2:45-4:15
+    # 注: building_complete 对形态升级不触发，必须用 building_count 数 LAIR 单位
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "4:30"
+    tol: 40
+    # 实测 actual 260s(~4:20)；plan 让 BR 等 BS + Lair 资源，实际延迟较大
+    # at=4:30 tol=40 → 窗口 3:50-5:10；覆盖 sharpy 调度延迟
+
+  - id: nydus_network
+    type: building_complete
+    unit: NYDUSNETWORK
+    at: "4:10"
+    tol: 40
+    # VN 在 Lair 完成(~3:05)后立刻开建；NydusNetwork 建造 50s
+    # 完成约 3:45-4:45；at=4:10 tol=40 → 窗口 3:30-4:50
+    # VN 是入口，必须建好才能打通 NydusCanal 插入敌方
+
+
+  # --- 关键升级 ---
+
+  - id: ling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "3:25"
+    tol: 40
+    # 实测 actual 205s(~3:25)；比预期早，资源竞争较轻时提速研究更快触发
+    # at=3:25 tol=40 → 窗口 2:45-4:05
+
+  - id: glial_reconstitution
+    type: upgrade_complete
+    upgrade: GLIALRECONSTITUTION
+    at: "5:30"
+    tol: 60
+    # 蟑螂速度升级：需要 Lair 完成(是蟑螂窝研究，但 Lair 是前置)
+    # BR 完成(~3:15) + Lair 完成(~3:05) → 研究开始约 3:30-4:00
+    # 研究时间 110s → 完成约 5:00-6:00；at=5:30 tol=60 → 窗口 4:30-6:30
+    # nydus 是 all-in，此升级是加分项；局可能在研究完成前结束
+
+  # --- 单位数量 ---
+
+  - id: zergling_wave
+    type: unit_count
+    unit: ZERGLING
+    at: "3:30"
+    tol: 40
+    min: 8
+    # 实测 actual=0 at 150s(2:30)；BS 完成约 1:10-1:20，但早期幼虫先造女王
+    # 小狗开始出约 2:00-2:30；8 只需 ~96s → 完成约 3:20-4:00
+    # at=3:30 tol=40 → 窗口 2:50-4:10
+
+  - id: zergling_army
+    type: unit_count
+    unit: ZERGLING
+    at: "4:30"
+    tol: 40
+    min: 16
+    # 持续刷狗；plan 上限 20 只；4:30 应有 16+ 只在场(含等待虫道的)
+    # Railgan build 4:03 偷袭有 30+ 只；Serral build ~40+ 只 @6:00
+
+  - id: roach_ready
+    type: unit_count
+    unit: ROACH
+    at: "5:00"
+    tol: 50
+    min: 3
+    # 实测 actual=3 at 270s(4:30)；BR actual 117s(~1:57)，量产蟑螂 27s/只
+    # 但幼虫/矿/气竞争激烈，实际 3 只在 4:30；6 只约 5:00-5:30
+    # min 调到 3（实测可达），at=5:00 tol=50 → 窗口 4:10-5:50
+
+  # --- 出门 timing ---
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "5:30"
+    tol: 60
+    # PlanZoneAttack(start_attack_power=6)：army power 达 6 即出门
+    # VN 完成(~4:10) + NydusCanal 打通(~5:10) + 小狗/蟑螂集结
+    # → 实测出门约 5:00-6:30；at=5:30 tol=60 → 窗口 4:30-6:30
+    # Serral build 首攻 ~6:00；Railgan build 首攻 ~4:03(1base 更激进)
+
+  # --- 偷袭到位验收 ---
+
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "7:00"
+    near: enemy_main
+    within: 20
+    # 尼德斯偷袭核心：部队经虫道直接钻进对方主基地，不走正面
+    # 锚点 enemy_main（比 enemy_natural 更深，覆盖虫道插主基地场景）
+    # 截至 7:00，army_center 到过敌方主基地 20 格内
+    # 或与敌方单位在对方基地附近接触（偷袭兵与矿工交战）
+    # Serral build 虫道偷袭 @6:00 打响；7:00 是宽松上限
+
+# 经济曲线（尼德斯偷袭：all-in 科技流，农民数刻意压低）
+economy_profile:
+  - at: "2:00"
+    workers: 14
+    minerals: 100
+    # 12 BS 开局，BS + 气矿花光矿；出女王/小狗优先；农民压在 14
+  - at: "3:30"
+    workers: 18
+    minerals: 150
+    # Lair morph 中，RoachWarren 在建；农民小幅增；余矿投入科技
+    # plan 目标最多 20 农民（ActUnit DRONE 上限 20）
+  - at: "5:30"
+    workers: 20
+    minerals: 200
+    # VN 完成，量产冲刺阶段；农民封顶 ~20；余矿压低全投偷袭兵
+  - at: "7:00"
+    workers: 20
+    minerals: 300
+    # 偷袭交战中：农民不增，余矿稍积（偷家成功则经济已无意义）

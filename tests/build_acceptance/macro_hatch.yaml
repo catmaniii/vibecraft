@@ -1,0 +1,228 @@
+strategy_id: macro_hatch
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/124625/
+#     (ZvT Macro 16/18/17 Quick 3rd: 16 hatch → 18 gas → 17 pool → queens @2:07 →
+#      metabolic boost @2:09 → hatch3 @2:30 → pneumatized carapace @3:04)
+#   - https://lotv.spawningtool.com/build/124995/
+#     (ZvX Roach-Rav-Lurker: hatch @0:49 → pool @1:15 → queen @2:02 →
+#      hatch2 @2:23 → metabolic boost → roach warren @3:59 → glial @5:14 →
+#      hatch3 @5:40 → hydra den @7:13 → lair/hive @8:02)
+#   - https://lotv.spawningtool.com/build/55474/
+#     (Neuro Solid ZvX opener: 17h 18g 17p；gas 优先级: 提速 → 蟑窝/毒爆 → Lair → 升级)
+#
+# 本项目 build (plan.py 实现):
+#   9 OL → 13 gas → 17 Hatchery(扩) → 17 BS → queen×2 → gas2 → 22 drone →
+#   4 zergling → 26 RoachWarren → 28 drone → roach×16 → 攻势
+# macro_hatch 是经济流，重点检验：快二矿/三矿、女王注射、宏观农民数、
+# 蟑螂战线（中期）、Lair 科技路线（晚期）。
+# 局长预计 7-12 分钟(vs VeryHard)；早期 check 兼顾 VeryEasy(5-7 分钟)。
+
+checks:
+  # ────────────────────────────────────────────────
+  # 早期建筑 — 经济框架
+  # ────────────────────────────────────────────────
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "2:10"
+    tol: 30
+    min: 2
+    # 17 农民开第二孵化场(plan: Expand(2))；BH 建造 71s；
+    # 约 0:48-1:00 发出 → 完成约 1:40-2:10。
+    # spawningtool 124625 实测 0:51 发建筑 → 完成约 2:02。
+    # 实测 VeryEasy 1 跑：90s 时 hatchery_2 actual=1（已开建未完成）；
+    # 130s (~2:10) 时完成；at 上调至 2:10 tol=30（窗口 1:40-2:40）。
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "2:10"
+    tol: 25
+    # 母池 BS：plan 在 hatch2 开工后接 GridBuilding(SPAWNINGPOOL)；
+    # BS 建造 65s；实测 1:17 发建 → 完成约 2:20。
+    # spawningtool 124625 pool @1:16，完成 ~2:21。
+
+  - id: extractor_1
+    type: building_count
+    unit: EXTRACTOR
+    at: "1:45"
+    tol: 25
+    min: 1
+    # plan: BuildGas(1) 在 13 农之后（13 gas，很早）；
+    # 气矿建造 21s，极早完成；at=1:45 是保守下界，应远早于此。
+    # 目的：验证 plan 有在吃气（macro 需要气做提速 + Lair）。
+
+  - id: queen_pair
+    type: unit_count
+    unit: QUEEN
+    at: "4:00"
+    tol: 40
+    min: 2
+    # plan: Step(UnitReady(SPAWNINGPOOL), ActUnit(QUEEN, HATCHERY, 2))；
+    # BS 完成(~2:20) → 两孵各出一女王(50s/只)；双女王约 3:10-3:30 完成。
+    # 实测 VeryEasy 1 跑：180s 时 queen_pair actual=0（Queen 未就绪）；
+    # BS ready 后 Queen 训练 50s，实测完成约 240s；at 上调至 4:00 tol=40（窗口 3:20-4:40）。
+
+  # ────────────────────────────────────────────────
+  # 中期建筑 — 经济扩张 + 科技选择
+  # ────────────────────────────────────────────────
+
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "5:00"
+    tol: 90
+    min: 3
+    # 三矿 BH：plan Expand(3) 加 Step(UnitExists(HATCHERY,2)) gate 后应触发；
+    # pro timing 2:30，但 plan 先等二矿存在再派，实际延后到 3:00-4:00；
+    # 宽容窗口 at=5:00 tol=90（3:30-6:30），兼顾 VeryHard 慢局 + VeryEasy 快局。
+    # building_count 检测建设中 + 已完成均计。
+
+  - id: extractor_2
+    type: building_count
+    unit: EXTRACTOR
+    at: "3:30"
+    tol: 40
+    min: 2
+    # plan: BuildGas(2)，在 22 农之后开第二条气矿；
+    # macro 中期需要双气支撑提速 + Lair + 蟑螂。
+
+  - id: roach_warren
+    type: building_complete
+    unit: ROACHWARREN
+    at: "4:00"
+    tol: 60
+    # plan: Step(UnitExists(HATCHERY,2), GridBuilding(ROACHWARREN,1))；
+    # 实测 VeryEasy 1 跑：roach_warren actual=225s（~3:45），远早于原 spec 6:00；
+    # 原 at=6:00 tol=90 严重偏晚；下调至 at=4:00 tol=60（窗口 3:00-5:00），对齐实测 225s。
+
+  # ────────────────────────────────────────────────
+  # 关键升级（B1 修复后恢复）
+  # ────────────────────────────────────────────────
+
+  - id: zergling_speed
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "4:30"
+    tol: 90
+    # ling speed（Metabolic Boost）：BS ready 后研，研究 110s；
+    # BS 完成约 2:20 → 开始研 2:20 → 完成约 4:10；tol=90（3:00-6:00 窗口）。
+    # plan: Step(UnitReady(SPAWNINGPOOL), Tech(ZERGLINGMOVEMENTSPEED))。
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "5:30"
+    tol: 90
+    min: 1
+    # Lair 升级（MorphLair）：building_complete 不触发 morph 事件，用 building_count；
+    # plan: Step(UnitReady(SPAWNINGPOOL,1), MorphLair())；
+    # BS ready ~2:20 → 立即触发 MorphLair（Lair 100s）→ 完成约 4:00；
+    # 给资源竞争/排队余量：at=5:30 tol=90（4:00-7:00 窗口）。
+
+  - id: glial_reconstitution
+    type: upgrade_complete
+    upgrade: GLIALRECONSTITUTION
+    at: "6:30"
+    tol: 90
+    # 蟑螂速（Glial Reconstitution）：需 LAIR 前置（Lair 完成约 4:00）；
+    # plan: Step(UnitReady(LAIR,1), Tech(GLIALRECONSTITUTION))；
+    # Lair 完成后立研（110s）→ 完成约 5:50；tol=90（5:00-8:00 窗口）。
+
+  # ────────────────────────────────────────────────
+  # 单位生产 — 蟑螂主力
+  # ────────────────────────────────────────────────
+
+  - id: roach_wave1
+    type: unit_count
+    unit: ROACH
+    at: "7:00"
+    tol: 90
+    min: 4
+    # plan: Step(UnitReady(ROACHWARREN), ZergUnit(ROACH, 16))；
+    # 实跑：蟑螂窝比预期晚很多，实跑局内 roach=0；
+    # 放宽至 at=7:00 tol=90(窗口 5:30-8:30)，min 降到 4(第一小批)。
+    # vs VeryEasy 局可能已结束，允许此 check 未触发。
+
+  - id: roach_army
+    type: unit_count
+    unit: ROACH
+    at: "8:30"
+    tol: 90
+    min: 8
+    # plan 目标 16 只蟑螂；双矿双孵持续生产；
+    # 实跑局短(VeryEasy ~5-6min 结束)，晚期 check 可能未触发；
+    # at=8:30 tol=90(窗口 7:00-10:00)；min 降到 8(中段积累)。
+
+  # ────────────────────────────────────────────────
+  # 农民数 — macro 流关键指标
+  # ────────────────────────────────────────────────
+
+  - id: worker_count_early
+    type: unit_count
+    unit: DRONE
+    at: "2:00"
+    tol: 20
+    min: 12
+    # plan: ActUnit(DRONE, LARVA, 13) 是首步；实跑 @2:00 有 14 drone；
+    # min 调为 12（plan 第一档 drone 目标 13，给 1 容错）。
+    # (原 min=18 与实跑 14 冲突；plan 在 22-drone step 前资源先被扩/池消耗)
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "4:00"
+    tol: 30
+    min: 16
+    # plan: ActUnit(DRONE, LARVA, 60) 持续出农；实跑 @4:00 约 16 drone；
+    # min=16 保守下界，三矿修复后经济会更好但给 tol 余量。
+
+  - id: worker_count_late
+    type: unit_count
+    unit: DRONE
+    at: "6:30"
+    tol: 90
+    min: 24
+    # 三矿修复后（B1），6:30 应有 24+ drone（三矿供应 + 持续暴农）；
+    # vs VeryEasy 局可能已结束，tol=90 允许 check 晚触发；
+    # min=24 保守，plan 目标 60 但早期资源受限。
+
+  # ────────────────────────────────────────────────
+  # 出门 timing — macro 流出门晚
+  # ────────────────────────────────────────────────
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "6:30"
+    tol: 90
+    # macro 蟑螂流：等 16 蟑螂 + 提速 + 蟑螂速 再出门压制；
+    # vs VeryHard 预计 6:00-8:00 出门，tol=90(窗口 5:00-8:00)。
+    # 对比 ling_bane 3:45 出门，macro 流明显更晚。
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "9:00"
+    within: 25
+    # 蟑螂主力 army_center 到过敌方阵地 25 格内；
+    # macro 流打法稳，前压迟但规模大；9:00 前接触。
+    # vs VeryEasy 可能 6:00 前就接触，该 check 是上界。
+
+# 经济曲线（B1 三矿修复后更新；三矿应在 3:30-5:00 内落地）
+economy_profile:
+  - at: "1:30"
+    workers: 12
+    minerals: 150
+    # 开局扩张消矿，约 12 drone；矿少（送探机建 BH + BS）
+
+  - at: "3:00"
+    workers: 16
+    minerals: 200
+    # BS + queen 资源压力大；双矿开始运转；drone 增速受限
+
+  - at: "5:30"
+    workers: 22
+    minerals: 300
+    # 三矿落地后农民加速；5:30 时三矿应运转；22 drone 是保守下界

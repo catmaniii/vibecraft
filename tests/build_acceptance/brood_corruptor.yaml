@@ -1,0 +1,250 @@
+strategy_id: brood_corruptor
+my_race: Zerg
+
+# research 来源:
+#   - https://lotv.spawningtool.com/build/124625/ 参照虫族后期路线
+#   - https://www.youtube.com/watch?v=... Brood Lord timing push ZvT/ZvP
+#     (Hive 约 9-10 分钟；Greater Spire 约 10-11 分钟；BL 约 11-12 分钟)
+#
+# 本项目 plan (brood_corruptor.py 实现):
+#   科技链(串行)：36农 → BS → MorphLair → VI(感染坑) → MorphHive
+#                 → Spire(刺翼) → MorphGreaterSpire(大刺翼)
+#   并行：四矿 + 四气；44 农 cap；飞行攻防 1-3
+#   出兵：8 腐化者 → MorphBroodLord(10 BL)；感染虫 4；毒蛇 3；女王 6
+#
+# 开局完成条件(_opening_done)：GreaterSpire ready + ≥8 腐化者 + ≥4 BL
+# 局长预计：14-18 分钟(后期拖局，BL 慢推)
+#
+# timing 推算（串行科技链，36农 gate 放在最前，可能推迟整体 timing）:
+#   36农 gate：约 4:00-5:00（每 drone 12s，36 只 drone 积累需时间）
+#   BS 建造 65s → 完成约 5:00-6:00
+#   MorphLair：BS 完成后；Lair morph 100s → Lair 约 6:30-7:30
+#   VI(感染坑) 建造 50s；Lair 完成后 → 完成约 7:20-8:20
+#   MorphHive：VI 完成后；Hive morph 100s → Hive 约 9:00-10:20
+#   Spire(刺翼)：Lair 完成后并行开建；Spire 建造 100s → 完成约 8:10-9:00
+#   MorphGreaterSpire：Spire ready + Hive ready(隐式前置) → morph(→大刺翼~71s)
+#     → 完成约 10:00-11:30
+#   腐化者首批：Spire 完成 + 资源 → 24s 孵化 → 约 8:30-9:30
+#   8 腐化者积累 → 约 10:00-12:00
+#   MorphBroodLord(需 CORRUPTOR≥6) → BL 变形约 34s
+#   首只 BL → 约 11:00-13:00；4 BL 到位 → 约 12:00-14:00
+
+checks:
+  # ────────────────────────────────────────────────
+  # 早期建筑 — 36农门后科技起步
+  # ────────────────────────────────────────────────
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "5:30"
+    tol: 90
+    # plan: SequentialList 先拉 36 农，再建 BS
+    # 36 农约 4:00-5:00 完成 → BS 建造 65s → 完成约 5:00-6:00
+    # tol=90（窗口 4:00-7:00）兼顾农民生产速度波动
+
+  - id: extractor_early
+    type: building_count
+    unit: EXTRACTOR
+    at: "4:00"
+    tol: 60
+    min: 2
+    # 并行段 BuildGas(4) 包含早期气矿；后期 plan 需要大量气
+    # 前两条气矿约 2:30-4:00 完成；min=2，at=4:00 tol=60（窗口 3:00-5:00）
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "4:00"
+    tol: 60
+    min: 2
+    # 并行段 Expand(4)；二矿约 2:00-3:30 开建 + 71s → 完成约 3:10-4:40
+    # at=4:00 tol=60（窗口 3:00-5:00）
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "7:30"
+    tol: 90
+    min: 1
+    # MorphLair：BS 完成约 5:00-6:00 → 立即触发（100s）→ Lair 约 6:40-7:40
+    # building_count 覆盖 morph 进行中；at=7:30 tol=90（窗口 6:00-9:00）
+
+  # ────────────────────────────────────────────────
+  # 中后期建筑 — Hive 科技树
+  # ────────────────────────────────────────────────
+
+  - id: spire
+    type: building_complete
+    unit: SPIRE
+    at: "8:30"
+    tol: 90
+    # plan: Step(UnitReady(LAIR,1), GridBuilding(SPIRE,1))
+    # Lair 完成约 6:40-7:40 → Spire 建造 100s → 完成约 8:20-9:20
+    # tol=90（窗口 7:00-10:00）
+
+  - id: infestation_pit
+    type: building_complete
+    unit: INFESTATIONPIT
+    at: "8:30"
+    tol: 90
+    # plan: Step(UnitReady(LAIR,1), GridBuilding(INFESTATIONPIT,1))
+    # Lair 完成后立建；VI 建造 50s → 完成约 7:30-8:30；tol=90
+
+  - id: hive
+    type: building_count
+    unit: HIVE
+    at: "10:00"
+    tol: 90
+    min: 1
+    # MorphHive：VI 完成后触发；Hive morph 100s
+    # VI 约 7:30-8:30 完成 → Hive 约 9:10-10:10
+    # building_count 覆盖 morph 进行中；at=10:00 tol=90（窗口 8:30-11:30）
+
+  - id: greater_spire
+    type: building_count
+    unit: GREATERSPIRE
+    at: "11:30"
+    tol: 90
+    min: 1
+    # MorphGreaterSpire：需 Spire ready；BL 唯一前置
+    # Spire 约 8:20-9:20 → morph 71s → 约 9:30-10:30
+    # 资源竞争可能延迟实际 morph 触发；at=11:30 tol=90（窗口 10:00-13:00）
+    # building_count 覆盖 morph 进行中
+
+  - id: hatchery_3
+    type: building_count
+    unit: HATCHERY
+    at: "6:00"
+    tol: 90
+    min: 3
+    # 并行段 Expand(4)；三矿约 4:30-6:00 开建 + 71s
+    # at=6:00 tol=90（窗口 4:30-7:30）
+
+  # ────────────────────────────────────────────────
+  # 关键升级 — 飞行攻防
+  # ────────────────────────────────────────────────
+
+  - id: flyer_weapons_1
+    type: upgrade_complete
+    upgrade: ZERGFLYERWEAPONSLEVEL1
+    at: "10:30"
+    tol: 90
+    # Tech(ZERGFLYERWEAPONSLEVEL1)：并行段，Spire 完成后可研（150s）
+    # Spire 约 8:20-9:20 → 研 150s → 完成约 10:50-11:50；tol=90（窗口 9:00-12:30）
+
+  - id: flyer_armor_1
+    type: upgrade_complete
+    upgrade: ZERGFLYERARMORSLEVEL1
+    at: "10:30"
+    tol: 90
+    # Tech(ZERGFLYERARMORSLEVEL1)：与 Weapons 并行（不同队列）
+    # 同 Spire 完成后约 10:50-11:50；tol=90
+
+  # ────────────────────────────────────────────────
+  # 兵力 — 腐化者先行，BL 变形
+  # ────────────────────────────────────────────────
+
+  - id: corruptor_first
+    type: unit_count
+    unit: CORRUPTOR
+    at: "9:30"
+    tol: 90
+    min: 2
+    # plan: Step(UnitReady(SPIRE,1), ZergUnit(CORRUPTOR,8))
+    # Spire 完成约 8:20-9:20 → 腐化者(24s/只) → 首批约 8:45-9:45
+    # at=9:30 tol=90（窗口 8:00-11:00）；min=2 保守下界
+
+  - id: corruptor_count
+    type: unit_count
+    unit: CORRUPTOR
+    at: "11:00"
+    tol: 90
+    min: 6
+    # plan 目标 8 腐化者；积累至 6 后触发 MorphBroodLord
+    # at=11:00 tol=90（窗口 9:30-12:30）；min=6（部分已变 BL）
+
+  - id: broodlord_first
+    type: unit_count
+    unit: BROODLORD
+    at: "12:00"
+    tol: 90
+    min: 1
+    # plan: Step(UnitExists(CORRUPTOR,6), MorphBroodLord(10))
+    # 腐化者 ≥6 → MorphBroodLord（变形 34s/只）→ 首只约 11:00-12:30
+    # at=12:00 tol=90（窗口 10:30-13:30）；min=1
+
+  - id: broodlord_count
+    type: unit_count
+    unit: BROODLORD
+    at: "13:30"
+    tol: 90
+    min: 4
+    # plan 目标 10 BL（开局完成条件 4 BL）
+    # at=13:30 tol=90（窗口 12:00-15:00）；min=4 对应开局完成门槛
+
+  # ────────────────────────────────────────────────
+  # 农民数 — 四矿后期经济
+  # ────────────────────────────────────────────────
+
+  - id: worker_count_mid
+    type: unit_count
+    unit: DRONE
+    at: "6:00"
+    tol: 90
+    min: 36
+    # plan: SequentialList 首步 ActUnit(DRONE,36) 拉到 36 才建 BS
+    # 36 农约 4:00-5:00 → at=6:00 tol=90（窗口 4:30-7:30）确认已达到
+
+  - id: worker_count_late
+    type: unit_count
+    unit: DRONE
+    at: "10:00"
+    tol: 90
+    min: 40
+    # 并行段 ActUnit(DRONE,44)；四矿运转
+    # at=10:00 tol=90（窗口 8:30-11:30）；min=40
+
+  # ────────────────────────────────────────────────
+  # 出门 timing — 后期慢推
+  # ────────────────────────────────────────────────
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "13:00"
+    tol: 90
+    # BL 达到 4+ 后出门慢推；
+    # at=13:00 tol=90（窗口 11:30-14:30）
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "16:00"
+    within: 25
+    # BL 飞行慢推，接触对方防线；by=16:00 高容限兜底
+
+# 经济曲线（四矿后期 doctrine；36农门导致前期偏慢但后期强大）
+economy_profile:
+  - at: "4:00"
+    workers: 32
+    minerals: 400
+    # 36农 gate 途中，矿积累（农民全挖矿，还没建 BS）
+
+  - at: "6:00"
+    workers: 36
+    minerals: 250
+    # BS + 扩张开始消矿；36 农已达到
+
+  - at: "9:00"
+    workers: 40
+    minerals: 300
+    # Hive 在建；持续补农向 44 cap；气矿用于飞行升级 + 腐化者
+
+  - at: "12:00"
+    workers: 44
+    minerals: 350
+    # 四矿饱和；BL 变形消耗大量资源；持续生产
+
+  - at: "14:00"
+    workers: 44
+    minerals: 400
+    # 慢推阶段；BL + 腐化者出门，矿气持续消耗

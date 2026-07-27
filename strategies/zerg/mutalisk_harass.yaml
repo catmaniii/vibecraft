@@ -1,0 +1,91 @@
+kind: opening_build
+id: mutalisk_harass
+display_name_zh: "飞龙骚扰中期"
+display_name_en: "Mutalisk Harass (Mid-game)"
+summary_zh: "双矿飞龙骚扰：快出尖塔 → 12+ 飞龙持续骚扰，干扰对方生产 + 拖延经济；配合地面部队形成多线威胁"
+summary_en: "2-base Mutalisk harassment: fast Spire → 12+ Mutalisks sustained harass to disrupt production + delay economy; pairs with ground forces for multi-prong threat."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.zerg.plans.mutalisk_harass:MutaliskHarass"
+# 中期运营配比(build-aware sustain，2026-06-15 用户锁定)
+core_units:
+  - {unit: MUTALISK, policy: mass}
+  - {unit: ZERGLING, policy: light, value: 6}
+aliases:
+  - "mutalisk_harass"
+  - "飞龙骚扰"
+  - "飞龙流"
+  - "飞龙"
+  - "muta"
+  - "muta harass"
+  - "muta fly"
+  - "空中骚扰"
+
+enter_when:
+  - "self.tech.spire.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [12pool, macro_hatch]"
+
+# Phase stepper（2026-05-19 加上，PWA strategy card 显示 milestone 进度）
+phases:
+  - id: economic_open
+    display: "双矿运营 + 升 Lair"
+    display_en: "2-Base Economy + Lair"
+    subtitle: "二矿 / 气矿 / Spawning Pool / Lair"
+    subtitle_en: "Natural / gas / Spawning Pool / Lair"
+    start_at_time: 0
+  - id: spire_up
+    display: "起尖塔 Spire"
+    display_en: "Build Spire"
+    subtitle: "~3:30 Spire 开工，准备出飞龙"
+    subtitle_en: "~3:30 Spire started, preparing Mutalisk production"
+    start_at_time: 210
+  - id: mutalisk_burst
+    display: "暴飞龙"
+    display_en: "First Mutalisk Wave"
+    subtitle: "~5:30 第一波 3-5 飞龙，启动骚扰"  # 2026-06-18 #548 同步代码: 6-9→3-5 (spec wave1 @5:20 min:3)
+    subtitle_en: "~5:30 first wave of 3-5 Mutalisks, begin harass"
+    start_at_time: 330
+  - id: attack_timing
+    display: "6:30 整合攻势"
+    display_en: "6:30 Combined Assault"
+    subtitle: "飞龙 + 小狗 + Queen 一并推上"
+    subtitle_en: "Mutalisks + Zerglings + Queens push together"
+    start_at_time: 390  # 2026-06-18 #548 同步代码: 与 harass_phase 对调顺序, attack_timing(390s) 先于 harass_phase(420s)
+  - id: harass_phase
+    display: "持续双线骚扰"
+    display_en: "Sustained Dual-line Harassment"
+    subtitle: "飞龙骚 + 小狗压门，干扰对方经济节奏"
+    subtitle_en: "Mutalisk harass + Zergling pressure at gate, disrupting opponent economy"
+    start_at_time: 420  # 2026-06-18 #548 同步代码: 与 attack_timing 对调顺序, 保持时间递增
+
+commitments:
+  units:
+    mutalisk: 12
+    zergling: 20
+    queen: 4
+    overseer: 1
+  tech: [MetabolicBoost]
+  structures:
+    spire: 1
+    evolution_chamber: 1
+  expansions: 2
+
+attack_window:
+  open_at: "6:30"
+  close_at: "10:00"
+  target_priority: [workers, production, army]
+
+micro_doctrine:
+  - "飞龙集群移动，避免分散被集火"
+  - "优先骚扰对方矿区 worker"
+  - "对方有防空火力时快速撤离"
+  - "地面狗配合飞龙形成多线骚扰"
+  - "飞龙血量低时及时回家回血"
+
+expire_action:
+  - "transition: persistent_brood_corruptor"
+
+lategame_transitions:
+  - lategame_id: persistent_brood_corruptor
+    when: "default"
+  - lategame_id: persistent_brood_corruptor
+    when: "enemy.mass_anti_air"

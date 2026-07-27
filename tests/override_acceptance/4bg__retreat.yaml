@@ -1,0 +1,35 @@
+# 4bg + 玩家 4:30 按"全军撤退"→ 45s 后单位回家
+#
+# build_acceptance/4bg.yaml: attack_moveout by=5:00 (4:20-5:00 出门)
+# 选 4:30 触发 retreat: 4bg 此时已经出门一波,验"按按钮真撤"。
+#
+# 2026-05-26 expected FAIL,2026-05-27 方案 D + ForwardRally/Warp intent gate 修复:
+# - vendor PlanZoneAttack._should_retreat + _stop_retreat hook 读 intent=retreat ✓
+# - 之前 root cause: vibecraft 自己的 ForwardRallyStalker 每 tick 把 gather_point
+#   覆盖到 forward pylon,PlanZoneAttack retreat 拉单位到 gather_point 时单位被
+#   "撤"到敌方前线 pylon。修复:ForwardRallyStalker / ForwardWarpStalker 加
+#   intent gate,retreat/defend/hold 时 skip 让 sharpy 默认 home gather 接管。
+#
+# 实测撤回时序(对角线地图,stalker 物理移动需要 ~40s):
+#   t=300 (after 30s) d_home=42.6 — 还在半路
+#   t=310 (after 40s) d_home=24.9 ✓ ≤ 30
+#   t=325+ 稳定 d_home ≈ 12-15(已回 ramp/home 圈)
+#
+# spec after_s=45 给 stalker 足够物理时间撤回,within=30 仍严格判定"已回家"。
+
+strategy_id: 4bg
+my_race: Protoss
+
+player_actions:
+  - at: "4:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 45
+    near: home
+    within: 30.0
+    op: "<="

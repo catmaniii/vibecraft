@@ -1,0 +1,120 @@
+strategy_id: hellion_expand
+my_race: Terran
+
+# research 来源:
+#   - https://liquipedia.net/starcraft2/Hellion_Expand
+#     (Hellion Expand TvZ: BB@1:05 / Factory@2:20 / 快扩 CC@2:00 / 6 Hellion 控图 ~4:00 /
+#      Starport@4:00-4:30 / Banshee x2 + Cloak ~5:00-5:45 / 转 bio)
+#   - Clem 6 Hellion + 2 Banshee TvZ style（职业直播参考）:
+#     Factory 出 Hellion 6 个封顶 (~4:00-4:30) 用于骚扰 + 保二矿安全;
+#     Starport 接 2 女妖 + 研隐形 (~5:00-5:45 完成);
+#     之后加 Barracks 转 bio (Stim ~7:30), 9:00 前出门推进
+#   - https://lotv.spawningtool.com/ Hellion Expand TvZ builds:
+#     CC 扩张约 1:55-2:15 落地 / Factory ~2:00-2:20 开始建 / Hellion 4 个约 3:30-4:30 /
+#     Starport 约 4:00-4:30 / Banshee 约 5:00-5:45 / Cloak by 7:00
+#
+# build 意图: 恶火快扩 —— 6 个 Hellion 封图骚扰保二矿,接 2 女妖 + 隐形压制,
+# 之后 bio 转型。二矿经济保证 7:00 后兵力爆发。
+
+checks:
+  # --- 基础骨架 ---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:30"
+    tol: 20
+    # 标准人族开局 BB ~1:10-1:50 完成；Factory 开扩流 BB 略早
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:00"
+    tol: 40
+    # Hellion Expand 核心：Factory ~2:20 开始建 + 60s 建造 = ~3:20 完成；
+    # 给 ±40s 覆盖 2:40-3:40 实际窗口
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "2:50"
+    tol: 45
+    min: 2
+    # 快扩 CC 约 1:55-2:15 下建令 + 71s 建造 ≈ 3:05-3:30 完成；
+    # at 2:50 ±45s 覆盖 2:05-3:35 的宽松落地窗口
+
+  - id: hellion_4
+    type: unit_count
+    unit: HELLION
+    at: "4:30"
+    tol: 60
+    min: 4
+    # Factory 单 Reactor 出 Hellion：每 21s 一个，Reactor 双产 ~10.5s/个；
+    # Factory ~3:00 完成 + Reactor 50s + Hellion 持续产 → 4 个约 4:00-5:00；
+    # 4 个是 Hellion Expand 的最低验收门槛（6 个封顶，4 个已可控图）
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "4:30"
+    tol: 60
+    # Starport 在 Factory Hellion 生产中段开建 ~3:30-4:00；建造 46s → 完成 ~4:15-4:45
+
+  - id: banshee_2
+    type: unit_count
+    unit: BANSHEE
+    at: "5:45"
+    tol: 60
+    min: 2
+    # Starport TechLab 完成后出 Banshee：每 45s 一个；
+    # Starport ~4:30 + TechLab 25s + 2x Banshee 45s = ~5:45 双妖就位；
+    # Clem style 参考：女妖约 5:00-5:45 投入骚扰
+
+  - id: banshee_cloak
+    type: upgrade_complete
+    upgrade: BANSHEECLOAK
+    by: "7:00"
+    # Cloak 研究 100s；Starport TechLab ~4:55 完成后研；约 6:35 完成；
+    # by 7:00 留合理容差（TechLab 建时机稍晚也覆盖）
+
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "7:30"
+    # 转 bio 阶段：Barracks TechLab ~5:00-5:30 完成 + Stim 100s → 约 6:40-7:10；
+    # by 7:30 覆盖轻微延迟
+
+  - id: marine_10
+    type: unit_count
+    unit: MARINE
+    at: "7:00"
+    tol: 60
+    min: 10
+    # 转 bio 后兵营扩充产 Marine：双矿二矿上满后持续补兵；
+    # 7:00 前 10 个 Marine 是 bio 转型最低验收量
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "9:00"
+    # Hellion Expand attack_window：女妖 + bio 成型后约 8:00-9:00 出门推进；
+    # by 9:00 对应正常节奏上界
+
+  # --- L3 骚扰验收：是否真打到敌方农民 ---
+  - id: harass_worker_kills
+    type: harass_damage
+    by: "7:30"
+    min: 4
+    # 恶火点农民——恶火打轻甲对农民有溅射,摸进矿区必须真打到农民(打到即算,不强求击杀)。
+    # enemy_workers_harassed = telemetry 敌方块「被我方打到过(受伤∪阵亡)的敌方农民」累计;
+    # by 7:30:实测恶火骚扰真正铺开在 ~7:00-7:30,初设的 6:30 偏早,按实测校准。
+
+# 经济曲线标准值
+# Hellion Expand 是二矿快扩流：Factory 吃矿气，但二矿早落保证农民持续爬坡
+economy_profile:
+  - at: "3:00"
+    workers: 24
+    minerals: 200
+    # 二矿快扩 + Factory 在建：MULE 补矿 + 双矿刚起，农民 24，余矿压低给 Factory + Hellion
+  - at: "6:00"
+    workers: 40
+    minerals: 300
+    # 二矿运转 + Starport 吃资源：农民爬到 40，余矿 300（女妖 + Stim 研究消耗中）

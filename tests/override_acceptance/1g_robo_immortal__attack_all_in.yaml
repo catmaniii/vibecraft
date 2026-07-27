@@ -1,0 +1,26 @@
+# 1g_robo_immortal + 玩家 4:30 强制全体进攻 (mode=all_in, target=enemy_main)
+# → 90s 后主力到敌方主矿区
+#
+# build_acceptance/1g_robo_immortal.yaml: attack_moveout by=9:00,默认要 3+ 不朽
+# 才出门(~6:30-9:00)。玩家在 4:30 提前 force attack: 此时只有 1-2 个不朽 + 6-8
+# 追猎,正常 power check 不会让它出门,但 mode=all_in 应绕过 power check 直接 attack。
+#
+# 6:00 取样:90s 内主力应已进抵 enemy_main 60 格内。
+
+strategy_id: 1g_robo_immortal
+my_race: Protoss
+
+player_actions:
+  - at: "4:30"
+    verb: attack
+    mode: all_in
+    target_area: enemy_main
+
+checks:
+  - id: army_at_enemy_after_all_in
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 90
+    near: enemy_main
+    within: 60.0
+    op: "<="

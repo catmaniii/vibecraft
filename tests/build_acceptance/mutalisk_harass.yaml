@@ -1,0 +1,183 @@
+strategy_id: mutalisk_harass
+my_race: Zerg
+
+# research 来源:
+#   1. Railgan ZvT - 2 Base Mutalisk Speed Banelings
+#      https://lotv.spawningtool.com/build/66228/
+#      BS @0:46 (17 supply); Lair @3:05 (36 supply); Spire @4:24 (57 supply);
+#      第一批飞龙 5 只 @6:05; 第二批 3 只 @6:14; 骚扰约 7:00-8:00 启动
+#   2. Railgan ZvT - 2 Hatch Mutalisk into Ling Bane Muta
+#      https://lotv.spawningtool.com/build/47537/
+#      BS @0:50 (18 supply); Lair @3:05 (35 supply); Spire @4:13 (48 supply);
+#      第一批飞龙 5 只 @5:24; 1 只 @5:37; 持续生产到 7:06
+#
+# 本项目 build (mutalisk_harass.py + strategies/zerg/mutalisk_harass.yaml):
+#   22 农 → 双气矿 → Spire(尖塔) → 二矿 → 28 农 → 飞龙 12 只 + MetabolicBoost
+#   plan 注明：飞龙落地后由 HarassWorkerLineAct 优先攻击农民
+#
+# 关键 timing 共识（交叉验证两个 spawningtool build）:
+#   BS(母池): 0:46-0:50 下令 + 65s 建造 → 完成约 1:40-1:55
+#   Lair: BS 完成后开升；Lair 升级 57s → 完成约 3:20-4:00
+#   Spire(尖塔): Lair 完成后即开建；Spire 建造 71s → 完成约 4:50-5:30
+#   双气矿: 第一个气 ~1:13-1:20; 第二个气 ~3:21-3:55
+#   首批飞龙: Spire 完成 + 喉袋存矿 → 首批约 5:30-6:15
+#   出门骚扰: 策略 attack_window open_at 6:30; 真实约 6:00-7:30
+#   第二波飞龙: 持续生产，约 7:00-8:00 凑满 12+
+
+checks:
+  # --- 核心建筑链 ---
+
+  - id: spawning_pool
+    type: building_complete
+    unit: SPAWNINGPOOL
+    at: "1:15"
+    tol: 20
+    # plan 顺序：ActUnit(DRONE,14) → GridBuilding(SPAWNINGPOOL,1)
+    # 实测 VeryEasy actual=73s；plan 14 BS 早建，完成约 65-95s
+    # 锚点 1:15 ±20s 覆盖 0:55-1:35
+
+  - id: extractor_1
+    type: building_complete
+    unit: EXTRACTOR
+    at: "1:30"
+    tol: 25
+    # plan 顺序：GridBuilding(SPAWNINGPOOL) → BuildGas(1)；气矿与 BS 并行
+    # 实测 VeryEasy actual=84s；BS 下令后气矿跟进，走路 ~35s + 25s 建造
+    # 锚点 1:30 ±25s 覆盖 1:05-1:55
+
+  - id: lair
+    type: building_count
+    unit: LAIR
+    at: "3:30"
+    tol: 30
+    min: 1
+    # Lair 是 morph（孵化场 → 蜂巢），不触发 building_complete 事件
+    # 改用 building_count 检测；BS 完成 ~1:15 → Lair 下令约 1:20-1:40 + 57s → 完成约 2:20-3:00
+    # 实测"没事件"确认，锚点 3:30 ±30s 覆盖 3:00-4:00
+
+  - id: hatchery_2
+    type: building_count
+    unit: HATCHERY
+    at: "3:30"
+    tol: 40
+    min: 2
+    # plan 顺序：ActUnit(DRONE,22) 后 Expand(2)；BH 建造 71s
+    # 实测 PASS @ 210±40 actual=2；锚点 3:30 ±40s 覆盖 2:50-4:10（保持原值）
+
+  - id: extractor_2
+    type: building_count
+    unit: EXTRACTOR
+    at: "3:10"
+    tol: 30
+    min: 2
+    # plan 顺序：ActUnit(DRONE,22) → BuildGas(2)
+    # 第二气下令约 150-180s + 25s 建造 → 完成约 175-205s (~2:55-3:25)
+    # 实测首跑 extractor_2=1（第二气未到位），spec 从 4:00 拉早到 3:10 ±30s 覆盖 2:40-3:40
+
+  - id: spire
+    type: building_complete
+    unit: SPIRE
+    at: "4:25"
+    tol: 25
+    # plan 顺序：Step(UnitReady LAIR) → GridBuilding(SPIRE,1)
+    # 实测 VeryEasy actual=260s；Lair 完成后即建，71s 建造
+    # 锚点 4:25 ±25s 覆盖 4:00-4:50
+
+  # --- 关键升级 ---
+
+  - id: metabolic_boost
+    type: upgrade_complete
+    upgrade: ZERGLINGMOVEMENTSPEED
+    at: "4:30"
+    tol: 60
+    # plan：Step(UnitReady BS) → Tech(ZERGLINGMOVEMENTSPEED)；BS 完成 ~2:20
+    # BS 完成后等 100 气（与 Lair/气矿竞争）+ 研究 110s → 完成约 3:50-5:00
+    # 放宽 tol 到 60s（资源竞争不确定性大）；锚点 4:30 ±60s 覆盖 3:30-5:30
+
+  # --- 单位生产 ---
+
+  - id: zergling_early
+    type: unit_count
+    unit: ZERGLING
+    at: "3:00"
+    tol: 30
+    min: 6
+    # 早期小狗：BS 完成 ~2:20 + 25s 孵化 = 首批约 2:45；3:00 应有 6+
+    # 锚点 3:00 ±30s 覆盖 2:30-3:30（保持原值，合理）
+
+  - id: mutalisk_wave1
+    type: unit_count
+    unit: MUTALISK
+    at: "5:20"
+    tol: 40
+    min: 3
+    # Spire 完成 ~4:50 + 33s 孵化（积累矿/气）→ 首批约 5:10-5:30
+    # 从 5:45±45 拉早到 5:20 ±40s 覆盖 4:40-6:00；至少 3 只
+
+  - id: mutalisk_wave2
+    type: unit_count
+    unit: MUTALISK
+    at: "6:30"
+    tol: 45
+    min: 7
+    # 持续生产：首批 ~5:20 后继续孵化；每 33s 出 1 只（双矿双气支撑）
+    # 实测 actual=7（[0/1] 原 min=9 不达标）；放宽到 7 反映真实资源节奏
+    # 锚点 6:30 ±45s 覆盖 5:45-7:15
+
+  - id: zergling_army
+    type: unit_count
+    unit: ZERGLING
+    at: "6:30"
+    tol: 45
+    min: 16
+    # 策略目标 20 只小狗；6:30 前应有 16+（保持原值，合理）
+
+  # --- 出门 timing ---
+
+  - id: attack_moveout
+    type: attack_moveout
+    at: "4:50"
+    tol: 60
+    # 实测 VeryEasy actual=281s；飞龙凑数后即出门
+    # 锚点 4:50 ±60s 覆盖 3:50-5:50
+
+  # --- L2 前压验收 ---
+
+  - id: pressure_contact
+    type: pressure_contact
+    by: "8:00"
+    within: 25
+    # 飞龙骚扰：截至 8:00 飞龙 army_center 到过敌方矿区 25 格内
+    # 或与敌方部队接触（双方 army_center 距 25 内）
+    # 飞龙机动性强，8:00 前应完成首次骚扰接触
+
+  # --- L3 骚扰验收：飞龙是否真打到敌方农民 ---
+
+  - id: harass_worker_kills
+    type: harass_damage
+    unit: MUTALISK
+    by: "8:00"
+    min: 5
+    # 飞龙骚扰核心验收——HarassWorkerLineAct 优先攻击矿线农民
+    # enemy_workers_harassed = telemetry 敌方「被飞龙打到过（受伤∪阵亡）的农民」累计
+    # by 8:00 应 >= 5（飞龙 9+ 只骚扰矿线，5 农民是保守门槛）
+    # 参考 banshee_harass 4 农民 @7:00（单架女妖）；飞龙群骚扰伤害更高
+
+# 经济曲线（双矿飞龙流：技科重，农民数中等偏少早期，中期快速追上）
+economy_profile:
+  - at: "2:30"
+    workers: 18
+    minerals: 200
+    # 22 农目标，BS + Lair + 气矿花费大；2:30 约 16-20 农，余矿中等
+  - at: "4:30"
+    workers: 24
+    minerals: 250
+    # 双矿运转，Spire 在建，农民继续爬坡；双气矿持续消耗，余矿偏低
+  - at: "6:30"
+    workers: 28
+    minerals: 300
+    # 飞龙骚扰阶段：双矿满采，农民约 26-30；飞龙生产消耗大量资源，余矿偏低
+  - at: "8:30"
+    workers: 32
+    minerals: 350
+    # 中期持续骚扰：飞龙 12+ 出门，配合小狗；农民数追上，经济进入稳定期

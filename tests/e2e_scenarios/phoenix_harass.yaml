@@ -1,0 +1,24 @@
+# E2E directive scenario 7 — L2 harass + L3 patrol persistent (需要凤凰单位)
+#
+# phoenix_2base 早期出凤凰(stargate ~3:00 → 第一个凤凰 ~3:30)。
+# 测两个需要特定单位的 type:
+# - L2 tactical_objective(harass): LLM 给 done_when=enemy_killed_in_area
+# - L3 unit_claim(verb=patrol, persistent): commit lifecycle
+strategy_id: phoenix_2base
+description: phoenix 凤凰 harass + patrol standing
+
+schedule:
+  # ── 3:30 L2 harass (需要凤凰单位) ──
+  # phoenix_2base ~3:30 第一对凤凰 ready
+  # LLM 给 verb=harass + done_when=enemy_killed_in_area(area, unit_type:Probe, value)
+  - at_s: 210
+    text: 2 凤凰提对方农民
+    expect_directive_types: [tactical_objective, unit_claim]
+    expect_done_within_s: 180
+
+  # ── 4:30 L3 unit_claim persistent patrol (standing,commit lifecycle) ──
+  - at_s: 270
+    text: 凤凰巡逻分矿
+    expect_directive_types: [unit_claim]
+    expect_lifecycle: committed
+    expect_done_within_s: 30

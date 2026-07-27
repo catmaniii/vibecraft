@@ -1,0 +1,39 @@
+# two_base_tanks + 玩家 9:30 按"防守"→ 60s 后单位守家
+#
+# 人族 defend 验收。补齐 race × verb 矩阵的缺口(此前缺人族 defend)。
+#
+# 选 two_base_tanks 而非 bio_stim:
+# - bio_stim VeryEasy 实测 t≈535s game over(早结束,fire 9:00=540s 时
+#   game 已结束,snapshot 偏离 target 64s),build 选错而非 spec 问题
+# - two_base_tanks 中后期 build,VeryEasy 稳健赢 game ~12+ min,有充足
+#   window fire defend + 等部队回家
+# - 跟 two_base_tanks__attack_probe(at=6:00)同 strategy 不同 verb 的配对
+#
+# build_acceptance/two_base_tanks.yaml: attack_moveout by=10:00
+# (window 9:00-11:00, 6 坦克 + 12 兵 + 2 医疗船 + 4 Viking 推进)
+#
+# 时间线:
+#   t=9:30(action[0]): 玩家按 defend(此时部队已集结或刚出门)
+#   t=10:30 check[0]: 60s 后部队回 home 60 内
+#
+# 调参:
+# - at=9:30:bot 默认 attack_moveout window 内,fire 真有部队可"撤回"
+# - after_s=60:坦克速度 2.25 慢,但配医疗船 boost 飞回家快;给 60s 足够
+# - within=60:坦克体积 + 医疗船分散,放宽 60 grid 覆盖 home ramp + 主基地圈
+
+strategy_id: two_base_tanks
+my_race: Terran
+
+player_actions:
+  - at: "9:30"
+    verb: defend
+    mode: null
+
+checks:
+  - id: army_back_home_after_defend
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 60
+    near: home
+    within: 60.0
+    op: "<="

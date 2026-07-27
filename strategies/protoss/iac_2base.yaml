@@ -1,0 +1,139 @@
+kind: opening_build
+id: iac_2base
+core_units:
+  - {unit: ZEALOT, policy: mass}
+  - {unit: IMMORTAL, policy: cap, value: 6}
+display_name_zh: "电兵叉球一波"
+display_name_en: "Chargelot-Archon Timing (High Templar)"
+summary_zh: "叉球一波 HT 版：VT(圣堂档案) → 6 HT 放 Psi Storm + 合 3 Archon + 24 Chargelot，~6:00 出门 all-in。不出不朽，气矿排序:电兵 4 先出 → 追猎 10 → 电兵满 6 → 哨兵 2，叉子纯矿一直补"
+summary_en: "2-base High Templar Chargelot-Archon all-in: Templar Archives → 6 High Templar Psi Storm + merge 3 Archons + 24 Charge Zealots, push at ~6:00. No Immortals; gas priority: 4 HT first → 10 Stalkers → 6 HT → 2 Sentries."
+sharpy_dummy_class: "vibecraft.bot.auto_combat.protoss.plans.iac_2base:IacTwoBase"
+aliases:
+  - "电兵叉球一波"
+  - "电兵叉球"
+  - "电兵合球"
+  - "HT合球"
+  - "闪电合球"
+  - "storm archon timing"
+  - "叉球一波"         # 旧玩家叫法保留（语义不变，只是多了 Storm）
+  - "叉球"
+  - "叉光"
+  - "叉光不朽推"
+  - "叉球不朽推"
+  - "白球冲锋叉一波"
+  - "不朽光灵冲锋叉"
+  - "重装地面"
+  - "双矿叉球"
+  - "双矿一波"
+  - "IAC"             # 老外文术语别名，仍接受识别但不作为 display
+  - "IAC一波"
+  - "IAC双矿"
+  - "Immortal Archon Chargelot"
+  - "I AC"
+
+enter_when:
+  - "self.tech.warpgate.done"
+  - "self.expansion_count >= 2"
+  - "from_opening in [1g_robo_immortal, 4_gateway_pressure]"
+
+# Phase stepper（2026-05-29 改造：HT 路线取代 DT 路线）
+phases:
+  - id: economic_open
+    display: "双矿 + BY"
+    display_en: "Expand + Cybernetics Core"
+    subtitle: "1:25 二矿 / 1:35 控制核心 / 2:10 折跃研究"
+    subtitle_en: "1:25 natural / 1:35 Twilight Council / 2:10 Warp Gate research"
+    start_at_time: 0
+  - id: tech_tree
+    display: "VC + VT + BF"
+    display_en: "Twilight Council + Templar Archives + Forge"
+    subtitle: "2:38 议会 / 3:14 圣堂档案 / 3:00 锻炉 → Charge + Storm + +1/+1"
+    subtitle_en: "2:38 Twilight Council / 3:14 Templar Archives / 3:00 Forge → Charge + Storm + +1/+1"
+    start_at_time: 158    # ~2:38
+  - id: ht_pool
+    display: "6 HT → Storm → Archon 合"
+    display_en: "6 HT → Storm → Archon Merge"
+    subtitle: "4:26 第一批 HT × 2 / 5:00 第二批 HT × 4，放 Storm 后合白球（6 HT = 3 Archon）"
+    subtitle_en: "4:26 first High Templar×2 / 5:00 second High Templar×4, Storm then merge (6 HT = 3 Archons)"
+    start_at_time: 266    # ~4:26
+  - id: gateway_mass
+    display: "6 BG 暴叉子 + 升攻防"
+    display_en: "6-Gateway Charge Zealot Mass + Upgrades"
+    subtitle: "4:00-5:00 6 BG 暴 chargelot，Forge +1 攻 + +1 防研究中"
+    subtitle_en: "4:00-5:00 6-Gateway Charge Zealot mass, Forge +1 attack + +1 armor researching"
+    start_at_time: 240    # ~4:00
+  - id: archon_form
+    display: "Archon 合体"
+    display_en: "Archon Merge"
+    subtitle: "5:30+ Archon 由 HT 配对合，2 HT → 1 Archon，6 HT → 3 Archon"
+    subtitle_en: "5:30+ High Templars merge in pairs: 2 HT → 1 Archon, 6 HT → 3 Archons"
+    start_at_time: 330    # ~5:30
+  - id: attack_timing
+    display: "~6:00 Charge+Storm+3Archon 出门"
+    display_en: "~6:00 Charge + Storm + 3 Archons Push"
+    subtitle: "Charge + Psi Storm + 3 Archon + 12+ Chargelot → 主力 attack"
+    subtitle_en: "Charge + Psi Storm + 3 Archons + 12+ Charge Zealots → main army attack"
+    start_at_time: 360    # ~6:00
+
+# 数据来源：Stats PvZ #81482 Archon Chargelot timing ~6:05 出门（HT 路线）
+# Liquipedia 2 Base Templar (vs Terran) 参考
+# 2026-05-29 改造：VT(TemplarArchives) 取代 VD(DarkShrine)
+# target_composition / required_* 用 sc2 SDK 名（PascalCase），跟 unit_data 查表对齐
+commitments:
+  units:
+    Zealot: 40        # 主力 charge zealot（target 40，纯矿无气矿压力，叉子可一直补）
+    Archon: 3         # ★ HT 合，2 HT → 1 Archon，6 HT → 3 Archon（2026-05-29 调高）
+    HighTemplar: 6    # transient（全部 Storm 后合 archon，最终 army 不含 HT）
+    Stalker: 10       # kite 主力（电兵 4 ready 后才开始产；10 × 50 = 500 气）
+    Sentry: 2         # 力场切阵（出门前最后才出，等 6 电兵 ready）
+  tech: [WarpGateResearch, Charge, PsiStormTech, ProtossGroundWeaponsLevel1, ProtossGroundArmorsLevel1]
+  structures:
+    Gateway: 6        # 不需要 7 BG（没不朽吃 gas，mineral 6 BG 够暴叉子）
+    TwilightCouncil: 1
+    TemplarArchives: 1  # ★ HT 必备，取代 DarkShrine；建造 36s 比 VD 快 35s
+    Forge: 1
+    # 不需要 Robo（不出不朽 / observer）
+  expansions: 2
+
+# HT 路线出门 timing 比 DT 版早 ~50s（VT 36s vs VD 71s）
+attack_window:
+  open_at: "6:00"
+  close_at: "7:00"
+  target_priority: [army, natural, production]
+
+micro_doctrine:
+  - "charge zealot 主力前压，接战时 charge 切入对方后排"
+  - "HT 优先 Psi Storm 人群密集区，能量耗尽后立刻 idle 等待 merge"
+  - "archon focus_fire bio_clumps / 远程单位"
+  - "if has_sentry_energy: forcefield split_enemy_army"
+  - "气矿单位产出优先级（高 → 低）：电兵 4 先出（≥4 ready 前不产追猎）→ 追猎 10 → 电兵满 6 → 哨兵 2；叉子无气矿成本，可一直补"
+
+# 仅用于 PWA 显示与 LLM 上下文，真实 build 由 IacTwoBase.create_plan 控制
+steps:
+  - "13 build BE"
+  - "13 build BG"
+  - "14 build BA"
+  - "16 build BN"
+  - "16 build BY"
+  - "18 build BA"
+  - "20 research 折跃 @chrono"
+  - "22 build VC"
+  - "22 build BF"
+  - "24 research 冲锋 @chrono"
+  - "24 build VT"
+  - "24 research 灵能风暴 @chrono"
+  - "28 research 地面攻击1 @BF"
+  - "28 research 地面防御1 @BF"
+  - "30 train HT @chrono"
+  - "38 train 叉子"
+  - "48 build BG"
+
+expire_action:
+  - "transition: persistent_immortal_archon"
+  - "transition: persistent_skytoss"
+
+lategame_transitions:
+  - lategame_id: persistent_immortal_archon
+    when: "default"
+  - lategame_id: persistent_skytoss
+    when: "enemy.lategame_composition"

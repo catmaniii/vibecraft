@@ -1,0 +1,31 @@
+# E2E directive scenario 3 — L4 全覆盖
+#
+# 测 L4 四类 override 都能自动 released:
+# - structure_override (明确数字,LLM 倾向给 structure_override 不是 build_at)
+# - tech_override (auto-fill done_when=tech_done)
+# - expansion_override (auto-fill done_when=expansion_count)
+strategy_id: 1g_robo_immortal
+description: L4 structure / tech / expansion override 全覆盖
+
+schedule:
+  # ── 0:30 L4 structure_override (明确数字 + 现成建筑类型) ──
+  # "补 2 BG" 比"再造一个水晶"明确,LLM 倾向 structure_override 而非 build_at。
+  # 1g_robo_immortal 默认只 1 BG,target=2 → 一个 BG 时长 ~60s 内完成。
+  - at_s: 30
+    text: 补 2 个 BG
+    expect_directive_types: [structure_override]
+    expect_done_within_s: 120
+
+  # ── 1:30 L4 tech_override ──
+  # "研折跃门"WarpGate 是 1g_robo_immortal 自然会研的科技(Cyber 完成后),
+  # 即使玩家不下令也会研。LLM 给 upgrade_id=WarpGate,auto-fill tech_done。
+  - at_s: 90
+    text: 研折跃门
+    expect_directive_types: [tech_override]
+    expect_done_within_s: 180
+
+  # ── 2:30 L4 expansion_override (复测,已 PASS) ──
+  - at_s: 150
+    text: 开二矿
+    expect_directive_types: [expansion_override]
+    expect_done_within_s: 60

@@ -1,0 +1,156 @@
+strategy_id: bio_stim
+my_race: Terran
+
+# research 来源:
+#   - https://liquipedia.net/starcraft2/3_Barracks_Stim_(vs._Terran)
+#     (3BB Stim Timing: 1 Rax FE → Orbital CC → Nat CC → 3 Barracks;
+#      Stim ~5:00 / Combat Shield ~6:30 / +1 attack ~7:00; move out ~8:00-8:30)
+#   - https://lotv.spawningtool.com/build/188083/
+#     (5BB Stim Timing TvX: BB1@1:20 / CC2@2:30 / Factory@3:30 /
+#      Starport@4:30 / BB5@5:30 / Stim@5:00 / CS@6:30 / +1atk@7:30;
+#      wave: 24M+8R+4Medivac push @8:30-9:00)
+#   - https://lotv.spawningtool.com/build/87232/
+#     (MMM Timing Push TvZ 3 base: 5 Barracks + EB; Stim before 5:30;
+#      attack window 8:00-9:00 with 20+ Marines + 8 Marauders + 2-4 Medivacs)
+#
+# 本 spec 对应策略: bio_stim =「3矿5BB8分钟压制」
+#   开局: 1BB FE → 2nd CC → Factory → Starport → 扩到 5BB + 3rd CC
+#   科技路线: Stim (~5:30) → Combat Shield (~7:00) → +1 步兵武器 (~7:30)
+#   出门编制: 24 枪兵 + 8 掠夺者 + 4 医疗船; 出门时间 ~8:30-9:00
+#   辅助: 1-2 攻城坦克防守用(Factory TechLab 出)，不是核心兵种
+
+checks:
+  # --- 基础骨架 ---
+  - id: barracks_1
+    type: building_complete
+    unit: BARRACKS
+    at: "1:20"
+    tol: 20
+    # 标准 bio 开局 BB@1:05-1:25 完成; 给 ±20s 窗口
+
+  - id: command_center_2
+    type: building_count
+    unit: COMMANDCENTER
+    at: "2:30"
+    tol: 40
+    min: 2
+    # 快扩 CC: spawningtool 参考 ~1:50-2:10 开建, 2:10-2:50 完成;
+    # at=2:30 ±40s 覆盖 1:50-3:10
+
+  - id: factory_1
+    type: building_complete
+    unit: FACTORY
+    at: "3:30"
+    tol: 50
+    # Factory 主要用于出 Reactor 扩 Starport 或接 TechLab 出坦克防守;
+    # spawningtool 参考 ~3:10-3:50 完成
+
+  - id: starport_1
+    type: building_complete
+    unit: STARPORT
+    at: "4:30"
+    tol: 60
+    # Starport 接 Factory swap 或独立建; 4:00-5:00 完成;
+    # 用于生产医疗船
+
+  - id: barracks_5
+    type: building_count
+    unit: BARRACKS
+    at: "5:30"
+    tol: 60
+    min: 5
+    # 5BB 是本 build 核心特征; 3rd/4th/5th BB 分批建, 约 4:30-6:00 全部完成;
+    # spawningtool 参考 5BB 约 5:00-6:00 就位
+
+  - id: command_center_3
+    type: building_count
+    unit: COMMANDCENTER
+    at: "6:40"
+    tol: 75
+    min: 3
+    # 3rd base CC: 3矿 bio 的关键经济支撑。
+    # 2026-06-18 后移(原 5:30):用户强要求"三矿不宜太早/别没几个兵就开三矿"(#537)——
+    # 三矿门改成"5 兵营齐 + 有一小股防守部队(combat supply≥6)"才开,CC3 实测 ~6:30-6:55 落地。
+    # at 后移到 6:40 以测量这个**故意更晚**的军队优先三矿时机(不是放宽掩盖,是行为按用户改了)。
+
+  # --- 科技升级 ---
+  - id: stim_research
+    type: upgrade_complete
+    upgrade: STIMPACK
+    by: "5:30"
+    # Stim 100s 研究; BB TechLab 完成后即开研;
+    # Liquipedia / spawningtool 参考均在 5:00-5:30 前完成
+
+  - id: combat_shield
+    type: upgrade_complete
+    upgrade: SHIELDWALL
+    by: "7:00"
+    # Combat Shield 研究紧接 Stim; 约 5:30-7:00 完成;
+    # 出门前必须有盾
+
+  - id: weapons_1
+    type: upgrade_complete
+    upgrade: TERRANINFANTRYWEAPONSLEVEL1
+    by: "7:30"
+    # +1 步兵武器在 EB 建完后即开研 (EB ~4:30-5:00);
+    # 研究时间 ~170s; 约 7:00-7:30 完成
+
+  # --- 出门编制验收 ---
+  - id: marauder_8
+    type: unit_count
+    unit: MARAUDER
+    at: "8:00"
+    tol: 60
+    min: 8
+    # 5BB 中至少 2BB 出掠夺者; 8:00 ±60s 验 8 掠夺者到位
+
+  - id: medivac_4
+    type: unit_count
+    unit: MEDIVAC
+    at: "8:00"
+    tol: 60
+    min: 4
+    # Starport (Reactor) 持续产医疗船; 4 医疗船约 8:00 前达成
+
+  - id: marine_24
+    type: unit_count
+    unit: MARINE
+    at: "8:30"
+    tol: 60
+    min: 24
+    # 5BB (部分 Reactor) 持续产枪兵; 24 枪兵是 bio wave 核心;
+    # spawningtool 参考 ~20-28 兵在 8:30 出门
+
+  - id: attack_moveout
+    type: attack_moveout
+    by: "9:00"
+    # strategy: attack_window ~8:00-9:00;
+    # Stim + CS + +1武器 + 5BB 波次就位后出门压制
+
+  # --- L2 前压验收：主力是否压到前线 ---
+  - id: pressure_reach_enemy
+    type: pressure_contact
+    by: "10:00"
+    within: 25
+    # 生化兴奋剂 timing：截至 10:00,主力 army_center 到过敌方分矿 25 格内,
+    # 或与敌方主力接触过(双方 army_center 距 25 内,涵盖对方反压、我方在家防御)。
+    # 造出兵不等于压力给到——必须大部队真的开到前线。
+
+# 经济曲线标准值
+# bio_stim 是 macro 流但倾向 all-in 节奏——农民爬坡但不饱和即推;
+# 3矿支撑 5BB 生产, 余矿应保持低位(持续生产消耗)
+economy_profile:
+  - at: "3:00"
+    workers: 24
+    minerals: 200
+    # 快扩成型: 双矿 + MULE 运转, 农民 24, 余矿 200 (Factory 在建消耗)
+
+  - at: "6:00"
+    workers: 44
+    minerals: 300
+    # 3矿 + 5BB 建设期: 农民持续补 44, 余矿 300 (BB + 升级大量消耗)
+
+  - at: "9:00"
+    workers: 55
+    minerals: 400
+    # 出门前: 3矿接近饱和 55 农民, 余矿略有积累 (出门波次前正常)

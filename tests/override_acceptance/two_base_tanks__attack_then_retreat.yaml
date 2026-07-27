@@ -1,0 +1,54 @@
+# two_base_tanks + 玩家先 5:00 force attack all_in,90s 后 6:30 改主意 retreat
+# → 验证人族 sequential 战术切换(action_idx 配对双 check)。
+#
+# 三族 sequential 矩阵的人族那格:
+# - 神族:1g_robo_immortal__attack_then_retreat(已 2/2 PASS)
+# - 虫族:macro_hatch__attack_then_retreat
+# - 人族:本 case
+#
+# 选 two_base_tanks:
+# - two_base_tanks VeryEasy 实测 8:44 Victory(单波打死),game 长 ≥8 min
+# - fire 5:00 attack + 6:30 retreat + 60s wait check(7:30)< 8:44 game end
+# - 已有 two_base_tanks__attack_probe(at=6:00 mode=probe)case,
+#   这里加 attack→retreat 形成同 strategy 不同 mode/verb 组合验证
+#
+# 时间线:
+#   t=5:00 force attack all_in target=enemy_main(此时只 2-3 坦克 + 少量兵,
+#          正常 power check 不放行 attack window 9:00-11:00,mode=all_in 绕过)
+#   t=6:30 check[0]: 90s 后部队到 enemy_main 70 内(坦克速度 2.25 慢但医疗船
+#          boost 飞兵快,within=70 给坦克展开/未展开兵分散 buffer)
+#   t=6:30 force retreat
+#   t=7:30 check[1]: 60s 后部队回 home 70 内(坦克从前线撤退慢,放宽 70)
+#
+# 验收意义:
+# - 验证人族 PlanZoneAttack 的 vibecraft hook 在 sequential attack→retreat
+#   切换路径上生效。补齐三族 race × sequential 矩阵的最后一块。
+
+strategy_id: two_base_tanks
+my_race: Terran
+
+player_actions:
+  - at: "5:00"
+    verb: attack
+    mode: all_in
+    target_area: enemy_main
+  - at: "6:30"
+    verb: retreat
+    mode: null
+
+checks:
+  - id: army_advanced_after_attack
+    type: army_after_player_action
+    action_idx: 0
+    after_s: 90
+    near: enemy_main
+    within: 70.0
+    op: "<="
+
+  - id: army_back_home_after_retreat
+    type: army_after_player_action
+    action_idx: 1
+    after_s: 60
+    near: home
+    within: 70.0
+    op: "<="
