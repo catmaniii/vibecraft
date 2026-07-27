@@ -1,5 +1,7 @@
 # VibeCraft 玩家手册
 
+> **中文** · [English](USER_GUIDE_EN.md)
+
 > 用嘴指挥 StarCraft 2 — 给操作不动的老玩家准备的指挥官模式
 
 ---

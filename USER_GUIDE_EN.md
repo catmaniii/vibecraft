@@ -1,5 +1,7 @@
 # VibeCraft Player Guide
 
+> **English** · [中文](USER_GUIDE.md)
+
 > Command StarCraft 2 with your voice — Commander Mode for veterans who can no longer keep up with the mechanics
 
 ---

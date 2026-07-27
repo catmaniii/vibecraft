@@ -1,6 +1,6 @@
 # VibeCraft
 
-> 🇨🇳 中文 · [🇬🇧 English](README.en.md)
+> **中文** · [English](README.en.md)
 
 **动动嘴 / 打打字，AI 替你操作 StarCraft II —— 给操作不动、战略还在线的老玩家。**
 

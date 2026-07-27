@@ -1,6 +1,6 @@
 # VibeCraft
 
-> 🇬🇧 English · [🇨🇳 中文](README.md)
+> **English** · [中文](README.md)
 
 **Talk or type — an AI plays StarCraft II for you. Built for veterans whose strategy is
 still sharp but whose hands aren't.**
