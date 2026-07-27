@@ -2981,10 +2981,13 @@ dev = [
 ]
 sc2 = [
     { name = "ares-sc2" },
+    { name = "burnysc2" },
     { name = "sc2-helper" },
+    { name = "scikit-learn" },
 ]
 sc2-lib = [
     { name = "burnysc2" },
+    { name = "scikit-learn" },
 ]
 
 [package.metadata]
@@ -3015,8 +3018,10 @@ requires-dist = [
     { name = "qrcode", extras = ["pil"], specifier = ">=7.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "sc2-helper", marker = "extra == 'sc2'", specifier = ">=0.2.1" },
+    { name = "scikit-learn", marker = "extra == 'sc2-lib'", specifier = "<2.0.0" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "vibecraft", extras = ["sc2-lib"], marker = "extra == 'sc2'" },
     { name = "websockets", specifier = ">=12.0" },
 ]
 provides-extras = ["asr", "dev", "sc2", "sc2-lib"]

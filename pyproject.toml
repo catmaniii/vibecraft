@@ -67,15 +67,24 @@ dev = [
 # 只有要跑 smoke / M1.5 ares_adapter 才 `uv sync --extra dev --extra sc2`。
 # uv 用户靠下方 [tool.uv.sources] 解析 git URL；pip 用户走 runbook §1 手动装。
 sc2 = [
+    "vibecraft[sc2-lib]",
     "ares-sc2",
     "sc2-helper>=0.2.1",
 ]
-# 只装 python-sc2 本体（纯 Python、跨平台），不含 ares / sc2-helper。
-# 为什么单独拆出来：23 个单测文件 `from sc2.ids... import UnitTypeId` 之类，用的只是 enum、
-# Point2 这些纯数据类型（不连游戏），但没有 sc2 就整个文件 collect 失败。而完整的 `sc2` extra
-# 装不进 CI —— `sc2-helper` 只发了 cp311 的 wheel，3.12 那条腿必挂。CI 因此用这个：
-#   uv sync --extra dev --extra sc2-lib
-sc2-lib = ["burnysc2"]
+# **让 vendored sharpy 能 import 起来的最小依赖集**（不含 ares / sc2-helper，不连游戏）。
+# 单独拆出来是因为 CI 要用它：没有这些，几百个单测文件在 collect 阶段就炸，等于那部分 bot
+# 逻辑在 CI 上一行没跑过。踩过的坑：vendored sharpy 有自己的 requirements.txt，但它**从来
+# 没被并进本 pyproject** —— 于是干净克隆装完 `uv sync` 得到的 sharpy 是坏的，只有开发者
+# 本机因为残留着当初 clone 的包而"一切正常"。这里逐个对齐它真正 import 的东西：
+#   burnysc2     —— `sc2.*`（python-sc2 本体，纯 Python）
+#   scikit-learn —— sharpy/combat/group_combat_manager.py 顶层 `from sklearn.cluster import DBSCAN`
+# 不需要的：opencv-python（cv2 只在 sc2pathlib/map.py 的 debug 画图函数内惰性 import）、
+# requests / six / more-itertools（sharpy 的 requirements 里有，但源码里根本没 import）。
+# 其余（aiohttp / numpy / scipy / mpyq / portpicker / protobuf / loguru）由 burnysc2 带进来。
+sc2-lib = [
+    "burnysc2",
+    "scikit-learn<2.0.0",
+]
 
 [project.scripts]
 vibecraft = "vibecraft.cli:main"
