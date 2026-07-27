@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# vibecraft: 上面 `*.py[cod]` 是 Python 官方模板里排除 .pyc/.pyo 字节码的写法，但这个 glob
+# 连 `.pyd` 一起吞了 —— 而在 Windows 上 `.pyd` 不是编译垃圾，**是 C 扩展模块本身**。
+# sc2pathlib 的 .pyd 是 sharpy 的运行时硬依赖（pathing_manager / building_solver 无条件
+# `import sc2pathlib`），一旦不入库，任何人克隆本仓库拿到的 sharpy 都是坏的、bot 根本跑不起来
+# （只有原作者机器上因为残留着 clone 来的那份而"一切正常"）。所以显式反排除它。
+!sc2pathlib/*.pyd
+
 # C extensions
 *.so
 

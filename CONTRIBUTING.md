@@ -95,4 +95,11 @@ uv run pytest tests/unit/test_locale_penetration.py # locale 链路
 .venv/Scripts/python.exe scripts/dump_llm_prompt.py # 刷新 LLM prompt 快照
 ```
 
-有疑问开 Issue 讨论。感谢贡献！
+## 有问题找谁
+
+- **技术问题 / bug / 功能建议** → 开 [Issue](https://github.com/catmaniii/vibecraft/issues)。
+  公开讨论对后来人也有用，优先走这里。
+- **安全漏洞** → **不要开公开 Issue**，走 [`SECURITY.md`](SECURITY.md) 里的私密渠道。
+- **不适合公开的事**（行为准则投诉、协议/授权问题、私下联系）→ **vibecraftproject@gmail.com**。
+
+感谢贡献！

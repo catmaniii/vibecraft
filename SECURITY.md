@@ -4,11 +4,15 @@
 
 **请不要用公开 Issue 报告安全问题。**
 
-用 GitHub 的私密渠道：仓库 **Security → Report a vulnerability**
+首选 GitHub 的私密渠道：仓库 **Security → Report a vulnerability**
 （[Private vulnerability reporting](https://github.com/catmaniii/vibecraft/security/advisories/new)）。
 
+用不了那个渠道（比如没有 GitHub 账号）就发邮件到 **vibecraftproject@gmail.com**，
+标题带上 `[security]`。
+
 Please **do not** open a public issue for security problems — use GitHub's private
-vulnerability reporting instead.
+vulnerability reporting instead, or email **vibecraftproject@gmail.com** with
+`[security]` in the subject if that isn't an option for you.
 
 修复前请不要公开细节。这是个人业余项目，尽力在合理时间内回复，但不承诺 SLA。
 Please don't disclose details before a fix is out. This is a hobby project — best effort,

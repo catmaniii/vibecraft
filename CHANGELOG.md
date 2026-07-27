@@ -19,6 +19,32 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-27 **本仓库对所有人都是坏的**：sc2pathlib 的 .pyd 从未入库
+
+**修正 (Fixed)**：
+- **`vendor/sharpy/.gitignore` 的 `*.py[cod]` 把 `.pyd` 一起吞了。** 那行是 Python 官方
+  gitignore 模板里用来排除 `.pyc` / `.pyo` **字节码**的写法，但在 Windows 上 **`.pyd` 不是编译
+  垃圾，是 C 扩展模块本身**。后果：`sc2pathlib.cp311-win_amd64.pyd`（676 KB）只存在于原作者
+  机器上（当初 clone sharpy 带来的），**从未进过仓库**；而 sharpy 的核心 manager
+  （`pathing_manager` / `building_solver`）无条件 `import sc2pathlib` ——
+  **任何人克隆本仓库拿到的 sharpy 都是坏的、bot 根本跑不起来**，只有原作者的机器"一切正常"。
+  修法：`!sc2pathlib/*.pyd` 显式反排除并入库。协议上没问题——sc2pathlib 是 DrInfy 的
+  sc2-pathlib（MIT），上游 sharpy 自己也随仓库分发它，`THIRD_PARTY_NOTICES.md` 早已记录在案。
+  > **这是开源前最该抓到的一个 bug，而抓到它的是 CI —— 因为 CI 是这个项目历史上第一个"干净
+  > 克隆"。** 本机开发永远照不出这类问题：缺的文件就躺在本机磁盘上。此前"Linux CI 测不了"
+  > 的诊断只对了一半（win_amd64 的 .pyd 确实在 Linux 上加载不了），但即便换到 Windows CI，
+  > 文件不在仓库里照样失败——两处都得修。
+  > 验证方式：`git clone` 一份干净副本，在克隆里跑之前全挂的那 57 个用例 → 全 passed。
+
+**新增 (Added)**：
+- `CODE_OF_CONDUCT.md`：补齐 GitHub 社区标准清单最后一项。不照抄 Contributor Covenant 全文，
+  改写成一份**一个人维护的项目真能兑现**的短版（含"对事不对人"、技术分歧靠 telemetry/自验脚本
+  收敛、以及"本项目的出发点就是让手不利索的人也能玩 SC2，拿身体条件开玩笑尤其不合适"）。
+- **项目官方邮箱 `vibecraftproject@gmail.com`** 落到四处：`pyproject.toml` 的 authors（会显示在
+  打包元数据里）、`SECURITY.md`（GitHub 私密报告之外的备选，标题带 `[security]`）、
+  `CODE_OF_CONDUCT.md`（投诉渠道）、`CONTRIBUTING.md` 与两个 README 的「联系」段
+  （按"技术问题走 Issue / 安全走私密渠道 / 其余走邮箱"分流）。
+
 ### 2026-07-27 CI 改跑 Windows + 承认"只支持 3.11"（Linux CI 根本测不了这个项目）
 
 **修正 (Fixed)**：
