@@ -19,6 +19,24 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-28 `docs/plans/` 只留设计真理源（79 → 1），清掉 77 处死链
+
+**变更 (Changed)**：
+- **删掉 `docs/plans/` 下 78 个历史设计/计划文档**，只保留
+  [`2026-05-14-vibecraft-design.md`](docs/plans/2026-05-14-vibecraft-design.md)（14 节完整设计
+  真理源）。`docs/` 跟踪文件 123 → 45。这些文档仍可从仓库根 commit 取回
+  （`git show <root>:docs/plans/<name>.md`），不是永久丢失。
+- **同步清掉 77 处指向它们的死链**——删文件不清引用，等于给每个贡献者留一堆"详见 XXX.md"
+  然后找不到那个文件：
+  - 源码 / 测试 / 脚本注释 44 处；其余文档 33 处。
+  - 原则是**保留人能读懂的那部分描述，只去掉已不存在的路径**。例如
+    `设计参考：docs/plans/2026-05-18-zerg-terran-bot-design.md §3.3（A 抽象基类 + B 工厂函数）`
+    → `结构：A 抽象基类 + B 工厂函数`；纯粹只有路径、去掉后整行没意义的，整行删。
+  - **`CHANGELOG.md` 里的 12 处故意保留**：它是历史记录，条目描述的是当时发生的事，
+    改写历史比留一个旧路径更糟。
+  - 验证：全仓 grep 确认非历史文档里零残留；ruff / ruff format / mypy 全绿；
+    全量单测 3731 passed（删除与改注释都没碰行为）。
+
 ### 2026-07-28 README 加部署拓扑图 + 推理图谱独立复评（is_worker 那批）
 
 **新增 (Added)**：

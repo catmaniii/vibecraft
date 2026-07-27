@@ -1,6 +1,6 @@
 // 前端 i18n：从仓库根 locales/strings.json（中英唯一真理源）读取 UI 字符串。
 //
-// 设计 docs/plans/2026-06-27-i18n-localization-design.md。复用并扩展原有自研 t()（不引 vue-i18n）：
+// 复用并扩展原有自研 t()（不引 vue-i18n）：
 //   - locale 改为 reactive：切语言即时整页重渲（无需 reload）。
 //   - 支持 {name} 模板插值：t('starting.count', { n: 3 })。
 //   - 查不到 key → 回退当前 locale 的 zh → 再回退 key 本身（不崩、能看出缺哪条）。

@@ -1,6 +1,6 @@
 """VibeCraftBotBase：三族 bot 共享的 lifecycle / 多路复用 / EventBus 基类。
 
-设计参考：docs/plans/2026-05-18-zerg-terran-bot-design.md §3.3（A 抽象基类 + B 工厂函数）。
+结构：A 抽象基类 + B 工厂函数。
 
 继承层次：
     _VibeCraftProtossBot / _VibeCraftZergBot / _VibeCraftTerranBot

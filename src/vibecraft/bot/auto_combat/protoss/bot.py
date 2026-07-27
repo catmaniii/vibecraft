@@ -10,7 +10,6 @@ import 路径说明：vendor/sharpy/ 不在标准 src layout 下，
 运行时通过 sys.path 注入让 `from sharpy.knowledges.knowledge_bot import KnowledgeBot` 可解析。
 注入只在真正 import 本模块时发生（lazy，单测时 fake_sharpy 先 mock sys.modules）。
 
-设计参考：docs/plans/2026-05-18-zerg-terran-bot-design.md §3。
 """
 
 from __future__ import annotations

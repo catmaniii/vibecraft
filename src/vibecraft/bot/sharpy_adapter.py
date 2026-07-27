@@ -3,7 +3,7 @@
 **仅在装了 python-sc2 + sharpy(vendor/sharpy)的环境才能 import**。
 单测全部用 FakeFacade，本文件不被 import；只在真实对局用。
 
-实现按 M1 sharpy migration plan (docs/plans/2026-05-16-sharpy-migration.md):
+实现按 M1 sharpy migration plan:
 - bot 继承 `sharpy.knowledges.KnowledgeBot`
 - `set_build(name)` → M1 占位：记录 active_recipe；M3 才接 IfElse 树
 - `set_unit_role()` → `bot.knowledge.roles.set_task(sharpy_task, unit)`

@@ -1,6 +1,6 @@
 """EventBus —— vibecraft 自建 pub/sub,把 python-sc2 11 个 lifecycle hook 中心化分发。
 
-详 docs/adr/0010-four-layer-commands.md §9 + docs/plans/2026-05-17-task-completion-
+详 docs/adr/0010-four-layer-commands.md §9（task completion +
 and-eventbus-design.md §三。
 
 设计要点:

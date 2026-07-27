@@ -12,7 +12,7 @@
 
 `run_game()` 是同步阻塞调用（M0c smoke 实测：SC2 冷启动到进对局约 5-6s，整局运行几十秒到几分钟）。bot service 的 WS server 跑在 asyncio event loop，不能让 `run_game()` 直接在 loop 里跑。
 
-设计预研（`docs/plans/2026-05-14-m1.2-sc2-lifecycle.md` §2）列出三个候选方案：
+设计预研列出三个候选方案：
 
 | 方案 | 机制 | 优 | 劣 |
 |---|---|---|---|

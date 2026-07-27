@@ -5,7 +5,6 @@
 - solo (1 bot slot) 也走 orchestrator（mp_role="" → 原单人路径）
 - game_process_for(pid) 只查 orchestrator._procs
 
-设计 docs/plans/2026-06-12-multiplayer-design.md §3.
 """
 
 from __future__ import annotations

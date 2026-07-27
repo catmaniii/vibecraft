@@ -56,7 +56,6 @@ _HOTWORD_PATH = "config/asr_hotwords.txt"
 
 # --------------------------------------------------------------------------
 # 英文模型（SenseVoiceSmall，多语、**非流式/离线**；spike 实测 SC2 英文指令近乎完美）
-# 见设计 docs/plans/2026-06-27-i18n-localization-design.md §10。
 # 非流式：松手后整段一次性解码（无逐字 partial）。输出带 <|en|><|EMO|>… 标签 + 尾标点，需后处理。
 # --------------------------------------------------------------------------
 _MODEL_ID_EN = "iic/SenseVoiceSmall"

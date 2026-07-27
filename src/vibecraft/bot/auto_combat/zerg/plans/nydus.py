@@ -136,7 +136,7 @@ class _SendOverlordToEnemy(ActBase):  # type: ignore[misc]
     改成"常驻保活"）。
 
     Round 1 真局教训（2026-07-09 nydus_selftest telemetry 复盘，见
-    `docs/plans/2026-07-09-nydus-raid-polish-design.md`）：老版本只在 Lair 完成那刻
+    坑道骚扰 Round 4 精修）：老版本只在 Lair 完成那刻
     派**一只** Overlord 飞过去、`_sent=True` 后再也不管——telemetry 显示那只 OL 在
     t≈145s（刚到位不久）就被敌方防御打死，此后**全程 0 只 OL/Overseer 在敌方附近**。
     `_BuildNydusCanalAtEnemy` 后续 170 次 `BUILD_NYDUSWORM` 全部对着一个**已失去

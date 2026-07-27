@@ -1,7 +1,7 @@
 """部署期一次性预拉英文 ASR 模型（SenseVoiceSmall，~1GB）。
 
 首次跑会从 modelscope 下载到本地缓存（~数分钟）；之后 server 起来后英文玩家的第一句
-语音 finalize 就不会卡在下载上（见设计 docs/plans/2026-06-27-i18n-localization-design.md §10.5）。
+语音 finalize 就不会卡在下载上。
 
 用法（venv）：
     .venv/Scripts/python.exe scripts/prefetch_asr_en.py

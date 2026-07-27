@@ -19,7 +19,7 @@ release/bail）+ `NydusRush: BUILD_NYDUSWORM` / `worm position locked` + telemet
 清楚的时间线。
 
 **Round 4「声东击西」新增**（2026-07-09 用户拍板，见
-`docs/plans/2026-07-09-nydus-raid-polish-design.md`「Round4」段）：额外解析
+Round4 精修）：额外解析
 `NydusRush: window check/OPEN/timeout`（`_BuildNydusCanalAtEnemy` 的安全窗口
 检测，敌方主基地矿线附近敌方战斗单位数 <= 阈值才判定"窗口开"）+
 `NYDUSFEINT squad/poke/retreat`（`FeintSquadAct` 佯攻小队骚扰敌方二矿的

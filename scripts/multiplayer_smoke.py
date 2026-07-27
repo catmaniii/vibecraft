@@ -32,7 +32,7 @@ bot 用最小 BotAI stub（隔离链路问题，不拉 vibecraft 全栈）。
   （子进程 SC2 自己的 ws 端口压在游戏 P2P 端口上）。修复 = 散点 Portconfig()。
   栅栏/时序/窗口参数/realtime 全部无罪（join 相差几秒引擎会等，无需同步）。
 
-Spike 结论（详见 docs/plans/2026-06-12-multiplayer-implementation-plan.md「Spike 结论」节）：
+Spike 结论：
   v0 实测仅验证 2 真人（2 bot slot）。3+ 真人 slot 的 Portconfig 已预留
   但未实测，MatchOrchestrator.build_plan 对 >2 bot slot 先 raise RoomError。
 """

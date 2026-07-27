@@ -1,6 +1,5 @@
 """房间状态机 + slot 模型（阶段 0 多人联网，纯逻辑无 IO）。
 
-设计：docs/plans/2026-06-12-multiplayer-design.md §3.2。
 状态机：lobby → starting → in_game → (ended 瞬态) → lobby。
 
 v0 一个 server 一个房间；team 字段进模型/UI，引擎层同盟以 Task 1 spike 结论为准。

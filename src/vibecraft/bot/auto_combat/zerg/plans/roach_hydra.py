@@ -33,7 +33,6 @@
 
 设计参考：
   strategies/zerg/roach_hydra.yaml
-  docs/plans/research/zerg_roach_hydra_research.md
 """
 
 from __future__ import annotations

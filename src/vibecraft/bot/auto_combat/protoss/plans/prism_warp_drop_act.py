@@ -31,7 +31,6 @@ Attack handling:
   src/vibecraft/bot/auto_combat/protoss/plans/dt_micro.py (DtHarassMicro)
   src/vibecraft/bot/auto_combat/protoss/plans/generic_drop_act.py (GenericDropAct)
   src/vibecraft/bot/auto_combat/protoss/plans/warp_dt_at_prism.py (WarpDTAtPrism)
-  docs/plans/2026-05-23-drop-act-design.md §5
 """
 
 from __future__ import annotations

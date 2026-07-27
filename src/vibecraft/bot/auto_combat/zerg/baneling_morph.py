@@ -1,6 +1,5 @@
 """共享毒爆 morph：前压 + 护蛹（ling_bane 开局 plan 与 build-aware sustain 共用）。
 
-设计真理源：docs/plans/2026-06-16-ling-bane-choreography-design.md。
 
 三道 gate（顺序）：
 1. **够狗**：≥6 ling（cocoon 4 + 护卫 ≥2 才有意义）。

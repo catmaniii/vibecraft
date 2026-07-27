@@ -231,7 +231,6 @@ while i <= max_steps: ...
   锚点**(`_vbc_threatened_zone`，已含 power>3.0 阈值 + 1.5x 滞回 + 无威胁回前沿点)驱动 →
   根本不存在 Idle↔Defending 翻转 → 彻底消抖。敌入射程仍由 combat 引擎(GroupCombatManager
   按最近敌群交战，与 execute target 解耦)交战 → 守得住、不"站着挨打"。
-- 设计 + 评审留痕：`docs/plans/2026-06-17-defend-tug-fix-design.md`。
 - **升级 checklist**：sharpy upstream 升级覆盖 zone_defense.py 后，重新在 `execute` 的
   defenders 收集段(原 `for unit in zone_defenders` + warp-in + `get_defenders` 块)外面包
   `if vbc_defend: 释放非工人 Defending + 只计数 free 主力 power; else: <原逻辑>`，跑
@@ -697,7 +696,7 @@ caster = Reserved,不进 group → 不走这套自动施法**。本方案只覆�
 
 **验证**:`scripts/caster_ability_selftest.py`(debug `debug_upgrade()` 解锁研究门 + 生 caster/敌 +
 `VIBECRAFT_CASTER_TRACE` grep `CASTERTRACE`)真局实测:鬼兵狙击 9 / EMP 9 / 女妖隐形 6 / ghost cloak 3
-**全 PASS**。设计 + 评审留痕 `docs/plans/2026-06-18-caster-abilities-design.md`。
+**全 PASS**。
 
 **升级 checklist**:sharpy 升级覆盖以上文件后,重新加回 micro_rules 注册 + 各 micro 改动(对照本节表),
 跑 `test_sharpy_patch_audit.py` 确认 marker 在 + `caster_ability_selftest.py` 确认技能仍触发。

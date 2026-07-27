@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 入口页：用户名输入 + 服务器列表（点选/删除）+ 添加服务器折叠表单 + [连接] 按钮
-// 设计 docs/plans/2026-06-12-multiplayer-implementation-plan.md Task 8
 import { ref, computed } from 'vue'
 import { useProfile } from '@/composables/useProfile'
 import QrShareButton from '@/components/QrShareButton.vue'

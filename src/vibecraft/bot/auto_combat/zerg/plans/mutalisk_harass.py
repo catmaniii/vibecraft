@@ -21,7 +21,6 @@ Railgan ZvT 2-Base Mutalisk Speed Bane 节奏（主流，最接近 pro 标准）
 
 设计参考：
   strategies/zerg/mutalisk_harass.yaml
-  docs/plans/research/zerg_mutalisk_harass_research.md
   https://lotv.spawningtool.com/build/66228/
 """
 

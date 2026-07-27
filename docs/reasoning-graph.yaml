@@ -3562,7 +3562,7 @@ nodes:
     title: "落地 F122 低地路由:敌方高地代价栅格(terrain_height 高地 ∩ 敌方半场) + A*(叠加静态防空/漫游军动态惩罚),接入 approach 主选路、超限回退 snap"
     statement: "落地 F122/I50 低地路由(terrain_harass.build_enemy_highground_cells + plan_lowground_path):①敌方高地代价栅格 = terrain_height 和敌基同台面(>= h_enemy - CLIFF_MARGIN)且在敌方半场(离敌 start 近),纯几何、一局一算缓存;②A* 8连通,代价=步长×(1+高地惩罚+AA惩罚),叠加静态防空/漫游军动态惩罚点;③接入 _approach_waypoint 主选路,超 max_expand/max_detour → 回退 snap 版 plan_air_path;④detour 运行时守卫。仅 approach(Phase 1);撤退/dodge 因 micro flee 覆盖(F143)留 Phase 2。"
     deps: [I50, F122, F121, F143]
-    evidence: "设计 docs/plans/2026-07-26-phoenix-lowground-routing-design.md;独立 opus 评审补 3 阻塞项(①去掉 enemy_ground_reachable 交集[BFS 淹没误罚自家高地]→改敌方半场;②纯地形丢 AA 避让→叠动态惩罚;③不并存两路由器→主选+超限回退);单测 test_terrain_harass 11 过;效果见 F144"
+    evidence: "独立 opus 评审补 3 阻塞项(①去掉 enemy_ground_reachable 交集[BFS 淹没误罚自家高地]→改敌方半场;②纯地形丢 AA 避让→叠动态惩罚;③不并存两路由器→主选+超限回退);单测 test_terrain_harass 11 过;效果见 F144"
 
   - id: F144
     kind: fact

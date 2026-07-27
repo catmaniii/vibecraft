@@ -1,5 +1,4 @@
 // 玩家本地档案：用户名 + 服务器列表（localStorage 持久化，无账号系统）。
-// 设计 docs/plans/2026-06-12-multiplayer-design.md §3.1。
 import { ref } from 'vue'
 
 export interface ServerEntry {

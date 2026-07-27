@@ -51,7 +51,7 @@ class PlanZoneDefense(ActBase):
         # army 中心 x/y 反转 18/16,defend role 反复 claim/release)。让主力单一 plan 单一锚点驱动 →
         # 无 role 翻转 → 彻底消抖;敌入射程仍由 combat 引擎交战(与 execute target 解耦)。worker 防守
         # 保留原 enemy_center 路径。严格 gate defend intent,非 defend / dummies / 默认 AI 走原逻辑。
-        # 详见 docs/sharpy-patches.md + docs/plans/2026-06-17-defend-tug-fix-design.md。
+        # 详见 docs/sharpy-patches.md。
         vbc_defend = (
             getattr(getattr(self.knowledge, "vibecraft", None), "combat_intent_override", None)
             == "defend"

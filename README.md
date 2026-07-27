@@ -407,7 +407,7 @@ bash setup-frontdoor.sh     # nginx 443 SNI 分流（turn.*→coturn / app.*→�
 
 手机连 `https://app.<你的IP>.sslip.io/?room=<房间码>`：控制面经 nginx→反向隧道→你 PC，
 媒体面 P2P 优先、打不通走 `turns:443` 中继。详细方案
-[`docs/plans/2026-06-14-turn-integration-plan.md`](docs/plans/2026-06-14-turn-integration-plan.md)。
+[`ARCHITECTURE.md`](ARCHITECTURE.md#部署架构) 的部署架构一节。
 
 **4) 成本估算（重点：流量）**
 

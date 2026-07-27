@@ -245,7 +245,7 @@ SMART 装载生效那一刻，单位在**同一帧**内"从 `self.cache.own(ROAC
 
 **ref**：`nydus_raid_act.py::_tick`（`_promote_stage_to_transit` 调用顺序）+
 `_promote_stage_to_transit`；回归测试 `tests/unit/test_nydus_raid.py`；
-设计 `docs/plans/2026-07-09-nydus-raid-polish-design.md`。
+见坑道骚扰 Round 4 精修。
 
 ---
 
@@ -364,7 +364,7 @@ CHANGELOG #582。
 
 **ref**：`bc_raid_act.py` `_raid_move_point` / `_approach_wp`(`_approach_arrived` 闩锁)；真局验证用
 `BCRAIDTRACE arrived ... behind_dot`（>0=从矿背后到达）+ per-BC `dmain`；设计
-`docs/plans/2026-07-03-bc-harass-approach-micro-design.md` 评审处置 #1。
+BC 骚扰接近微操设计的评审处置 #1。
 
 ---
 

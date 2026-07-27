@@ -559,7 +559,7 @@ tests/{unit,integration,e2e}/
 | [`CLAUDE.md`](CLAUDE.md) | Working conventions (also the AI-collaboration context file) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
 
-> Most design documents (`docs/plans/`, ADRs, the reasoning graph) are written in Chinese.
+> The design documents (the master design doc, ADRs, the reasoning graph) are written in Chinese.
 
 ---
 

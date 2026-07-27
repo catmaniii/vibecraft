@@ -1,6 +1,5 @@
 """TaskMonitor —— 每 sharpy step 检查 in-flight directive 是否完成。
 
-设计文档: docs/plans/2026-05-17-task-completion-and-eventbus-design.md §3.4
 ADR 0010 §8 done_when 决策摘要
 
 职责:

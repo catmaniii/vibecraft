@@ -6314,7 +6314,6 @@ class Director:
           5. 单位齐 → 实例化 GenericDropAct / PrismWarpDropAct → 记入 _active_drop_acts
              (防重复:同 directive_id 只实例化一次)
 
-        Task 7 of docs/plans/2026-05-23-drop-act-implementation-plan.md
         """
         if self._bot is None:
             return

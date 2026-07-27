@@ -10,7 +10,6 @@ Build order（二本速战巡，调研自 Liquipedia / spawningtool）：
   Starport(~2:50)→ FusionCore(~3:25) + Starport TechLab→
   首舰 ~4:10-4:40 → 持续 BC
 
-设计参考：docs/plans/2026-06-18-bc-rush-design.md
 策略 yaml：strategies/terran/bc_rush.yaml
 """
 

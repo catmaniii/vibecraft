@@ -7,7 +7,6 @@ M6.2b：虫族 bot class + plans。
   - DEFAULT_OPENING_ID = "12pool"
   - create_plan()（虫族 IfElse 路由树 + OverlordScout + ZergSustain）
 
-设计参考：docs/plans/2026-05-18-zerg-terran-bot-design.md §3.2。
 """
 
 from __future__ import annotations

@@ -1,6 +1,5 @@
 """MatchOrchestrator：房间配置 → SC2 启动计划 → 多 GameProcess 生命周期。
 
-设计 docs/plans/2026-06-12-multiplayer-design.md §3.3。
 评审修订（2026-06-12 Opus）已全部叠加：
 - M2：start_match 为每个 (player_id, gp) 创建 connection-无关的 asyncio monitor task；
       每 GameProcess 恰一个消费者（不变量）。

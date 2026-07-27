@@ -7,7 +7,6 @@ M6.3b：人族 bot class + plans。
   - DEFAULT_OPENING_ID = "reaper_expand"（最稳的标准 TvX 开局）
   - create_plan()（人族 IfElse 路由树 + ScoutWorker + TerranSustain）
 
-设计参考：docs/plans/2026-05-18-zerg-terran-bot-design.md §3.3。
 """
 
 from __future__ import annotations

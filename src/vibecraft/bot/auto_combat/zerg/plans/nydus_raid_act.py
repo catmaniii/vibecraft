@@ -3,7 +3,7 @@
 把 army（狗/蟑/女王）真正"灌"过坑道网络钻到敌方家，替代 `nydus.py` 原来
 "坑道虫建出来没人用、army 走地图正面攻过去"的 gap。
 
-设计权威：`docs/plans/2026-07-09-nydus-raid-polish-design.md`（opus 评审 + venv 真机
+设计经 opus 评审 + venv 真机
 核对，评审处置 9 条 must-fix 全照做）。
 
 三态状态机（照 `bc_raid_act.py` GroupHarassAct 的 STAGE/DIVE/HEAL 单状态机范式，
@@ -91,7 +91,7 @@ Round 4「声东击西」战略重构（2026-07-09，用户拍板）：
   才下 BUILD_NYDUSWORM，落点也从矿点背面隐蔽点改回矿线正中——窗口期无人守，
   屠农民更直接）。本 act（NydusRaidAct）职责不变，仍只管"有 canal 就用"；招募
   小狗池子与 FeintSquadAct 分池不重叠（`ai._vibecraft_nydus_feint_tags` 排除，见
-  `_recruit`）。详见 `docs/plans/2026-07-09-nydus-raid-polish-design.md`「Round 4」段。
+  `_recruit`）。
 """
 
 from __future__ import annotations
@@ -568,8 +568,8 @@ class NydusRaidAct(ActBase):  # type: ignore[misc]
             return
 
         # Round 2（2026-07-09 真局教训）：不再等 canal_ready 才开始装载。原设计意图
-        # 本就是"STAGE 阶段就把 army 预装进自家坑道网络"（`docs/plans/2026-07-09-
-        # nydus-raid-polish-design.md` 精修点2），网络自己随时能装人（乘客在网络里
+        # 本就是"STAGE 阶段就把 army 预装进自家坑道网络"（Round 4 精修点 2），
+        # 网络自己随时能装人（乘客在网络里
         # 等着，等虫洞打通再排空是 SC2 原生机制），没必要卡 canal_ready 才开始装——
         # 卡了反而拉长"worm ready → army 才开始装 → 才排空"的暴露窗口。真正的排空
         # 门控在 `_tick_transit`（有 cargo 的 canal 才 issue UNLOAD），这里只管把人

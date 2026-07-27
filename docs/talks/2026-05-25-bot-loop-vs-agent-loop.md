@@ -200,7 +200,7 @@ vibecraft 一个对话内修 12 bug + 加 7+ contract test —— **正在验证
 # 后续路线 (跟 Heuristic Learning 一脉相承)
 
 **短期 (已在做)**
-- 补完 14 directive type 契约测试 (audit plan: `docs/plans/2026-05-25-directive-contract-audit.md`)
+- 补完 14 directive type 契约测试
 - 修玩家实测发现的 silent bug
 - 改 prompt 让 LLM 不瞎猜不存在的 named_spot
 

@@ -2,7 +2,7 @@
 
 > **目的**：SC2 版本更新（patch）后**重跑全部 build 效率优化**的可复用方法论。
 > 三族 **26 opening + 18 doctrine** 已优化一轮（2026-06-15/16，详见
-> `docs/plans/2026-06-15-build-optimization-method-log.md` 的逐条findings）。本文档是过程**蒸馏**，
+> 逐条 findings 的方法论留痕）。本文档是过程**蒸馏**，
 > 让下次重跑直接照做、避开所有已踩过的坑。
 >
 > **何时重跑**：① SC2 patch（兵种数值 / **ability id** / 建造时间 / 供给 变更）→ build 行为变；

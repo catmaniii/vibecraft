@@ -1,6 +1,6 @@
 """SC2 子进程生命周期管理（M1.2）。
 
-设计预研 `docs/plans/2026-05-14-m1.2-sc2-lifecycle.md`（4 个架构难点 + spike 结论）。
+设计预研覆盖 4 个架构难点 + spike 结论。
 
 架构难点解决方案（spike 结论）：
 - 难点 1：`run_game()` 阻塞 → 方案 B：独立 `multiprocessing` spawn 子进程。

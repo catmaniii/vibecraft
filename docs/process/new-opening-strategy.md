@@ -1,6 +1,5 @@
 # 引入 / 审计一个开局策略 — 可复用流程
 
-> 配套框架设计见 `docs/plans/2026-05-20-build-acceptance-testing-design.md`。
 > 本文档是引入新开局策略、或审计一个现存 build 是否合理的**标准流程**。
 
 每个 build order 走这 7 步。既用于新策略，也用于回头审计现存 build
@@ -24,7 +23,7 @@
 ## 第 2 步 — 写 acceptance spec
 
 新建 `tests/build_acceptance/<strategy_id>.yaml`。格式见
-`docs/plans/2026-05-20-build-acceptance-testing-design.md` §3。
+build_acceptance 框架设计。
 
 - 文件头注释写 research 来源链接
 - 每条 check：`{id, type, at+tol 或 by, 目标参数}`

@@ -3,7 +3,6 @@
 **日期**: 2026-05-17
 **状态**: Accepted（决策固定，P1-P6 实施进行中）
 **决策者**: catmaniii
-**关联文档**: `docs/plans/2026-05-16-four-layer-commands-design.md`
 
 ---
 
@@ -107,7 +106,7 @@ class Director:
 
 ### 8. L2/L4 完成判定：LLM 输出 structured done_when + bot 内 task_monitor
 
-详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md`。要点：
+要点：
 
 - **Director 加 `task_monitor`**，每 sharpy step（45ms）check in_flight directive
   完成状态。bot 内闭环，**不调 LLM**
@@ -124,7 +123,7 @@ class Director:
 
 ### 9. EventBus（vibecraft 自建独立层）
 
-详 `docs/plans/2026-05-17-task-completion-and-eventbus-design.md` §三。要点：
+要点：
 
 - **新文件 `src/vibecraft/bot/event_bus.py`**：`EventBus.subscribe(kind, handler,
   filter)` / `unsubscribe(sub_id)` / `publish(event)`

@@ -1,6 +1,6 @@
 """静态防复发门：build plan「结构冻结」/「农民埋葬」反模式检测。
 
-背景（docs/plans/2026-07-10-worker-saturation-floor-design.md「治本三件套 C」）：
+背景（农民饱和兜底「治本三件套 C」）：
 2026-07-10 修完 4 个虫/人族 build（roach_hydra_viper / ultralisk / bc_late / mech）的
 「结构冻结」病 —— 军队/科技/农民全塞进单条阻塞 `SequentialList`，前面的经济/科技建筑
 步骤没走完，后面（往往是军队生产）就被永久冻住（sharpy `SequentialList.execute()` 每帧

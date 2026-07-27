@@ -6,7 +6,6 @@
 - C = M.position + (P-M).normalized() * (R+push), P 是 M 在 AB 上垂足
 - 递归 max_depth=3 兜底,防 loop
 
-参考 docs/plans/2026-05-23-drop-act-design.md §2。
 """
 
 from __future__ import annotations

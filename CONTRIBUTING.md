@@ -70,7 +70,7 @@ CI（`.github/workflows/ci.yml`）会跑 ruff + mypy + pytest，PR 需全绿。
 - `USER_GUIDE.md` —— 玩家入门 + 话术示例
 - `docs/adr/` —— 关键架构决策记录
 - `docs/pitfalls.md` —— 踩过的坑（开工前扫一眼相关条目）
-- `docs/plans/*-design.md` —— 各大特性的设计文档
+- `docs/plans/2026-05-14-vibecraft-design.md` —— 14 节完整设计真理源（WHY）
 
 ## 如何加一种语言
 

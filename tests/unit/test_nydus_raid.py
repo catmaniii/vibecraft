@@ -312,7 +312,7 @@ def test_wave1_loads_even_when_canal_not_ready():
     旧版行为是"canal 没 ready 就不装载"，但真局实测这拉长了"worm 打通 → army 才开始
     装 → 才排空"的暴露窗口。改成 STAGE 阶段就把 army 灌进自家坑道网络（网络在家，
     天然安全），虫洞一 ready 就能立刻排空（见 `_tick_stage` 里 canal_ready 门控移除
-    的注释 + `docs/plans/2026-07-09-nydus-raid-polish-design.md` 精修点2）。
+    的注释 + 坑道骚扰 Round 4 精修点 2）。
     """
     AbilityId = _live_ability_id()
     a = _act(stage_supply_threshold=2.0, min_roaches_wave1=1)

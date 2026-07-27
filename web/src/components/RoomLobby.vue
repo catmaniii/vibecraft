@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 多人联网 lobby 视图：SC2 经典大厅风格
-// 设计 docs/plans/2026-06-12-multiplayer-implementation-plan.md Task 9
 // 帧契约（下行 room_state / 上行 lobby_* 系列）见 src/vibecraft/server/room.py + web/src/types.ts
 import { ref, computed } from 'vue'
 import StatusChain from '@/components/StatusChain.vue'

@@ -1,7 +1,5 @@
 """build 持续运营效率评价（2026-06-15）。
 
-设计：docs/plans/2026-06-15-build-efficiency-eval-design.md
-方法论留痕：docs/plans/2026-06-15-build-optimization-method-log.md
 
 三维度（仅在同一 build 的变体之间纵向比，绝不跨 build/跨族横向比）：
 - M1 余钱：囤钱积分越低越好（钱花干净 = 兵出得多）。最看重。

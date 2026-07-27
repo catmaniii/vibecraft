@@ -10,7 +10,6 @@ my_race: Terran
 # 调研来源：
 #   - Liquipedia Battlecruiser Build Orders (TvP/TvZ BC rush)
 #   - spawningtool BC rush: https://lotv.spawningtool.com (BC timing ~4:10-4:40)
-#   - vibecraft design: docs/plans/2026-06-18-bc-rush-design.md
 #
 # 关键前置说明：
 #   BC 需要 FUSIONCORE + STARPORTTECHLAB 两个前置。

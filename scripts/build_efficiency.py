@@ -8,7 +8,6 @@
   # 只对已有 telemetry 打分
   python scripts/build_efficiency.py score <path/to/telemetry.jsonl>
 
-设计:docs/plans/2026-06-15-build-efficiency-eval-design.md
 沙盒 = sandbox_macro_only(强制 defend, bot 只 macro)+ 固定 random_seed(变体 A/B 配对)。
 """
 

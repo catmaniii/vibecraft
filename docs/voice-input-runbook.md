@@ -1,7 +1,6 @@
 # 语音指令输入 runbook（FunASR）
 
-> 设计/实施见 `docs/plans/2026-06-09-voice-input-funasr-design.md` +
-> `...-implementation-plan.md`。本文是"怎么起、怎么用、怎么排错"。
+> 本文是"怎么起、怎么用、怎么排错"。
 
 ## 一句话
 

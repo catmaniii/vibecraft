@@ -1,6 +1,5 @@
 """Director._exec_drop_act: resolve target + auto-prereq + auto-production.
 
-Task 7 of docs/plans/2026-05-23-drop-act-implementation-plan.md
 
 Tests:
   1. TestExecDropActResolveTarget  - drop_target 解析失败 → status=on_hold

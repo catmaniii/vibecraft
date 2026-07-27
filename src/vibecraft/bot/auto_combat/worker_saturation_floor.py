@@ -6,8 +6,7 @@
 之后。本 act 恒生效（不看任何 flag），把农民始终拉向 `sum(ideal_harvesters)`——
 "开多少矿最终就得多少农民"是唯一基础规则。
 
-设计 + 评审处置：docs/plans/2026-07-10-worker-saturation-floor-design.md
-（尤其「## 评审处置」6 条 must-fix，本文件严格照做）：
+设计评审给出的 6 条 must-fix，本文件严格照做：
   1. 虫族目标封顶（drone_budget，跟 opening_sustain_act.py 的 ZERG_WORKER_CAP/
      NON_ZERG_WORKER_CAP 同源，不各写一份）——虫族农民与军队抢同一 200 人口池。
   2. 挂载点：三族各自 `_wrap()`，顶层 BuildOrder 直接兄弟，绝不进 SequentialList。

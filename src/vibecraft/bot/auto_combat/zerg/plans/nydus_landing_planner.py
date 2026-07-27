@@ -4,7 +4,7 @@
 （副作用薄：不移 OL、不下 BUILD_NYDUSWORM，只算候选 + 选点 + 管 blacklist/lock/canal_lost）。
 真正的 `network(BUILD_NYDUSWORM, pos)` 由薄 act `_BuildNydusCanalAtEnemy` 调本模块拿点后下。
 
-设计真理源：`docs/plans/2026-07-12-nydus-landing-multiwave-design.md`。核心不变量：
+核心不变量：
 
 - **下 canal 的门 = ② 落点有视野 ∧ ④ 敌方主力不在落点区**（局部威胁 ≤ 阈值）。
   主力在家即使有视野也别强下（14s 钻出必被秒）；主力不在哪怕佯攻没到位也下。

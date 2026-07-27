@@ -6,7 +6,7 @@
 - ARMING   : calldown；cast 确认 → 撤退 → COOLDOWN
 - COOLDOWN : 停 reserve；冷却后 → IDLE
 
-设计严格按 docs/plans/2026-06-18-ghost-nuke-micro-design.md 评审后定稿 9 条。
+设计严格按评审后定稿的 9 条执行。
 """
 
 from __future__ import annotations

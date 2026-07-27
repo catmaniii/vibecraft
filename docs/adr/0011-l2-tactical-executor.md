@@ -3,7 +3,6 @@
 **日期**: 2026-05-17
 **状态**: Accepted（m4-l2-l4-executor 分支已实施，726 unit tests pass）
 **决策者**: catmaniii
-**关联文档**: `docs/plans/2026-05-17-l2-l4-executor-and-cards-design.md`
 
 ---
 

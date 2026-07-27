@@ -3,7 +3,7 @@
 P0 Step 3：两层架构的核心算法。开局完成 / 玩家 cancel / parse fail 时，
 Director 调 pick_best_persistent() 选成本最低的 doctrine 自动切。
 
-公式 6 分量（见 docs/plans/2026-05-19-two-tier-strategy-design.md §4）：
+公式 6 分量：
   1. 建筑差 (W_BUILD)    —— 缺建筑 × 造价 × ramp_factor + transitive prereq
   2. 科技差 (W_TECH)     —— 缺升级 × 造价 × research_time_factor
   3. 兵种差 (W_UNIT)     —— 缺兵种 × 造价 × count

@@ -12,7 +12,7 @@
   - ProxyBarracksAct(blockade_enabled=False)：默认关。
     开启后 3 SCV 建完 → 走到敌方斜坡底修地堡封口（激进封锁变体）。
 
-设计参考：docs/plans/2026-07-04-terran-4rax-proxy-design.md
+设计参考：本模块 docstring
 策略 yaml：strategies/terran/proxy_4rax.yaml
 """
 

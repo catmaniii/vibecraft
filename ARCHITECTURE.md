@@ -316,8 +316,7 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
 
 ## 多人联网（阶段 0，2026-06-12 落地）
 
-设计 `docs/plans/2026-06-12-multiplayer-design.md`；实施+spike 结论
-`docs/plans/2026-06-12-multiplayer-implementation-plan.md`。一台 PC 跑多个 SC2 实例
+一台 PC 跑多个 SC2 实例
 LAN host/join 成一局，每实例一个 bot，多个玩家各用手机指挥。
 
 ```
@@ -508,4 +507,4 @@ PC→手机，P2P 优先、打不通走 TURN 中继）。
 - **graceful**：未配置 TURN（`.secrets/vibecraft-turn.env` 缺失）→ `_ICE_SERVERS` 空、纯
   P2P，行为与本地单机完全一致（不变量）。
 - 部署脚本：`deploy/turn/{setup-coturn,setup-frontdoor}.sh` + `pc-tunnel.ps1`；采购规格
-  `docs/ops/vps-purchase-spec.md`；详细方案 `docs/plans/2026-06-14-turn-integration-plan.md`。
+  `docs/ops/vps-purchase-spec.md`。

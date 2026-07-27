@@ -1,6 +1,5 @@
 """WorkerSaturationFloorAct 单测（2026-07-10 通用农民饱和兜底）。
 
-设计 + 评审处置：docs/plans/2026-07-10-worker-saturation-floor-design.md
 
 覆盖：
 1. 动态 to_count 计算：2/3/4 矿 ideal_sum + 虫族 66 封顶 + 神/人 80 封顶

@@ -428,7 +428,7 @@ bot 不许自己从当前 build 转到另一套打法（如 nydus 坑道 → 自
   其余**由它生成或严格对齐**，绝不手改派生副本；②加一致性门（单测/CI）校验副本与源一致；③构建期从源
   生成的派生产物（如部署用静态拷贝）不算违反，但要可重新生成、不手维护。**能用"生成"消灭的重复源，就别
   用"手工同步"维持**。踩坑：`reasoning-graph.md` 曾是 `reasoning-graph.yaml` 的人读复制品 + 独占变更日志
-  → 双源漂移，已废弃 md、changelog 迁回 yaml 单源（见 `docs/plans/2026-07-14-reasoning-graph-portable-skill-design.md`）。
+  → 双源漂移，已废弃 md、changelog 迁回 yaml 单源。
 
 - **改 `Sc2Facade` 接口必须同步两个实现 + 跑 audit**（2026-06-07 踩坑，影响巨大）：
   `Sc2Facade`（`src/vibecraft/bot/facade.py`）是 `typing.Protocol` —— **运行时不强制实现**。
@@ -607,7 +607,7 @@ D:\code\claudecode\vibecraft\deploy\turn\pc-tunnel.ps1
 - **funnel URL（备用）**：`https://<your-host>.<your-tailnet>.ts.net/?room=vibecraft-dev`（手机需装
   Tailscale，video 才走 ICE 直连 100.94.x；funnel 只代理 HTTP/WS，不参与 media）。
 - VPS 部署细节 + coturn/前门一键脚本见 `deploy/turn/`（`setup-coturn.sh` / `setup-frontdoor.sh` /
-  `pc-tunnel.ps1`）+ 设计 `docs/plans/2026-06-12-multiplayer-design.md`（阶段1）。TURN 凭证存
+  `pc-tunnel.ps1`）。TURN 凭证存
   `.secrets/vibecraft-turn.env`（机密,勿提交）。
 
 ### `scripts/start.ps1` 用法 + 参数（2026-06-17 整理，重启 server 照这个来）

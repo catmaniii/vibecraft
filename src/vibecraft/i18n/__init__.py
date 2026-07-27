@@ -2,7 +2,7 @@
 
 与前端 `web/src/i18n.ts` **共读同一份 strings.json**（无生成器）。提供 `t(key, lang, **params)`。
 
-分工（设计 docs/plans/2026-06-27-i18n-localization-design.md §8）：
+分工：
   - 本模块 `t()`：管"key→句子/标签模板"（服务端发给手机的用户可见消息：解析反馈、错误、澄清…）。
   - `vibecraft.bot.localization.Localizer`：管"id→单位/建筑/科技专有名词"。
   两者互补——句子里嵌专有名词时，由 `t()` 的调用方先用 `Localizer` 渲染好名词再作参数传入。

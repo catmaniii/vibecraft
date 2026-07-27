@@ -50,7 +50,7 @@ worker 都走 `mediator.select_worker`(只取 `UnitRole.GATHERING`);`SpawnContro
 - `_VibeCraftBot.on_step` 调 `self._register_auto_pilot()`
 - 新增 `_register_auto_pilot()` 方法(两阶段注册)
 
-完整方案 + 4 个 spike 验证点见 `docs/plans/2026-05-15-auto-pilot.md`。
+完整方案含 4 个 spike 验证点。
 
 ## 待真实验证(端到端 smoke)
 

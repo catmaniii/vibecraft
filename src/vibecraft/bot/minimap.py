@@ -9,7 +9,6 @@ MVP 子集字段策略：
 - units_own[i] = [x, y, kind]，kind 一字节区分形状/颜色
 - 敌方只推 is_visible=True 的单位（fog 记忆是 M3 的事）
 
-详见 docs/plans/2026-05-15-minimap.md §1.1 / §1.2。
 """
 
 from __future__ import annotations

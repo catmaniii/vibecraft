@@ -43,7 +43,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // i18n 字符串单一真理源在仓库根 locales/（前后端共读，见 docs/plans/2026-06-27-i18n-localization-design.md）
+      // i18n 字符串单一真理源在仓库根 locales/（前后端共读）
       '@locales': path.resolve(__dirname, '../locales'),
     },
   },

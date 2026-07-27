@@ -171,7 +171,7 @@ def point_ground_reachable(pt: Any, reachable: set[tuple[int, int]], radius: int
     return False
 
 
-# ── 低地路由（F122 真解，2026-07-26；设计见 docs/plans/2026-07-26-phoenix-lowground-routing-design.md）──
+# ── 低地路由（F122 真解，2026-07-26）──
 # 凤凰接近/撤退走**低地**(敌方高地台面以外)不穿高地：敌方高地代价栅格 + A*(叠加动态 AA/军队惩罚)。
 # 空军能飞任何格,非 pathable(悬崖/缺口)对空军是低代价好格;高地=敌军所在+建筑俯视处=高代价避开。
 _NEI8: tuple[tuple[int, int, float], ...] = (
