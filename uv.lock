@@ -3318,6 +3318,9 @@ sc2 = [
     { name = "ares-sc2" },
     { name = "sc2-helper" },
 ]
+sc2-lib = [
+    { name = "burnysc2" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -3326,6 +3329,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.3" },
     { name = "ares-sc2", marker = "extra == 'sc2'", git = "https://github.com/AresSC2/ares-sc2?branch=main" },
     { name = "av", specifier = ">=16.1.0" },
+    { name = "burnysc2", marker = "extra == 'sc2-lib'", git = "https://github.com/august-k/python-sc2?branch=develop" },
     { name = "click", specifier = ">=8.1" },
     { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4" },
     { name = "funasr", marker = "extra == 'asr'" },
@@ -3350,7 +3354,7 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "websockets", specifier = ">=12.0" },
 ]
-provides-extras = ["asr", "dev", "sc2"]
+provides-extras = ["asr", "dev", "sc2", "sc2-lib"]
 
 [[package]]
 name = "virtualenv"

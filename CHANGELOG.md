@@ -40,6 +40,13 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
     `warn_unused_ignores`（同一行注释在两个环境里必有一边报错）。
   - 复现手段：`mypy --no-site-packages src/vibecraft`（本地模拟 CI 的缺包环境，覆盖了 CI 全部 26 条）。
   > CI 此前**从没跑到 Pytest 这步**——mypy 一红就短路了。这次修完才第一次在 Linux 上跑单测。
+- **接上：Linux 上 23 个单测文件 collect 失败（`No module named 'sc2'`）**。它们
+  `from sc2.ids.unit_typeid import UnitTypeId` 之类，用的只是 enum / `Point2` 这些纯数据类型
+  （不连游戏），但 python-sc2 只存在于 `sc2` extra 里，CI 只装 `--extra dev` → 整个文件收集失败，
+  等于**这 23 个文件的 bot 逻辑在 CI 上一行没跑过**（本地装了 `--extra sc2` 所以一直看不出来）。
+  修法不是让 CI 装完整 `sc2` extra —— `sc2-helper` 只发了 cp311 的 wheel，3.12 那条腿必挂。
+  新增轻量 extra **`sc2-lib = ["burnysc2"]`**（只装 python-sc2 本体，纯 Python、跨平台），
+  CI 改用 `uv sync --extra dev --extra sc2-lib`。
 
 **变更 (Changed)**：
 - **删掉 `vendor/sharpy/libs/ic52.zip`（6 MB）**：内容是三个 ICU 的 Windows 预编译 DLL

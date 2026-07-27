@@ -66,6 +66,12 @@ sc2 = [
     "ares-sc2",
     "sc2-helper>=0.2.1",
 ]
+# 只装 python-sc2 本体（纯 Python、跨平台），不含 ares / sc2-helper。
+# 为什么单独拆出来：23 个单测文件 `from sc2.ids... import UnitTypeId` 之类，用的只是 enum、
+# Point2 这些纯数据类型（不连游戏），但没有 sc2 就整个文件 collect 失败。而完整的 `sc2` extra
+# 装不进 CI —— `sc2-helper` 只发了 cp311 的 wheel，3.12 那条腿必挂。CI 因此用这个：
+#   uv sync --extra dev --extra sc2-lib
+sc2-lib = ["burnysc2"]
 
 [project.scripts]
 vibecraft = "vibecraft.cli:main"
