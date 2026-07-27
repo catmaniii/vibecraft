@@ -345,7 +345,9 @@ It handles (idempotent, safe to re-run):
 ### Step 2: install and run
 
 ```powershell
-uv sync --extra dev                            # first time / when deps change
+# sc2-lib is not optional: the bot itself needs python-sc2 and the vendored sharpy's deps.
+# With only `dev`, the server starts fine and then dies with an ImportError once a game begins.
+uv sync --extra dev --extra sc2-lib            # first time / when deps change
 uv run python scripts/download_sc2_icons.py    # fetch SC2 icons (first time; copyrighted art is not
                                                # shipped in this repo — see THIRD_PARTY_NOTICES)
 .\scripts\start.ps1 -Token vibecraft-dev       # start the server (prints a QR code + URL)

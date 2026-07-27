@@ -1,5 +1,10 @@
 # 命名 server 配置(可入库/可分享;绝不含 admin_token——admin 走 -AdminToken/.secrets)
 # 用法: .\scripts\start.ps1 -ServerName close_test
+#
+# ⚠️ 这是**示例/本地开发**配置。下面的 token 就写在公开仓库里,等于人人都知道 ——
+#    **绝不要拿它跑暴露到公网的 server**(房间 token 就是访问凭据:拿到 URL 的人能给你的
+#    bot 下指令、看你的游戏画面,见 SECURITY.md)。接公网前门时用 `-Token <随机串>`
+#    另起一个,别复用这个。局域网/单机自测无所谓。
 name: close_test
 token: vibecraft-dev
 port: 8080

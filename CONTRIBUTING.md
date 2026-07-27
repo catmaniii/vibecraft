@@ -5,11 +5,11 @@
 ## 本地开发环境
 
 ```bash
-# 1. 装 uv（https://docs.astral.sh/uv/）和 Python 3.11+
-# 2. 同步开发依赖
-uv sync --extra dev
-# 3.（可选，语音识别）装 SC2 / ASR 额外依赖
-uv sync --extra dev --extra sc2     # python-sc2 / ares 等
+# 1. 装 uv（https://docs.astral.sh/uv/）和 Python 3.11（只支持 3.11，见 README）
+# 2. 同步依赖 —— sc2-lib 不是可选项：bot 本体要 python-sc2 + vendored sharpy 的依赖，
+#    只装 dev 的话单测有几百个文件收集不了、server 起来一开局就 ImportError。
+uv sync --extra dev --extra sc2-lib
+# 3.（可选）--extra sc2 = ares 全家桶，只有跑旧的 M0 smoke 才需要
 #    ASR（FunASR + torch）较重，见下方「注意」
 # 4.（可选）设置 LLM key —— 不设则指令解析会失败
 export DEEPSEEK_API_KEY=sk-...       # 或在 config/llm.yaml 配置（见 config/llm.yaml.example）

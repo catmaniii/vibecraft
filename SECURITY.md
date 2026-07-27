@@ -25,6 +25,9 @@ VibeCraft 在你自己的机器上跑一个 **HTTP/WebSocket 服务器**，手�
 
 - **房间 token 就是访问凭据**。任何拿到 URL（含 `?room=<token>`）的人都能给你的 bot 下指令、
   看你的游戏画面。别把带 token 的链接发到公开场合；换 token 就是换一个 `-Token` 参数重启。
+  ⚠️ **仓库里出现过的 token 一律视为公开已知** —— `config/servers/close_test.yaml` 里的
+  `vibecraft-dev`、文档示例里的任何 token 都是。它们只能用于局域网/单机自测；
+  **接公网前门时必须用 `-Token <你自己的随机串>`**，别图省事复用示例值。
 - **把服务暴露到公网**（隧道 / 反代 / 端口转发）意味着任何人都能尝试连接。仓库里的
   `deploy/` 脚本只是把它接到你自己的服务器，不含任何鉴权强化。自己评估风险。
 - **admin 面板**有独立 token（`-AdminToken`，≥8 位），它能改服务端设置，泄漏后果比房间 token 更大。

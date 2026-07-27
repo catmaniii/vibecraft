@@ -6,7 +6,7 @@
 
 - **Windows 10/11** PC（音频分流 / 启动脚本目前 Windows-only）
 - 已安装并**至少启动过一次**正版 **StarCraft II**
-- **Python 3.11+** 和 **uv**（https://docs.astral.sh/uv/）
+- **Python 3.11**（只支持 3.11，不是 3.11+）和 **uv**（https://docs.astral.sh/uv/）
 - **DeepSeek API key**（解析指令用，按量付费，platform.deepseek.com 申请）
 
 ## 1. 拉代码 + 装依赖
@@ -14,7 +14,8 @@
 ```bash
 git clone https://github.com/catmaniii/vibecraft.git
 cd vibecraft
-uv sync --extra dev --extra sc2          # 核心 + SC2 bot 依赖
+uv sync --extra dev --extra sc2-lib      # 核心 + bot 运行所需（python-sc2 / sharpy 依赖）
+# 注：--extra sc2（不带 -lib）是给旧的 M0 ares smoke 用的，跑 bot 本身不需要
 # （可选）语音识别：FunASR + torch（体积大，见末尾「语音识别」注意）
 ```
 

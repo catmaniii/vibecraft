@@ -323,7 +323,9 @@ bot 默认能赢 Medium AI、vs Hard 五五开；你参与越深，能打越高�
 ### 第 2 步：装依赖 + 启动
 
 ```powershell
-uv sync --extra dev                       # 首次 / 依赖变更
+# sc2-lib 不能省：bot 本体要 python-sc2 + vendored sharpy 的依赖。
+# 只装 dev 的话 server 起得来、一开局就 ImportError。
+uv sync --extra dev --extra sc2-lib       # 首次 / 依赖变更
 .\scripts\start.ps1 -Token vibecraft-dev  # 启动 server（打印二维码 + URL）
 # 可选：有英文玩家时提前预拉英文 ASR 模型（~1 GB，首次约 6 分钟，之后缓存秒载）
 .venv\Scripts\python.exe scripts\prefetch_asr_en.py

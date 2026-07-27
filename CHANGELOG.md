@@ -19,6 +19,34 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-27 照 README 装完跑不起来：安装命令少了 bot 本体依赖
+
+**修正 (Fixed)**：
+- **README / QUICK_START 的安装命令是错的**：写的是 `uv sync --extra dev`，但 `dev` 里只有
+  pytest/ruff/mypy 这些工具链，**没有 python-sc2**。照着做的人 server 能起来、**一开局就
+  ImportError**。同一个根源还导致：`sc2` extra 里少了 `scikit-learn`
+  （`sharpy/combat/group_combat_manager.py` 顶层 `from sklearn.cluster import DBSCAN`）——
+  vendored sharpy 有自己的 `requirements.txt`，但它**从来没被并进本项目的 pyproject**。
+  - `sc2-lib` extra 补齐为 `["burnysc2", "scikit-learn<2.0.0"]`，并写清为什么**不**需要
+    opencv-python（`cv2` 只在 `sc2pathlib/map.py` 的 debug 画图函数内惰性 import）、
+    requests / six / more-itertools（sharpy 的 requirements 里有，源码里根本没 import）。
+  - `sc2` extra 改为包含 `vibecraft[sc2-lib]`，避免两处清单漂移。
+  - README / README.en / QUICK_START / CONTRIBUTING 的安装命令统一改成
+    `uv sync --extra dev --extra sc2-lib`，并注明 `--extra sc2`（ares 全家桶）只有跑旧的
+    M0 smoke 才需要 —— **真实 bot 运行路径零 ares 代码**（`src/` 里没有任何 ares import）。
+  - 排查方式：写了个一次性脚本用 AST 扫出 `vendor/sharpy/` + `src/vibecraft/` 的**全部**
+    第三方顶层 import，和 `uv export --extra dev --extra sc2-lib` 的结果对差集
+    —— 一次找齐，而不是一轮 CI 撞一个缺包。
+  - 验证：`git clone` 一份干净副本 → `uv sync --extra dev --extra sc2-lib` → 全量单测
+    **3731 passed / 60 skipped**，与开发机一致。
+
+**安全 (Security)**：
+- **仓库里的示例 token 现在是公开已知的凭据**。`config/servers/close_test.yaml` 入库了
+  `token: vibecraft-dev`，而 `SECURITY.md` 自己写着"房间 token 就是访问凭据"——
+  拿到 URL 的人能给 bot 下指令、看你的游戏画面。该文件与 `SECURITY.md` 都加了醒目警告：
+  **仓库里出现过的 token 一律视为公开已知，只能用于局域网/单机自测；接公网前门必须
+  `-Token <自己的随机串>`**。
+
 ### 2026-07-27 **本仓库对所有人都是坏的**：sc2pathlib 的 .pyd 从未入库
 
 **修正 (Fixed)**：
