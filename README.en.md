@@ -312,6 +312,54 @@ You want to host for your friends. Two setups: **local** (you and your friends o
 or on Tailscale) and **public internet** (phones connect directly, no Tailscale needed). The
 server code is identical — the only difference is how the phone reaches your PC.
 
+### How the three pieces fit together
+
+**Solid lines are the control plane** (web page, signalling, your commands — tiny amounts of
+traffic). **Dashed lines are the media plane** (game video and audio, PC to phone — the bulk of it):
+
+```mermaid
+flowchart LR
+    subgraph PHONE["Phone — the only controller"]
+        PWA["PWA<br/>talk / tap / watch the game"]
+    end
+
+    subgraph VPS["Cloud VPS — only needed to go public"]
+        NGINX["nginx :443<br/>SNI-based routing"]
+        COTURN["coturn<br/>turns:443 media relay"]
+    end
+
+    subgraph PC["Your PC (Windows) — server must sit on the same machine as SC2"]
+        SERVER["VibeCraft server :8080<br/>HTTP + WS on one port"]
+        DIRECTOR["Director (per-frame arbitration)<br/>+ sharpy bot"]
+        SC2["StarCraft II"]
+    end
+
+    LLM["Cloud LLM<br/>turns plain speech into Directives JSON"]
+
+    PWA -->|"what you said / tapped (WSS)"| NGINX
+    NGINX -->|"SSH -R reverse tunnel<br/>PC dials out; no port forwarding at home"| SERVER
+    SERVER <-->|"parse the command"| LLM
+    SERVER --> DIRECTOR
+    DIRECTOR -->|"drive the units"| SC2
+    SC2 -->|"capture window by PID + audio"| SERVER
+    SERVER -.->|"WebRTC media: direct P2P first"| PWA
+    SERVER -.->|"when P2P fails"| COTURN
+    COTURN -.->|"relayed"| PWA
+
+    PWA -->|"same wifi / Tailscale: straight to the PC, no VPS"| SERVER
+```
+
+Three things worth internalising:
+
+- **The server always lives on the same PC as StarCraft II** and cannot move to the cloud — it
+  launches and drives the game, and captures that machine's screen by window PID.
+  **The cloud does exactly one job: connect your phone to your PC.**
+- **The VPS is optional.** On the same wifi, or with Tailscale on both ends, the phone talks to
+  the PC directly (the bottom edge in the diagram). You only need a VPS when a friend is on
+  mobile data and you don't want to ask them to install Tailscale.
+- **Media avoids the VPS when it can.** WebRTC tries a direct P2P path first and only falls back
+  to the TURN relay if that fails — so the VPS usually costs very little bandwidth.
+
 ## A. Local (Windows) — the one-click script
 
 ### Step 0: prerequisites

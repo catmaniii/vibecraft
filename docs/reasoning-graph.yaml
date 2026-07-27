@@ -19,7 +19,7 @@
 #   下面 config 块声明本项目方言(provenance/by 词表、id前缀↔kind、语义规则)
 
 review:
-  last_reviewed: "2026-07-27"
+  last_reviewed: "2026-07-28"
 
 # 左上角项目标题(viewer 顶层可选 title;缺省显示模板通用的"项目推理图谱")。
 title: "vibecraft 项目推理图谱"
@@ -922,39 +922,110 @@ nodes:
     domain: nydus-landing
     kind: fact
     provenance: env-api
-    statement: "sc2.unit.Unit 不存在 is_worker 属性,且该类没有 __getattr__ 兜底(访问即 AttributeError)"
+    statement: "python-sc2 的 sc2.unit.Unit 类没有 is_worker 属性"
     deps: []
-    evidence: "核实 .venv/Lib/site-packages/sc2/unit.py:dir(Unit) 的 is_* 只有 is_mine / is_mineral_field / is_carrying_minerals 等;实例访问 is_worker 抛 AttributeError。回归钉子 tests/unit/test_unit_kind.py::test_sc2_unit_really_has_no_is_worker"
+    evidence: "核到的版本是 uv.lock 里的 burnysc2 7.1.0;dir(Unit) 里的 is_* 只有 is_mine、is_mineral_field、is_carrying_minerals 等,没有 is_worker。回归钉子 tests/unit/test_unit_kind.py::test_sc2_unit_really_has_no_is_worker(哪天上游加了这个属性会转红,提醒复核)"
+    status: verified
+
+  - id: F178
+    title: "sc2.unit.Unit 没有 __getattr__ 兜底"
+    domain: nydus-landing
+    kind: fact
+    provenance: env-api
+    statement: "sc2.unit.Unit 未定义 __getattr__,访问它没有的属性会直接抛 AttributeError"
+    deps: []
+    evidence: "'__getattr__' not in Unit.__dict__(burnysc2 7.1.0);实例访问 is_worker 抛 AttributeError。同由 tests/unit/test_unit_kind.py::test_sc2_unit_really_has_no_is_worker 钉住"
     status: verified
 
   - id: F177
-    title: "16 处代码用这个不存在的属性判农民"
+    title: "修复前仓库有 16 处用 is_worker 判农民"
     domain: nydus-landing
     kind: fact
     provenance: own-code
-    statement: "2026-07-27 修复前:16 处用 is_worker 判单位是不是农民,其中多数写作 getattr(u, \"is_worker\", False),4 处直接访问 u.is_worker"
+    statement: "修复前的仓库里有 16 处代码用 is_worker 判断单位是不是农民"
     deps: []
-    evidence: "grep 结果覆盖 bc_raid_act.py / nydus.py / nydus_landing_planner.py / nydus_raid_act.py"
+    evidence: "2026-07-27 修复前的仓库快照上 `rg \"is_worker\" src/` 得 16 处,命中 bc_raid_act.py、nydus.py、nydus_landing_planner.py、nydus_raid_act.py 等;详见 CHANGELOG 2026-07-27「修 is_worker 假属性」条"
+    status: verified
+
+  - id: F179
+    title: "这 16 处分成带默认值的 getattr 与直接属性访问两种写法"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "上述 16 处里,12 处写作 getattr(u, \"is_worker\", False),另外 4 处直接访问 u.is_worker"
+    deps: [F177]
+    evidence: "同 F177 的 grep 结果按写法分类:直接访问的 4 处都在 BC 骚扰路径(见 CHANGELOG 2026-07-27 条)"
+    status: verified
+
+  - id: F180
+    title: "单帧异常被 on_step 顶层兜底吞掉后本局继续"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "common_bot 的 on_step 外层套了整体 try/except,捕获后只 logger.exception 记一条 traceback,不中断本局"
+    deps: []
+    evidence: "src/vibecraft/bot/auto_combat/common_bot.py:2376 `try: await self._on_step_body(iteration)` / `except Exception: logger.exception(\"on_step 顶层兜底捕获异常(已吞,游戏继续)\")`"
+    status: verified
+
+  - id: F182
+    title: "修复前的单测 mock 自己给单位造了 is_worker 属性"
+    domain: nydus-landing
+    kind: fact
+    provenance: own-code
+    statement: "修复前的单测 mock 直接在假单位上写 is_worker=True,即 mock 提供了引擎本身没有的属性"
+    deps: []
+    evidence: "mock 改用真 type_id 之后,5 条老测试立刻转红(见 CHANGELOG 2026-07-27「单测当初按同一个错误假设建模」)"
+    status: verified
+
+  - id: F181
+    title: "修复前后坑道部队选农民当目标的比例从 0% 变成 50%"
+    domain: nydus-landing
+    kind: fact
+    provenance: empirical
+    statement: "钻出的坑道部队打击目标里农民的占比:修复前在多局共上千次打击中恒为 0,修复后稳定在三成以上"
+    deps: []
+    repro: "对任一含坑道的对局 log 跑 `grep -c \"NYDUSRAID strike\" <log>` 与 `grep -c \"tgt=worker\" <log>` 求比值(埋点在 nydus_raid_act.py,格式 `NYDUSRAID strike tag=.. tgt=..`)"
+    evidence: "修复前:logs/nydus24.out 393 次打击 0 个农民、logs/wave8r.out 478/0、logs/server_20260726_235046.log 72/0(全部为 0)。修复后:logs/server_20260727_035105.log 288 次里 107 个农民(37%)、logs/server_20260727_080542.log 468/162(35%)"
     status: verified
 
   - id: I69
-    title: "假属性让找农民的分支从没走到过"
+    title: "两种写法都让 is_worker 判据恒为假"
     domain: nydus-landing
     kind: inference
     derivation: deductive
-    statement: "属性不存在时 getattr 取默认值 False、直接访问抛异常被上层吞掉,两种写法都使依赖它的农民判定恒不成立,故钻出的部队从不选农民当目标"
-    deps: [F176, F177]
-    evidence: "复核推导即可;真机对照:修前 tgt=worker 恒 0%(0/163 retarget),修后 66/133(50%)"
+    statement: "属性不存在时,getattr 那种取到默认值 False、直接访问那种抛异常被顶层兜底吞掉,两者都让依赖 is_worker 的农民判定恒不成立"
+    deps: [F176, F178, F179, F180]
+    evidence: "演绎:前提给定后结论必然成立,复核推导即可。真机侧的对照结果另见 F181"
+    status: verified
+
+  - id: I70
+    title: "行为单测挡不住这类假属性 bug"
+    domain: nydus-landing
+    kind: inference
+    derivation: deductive
+    statement: "mock 提供了引擎没有的属性,单测因此走的是真机永远走不到的分支,故行为单测对这类 bug 恒为绿、当不了回归防线"
+    deps: [F176, F182]
+    evidence: "演绎:前提给定后结论必然成立。事实侧印证:修复前相关行为单测全绿,而真机那条分支从未执行(F181)"
     status: verified
 
   - id: D115
-    title: "单位类别判据统一走 type_id,并加静态门禁用假属性"
+    title: "单位类别判据统一走 type_id"
     domain: nydus-landing
     kind: decision
     by: agent
-    statement: "判断单位是不是农民/军队一律用引擎必有的 type_id 自组判据(bot/unit_kind.py),并加静态审计禁止全仓再出现 is_worker 属性写法"
+    statement: "判断单位是不是农民/军队,一律用协议层一定带的 type_id 自组判据(bot/unit_kind.py),不再读引擎对象的 is_* 属性"
     deps: [I69]
-    evidence: "行为单测 + 静态门 tests/unit/test_unit_kind.py::test_no_source_uses_fake_is_worker_attribute;单靠行为单测挡不住——原来的 mock 正是按同一个假设建模才一直绿"
+    evidence: "实现 src/vibecraft/bot/unit_kind.py + 行为单测 tests/unit/test_unit_kind.py;军队判据是同一机制的顺带推广,驱动它的失效证据来自农民那一侧(I69)"
+    status: active
+
+  - id: D116
+    title: "加一条静态审计,禁止全仓再出现 is_worker 写法"
+    domain: nydus-landing
+    kind: decision
+    by: agent
+    statement: "加一条静态审计,禁止仓库任何位置再出现 is_worker 属性写法"
+    deps: [I70]
+    evidence: "tests/unit/test_unit_kind.py::test_no_source_uses_fake_is_worker_attribute"
     status: active
 
   - id: F151

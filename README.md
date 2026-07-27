@@ -294,6 +294,52 @@ bot 默认能赢 Medium AI、vs Hard 五五开；你参与越深，能打越高�
 你想自己当主机给朋友玩。分两块：**本地单机**（你和朋友同 wifi / 装 Tailscale 就够）和
 **公网**（国内手机直连、无需 Tailscale）。server 代码同一套，区别只是手机怎么连到你 PC。
 
+### 三方是什么关系
+
+先看一眼整体拓扑。**实线 = 控制面**（网页、信令、指令，流量极小）；**虚线 = 媒体面**
+（游戏画面和声音，PC→手机，量大）：
+
+```mermaid
+flowchart LR
+    subgraph PHONE["手机 —— 唯一的控制器"]
+        PWA["PWA 网页<br/>说话 / 点按钮 / 看画面"]
+    end
+
+    subgraph VPS["云 VPS —— 只有要走公网才需要"]
+        NGINX["nginx :443<br/>按 SNI 分流"]
+        COTURN["coturn<br/>turns:443 媒体中继"]
+    end
+
+    subgraph PC["你的 PC（Windows）—— server 必须和 SC2 同一台机器"]
+        SERVER["VibeCraft server :8080<br/>HTTP + WS 同端口"]
+        DIRECTOR["Director 每帧仲裁<br/>+ sharpy bot"]
+        SC2["StarCraft II"]
+    end
+
+    LLM["云端 LLM<br/>把人话解析成 Directives JSON"]
+
+    PWA -->|"你说的话 / 按的键（WSS）"| NGINX
+    NGINX -->|"SSH -R 反向隧道<br/>PC 主动出站，家里不用开端口"| SERVER
+    SERVER <-->|"解析指令"| LLM
+    SERVER --> DIRECTOR
+    DIRECTOR -->|"操作单位"| SC2
+    SC2 -->|"按窗口 PID 抓屏 + 抓声音"| SERVER
+    SERVER -.->|"WebRTC 媒体：优先 P2P 直连"| PWA
+    SERVER -.->|"P2P 打不通时"| COTURN
+    COTURN -.->|"中继转发"| PWA
+
+    PWA -->|"同 wifi / Tailscale 时：绕开 VPS 直连"| SERVER
+```
+
+三件事值得先记住：
+
+- **server 永远和 SC2 在同一台 PC 上**，搬不到云上——它要启动和操作 SC2、还要按窗口 PID
+  抓那台机器的画面。**云只干一件事：把手机接到你的 PC。**
+- **VPS 是可选的。** 同 wifi 或两端装了 Tailscale，手机直连 PC 就行（图里最下面那条）。
+  只有"朋友在外面用 4G、又不想让他装 Tailscale"才需要 VPS。
+- **媒体面尽量不走 VPS。** WebRTC 先试 P2P 直连，实在打不通才落到 TURN 中继——所以 VPS
+  的带宽通常花不了多少。
+
 ## A. 本地单机（Windows）—— 一键脚本最省事
 
 ### 第 0 步：前置
