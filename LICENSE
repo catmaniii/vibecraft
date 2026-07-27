@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This MIT license applies to VibeCraft's own source code only. VibeCraft bundles
-and depends on third-party software under their own (permissive, MIT-compatible)
-licenses, and interacts with StarCraft II under Blizzard Entertainment's terms.
-See THIRD_PARTY_NOTICES.md for details, including the required notices for the
-vendored, modified sharpy-sc2 (MIT, (c) 2019 DrInfy) and the StarCraft II /
-Blizzard trademark and non-commercial AI/ML API terms.

@@ -102,3 +102,7 @@ web/public/icons/sc2/
 src/vibecraft/server/static/icons/sc2/
 # 同理:vendored sharpy 自带的 ladder 地图是暴雪地图包,不入库(跑 bot 用你自己 SC2 安装里的地图)
 vendor/sharpy/maps/*.SC2Map
+
+# USER_GUIDE.md 导出的 PDF —— 派生产物,没有任何文档引用它,入库只会跟 md 漂移。要发给别人时
+# 自己现导一份即可。(同"单一数据源"纪律:能生成的别手工同步。)
+docs/USER_GUIDE.pdf

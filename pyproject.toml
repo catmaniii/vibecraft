@@ -32,6 +32,7 @@ dependencies = [
     "mss>=10.2.0",
     "pygetwindow>=0.0.9",
     "numpy>=2.4.5",
+    "loguru>=0.7",  # sharpy 的 plan 用它打日志，我们自己的 act 也直接 import
     "pyaudiowpatch>=0.2.12.7 ; sys_platform == 'win32'",
     "comtypes>=1.4 ; sys_platform == 'win32'",
 ]
@@ -150,6 +151,12 @@ indent-style = "space"
 # ----------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.11"
+# VibeCraft 只在 Windows 跑（SC2 客户端 + PowerShell 启动脚本），代码里到处是
+# `if sys.platform != "win32": return` 的守卫。不钉死平台的话，mypy 在 Linux CI 上会把
+# sys.platform 收窄成 "linux"、判定守卫恒真 → 守卫之后的 Windows 实现全被报成 unreachable，
+# 且 ctypes.WinDLL / windll / HRESULT 这些 Windows-only 属性全部 attr-defined。
+# 钉成 win32 后，CI 与开发机检查的是同一批代码路径。
+platform = "win32"
 strict = true
 exclude = ["vendor/"]
 warn_unused_ignores = true
@@ -165,6 +172,22 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["ares.*", "sc2.*", "ares_sc2.*", "burnysc2.*", "qrcode.*", "bot.*", "sharpy.*", "config", "s2clientprotocol.*"]
 ignore_missing_imports = true
+
+# 这几个包在 Linux CI 上装不到，且是**故意**的：
+#   comtypes / pyaudiowpatch —— dependencies 里带 `sys_platform == 'win32'` 标记，非 Windows 不装；
+#   funasr —— 可选 extra（`uv sync --extra asr`），体积大，CI 不装。
+# 代码里都有运行时守卫/惰性导入，所以缺了不影响 CI 跑 lint 和单测。
+[[tool.mypy.overrides]]
+module = ["comtypes.*", "pyaudiowpatch.*", "funasr.*"]
+ignore_missing_imports = true
+
+# 承上：这两个文件的 import 行带 `# type: ignore[import-untyped]`。
+# 在 Windows 开发机上包是装着的（untyped）→ 该 ignore 有效；在 CI 上包根本不存在，被上面的
+# ignore_missing_imports 吞掉 → 同一个 ignore 变成“多余”。同一行注释在两个环境里必有一边报错，
+# 只能对这两个文件关掉 unused-ignore 检查。
+[[tool.mypy.overrides]]
+module = ["vibecraft.server.process_loopback", "vibecraft.server.audio_grab"]
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = "tests.*"

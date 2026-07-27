@@ -1,8 +1,12 @@
 # Third-Party Notices
 
-VibeCraft 自身源码以 **MIT** 协议发布（见 [`LICENSE`](LICENSE)）。本项目**打包 / 依赖**以下
-第三方软件，各自的协议适用于相应部分。所有依赖均为**宽松协议（MIT / BSD / Apache-2.0）**，
-与 MIT 兼容；**无 copyleft（GPL/LGPL 等）依赖**，整体可以 MIT 发布。
+VibeCraft 自身源码以 **MIT** 协议发布（见 [`LICENSE`](LICENSE)）。**那份 MIT 只覆盖 VibeCraft
+自己写的代码**；本项目还**打包 / 依赖**下列第三方软件，各自的协议适用于相应部分，并且在
+Blizzard Entertainment 的条款下与《星际争霸 II》交互（见第四节）。所有依赖均为**宽松协议
+（MIT / BSD / Apache-2.0）**，与 MIT 兼容；**无 copyleft（GPL/LGPL 等）依赖**，整体可以 MIT 发布。
+
+> `LICENSE` 文件刻意只放 MIT 原文、不附加说明 —— GitHub 靠文本相似度识别协议，掺入额外段落
+> 会让它判成 “Other”、仓库页不再显示 MIT 标签。作用域说明因此放在这里。
 
 ---
 
@@ -43,8 +47,15 @@ VibeCraft 自身源码以 **MIT** 协议发布（见 [`LICENSE`](LICENSE)）。�
 >
 > **vendored sharpy 内部再打包了次级第三方组件**（上游 DrInfy 即已 bundle，非本项目引入）：
 > `jsonpickle`（BSD，`vendor/sharpy/jsonpickle/COPYING.txt` 已保留）、`sc2pathlib`
-> （DrInfy 的 sc2-pathlib，MIT，编译产物 + py 包装）、`vendor/sharpy/libs/ic52.zip`
-> （sharpy `bot_loader/ladder_zip.py` 打包 ladder bot 用的捆绑文件，随 sharpy 一并以 MIT 分发）。
+> （DrInfy 的 sc2-pathlib，MIT，编译产物 + py 包装）。
+>
+> **已移除**：`vendor/sharpy/libs/ic52.zip`（6 MB）。它是三个 ICU 的 Windows 预编译 DLL
+> （`icudt52.dll` / `icuin52.dll` / `icuuc52.dll`，2019 年构建），**并非 MIT** —— ICU 有自己的
+> Unicode/ICU License，来源与构建方式也无从核实。它在上游只被 `bot_loader/ladder_zip.py` 用于
+> 把 bot 打包成 AI Arena ladder 的 PyInstaller 独立可执行文件；VibeCraft 从源码进程内跑 bot，
+> **完全不走这条路径**。既然用不上、又会连带再分发一份来路不明、协议标注还是错的二进制，
+> 直接删掉。（需要打 ladder 包的人请自行从 [ICU 官方](https://github.com/unicode-org/icu)
+> 取对应版本。）
 >
 > **ASR 模型权重不随仓库分发**：FunASR 运行时从 ModelScope 自动下载（如 paraformer-zh-streaming /
 > paraformer-en / SenseVoice 等），各模型受其在 ModelScope 上的**模型许可协议**约束，使用者请自行确认。

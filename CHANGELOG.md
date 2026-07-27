@@ -19,6 +19,42 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-27 修 GitHub CI（Linux）红 + 开源合规二轮清理
+
+**修正 (Fixed)**：
+- **`loguru` 是未声明的直接依赖（真 bug，不只是 CI 配置问题）**：6 个源文件
+  （`feint_squad_act` / `nydus_raid_act` / `spare_queen_act` / `marine_staging_act` /
+  `proxy_rax_act` / `forward_cannon_proxy`）直接 `from loguru import logger`，但它只作为
+  `sc2` extra 的**间接**依赖存在（burnysc2 ← ares-sc2）。日常 `uv sync --extra dev` 不装那个
+  extra → **CI 和任何新贡献者的环境里根本没有 loguru**，那 6 个 plan 一加载就 ImportError。
+  已加进核心 `dependencies` 并重新 `uv lock`。
+- **CI 的 mypy 在 Linux 上跑，26 条错误全是平台差异**（本地 Windows 全绿 → 从没发现）：
+  - `platform = "win32"` 钉进 `[tool.mypy]`。VibeCraft 只在 Windows 跑，代码里到处是
+    `if sys.platform != "win32": return` 的守卫；不钉平台的话 mypy 在 Linux 上把 `sys.platform`
+    收窄成 `"linux"`、判定守卫恒真 → 守卫之后的 Windows 实现全被报 `unreachable`（3 条），
+    `ctypes.WinDLL` / `windll` / `HRESULT` / `WinError` / `get_last_error` 全报 `attr-defined`
+    （8 条）。钉死后 CI 与开发机检查的是同一批代码路径。
+  - `comtypes` / `pyaudiowpatch`（依赖里带 `sys_platform == 'win32'` 标记）与 `funasr`
+    （可选 extra）在 Linux CI 上**故意**装不到 → 加 `ignore_missing_imports`；这两个包所在文件的
+    `# type: ignore[import-untyped]` 因此在 CI 上变成"多余"，只能对这两个文件关掉
+    `warn_unused_ignores`（同一行注释在两个环境里必有一边报错）。
+  - 复现手段：`mypy --no-site-packages src/vibecraft`（本地模拟 CI 的缺包环境，覆盖了 CI 全部 26 条）。
+  > CI 此前**从没跑到 Pytest 这步**——mypy 一红就短路了。这次修完才第一次在 Linux 上跑单测。
+
+**变更 (Changed)**：
+- **删掉 `vendor/sharpy/libs/ic52.zip`（6 MB）**：内容是三个 ICU 的 Windows 预编译 DLL
+  （`icudt52` / `icuin52` / `icuuc52`，2019 年构建），**并非 MIT**——ICU 有自己的 Unicode/ICU
+  License，而 `THIRD_PARTY_NOTICES.md` 原先把它标成"随 sharpy 一并以 MIT 分发"（标注错误）。
+  它在上游只被 `bot_loader/ladder_zip.py` 用于把 bot 打包成 AI Arena ladder 的 PyInstaller
+  可执行文件，VibeCraft 从源码进程内跑 bot、**完全不走这条路径**（全仓零引用）。用不上还要连带
+  再分发一份来路不明、协议还标错的二进制 → 删除，并在 THIRD_PARTY_NOTICES 说明去向。
+- **`LICENSE` 恢复成纯 MIT 原文**：原先末尾附了一段"MIT 只覆盖自身源码"的作用域说明，导致
+  **GitHub 的协议识别判成 `Other`**（靠文本相似度匹配，掺入额外段落即失配）——仓库页不显示
+  MIT 标签、也进不了按协议筛选的检索。作用域说明移到 `THIRD_PARTY_NOTICES.md` 开头（那里本就
+  有同样的声明），并注明 LICENSE 为何要保持纯净。
+- `docs/USER_GUIDE.pdf`（889 KB）撤出版本控制并加进 `.gitignore`：它是 `USER_GUIDE.md` 的派生
+  产物，全仓**零引用**、也没有生成脚本，入库只会跟 md 漂移。
+
 ### 2026-07-27 英文 README + 仓库名统一为 vibecraft
 
 **新增 (Added)**：
