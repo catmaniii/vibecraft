@@ -9,7 +9,7 @@ You can still read a StarCraft II game. Your hands just can't keep up anymore. V
 issue **strategy and micro commands from your phone** (typing, your phone's voice keyboard, or
 push-to-talk in the app) while an AI bot does every click: workers, supply, expansions, unit
 production, attacks, and basic combat. You watch, you judge, you give orders at the moments that
-matter — **you are the commander, the AI is your executive officer.**
+matter — **you are the commander, the AI is your Adjutant.**
 
 > **Good fit:** returning veterans who lost the mechanics but kept the game sense; playing a few
 > games with old friends without an APM contest.
