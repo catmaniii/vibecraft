@@ -9,7 +9,6 @@
 # 2. 同步依赖 —— sc2-lib 不是可选项：bot 本体要 python-sc2 + vendored sharpy 的依赖，
 #    只装 dev 的话单测有几百个文件收集不了、server 起来一开局就 ImportError。
 uv sync --extra dev --extra sc2-lib
-# 3.（可选）--extra sc2 = ares 全家桶，只有跑旧的 M0 smoke 才需要
 #    ASR（FunASR + torch）较重，见下方「注意」
 # 4.（可选）设置 LLM key —— 不设则指令解析会失败
 export DEEPSEEK_API_KEY=sk-...       # 或在 config/llm.yaml 配置（见 config/llm.yaml.example）
@@ -34,7 +33,7 @@ uv run pytest -m e2e
 .venv/Scripts/python.exe scripts/build_acceptance.py <build_id> --opponent veryeasy
 ```
 
-`tests/` 全部 mock python-sc2 / ares，**不允许在单测里真起 SC2**。真局验证走 `scripts/` 下的自验脚本。
+`tests/` 全部 mock python-sc2 / sharpy，**不允许在单测里真起 SC2**。真局验证走 `scripts/` 下的自验脚本。
 
 ## Lint / 类型检查
 

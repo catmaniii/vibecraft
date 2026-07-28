@@ -573,7 +573,7 @@ class Director:
         self._snapshot_callback = cb
 
     def set_initial_strategy(self, stage: StageKind, strategy_id: str, now: float) -> None:
-        """bot 启动时初始化某阶段剧本(反映 ares 选的默认 opening)。
+        """bot 启动时初始化某阶段剧本(反映 bot 选的默认 opening)。
 
         - bypass board 1.5s commit delay,立即让手机 UI 看到剧本卡片
         - 用 BOT_INTERNAL 来源,玩家 VOICE 指令随时可覆盖

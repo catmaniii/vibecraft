@@ -1,6 +1,6 @@
 """bot 自动决策状态 diff watcher。
 
-不 hook Aristaeus / ares 内部决策点(那是 vendor 黑盒),而是在 on_step 周期性
+不 hook vendor 框架的内部决策点(那是黑盒),而是在 on_step 周期性
 比较 bot 状态,把变化翻译成中文 event 推给手机 UI。
 
 覆盖的"bot 意图"信号:

@@ -174,15 +174,6 @@ spec 在 `tests/override_acceptance/<case_id>.yaml`，含 `player_actions` 时�
 combat_intent_override / attack_mode_override)。详细 spec 格式 + 调参法则
 见 `docs/override-acceptance-runbook.md`。
 
-**端到端 smoke**（需 Windows + SC2 + `SC2PATH` 环境变量；详见
-`docs/m0-smoke-runbook.md`）：
-
-```bash
-uv sync --extra dev
-uv pip install "git+https://github.com/AresSC2/ares-sc2@main"
-uv run python scripts/smoke_test.py
-```
-
 pytest 配置（`pyproject.toml`）开了 `filterwarnings = ["error", ...]` —— 任意
 未预期 warning 会让测试红。pydantic 自身的 DeprecationWarning 已忽略，新增依赖
 前查一下它的 deprecation 噪音。
@@ -245,7 +236,7 @@ CLAUDE.md 只放**约定 + 指针**，不重复其他文档已有的内容。
 
 | 决策 | 选择 |
 |---|---|
-| 基础 bot 框架 | **sharpy-sc2**（vendored fork）+ python-sc2 (BurnySc2)；M1 已从 ares-sc2 迁到 sharpy，真实 bot 零 ares 代码（旧 M0 `smoke_test.py` 仍用 ares 仅历史遗留）|
+| 基础 bot 框架 | **sharpy-sc2**（vendored fork）+ python-sc2 (BurnySc2) |
 | 部署形态 | **单 SC2 客户端**，玩家以 player slot 加入，bot 接管操作 |
 | 输入设备 | **手机 PWA** (Vue 3 + Tailwind)，扫码连接 |
 | 视野控制 | **手机小地图拖拽** → bot move_camera |
@@ -257,7 +248,7 @@ CLAUDE.md 只放**约定 + 指针**，不重复其他文档已有的内容。
 | 剧本表达 | 多态 YAML：opening_build / midgame_stance / lategame_doctrine |
 | 时机记法 | build steps 用 supply，timing windows 用 game_time |
 | 别名机制 | 中央 YAML 表 + verb 消歧（"造建筑" / "出单位" / "研升级"）|
-| 6 个 ares hook 点 | A Build Runner / B OverrideMediator / C Unit Role / D Rationale Logger / E ViewController / F BuildLocationOverride |
+| bot 接入点 | sharpy BuildOrder/Act（剧本·产能·升级）+ combat plan 内的玩家覆盖 hook + `UnitTask.Reserved` 单位角色 + `Sc2Facade` |
 
 ---
 
@@ -422,7 +413,7 @@ bot 不许自己从当前 build 转到另一套打法（如 nydus 坑道 → 自
 - **结构化日志 JSONL**：每次 LLM 调用（prompt 全文 / 响应 / 耗时 / token / 解析后 directives）、每个 directive 进出 Board、每个 Manager hook 触发，都落盘到 `logs/<game_id>/events.jsonl`。
 - **两种部署变体接口**：服务端协议必须假定可能被远程客户端连接；不要硬编码 `localhost`。
 - **Recipe store 抽象**：剧本不直接 import YAML 路径，走 `StrategyLibrary.get(id)` 接口，未来好替换。
-- **不允许 sleep 等真实 SC2**：单测全部 mock python-sc2 / ares 接口。`tests/integration/` 留给端到端，但跳过 default。
+- **不允许 sleep 等真实 SC2**：单测全部 mock python-sc2 / sharpy 接口。`tests/integration/` 留给端到端，但跳过 default。
 - **装 Python 包先确认在 venv 里,不污染全局**：本项目用 `uv`,新依赖一律走 `uv add <pkg>`（写 pyproject）或 `uv pip install <pkg>`（仅 venv,等价 `.venv/Scripts/pip install`）。**严禁** 在系统 Python 跑裸 `pip install`，不管它装到哪里。装新框架前先 `where python` / `Get-Command python` 确认指到 `.venv/Scripts/python.exe`。
 - **设计架构时维护单一数据源**（2026-07-14）：任何"同一份信息存在多处、改动需手工同步"的静态数据源
   设计都要严谨对待、能免则免。确需多份（人读版/机读版/索引缓存/前端副本）就：①明确**唯一真理源**，

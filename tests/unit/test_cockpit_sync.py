@@ -7,7 +7,7 @@ P0:
 - ws._dispatch_upstream snapshot/event 分支不污染 sc2_state（S5）
 P1:
 - Director._maybe_push_event_frame A 组埋点
-- ares_adapter autopilot 阶段二边沿检测 B 组埋点
+- autopilot 阶段二边沿检测 B 组埋点
 - game_process snapshot/event 消息入上行队列
 """
 
@@ -633,12 +633,12 @@ class TestDispatchUpstreamNoStatePollution:
 
 
 # ---------------------------------------------------------------------------
-# P1-2：ares_adapter autopilot 边沿检测 + event 推送
+# P1-2：autopilot 边沿检测 + event 推送
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
-def _clean_ares() -> Any:
+def _clean_sharpy() -> Any:
     _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
@@ -649,8 +649,8 @@ def _clean_ares() -> Any:
             del sys.modules[key]
 
 
-def _inject_fake_ares_minimal() -> type:
-    """注入最小伪 sharpy，返回 FakeKnowledgeBot 类（M1 sharpy 迁移后替代原 FakeAresBot）。"""
+def _inject_fake_sharpy_minimal() -> type:
+    """注入最小伪 sharpy，返回 FakeKnowledgeBot 类。"""
     import enum
 
     class _FakeUnitTask(enum.IntEnum):

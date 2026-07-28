@@ -15,7 +15,6 @@
 git clone https://github.com/catmaniii/vibecraft.git
 cd vibecraft
 uv sync --extra dev --extra sc2-lib      # 核心 + bot 运行所需（python-sc2 / sharpy 依赖）
-# 注：--extra sc2（不带 -lib）是给旧的 M0 ares smoke 用的，跑 bot 本身不需要
 # （可选）语音识别：FunASR + torch（体积大，见末尾「语音识别」注意）
 ```
 

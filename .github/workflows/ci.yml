@@ -46,9 +46,8 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dev dependencies
-        # sc2-lib = 只装 python-sc2 本体（纯 Python）。没有它，23 个单测文件会因
-        # `No module named 'sc2'` 直接 collect 失败。不装完整的 sc2 extra 是因为它会从
-        # git 拉 ares-sc2 / map-analyzer，慢且与 lint/单测无关。
+        # sc2-lib = vendored sharpy 能 import 起来的最小依赖集（python-sc2 + scikit-learn）。
+        # 没有它，几百个单测文件会因 `No module named 'sc2'` 直接 collect 失败。
         run: uv sync --extra dev --extra sc2-lib
 
       - name: Ruff check

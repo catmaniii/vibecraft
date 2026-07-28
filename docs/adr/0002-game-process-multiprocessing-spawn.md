@@ -28,7 +28,7 @@
 
 关键验证：
 1. `GameConfig` 全是基本类型（`str`, `bool`, `int`），Python `pickle` 序列化无问题（单测 `TestGameConfig.test_picklable` 验证）
-2. 父进程不传 bot 对象 —— 只传 `GameConfig`；子进程在自己的进程空间内执行 `import ares` + 构造 bot。这样绕开了 `AresBot` 不可 pickle 的问题
+2. 父进程不传 bot 对象 —— 只传 `GameConfig`；子进程在自己的进程空间内 import bot 框架并构造 bot。这样绕开了 bot 对象不可 pickle 的问题
 3. `multiprocessing.Queue`（上行 / 下行各一个）是进程安全的，两端都能无锁读写
 
 ---

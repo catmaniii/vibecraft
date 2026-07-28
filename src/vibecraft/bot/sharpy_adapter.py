@@ -9,7 +9,7 @@
 - `set_unit_role()` → `bot.knowledge.roles.set_task(sharpy_task, unit)`
 - `move_camera()` → 暂存模式（ADR 0008），on_step 末尾串行 drain
 
-调用方式（与 ares_adapter.py 完全向后兼容）：
+调用方式：
 
     from vibecraft.bot.sharpy_adapter import make_bot_class
     BotClass = make_bot_class(director_factory, race="Protoss")
@@ -42,7 +42,7 @@ def make_bot_class(
 ) -> type:
     """工厂：返回一个继承 sharpy.KnowledgeBot 的 bot 类，把事件转给 director。
 
-    签名与 ares_adapter.make_bot_class 完全一致（向后兼容 game_process.py 调用方）。
+    供 game_process.py 在子进程内构造 bot 类。
 
     race="Protoss" → 返回 _VibeCraftProtossBot（KnowledgeBot 子类）。
     Terran / Zerg 留 M3+。

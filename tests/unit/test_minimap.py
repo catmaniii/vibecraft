@@ -1,13 +1,13 @@
-"""MinimapBuilder + _AresFacade.move_camera async 修复的单元测试。
+"""MinimapBuilder + facade.move_camera async 修复的单元测试。
 
-不依赖 ares-sc2：全部用 Mock / FakeBot。
+不依赖真实 bot 框架：全部用 Mock / FakeBot。
 
 测试覆盖：
 1. MinimapBuilder.build() 输出字段正确性（类型/值/结构）
 2. _collect_own()：Nexus / 探机 / 建筑 / 战斗单位分类
 3. _collect_enemy_visible()：只推 is_visible=True；工人识别（PROBE/SCV/DRONE）
 4. _ensure_static_cached()：只算一次
-5. spike S1：_AresFacade.move_camera 调 asyncio.create_task（不是直接 await）
+5. spike S1：facade.move_camera 调 asyncio.create_task（不是直接 await）
 6. ws._handle_view_move：验证参数合法校验 + 转发 send_command
 7. game_process._dispatch_upstream：minimap 分支正确转发
 """
@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 
 # ---------------------------------------------------------------------------
-# FakeBot：最小 bot stub，不依赖 ares
+# FakeBot：最小 bot stub
 # ---------------------------------------------------------------------------
 
 
@@ -333,9 +333,9 @@ class TestMinimapBuilderCoordRounding:
 # ---------------------------------------------------------------------------
 
 
-# 注入 fake sharpy（M1：sharpy_adapter 取代 ares_adapter）
+# 注入 fake sharpy
 def _inject_fake_sharpy_for_move_camera() -> type:
-    """注入 fake sharpy，返回 FakeKnowledgeBot 类（M1 sharpy 迁移后替代原 FakeAresBot）。"""
+    """注入 fake sharpy，返回 FakeKnowledgeBot 类。"""
     import enum
 
     for key in list(sys.modules.keys()):
@@ -453,7 +453,7 @@ def _inject_fake_sharpy_for_move_camera() -> type:
 
 
 @pytest.fixture(autouse=True)
-def _clean_ares_modules_minimap() -> Any:
+def _clean_sharpy_modules_minimap() -> Any:
     _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
@@ -464,7 +464,7 @@ def _clean_ares_modules_minimap() -> Any:
             del sys.modules[key]
 
 
-class TestAresFacadeMoveCameraStaged:
+class TestSharpyFacadeMoveCameraStaged:
     """ADR 0008:move_camera 暂存 + on_step 末尾 drain（sharpy 版）。
 
     撤回 ADR 0007 的 fire-and-forget(会与 step 主请求并发写 ws,SC2 客户端崩)。

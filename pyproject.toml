@@ -62,16 +62,7 @@ dev = [
     "types-PyYAML>=6.0",
     "pre-commit>=3.7",
 ]
-# 端到端依赖（真实 SC2 + ares-sc2）。ares-sc2 / burnysc2 / map-analyzer 都不在
-# PyPI（git 源），所以单独成 extra —— 日常 `uv sync --extra dev` 不会装它们，
-# 只有要跑 smoke / M1.5 ares_adapter 才 `uv sync --extra dev --extra sc2`。
-# uv 用户靠下方 [tool.uv.sources] 解析 git URL；pip 用户走 runbook §1 手动装。
-sc2 = [
-    "vibecraft[sc2-lib]",
-    "ares-sc2",
-    "sc2-helper>=0.2.1",
-]
-# **让 vendored sharpy 能 import 起来的最小依赖集**（不含 ares / sc2-helper，不连游戏）。
+# **让 vendored sharpy 能 import 起来的最小依赖集**（不连游戏，纯 import 用）。
 # 单独拆出来是因为 CI 要用它：没有这些，几百个单测文件在 collect 阶段就炸，等于那部分 bot
 # 逻辑在 CI 上一行没跑过。踩过的坑：vendored sharpy 有自己的 requirements.txt，但它**从来
 # 没被并进本 pyproject** —— 于是干净克隆装完 `uv sync` 得到的 sharpy 是坏的，只有开发者
@@ -97,16 +88,12 @@ build-backend = "hatchling.build"
 packages = ["src/vibecraft"]
 
 # ----------------------------------------------------------------------
-# uv sources —— 把 sc2 extra 里的 git 依赖映射到源（uv 专用，pip 不读这段）。
-# 根治「`uv sync` 把 ares 全家桶清掉」的问题：之前 ares 是 `uv pip install`
-# 旁路装的、不在 pyproject 声明里，任何 `uv sync` 都会清掉它们。
-# burnysc2 / map-analyzer 是 ares-sc2 的传递依赖，显式列源保证用对 URL。
-# `ares_sc2_src.pth`（修 ares-sc2 src-layout 打包 bug）仍需手动建，见 runbook §1。
+# uv sources —— python-sc2 不在 PyPI，只有 git 源（uv 专用，pip 不读这段）。
+# 显式声明在这里，`uv sync --extra sc2-lib` 才能把它装上；旁路 `uv pip install` 装的东西
+# 会被下一次 `uv sync` 清掉。
 # ----------------------------------------------------------------------
 [tool.uv.sources]
-ares-sc2 = { git = "https://github.com/AresSC2/ares-sc2", branch = "main" }
 burnysc2 = { git = "https://github.com/august-k/python-sc2", branch = "develop" }
-map-analyzer = { git = "https://github.com/spudde123/SC2MapAnalysis", branch = "develop" }
 
 # ----------------------------------------------------------------------
 # ruff
@@ -189,7 +176,7 @@ show_error_codes = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["ares.*", "sc2.*", "ares_sc2.*", "burnysc2.*", "qrcode.*", "bot.*", "sharpy.*", "config", "s2clientprotocol.*"]
+module = ["sc2.*", "burnysc2.*", "qrcode.*", "bot.*", "sharpy.*", "config", "s2clientprotocol.*"]
 ignore_missing_imports = true
 
 # 这几个包在 Linux CI 上装不到，且是**故意**的：

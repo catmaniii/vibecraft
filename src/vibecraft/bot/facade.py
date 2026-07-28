@@ -1,14 +1,13 @@
 """Sc2Facade：bot 对 SC2 的全部需求接口。
 
 设计原则：
-1. 不暴露任何 ares-sc2 / python-sc2 类型。所有参数都用 stdlib + dataclass。
-2. 设计 6 个 ares hook 点（设计文档 §3.2）能映射到这里：
-   - Hook A Build Runner 切换       → `set_build`
-   - Hook B OverrideMediator        → `set_production_override` / `set_tech_override`
-   - Hook C Unit Role               → `set_unit_role`
-   - Hook D Rationale Logger        → 由 Director 自己用 GameSession
-   - Hook E ViewController          → `move_camera` / `follow_unit` / `set_camera_zoom`
-   - Hook F BuildLocationOverride   → `set_build_location_override`
+1. 不暴露任何 sharpy / python-sc2 类型。所有参数都用 stdlib + dataclass。
+2. 玩家指令要影响 bot 的每一类动作，都在这里有对应入口：
+   - 切剧本            → `set_build`
+   - 产能 / 科技覆盖    → `set_production_override` / `set_tech_override`
+   - 单位归属          → `set_unit_role`
+   - 镜头              → `move_camera` / `follow_unit` / `set_camera_zoom`
+   - 建筑落点覆盖      → `set_build_location_override`
 3. **查询**接口也走 facade：bot 内部不直接调 SC2 API，便于单测。
 """
 

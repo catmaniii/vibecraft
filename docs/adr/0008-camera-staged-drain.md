@@ -9,7 +9,7 @@
 
 ## 背景
 
-ADR 0007 把 `_AresFacade.move_camera` 改成 `asyncio.create_task(self.bot.client.move_camera(...))`
+ADR 0007 把 facade 的 `move_camera` 改成 `asyncio.create_task(self.bot.client.move_camera(...))`
 fire-and-forget。代码层面看像对的——`bot.client.move_camera` 是 async,被 schedule 到 event
 loop 就一定会跑。但在**真实 SC2 进程**上跑时,一点击小地图,SC2 客户端立即崩溃。
 
@@ -47,7 +47,7 @@ bot 子进程没死(还在 await 协议响应,挂着),所以也没 traceback 出
 camera 操作改"暂存 + on_step 末尾串行 await":
 
 ```python
-class _AresFacade:
+class _Facade:
     def __init__(self, bot):
         self.bot = bot
         self._pending_camera_point: tuple[float, float] | None = None
@@ -72,7 +72,7 @@ class _AresFacade:
             logger.warning("move_camera_failed point=%s err=%s", pt, exc)
 
 
-class _VibeCraftBot(AresBot):
+class _VibeCraftBot(BotBase):
     async def on_step(self, iteration):
         ...
         if self.director is not None:
@@ -95,7 +95,7 @@ class _VibeCraftBot(AresBot):
 ## 影响
 
 - ADR 0007 推荐的 `_log_move_camera_done` callback 也一并删掉
-- 单测从 `TestAresFacadeMoveCameraAsync`(验 create_task)改成 `TestAresFacadeMoveCameraStaged`:
+- 单测从 `TestSharpyFacadeMoveCameraAsync`(验 create_task)改成 `TestSharpyFacadeMoveCameraStaged`:
   - `test_move_camera_stages_point_not_immediate_call`:调 `move_camera` 后 `client.move_camera` **未**被调
   - `test_drain_pending_actions_awaits_move_camera`:`drain` 后 `client.move_camera` 被 await 一次,`_pending_camera_point` 被清
   - `test_on_step_view_move_stages_then_drains`:`on_step` 一次 tick 内既调 `facade.move_camera` 又调 `facade.drain_pending_actions`

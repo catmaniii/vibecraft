@@ -352,7 +352,7 @@ def _child_entry(
 ) -> None:
     """子进程入口：在子进程内构造 bot、调 run_game()，往 up_q 推状态事件。
 
-    父进程只传 picklable 的 GameConfig（基本类型），此函数负责 import ares 并
+    父进程只传 picklable 的 GameConfig（基本类型），此函数负责 import bot 框架并
     构造真 _VibeCraftBot（含 director + IntentParser + GameSession）。
 
     M1.6 变更：
@@ -709,10 +709,10 @@ def _build_bot_class(
 
     if importlib.util.find_spec("sc2") is None:
         # sc2 未装：退到最小 python-sc2 Bot stub（M0c smoke 环境）
-        from sc2.bot_ai import BotAI as AresBotFallback
+        from sc2.bot_ai import BotAI as _BotAIFallback
 
-        class _M12Bot(AresBotFallback):  # type: ignore[misc]
-            """向后兼容 stub：ares 未装时保留 M1.2 行为（仅推状态）。"""
+        class _M12Bot(_BotAIFallback):  # type: ignore[misc]
+            """向后兼容 stub：bot 框架未装时保留 M1.2 行为（仅推状态）。"""
 
             async def on_start(self) -> None:
                 if hasattr(super(), "on_start"):

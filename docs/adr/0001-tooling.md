@@ -11,7 +11,7 @@
 | 类别 | 选择 | 备选 | 理由 |
 |---|---|---|---|
 | 包管理 | **uv** (主推) + 兼容 pip/venv | poetry / hatch / pdm | 安装 10x 快，PEP 621 兼容；用户运行 smoke 时单条 `uv sync --extra sc2` 比手动 venv 顺 |
-| Python 版本 | **3.11+** (3.13 排除) | 3.10 / 3.12 only | ares-sc2 文档建议 3.11；3.13 部分依赖未跟上 |
+| Python 版本 | **3.11** | 3.10 / 3.12+ | vendored sharpy 的 `sc2pathlib` 只有 cp311-win_amd64 的编译产物 |
 | 包布局 | **src/ layout** | flat layout | 防 import shadow，开发期 editable install 必须显式 |
 | Lint + format | **ruff** | flake8 + black + isort | 一个工具替代三个，速度差 100x |
 | 类型检查 | **mypy strict** + pydantic plugin | pyright | mypy 与 pydantic v2 plugin 集成更好 |
@@ -24,13 +24,12 @@
 | CLI | **click** | argparse / typer | 子命令组织方便，typer 依赖 pydantic 旧版 |
 | 配置 | **PyYAML + pydantic** | tomli / 纯 yaml | 设计文档全部 YAML；pydantic 验证 schema |
 
-## ares-sc2 安装策略
+## SC2 依赖的安装策略
 
-ares-sc2 **不发布到 PyPI**（仅 GitHub），其依赖 burnysc2 / map-analyzer 也是 git source。pyproject 的 optional-dependencies 不能用 git URL（pip 标准不允许），所以：
+python-sc2（burnysc2）**不发布到 PyPI**（仅 GitHub）。pyproject 的 optional-dependencies 不能直接写 git URL（pip 标准不允许），所以：
 
-- 主 `pyproject.toml` **不声明 ares-sc2 依赖**，CI / 单测全程 mock
-- M0c 端到端 / M1 真实集成的用户走 README 文档手动跑 `uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`
-- mypy override 已配 `ignore_missing_imports` 给 `ares.*` / `sc2.*` 等，没装也能过类型检查
+- 用 `[tool.uv.sources]` 把它映射到 git 源，`uv sync --extra sc2-lib` 即可装上
+- mypy override 已配 `ignore_missing_imports` 给 `sc2.*` / `sharpy.*` 等，没装也能过类型检查
 - 未来若用 uv 专属语法，可在 `[tool.uv.sources]` 加 git，但会绑死 uv —— 暂不做
 
 ## 不做的事
@@ -48,5 +47,5 @@ ares-sc2 **不发布到 PyPI**（仅 GitHub），其依赖 burnysc2 / map-analyz
 
 ## 后续
 
-- 若 mypy strict 在某层（如 bot/ares 子类）成本过高，可在该模块加 `[[tool.mypy.overrides]]` 局部放宽，不全局放
+- 若 mypy strict 在某层（如 bot 子类）成本过高，可在该模块加 `[[tool.mypy.overrides]]` 局部放宽，不全局放
 - WS server 实现复杂度超预期则再评估 starlette

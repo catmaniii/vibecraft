@@ -4,7 +4,7 @@
 |---|---|
 | 日期 | 2026-05-15 |
 | 状态 | **已撤回（superseded by [ADR 0008](0008-camera-staged-drain.md)）** |
-| 触发 | minimap 里程碑 spike S1：发现 `_AresFacade.move_camera` 同步调 async 协程等于没调 |
+| 触发 | minimap 里程碑 spike S1：发现 facade 的 `move_camera` 同步调 async 协程等于没调 |
 
 > **撤回原因**：fire-and-forget 在真实 SC2 上让客户端立即崩。python-sc2 的
 > `Protocol.__request` 是 send_bytes 后立刻 receive_bytes,**无 request id**,
@@ -21,7 +21,7 @@ async def move_camera(self, position: Union[Unit, Units, Point2, Point3]):
     await self._execute(action=sc_pb.RequestAction(actions=[...]))
 ```
 
-原 `_AresFacade.move_camera` 同步姿势调它：
+原 facade 的 `move_camera` 同步姿势调它：
 
 ```python
 def move_camera(self, point: tuple[float, float]) -> None:
@@ -61,4 +61,4 @@ def move_camera(self, point: tuple[float, float]) -> None:
 
 - view_move 链路（minimap 拖拽 → 手机 → WS → down_q → on_step → facade.move_camera → SC2）正式打通。
 - director._dispatch_view（LLM 语音控制视野）也跟着 work（不需要额外改）。
-- 单测：`test_minimap.py::TestAresFacadeMoveCameraAsync` 验证 create_task 被 schedule。
+- 单测：`test_minimap.py::TestSharpyFacadeMoveCameraAsync` 验证 create_task 被 schedule。

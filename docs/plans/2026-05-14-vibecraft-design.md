@@ -6,7 +6,7 @@
 | 起草日期 | 2026-05-14 |
 | 状态 | 设计完成，待实现 |
 | 主语言 | Python 3.11+ (服务端) / TypeScript + Vue 3 (前端) |
-| 主框架 | ares-sc2 / python-sc2 (BurnySc2) |
+| 主框架 | sharpy-sc2（vendored fork） / python-sc2 (BurnySc2) |
 | 文档配套 | [USER_GUIDE.md](../../USER_GUIDE.md) (玩家手册) |
 
 > 本文档是 VibeCraft 全部架构和实现决策的唯一真理源 (Single Source of Truth)。任何后续修改请同步本文件。
@@ -65,7 +65,7 @@
 │   ├─ Strategy Library (3 份神族剧本 YAML, 多态)      │
 │   ├─ Rationale Logger (Manager hook → 事件流)        │
 │   ├─ ViewController (camera 控制)                    │
-│   └─ VibeCraftBot (ares-sc2 子类)                  │
+│   └─ VibeCraftBot (sharpy 子类)                     │
 │        - Build Runner (剧本切换)                     │
 │        - OverrideMediator (拦截关键决策点)            │
 │        - Unit Role Manager + LLMControlBehavior     │
@@ -90,7 +90,7 @@
 | 5 | ② → 手机 | echo "我理解为 A, B"（带 1.5s 撤销按钮）|
 | 6 | ② Directive Board | issued_at + 1.5s 固定延迟后 commit directives，进入仲裁 |
 | 7 | ② VibeCraftBot | Build Runner 切 `2base_phoenix.yaml`；overlay 入队 |
-| 8 | ② → ③ | ares Managers 下个 tick 读 Directive Board → 改行为，发 SC2 API |
+| 8 | ② → ③ | bot 下个 tick 读 Directive Board → 改行为，发 SC2 API |
 | 9 | ③ → ② | 凤凰造好 → Unit Role Manager 移到 HARASS_WORKERS role |
 | 10 | ② LLMControlBehavior | 该 role 单位执行骚扰行为，到死或撤回归还 |
 | 11 | ② Rationale Logger | 整个过程关键决策点推到手机驾驶舱 + logs |
@@ -104,33 +104,39 @@
 
 ---
 
-## 3. 基础 bot：ares-sc2 集成
+## 3. 基础 bot：sharpy-sc2 集成
+
+> **注**：本节已按 M1 的全框架迁移重写。本文档初稿（2026-05-14）选的是另一个框架，
+> 后来整体迁到了 [sharpy-sc2](https://github.com/DrInfy/sharpy-sc2)，理由见
+> [ADR 0009](../adr/0009-sharpy-migration.md)。**本节描述的是当前真实形态。**
 
 ### 3.1 框架选型
 
-**最终选定**：[AresSC2/ares-sc2](https://github.com/AresSC2/ares-sc2) (v3.7+)
+**最终选定**：[DrInfy/sharpy-sc2](https://github.com/DrInfy/sharpy-sc2)，以 vendored fork
+形式随仓库打包（`vendor/sharpy/`）。
 
 理由：
-- **Manager + Mediator 架构**：所有决策走 `mediator.xxx()`，对外部 LLM 注入极其友好
-- **Build Runner 支持运行时切换 YAML build**：直接对应"剧本切换"需求
-- **Unit Role Manager 原生**：天然支持把单位移到 `LLM_CONTROLLED` role
-- **生产验证**：Eris bot（虫族）用 ares-sc2 在 2026 Season 2 AI Arena 排第 3
-- **活跃维护**：v3.7.2 (2026-04-30)，1200+ commits in 18 月
+- **BuildOrder / Act 体系**：剧本可以直接写成一串 Act，运行时整体替换 = "剧本切换"
+- **战斗 plan 分层清晰**：`PlanZoneAttack` / `PlanZoneDefense` / 各兵种 micro 各自独立，
+  玩家覆盖的 hook 可以精确地插在"派单位"那一行之前
+- **`UnitTask` 角色系统**：`Reserved` 槽位天然表达"这个单位被玩家接管了，base bot 别碰"
+- **vendored 而非依赖**：hook 直接加在 fork 里（都用 `# vibecraft:` 标记），
+  explicit、好调试、instance state 自然挂 self。代价是 upstream 升级要手动 merge，
+  用 `docs/sharpy-patches.md` 的清单控制
 
-替代选项调研结果：sharpy-sc2（ares 的精神前身，维护较慢）/ MicroMachine（C++，与 Python 编排层冲突）/ PySC2（feature-layer RL 接口，不适合我们）。
+### 3.2 玩家指令的接入点
 
-### 3.2 6 个 hook 点
+玩家的话最终要变成 bot 的动作，落点有这几类：
 
-不 fork ares 代码，全部走已有扩展机制：
-
-| Hook | 处理的 directive type | ares 模块 | 实现方式 |
-|---|---|---|---|
-| **A** Build Runner 切换 | `strategy_set` | `build_runner` | 调 `set_build("name")` |
-| **B** OverrideMediator | `production_override` / `tech_override` / `expansion_override` / `engagement_constraint` | Manager via mediator | wrap mediator 拦截关键查询方法 |
-| **C** Unit Role + LLMControlBehavior | `unit_claim` / `scout` / `move` | Unit Role Manager | role 改 `LLM_CONTROLLED` + 自写 behavior |
-| **D** Rationale Logger | (旁观, 不处理 directive) | 所有 Managers | `@logged` 装饰器 + asyncio.Queue |
-| **E** ViewController | `view_move` / `view_follow` / `view_zoom` | `bot.move_camera()` | 直接调 API |
-| **F** BuildLocationOverride | `build_at` | `mediator.request_building_placement` | wrap 拦截 placement 查询 |
+| 接入点 | 处理的 directive type | 实现方式 |
+|---|---|---|
+| **BuildOrder / Act 替换** | `strategy_set` | 整体换掉当前 plan 树 |
+| **产能 / 科技覆盖** | `production_override` / `tech_override` / `expansion_override` | Act 执行前读覆盖表 |
+| **单位归属** | `unit_claim` / `scout` / `move` | 置 `UnitTask.Reserved`，base bot 的 `free_units` 不含它 |
+| **战斗 plan 内 hook** | `engagement_constraint` / 全军进攻·防守·撤退 | vendored sharpy 的 combat plan 里就地读 `knowledge.vibecraft.*` 覆盖字段 |
+| **镜头** | `view_move` / `view_follow` / `view_zoom` | 直接调 `bot.client.move_camera()` |
+| **建筑落点覆盖** | `build_at` | 拦截落点查询 / 直接给农民下 build 指令 |
+| **决策留痕** | (旁观，不处理 directive) | Director 侧统一落 JSONL，推手机驾驶舱 |
 
 ### 3.3 部署细节
 
@@ -170,12 +176,14 @@ service 一启动就拉起，而是分两阶段 —— 这样 WS 连接能在 SC
 
 ### 3.4 关键风险（M0 必须验证）
 
-**ares Manager 默认是否真的 respect role exclusion？**
+**base bot 会不会去动被玩家接管的单位？**
 
-- 理论上是（Eris bot 用了，跑到 top 3）
-- 实操可能每个 Manager 行为不同
-- M0 smoke test 必须验证 ArmyManager / OffensiveManager / DefensiveManager / ProductionManager 都正确 skip LLM_CONTROLLED 单位
-- 修复路径：轻 → 改配置；中 → OverrideMediator wrap query；重 → 继承 Manager 写子类
+- sharpy 的做法：被玩家 claim 的单位置 `UnitTask.Reserved`，而 `PlanZoneAttack` /
+  `PlanZoneDefense` / `PlanZoneGather` 取的是 `roles.free_units`（不含 Reserved）——
+  天然隔离，不需要额外 wrap
+- 例外是那些在 `execute()` 里**直接**派单位的 plan：这类必须在 vendored fork 里就地加 hook
+  （判据与清单见 `docs/sharpy-patches.md`）
+- 回归防线：`tests/unit/test_sharpy_patch_audit.py` 保证 hook marker 不在升级中丢失
 
 ---
 
@@ -339,7 +347,7 @@ weak_against: [mass_viking, mass_corruptor, ghost_emp]
   in [a, b, c]
 ```
 
-实现：parse 成 AST → 每个 tick 求值。AST 节点对应 ares `mediator.xxx()` 查询。
+实现：parse 成 AST → 每个 tick 求值。AST 节点对应对 bot 状态的查询。
 
 ### 4.4 别名表
 
@@ -560,8 +568,8 @@ def resolve_for_unit(unit: Unit) -> ControlOrder:
         if order := doctrine.engagement_doctrine.match(unit, game_state):
             return order
 
-    # 3. ares 原生 Manager 默认决策
-    return ares_default_unit_behavior(unit)
+    # 3. base bot 的默认决策
+    return base_bot_default_unit_behavior(unit)
 
 
 def resolve_production() -> list[ProductionOrder]:
@@ -802,7 +810,7 @@ async def parse_intent(text: str, context: Context) -> ParseResult:
 
 ### 8.1 四档粒度
 
-| 粒度 | 例 | Directive type | ares 对接 | python-sc2 API |
+| 粒度 | 例 | Directive type | 接入点 | python-sc2 API |
 |---|---|---|---|---|
 | A. 大略 (剧本) | "切到双矿凤凰" | `strategy_set` | Hook A | — |
 | B. 中略 (全局调参) | "下个 BG 出哨兵" / "先研闪烁" / "守家" / "开三矿" | `production_override` / `tech_override` / `engagement_constraint` / `expansion_override` | Hook B | — |
@@ -812,8 +820,8 @@ async def parse_intent(text: str, context: Context) -> ParseResult:
 ### 8.2 优先级机制
 
 ```
-LLM_CONTROLLED role 的单位:
-  ares Manager   →  默认 skip
+被玩家接管(Reserved)的单位:
+  base bot       →  看不到它(不在 free_units 里)
   LLMControlBehavior  →  独占控制权
   army_strength 计算  →  按 role_hint 决定计入哪部分
 ```
@@ -837,14 +845,14 @@ class UnitRelease(BaseModel):
 
 ### 8.4 技术可行性 verify
 
-ares + python-sc2 提供所有需要的原语：
+sharpy + python-sc2 提供所有需要的原语：
 - `unit.use_ability(AbilityId, target)` —— FF / Storm / Lift / Blink / Time Warp
 - `unit.hold_position() / patrol / move`
 - `bot.enemy_units.closer_than(8, point).filter(...)` —— 范围 + 类型过滤
 - `unit.energy / shield / health_percentage` —— 状态属性
-- ares MapAnalyzer —— main_ramp / choke / expansion 解析
+- sharpy 的地形分析 —— main_ramp / choke / expansion 解析
 
-**唯一存疑点**：ares Manager 默认 respect role exclusion 的程度，M0 验证。
+**唯一存疑点**：base bot 对『被玩家接管』单位的隔离是否彻底（见 §3.4）。
 
 ### 8.5 实现工作量盘点
 
@@ -853,7 +861,7 @@ ares + python-sc2 提供所有需要的原语：
 | LLMControlBehavior (rule engine + DSL evaluator + cooldown) | 300-500 行 | 中 |
 | MapLocationResolver | 100-150 行 | 低 |
 | UnitStateStore | 100-200 行 | 低 |
-| ares Manager exclusion wiring | 50-100 行 | 中 |
+| base bot 单位隔离接线 | 50-100 行 | 中 |
 | Verb dispatcher | 200-300 行 | 低 |
 | **总计** | **750-1250 行** | 3-5 天 |
 
@@ -1114,7 +1122,7 @@ on reconnect:    re-send token, wait for new snapshot
 | 层 | 测试 | 频率 | 通过标准 |
 |---|---|---|---|
 | L1 单元 | 别名 / DSL / schema / cooldown | 每次提交 | 覆盖 > 80%, 0 失败 |
-| L2 集成 | LLM 解析 / Directive Board 仲裁 / ares Hook | 每 PR | 0 失败 |
+| L2 集成 | LLM 解析 / Directive Board 仲裁 / bot 接入点 | 每 PR | 0 失败 |
 | L3 vs AI 回归 | 5 剧本 × 5 地图 × 50 场 vs Hard AI | 每周 | 胜率 ≥ 50% ± 10% |
 | L4 端到端脚本 | 5-10 完整对局 replay | nightly | 0 崩溃 |
 | L5 真实手测 | 团队 + 内测玩家 vs 内置 AI | 每周 N+ 场 | 反馈循环 < 1 周 |
@@ -1197,7 +1205,7 @@ M0 ─→ M1 ─→ M2 ─→ M3 ─→ M4 ─→ M5
 
 | Milestone | 周次 | 交付 | demo 看点 |
 |---|---|---|---|
-| **M0 Smoke Test** | W1 | • ares-sc2 + python-sc2 跑通<br>• Unit Role 排除机制验证<br>• 资源占用 baseline | 不动的叉子证明 base bot 不会动它 |
+| **M0 Smoke Test** | W1 | • bot 框架 + python-sc2 跑通<br>• 单位归属排除机制验证<br>• 资源占用 baseline | 不动的叉子证明 base bot 不会动它 |
 | **M1 端到端骨架** | W2-4 | • Bot 服务 + WS endpoint<br>• 手机 PWA 框架 + 状态条 + minimap 占位<br>• 1 个剧本（1门Robo）能 set_build<br>• LLM 调通 + 解析 1 条话语 | 手机说话，PC bot 按 1门Robo build 起来 |
 | **M2 Directive Board 完整** | W5-7 | • 3 剧本 (1门Robo, IAC, Skytoss)<br>• Production / Tech / Engagement override<br>• Unit Claim + LLMControlBehavior (持久 + reactions)<br>• 别名表 + 条件 DSL | 切剧本 + 临时叠加 + standing order 全部 work |
 | **M3 手机驾驶舱完整** | W8-9 | • Mini-map 可拖<br>• Phase stepper<br>• Standing orders 区<br>• 撤销 / 保存为快捷 | 整局过程在手机上完整呈现 |
@@ -1208,7 +1216,7 @@ M0 ─→ M1 ─→ M2 ─→ M3 ─→ M4 ─→ M5
 
 | 风险 | 概率 | 影响 | 缓解 |
 |---|---|---|---|
-| ares Manager 不默认 respect role exclusion | 中 | 中 | M0 验证；最坏 Hook B Mediator wrap |
+| base bot 不尊重单位归属隔离 | 中 | 中 | M0 验证；最坏在 vendored fork 里就地加 hook |
 | LLM 解析准确率不达 90% | 中 | 高 | 测试集驱动 prompt 迭代；换 model；fine-tune |
 | SC2 暴雪 patch 破坏 python-sc2 | 低 | 中 | 锁 commit；patch 时 1-2 天修复 |
 | 玩家话语口语化超出 prompt 覆盖 | 中 | 中 | 测试期收集真实玩家话语扩展 few-shot |
@@ -1235,7 +1243,7 @@ M0 ─→ M1 ─→ M2 ─→ M3 ─→ M4 ─→ M5
 | 决策 | 选择 | 理由 |
 |---|---|---|
 | SC2 接入方式 | python-sc2 (BurnySc2) | 社区活跃，事实标准 |
-| 基础 bot 框架 | ares-sc2 | Manager + Mediator + Build Runner + Unit Role 全配齐 |
+| 基础 bot 框架 | sharpy-sc2（vendored fork） | BuildOrder/Act + 分层 combat plan + UnitTask 角色 |
 | 部署形态 | 单 SC2 客户端 + 玩家 player slot | 资源最省，相机与 bot 决策解耦 |
 | 键鼠 | 不屏蔽，但物理隔离 | 信任玩家不碰；冲突自愈 |
 | 输入设备 | 手机 PWA | 中文输入法 + 撤销 / 编辑能力 |

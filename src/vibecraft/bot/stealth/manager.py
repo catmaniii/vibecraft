@@ -86,7 +86,7 @@ def _main_economy_has_gas(bot: Any) -> bool:
 
     两条路径：
     1. Test hook：bot._main_economy_has_gas() → bool（单测注入，精确控制）。
-    2. 生产路径：bool(bot.gas_buildings.ready)（python-sc2 / ares-sc2 标准属性；
+    2. 生产路径：bool(bot.gas_buildings.ready)（python-sc2 标准属性；
        ASSIMILATOR / REFINERY / EXTRACTOR 统一通过 bot.gas_buildings 暴露）。
 
     玩家级优先采矿信号将来从这里接入（如 workers=stop 指令或专用 gas_hold 开关）。

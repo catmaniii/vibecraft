@@ -352,7 +352,7 @@ class OpeningSustainAct(_ActBase):  # type: ignore[misc]
                 if getattr(UnitTypeId, u, None) is not None
                 and getattr(UnitTypeId, p, None) is not None
             ]
-        # 虫族：补女王（每矿 1 注卵 + 防守；ZergPersistentMacro 不带女王）。注卵靠 ares/sharpy
+        # 虫族：补女王（每矿 1 注卵 + 防守；ZergPersistentMacro 不带女王）。注卵靠 sharpy
         # 的 queen 逻辑（有则自动 inject；inject_coverage 埋点会显示是否真注卵）。
         if self.race == "ZERG":
             unit_acts.append(ActUnit(UnitTypeId.QUEEN, UnitTypeId.HATCHERY, 6))

@@ -16,7 +16,7 @@ Blizzard Entertainment 的条款下与《星际争霸 II》交互（见第四节
 
 - **上游**：DrInfy / sharpy-sc2 — https://github.com/DrInfy/sharpy-sc2 （cloned commit `d9577a0`）
 - **协议**：MIT，Copyright (c) 2019 DrInfy（完整文本见 [`vendor/sharpy/LICENSE`](vendor/sharpy/LICENSE)）
-- **VibeCraft 对其做了修改**：在 15 个文件就地加入"玩家覆盖"hook（均以 `# vibecraft:`
+- **VibeCraft 对其做了修改**：在 27 个文件就地加入"玩家覆盖"hook（均以 `# vibecraft:`
   注释标记），用于把玩家语音/UI 指令接入 sharpy 的战斗 plan。改动清单见
   [`docs/sharpy-patches.md`](docs/sharpy-patches.md)，vendored 说明见
   [`vendor/sharpy/ATTRIBUTION.md`](vendor/sharpy/ATTRIBUTION.md)。
@@ -33,7 +33,6 @@ Blizzard Entertainment 的条款下与《星际争霸 II》交互（见第四节
 | 包 | 用途 | 协议 |
 |---|---|---|
 | python-sc2（burnysc2，august-k fork） | SC2 bot API | MIT |
-| ares-sc2（AresSC2） | bot 框架 | MIT |
 | pydantic / PyYAML / structlog / anyio | 数据模型 / 配置 / 日志 / 异步 | MIT |
 | mss / comtypes / pyaudiowpatch / qrcode | 抓屏 / COM / 音频 / 二维码 | MIT |
 | anthropic（SDK） | LLM 调用 | MIT |

@@ -52,7 +52,7 @@ paginate: true
 │   BOT Loop (主体,确定性规则系统)             │  ← 22 tick/秒
 │   perceive → decide → act                    │   毫秒级
 │             ↑________|                       │
-│   ares-sc2 + sharpy + vibecraft acts         │
+│   sharpy + vibecraft acts                    │
 └──────────────────┬──────────────────────────┘
                    ↑ 异步注入(不阻塞)
 ┌──────────────────┴──────────────────────────┐
@@ -175,7 +175,7 @@ vibecraft 一个对话内修 12 bug + 加 7+ contract test —— **正在验证
 借用 Jiayi Weng 的提法:
 
 **System 1 (毫秒级,确定性,vibecraft BOT 的本体)**
-- sharpy/ares 战术执行 (3000+ LOC vendor)
+- sharpy 战术执行 (3000+ LOC vendor)
 - 单位 micro、生产队列、攻防判定
 - vibecraft 自定义 acts (DT drop / IAC midgame / 4bg pressure / ...)
 

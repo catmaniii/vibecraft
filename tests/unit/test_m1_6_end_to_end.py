@@ -1,6 +1,6 @@
 """M1.6 端到端串通单测。
 
-测试策略：不需要真实 SC2 / ares，全部 mock。验证：
+测试策略：不需要真实 SC2，全部 mock。验证：
 1. Gap 2：WS command handler → send_command
 2. Gap 2：_VibeCraftBot.on_step 消费下行队列
 3. Gap 3：on_player_command 用 create_task fire-and-forget（不阻塞 on_step）
@@ -23,15 +23,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# fake sharpy 注入辅助（M1 sharpy 迁移后替代原 _inject_fake_ares）
+# fake sharpy 注入辅助
 # ---------------------------------------------------------------------------
 
 
-def _inject_fake_ares() -> tuple[type, type]:
+def _inject_fake_sharpy() -> tuple[type, type]:
     """向 sys.modules 注入伪 sharpy 模块，保持调用点签名不变。
 
-    M1 后 make_bot_class 走 sharpy_adapter，base class 是 KnowledgeBot 而非 AresBot。
-    返回 (FakeKnowledgeBot, FakeUnitTask) 但签名兼容原 (FakeAresBot, FakeUnitRole)。
+    make_bot_class 走 sharpy_adapter，base class 是 KnowledgeBot。
+    返回 (FakeKnowledgeBot, FakeUnitTask)。
     """
     import enum
 
@@ -145,7 +145,7 @@ def _inject_fake_ares() -> tuple[type, type]:
 
 
 @pytest.fixture(autouse=True)
-def _clean_ares_modules() -> Any:
+def _clean_sharpy_modules() -> Any:
     _prefixes = ("sharpy", "vibecraft.bot.sharpy_adapter", "vibecraft.bot.auto_combat")
     for key in list(sys.modules.keys()):
         if any(key == p or key.startswith(p + ".") for p in _prefixes):
@@ -279,7 +279,7 @@ class TestBotOnStepConsumesQueue:
 
     async def test_on_step_creates_task_for_command(self) -> None:
         """on_step 里收到 command 消息，应 create_task 调 director.on_player_command。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         parse_calls: list[tuple[str, float]] = []
@@ -326,7 +326,7 @@ class TestBotOnStepConsumesQueue:
 
     async def test_on_step_does_not_await_command(self) -> None:
         """on_step 在 task 完成前就返回（不阻塞 realtime loop）。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         parse_started = asyncio.Event()
@@ -374,7 +374,7 @@ class TestBotOnStepConsumesQueue:
 
     async def test_cmd_task_exception_is_logged_not_raised(self) -> None:
         """后台 cmd task 异常时 log 不向上传播（不崩 bot）。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         async def failing_parse(text: str, now: float) -> Any:
@@ -413,7 +413,7 @@ class TestBotOnStepConsumesQueue:
 
     async def test_empty_queue_does_not_crash(self) -> None:
         """下行队列空时 on_step 正常跑。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         director_mock = MagicMock()
@@ -447,7 +447,7 @@ class TestStatusCallback:
 
     async def test_status_callback_on_start(self) -> None:
         """on_start 应调 status_callback("in_game", ...) 和 status_callback("playing", ...)。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
@@ -473,7 +473,7 @@ class TestStatusCallback:
 
     async def test_status_callback_on_end(self) -> None:
         """on_end 应调 status_callback("ended", ...)。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         calls: list[tuple[str, str, str]] = []
@@ -496,7 +496,7 @@ class TestStatusCallback:
 
     async def test_no_status_callback_is_backward_compatible(self) -> None:
         """status_callback=None 时，on_start / on_end 不抛异常（向后兼容）。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(
@@ -524,7 +524,7 @@ class TestEchoCallback:
 
     async def test_echo_on_successful_parse(self) -> None:
         """IntentParseResult → echo_callback(text, interpretation_zh)。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
         from vibecraft.llm.schema import IntentParseResult
 
@@ -567,7 +567,7 @@ class TestEchoCallback:
 
     async def test_echo_on_parse_error(self) -> None:
         """ParseError → echo_callback(text, '[解析失败] ...')。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
         from vibecraft.llm.schema import ParseError, ParseErrorKind
 
@@ -605,7 +605,7 @@ class TestEchoCallback:
 
     async def test_no_echo_callback_is_fine(self) -> None:
         """echo_callback=None 时，parse 完成后不抛异常。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
         from vibecraft.llm.schema import IntentParseResult
 
@@ -824,7 +824,7 @@ class TestBackwardCompatibility:
 
     async def test_old_usage_no_new_params(self) -> None:
         """旧版 make_bot_class(director_factory) 签名不破坏。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         BotClass = make_bot_class(lambda facade: MagicMock())
@@ -855,7 +855,7 @@ class TestOnEndWaitsForTasks:
 
     async def test_on_end_awaits_cmd_tasks(self) -> None:
         """on_end 应 gather 所有 _cmd_tasks 才调 status_callback("ended")。"""
-        FakeKnowledgeBot, _ = _inject_fake_ares()
+        FakeKnowledgeBot, _ = _inject_fake_sharpy()
         from vibecraft.bot.sharpy_adapter import make_bot_class
 
         task_finished = asyncio.Event()

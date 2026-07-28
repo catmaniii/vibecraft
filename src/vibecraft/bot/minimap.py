@@ -25,7 +25,7 @@ class MinimapBuilder:
     切片用 numpy[y_start:y_end, x_start:x_end] 取 playable 子区域。
     """
 
-    def __init__(self, bot: Any) -> None:  # AresBot,用 Any 避免顶层 import
+    def __init__(self, bot: Any) -> None:  # bot 实例,用 Any 避免顶层 import
         self.bot = bot
         # 静态部分缓存(on_start 之后 game_info 才可访问)
         self._playable: list[int] | None = None

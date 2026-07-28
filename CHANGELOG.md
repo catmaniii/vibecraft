@@ -19,6 +19,37 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-29 抹掉 ares-sc2 的全部痕迹（M1 早已迁到 sharpy，文档却还在讲 ares）
+
+**变更 (Changed)**：
+- **起因**：查"致谢里该不该列 ares"时发现——**全仓只有一个文件真的 import 它**
+  （`scripts/smoke_test.py`，M0 里程碑的遗留脚本），`src/` 里零 ares 代码。但**文档在好几处
+  说得完全不是这回事**，会把贡献者带进沟里：
+  - README（中英）的架构图写着"ares-sc2 6 hook 点"，英文版目录说明甚至写着
+    `VibeCraftBot (ares-sc2 subclass)` —— 真实基类是 sharpy 的 `KnowledgeBot`；
+  - 技术栈表把 ares-sc2 列在 bot 引擎第一位；
+  - `bot/facade.py` 的 docstring 还在逐条解释那套已作废的"6 个 ares hook 点"。
+- **删掉的死代码**：`src/vibecraft/bot/build_translator.py` 与其单测——整个模块是把剧本翻译成
+  **ares 的 `config["Builds"]` 格式**，迁到 sharpy 后零调用。另删
+  `scripts/smoke_test.py`（M0 smoke，验的是"ares 的 Manager 会不会尊重用户自定义 role"，
+  这个问题自迁移后就不存在了）、`docs/m0-smoke-runbook.md`、
+  `docs/adr/0003-ares-build-runner-integration.md`（整篇讲 ares build runner 集成）。
+- **依赖清理**：`pyproject.toml` 删掉整个 `sc2` extra（它只为 ares 全家桶存在；`sc2-helper`
+  与 `map-analyzer` 全仓零使用，本来就是 ares 的传递依赖），`[tool.uv.sources]` 只留
+  python-sc2，mypy override 去掉 `ares.*` / `ares_sc2.*`。
+- **命名与注释**：测试里的 `_inject_fake_ares` / `_clean_ares_modules` /
+  `TestAresFacadeMoveCamera*` 全部改成 sharpy 命名（它们注入的**本来就是 sharpy 假货**，
+  只是名字没跟着改）；`_AresFacade` 这个类名早已不存在，ADR 0007/0008 里的引用一并订正。
+- **设计文档 §3 重写**：`docs/plans/2026-05-14-vibecraft-design.md` 的"§3 基础 bot：ares-sc2
+  集成"整节论证的是"**选 ares、不选 sharpy**（sharpy 维护较慢）"——这个判断后来被 ADR 0009
+  完全推翻，而我们现在**整个 bot 都建在 sharpy 上**。留着它不只是过时，是主动误导（还顺带贬了
+  一句自己完全依赖的项目）。已按当前真实形态重写框架选型与接入点表格，并标注本节经过迁移改写。
+- **保留的两处 ares**（刻意）：`CHANGELOG.md` 的历史条目，以及
+  `docs/adr/0009-sharpy-migration.md` —— 那一份**就是"从 ares 迁到 sharpy"的记录本身**，
+  抹掉它等于删掉"为什么现在用 sharpy"的出处。
+- **顺带修正**：`THIRD_PARTY_NOTICES.md` 里 vendored sharpy 的改动文件数 15 → **27**（实测）。
+- 验证：ruff / format / mypy 全绿，全量单测 **3708 passed**。
+
 ### 2026-07-29 补「致谢」——之前只有法律合规，没有一句道谢
 
 **新增 (Added)**：

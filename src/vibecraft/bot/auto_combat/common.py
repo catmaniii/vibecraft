@@ -1,6 +1,6 @@
 """三族共享工具：role_map、echo 辅助协程。
 
-sharpy 迁移（M1）：build_role_map 改用 sharpy UnitTask（原 ares AresUnitRole 删除）。
+build_role_map 用 sharpy UnitTask 表达单位归属。
 所有内容都是"有了 python-sc2 + sharpy 才能用"的；import 前必须确保已装。
 """
 
@@ -18,7 +18,7 @@ def build_role_map() -> dict[Any, Any]:
     必须在 sharpy 已 import 后调用（运行时 lazy）。
 
     LLM_CONTROLLED → UnitTask.Reserved：
-    sharpy 里 Reserved(8) 是"为未知目的保留"的槽位，相当于 ares 里的
+    sharpy 里 Reserved(8) 是"为未知目的保留"的槽位，相当于
     CONTROL_GROUP_THREE —— sharpy 各 Manager 不会主动把 Reserved 单位
     拉去执行任务，恰好满足 §3.4 "LLM 接管单元不被 base bot 占用"的需求。
 

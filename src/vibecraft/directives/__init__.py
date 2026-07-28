@@ -1,7 +1,7 @@
 """Directives：内部 IR 与 Directive Board。
 
 对应设计文档 §5。所有玩家输入（语音 / 文字 / 按钮）都最终归一到 directives 数组，
-经 Board 仲裁后由 ares hook 点应用到 SC2。
+经 Board 仲裁后应用到 SC2。
 
 本模块只负责数据模型与生命周期（commit / release / expire），不做仲裁。
 仲裁需要游戏运行时状态 + 剧本对象，放在 bot/ 模块里组合。

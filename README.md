@@ -442,18 +442,18 @@ VPS 上跑的是 coturn(TURN/STUN) + nginx 前门 + SSH 反向隧道，**CPU/内
 
 # 三、开发者：系统架构
 
-一句话：**手机指令 → LLM 解析成 Directives JSON（唯一中间表示）→ Director 每帧仲裁 → 通过
-ares/sharpy hook 操作 SC2；SC2 画面/声音经 WebRTC 推回手机。**
+一句话：**手机指令 → LLM 解析成 Directives JSON（唯一中间表示）→ Director 每帧仲裁 →
+通过 sharpy hook 操作 SC2；SC2 画面/声音经 WebRTC 推回手机。**
 
 ```
 手机 PWA ──WS──► server（PC 上）
    │  指令文本/语音 → LLM 解析 → Directives JSON
    ▼
 Director（每帧 tick）──► Directive Board（仲裁/优先级/激活门）
-   ├─► ares-sc2 6 hook 点（Build Runner / OverrideMediator / Unit Role /
-   │     Rationale Log / ViewController / BuildLocationOverride）
-   ├─► sharpy combat plan（vendor fork，玩家覆盖 hook 直接加在 plan 内）
-   └─► Sc2Facade ──► python-sc2 / ares ──► SC2 客户端
+   ├─► sharpy BuildOrder / Act（剧本步骤、产能、升级）
+   ├─► sharpy combat plan（vendored fork，玩家覆盖 hook 就地加在 plan 内部）
+   ├─► UnitTask.Reserved 单位角色（被玩家点名的单位对 base bot 不可见）
+   └─► Sc2Facade ──► python-sc2 ──► SC2 客户端
    ▲
    └── SC2 画面/声音 ──WebRTC（按进程 PID 抓屏+音频）──► 手机
 ```
@@ -462,7 +462,7 @@ Director（每帧 tick）──► Directive Board（仲裁/优先级/激活门�
 
 | 层 | 用什么 |
 |---|---|
-| Bot / 引擎 | ares-sc2, python-sc2(BurnySc2), sharpy(fork), Python 3.11 |
+| Bot / 引擎 | sharpy-sc2（vendored fork）, python-sc2(BurnySc2), Python 3.11 |
 | 中间表示 | pydantic Directives + 别名 YAML + 剧本 YAML |
 | 实时流 | aiortc（WebRTC 视频+音频，按 PID 抓屏 / WASAPI process loopback） |
 | 信令 / Web | websockets（HTTP+WS 同端口）, Vue 3 + Tailwind PWA |
@@ -490,7 +490,7 @@ uv run python scripts/download_sc2_icons.py   # 拉 SC2 图标（首次；版权
 cd web && npm run build              # 构建 PWA（写入 server/static）
 ```
 
-ares-sc2 / burnysc2 不在 PyPI：`uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`。
+burnysc2 不在 PyPI —— `uv sync --extra dev --extra sc2-lib` 会自动从 git 拉。
 
 **真局自验**（mock LLM，non-realtime，可并行多开）：
 
@@ -508,7 +508,7 @@ src/vibecraft/
   strategy/    # 剧本库 + YAML schema + 别名解析
   dsl/         # 条件 DSL（activate_when / done_when）
   llm/         # Intent Parser + Provider 抽象
-  bot/         # VibeCraftBot（ares-sc2 子类）+ Director + 6 hook + auto_combat
+  bot/         # VibeCraftBot（sharpy 子类）+ Director + auto_combat（三族 plan）
   server/      # WS+HTTP service + WebRTC + ASR + 多人 Room + PWA static
   logging_/    # 结构化 JSONL 日志
 web/           # Vue 3 + Tailwind PWA 源码（构建后入 server/static）
@@ -554,8 +554,6 @@ VibeCraft 是站在别人的工作上做起来的。下面这些不是"依赖列
   它那个编译产物一旦缺失，整个 bot 就起不来，可见依赖有多深。
 - **[python-sc2](https://github.com/BurnySc2/python-sc2)（BurnySc2；本项目用 august-k 的 fork）**
   —— 所有和游戏的对话都经过它。
-- **[ares-sc2](https://github.com/AresSC2/ares-sc2)（AresSC2）** —— 项目最早跑在它上面，
-  后来整体迁到 sharpy；但当初那套 hook 点的设计思路来自这里。
 - **[SC2MapAnalysis](https://github.com/spudde123/SC2MapAnalysis)（spudde123）** —— 地形分析。
 - **[FunASR](https://github.com/modelscope/FunASR)（达摩院 / ModelScope）** —— 中英文语音识别。
   "按住说话"这个交互能成立，靠的是它。

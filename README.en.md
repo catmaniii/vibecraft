@@ -464,7 +464,7 @@ At two hours a day, solo, that's ≈ **40–60 GB/month**.
 # Part 3 — Developers: architecture
 
 In one sentence: **phone command → LLM parses it into Directives JSON (the single intermediate
-representation) → the Director arbitrates every frame → SC2 is driven through ares/sharpy hooks;
+representation) → the Director arbitrates every frame → SC2 is driven through sharpy hooks;
 SC2 video and audio stream back to the phone over WebRTC.**
 
 ```
@@ -472,10 +472,10 @@ Phone PWA ──WS──► server (on the PC)
    │  command text / speech → LLM → Directives JSON
    ▼
 Director (ticks every frame) ──► Directive Board (arbitration / priority / activation gates)
-   ├─► ares-sc2 hook points (Build Runner / OverrideMediator / Unit Role /
+   ├─► sharpy BuildOrder / Act (build steps, production, upgrades)
    │     Rationale Log / ViewController / BuildLocationOverride)
    ├─► sharpy combat plans (vendored fork; player-override hooks live inside the plans)
-   └─► Sc2Facade ──► python-sc2 / ares ──► SC2 client
+   └─► Sc2Facade ──► python-sc2 ──► SC2 client
    ▲
    └── SC2 video/audio ──WebRTC (per-PID screen + audio capture)──► phone
 ```
@@ -484,7 +484,7 @@ Director (ticks every frame) ──► Directive Board (arbitration / priority /
 
 | Layer | Tech |
 |---|---|
-| Bot / engine | ares-sc2, python-sc2 (BurnySc2), sharpy (vendored fork), Python 3.11 |
+| Bot / engine | sharpy-sc2 (vendored fork), python-sc2 (BurnySc2), Python 3.11 |
 | Intermediate representation | pydantic Directives + alias YAML + build YAML |
 | Realtime media | aiortc (WebRTC video + audio; per-PID capture, WASAPI process loopback) |
 | Signalling / web | websockets (HTTP + WS on one port), Vue 3 + Tailwind PWA |
@@ -513,8 +513,7 @@ uv run python scripts/download_sc2_icons.py        # fetch SC2 icons (not shippe
 cd web && npm run build                            # build the PWA (outputs to server/static)
 ```
 
-ares-sc2 / burnysc2 aren't on PyPI:
-`uv pip install "git+https://github.com/AresSC2/ares-sc2@main"`.
+burnysc2 isn't on PyPI — `uv sync --extra sc2-lib` pulls it from git for you.
 
 **Real-game self-verification** (mocked LLM, non-realtime, several can run in parallel):
 
@@ -537,7 +536,7 @@ src/vibecraft/
   strategy/    # build library + YAML schema + alias resolution
   dsl/         # condition DSL (activate_when / done_when)
   llm/         # intent parser + provider abstraction
-  bot/         # VibeCraftBot (ares-sc2 subclass) + Director + hooks + auto_combat
+  bot/         # VibeCraftBot (sharpy subclass) + Director + auto_combat (all three races)
   server/      # WS+HTTP service + WebRTC + ASR + multiplayer rooms + PWA static
   logging_/    # structured JSONL logging
 web/           # Vue 3 + Tailwind PWA source (built into server/static)
@@ -592,8 +591,6 @@ them there is no project**:
   even start without its compiled module, which tells you how deep the dependency runs.
 - **[python-sc2](https://github.com/BurnySc2/python-sc2) (BurnySc2; we use august-k's fork)** —
   every conversation with the game goes through it.
-- **[ares-sc2](https://github.com/AresSC2/ares-sc2) (AresSC2)** — the project originally ran on
-  this before migrating wholesale to sharpy, and the hook-point design still comes from here.
 - **[SC2MapAnalysis](https://github.com/spudde123/SC2MapAnalysis) (spudde123)** — terrain analysis.
 - **[FunASR](https://github.com/modelscope/FunASR) (DAMO Academy / ModelScope)** — Chinese and
   English speech recognition. Push-to-talk only works because of it.

@@ -38,7 +38,7 @@ src/vibecraft/
 │   ├── types.py         # Event / EventKind
 │   ├── sinks.py         # 文件 sink + 内存 sink（测试用）
 │   └── session.py       # GameSession（一局一个 session 目录）
-└── bot/                 # 唯一一个会碰 sharpy-sc2 的子包（M1+：ares → sharpy）
+└── bot/                 # 唯一一个会碰 sharpy-sc2 的子包
     ├── facade.py        # Sc2Facade Protocol + UnitRole + FakeFacade（测试用）
     ├── director.py      # 中央编排器，下面单独讲
     ├── sharpy_adapter.py  # make_bot_class() 工厂；仅真实对局 import（见 ADR 0009）
@@ -101,7 +101,7 @@ mypy override 把它们当 missing-imports，pyproject 已配。所有单测都�
   在 `directives/types.py` 注册类型枚举 + 在 `directives/models.py` 加 Payload。
 - **VIEW directive 绕过 Board**：相机操作不走 1.5s commit delay，不占 overlay 槽。
   `directives/types.py::is_view_directive()` 是判定函数。
-- **`LLM_CONTROLLED` UnitRole 映射到 sharpy `UnitTask.Reserved`**（M1+，原 ares
+- **`LLM_CONTROLLED` UnitRole 映射到 sharpy `UnitTask.Reserved`**（原
   `CONTROL_GROUP_ONE` 已废弃）：`set_unit_role(tag, LLM_CONTROLLED)` 同时写入
   `bot._llm_controlled_tags`，每 step `_refresh_llm_controlled_roles()` 重新声明
   Reserved，确保 sharpy `UnitRoleManager.update()` 每帧清 `had_task_set` 后角色不丢。
@@ -457,7 +457,6 @@ vendor 段：sharpy-sc2 MIT，vendor 路径 `vendor/sharpy/`（不在 PyPI），
 - `tests/unit/test_m1_6_end_to_end.py`：make_protoss_bot_class 工厂、
   bot 生命周期、watchdog、SC2 facade 分派的 mock-bot 端到端。
 - `tests/integration/`、`tests/e2e/`：default 跳过（pytest mark），需真实 SC2 客户端。
-- `scripts/smoke_test.py`：端到端冒烟，单独脚本，详见 `docs/m0-smoke-runbook.md`。
 
 ## 部署架构
 
