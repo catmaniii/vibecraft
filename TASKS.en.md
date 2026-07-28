@@ -64,10 +64,35 @@ watchtower" resolve correctly everywhere.
 are in decent shape — **the games that get away are usually lost in the mid-to-late game, with no
 strong plan to switch into.**
 
-Separately: **every SC2 patch knocks the builds out of alignment.** Changes to starting worker
-count, unit stats, or build times shift every supply-keyed step in a build, and the
-`build_acceptance` specs need recalibrating with them. **This is ongoing maintenance, not a
-one-off.**
+There's also something **already out there that hasn't hit us yet**: **SC2 patch 5.0.16 — the
+"8 worker start" — invalidates every build in this repo.**
+
+It went live on 22 June 2026 and is the largest balance change in eleven years. The parts that
+matter here:
+
+| Change | From → To |
+|---|---|
+| **Starting workers** | **12 → 8** |
+| Nexus / Command Center supply | 15 → 13 |
+| Hatchery supply (cost) | 6 → 4 (275 → 300) |
+| Large / small mineral patches | 1800 → 1600 / 900 → 1100 |
+| Vespene geyser (total gas per base) | 2250 → 2500 (4500 → 5000) |
+| Warpgate | Research now speeds Gateway production by 40%; transform costs 25/25; warp-in is a flat 4s |
+
+**Why this is a full rewrite rather than a tweak**: every build here is written as
+`<supply> build ...`. Starting with 8 workers and a town hall that only supplies 13 means **the
+same supply number now describes a completely different game state** — `13 build BG` in the
+4-gate used to mean "one unit after your 12 starting workers", and now means "five after your
+8". All 48 builds and all 47 acceptance specs need recalibrating step by step. The Warpgate
+rework separately shifts every Protoss warp-in timing (`4bg`, `iac_2base`, the chargelot
+pipeline, and so on).
+
+One prerequisite gotcha: `python-sc2` (burnysc2) only knows about game versions up to **5.0.14**
+(base build 94137). Once the client updates to 5.0.16, its version table may need extending
+before a game will launch at all.
+
+**This is ongoing maintenance, not a one-off** — every future balance patch means another full
+re-run.
 
 **The workflow already exists** — follow
 [`docs/process/new-opening-strategy.md`](docs/process/new-opening-strategy.md): research a real
@@ -155,6 +180,33 @@ installed; everything else is open to anyone.
 - **Most features were validated by self-tests and screenshots**, not by accumulated real games
   against real people.
 - **CI only covers Windows + Python 3.11** — not laziness, a hard constraint (see below).
+
+---
+
+## Open questions (undecided — input welcome)
+
+### How strong should authentication be?
+
+**Today** the only access control is a **room token**, and it travels in the URL
+(`?room=<token>`) — anyone holding the link can command the bot and watch your screen. Forward
+the link, screenshot it, paste it into a group chat, and you've handed over the key. (The admin
+panel has a separate token; that one can change server settings.)
+
+**It's tolerable right now** because servers spread by word of mouth: if you don't know the
+address, you can't connect. But **Direction C removes exactly that cover** — once servers are
+publicly discoverable, "nobody knows my address" stops being a defence.
+
+**The options, and what each costs**:
+
+| Approach | Upside | Cost |
+|---|---|---|
+| Keep it as is (one shared token) | Zero friction — send a friend a link and they're playing | The link *is* the key; you can't kick one person or attribute anything |
+| One-time / expiring invite links | Stops a link being forwarded forever | The host has to mint and distribute one every time |
+| Lightweight accounts (nickname + passphrase, or OAuth) | You can identify, kick, and log people | You're now storing user data — a real step up in responsibility and complexity |
+
+**Leaning**: this is a tool for playing with friends, not a public service, and **over-engineering
+auth could easily destroy its best property — open a link and you're in.** But it needs deciding
+before Direction C ships. Thoughts welcome in an issue.
 
 ---
 
