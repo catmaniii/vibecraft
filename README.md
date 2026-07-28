@@ -543,6 +543,33 @@ tests/{unit,integration,e2e}/
 
 ---
 
+## 致谢
+
+VibeCraft 是站在别人的工作上做起来的。下面这些不是"依赖列表"里的条目，是**没有它们就没有这个项目**：
+
+- **[sharpy-sc2](https://github.com/DrInfy/sharpy-sc2)（DrInfy）** —— 整个 bot 的骨架。
+  381 个文件随本仓库打包，其中 27 个被我们就地加了"玩家覆盖"hook。战斗微操、建造管理、
+  兵力调度这些最难啃的部分，是 DrInfy 早就做好的；VibeCraft 做的其实只是**把玩家的话接进去**。
+  同一作者的 **[sc2-pathlib](https://github.com/DrInfy/sc2-pathlib)** 提供寻路——
+  它那个编译产物一旦缺失，整个 bot 就起不来，可见依赖有多深。
+- **[python-sc2](https://github.com/BurnySc2/python-sc2)（BurnySc2；本项目用 august-k 的 fork）**
+  —— 所有和游戏的对话都经过它。
+- **[ares-sc2](https://github.com/AresSC2/ares-sc2)（AresSC2）** —— 项目最早跑在它上面，
+  后来整体迁到 sharpy；但当初那套 hook 点的设计思路来自这里。
+- **[SC2MapAnalysis](https://github.com/spudde123/SC2MapAnalysis)（spudde123）** —— 地形分析。
+- **[FunASR](https://github.com/modelscope/FunASR)（达摩院 / ModelScope）** —— 中英文语音识别。
+  "按住说话"这个交互能成立，靠的是它。
+- **[aiortc](https://github.com/aiortc/aiortc)** —— 纯 Python 的 WebRTC，手机上那块实时画面。
+- **[Liquipedia](https://liquipedia.net/starcraft2/)** —— 建筑 hotkey 表与职业 build order。
+  玩家能对着 bot 说的那套黑话，词汇表基本来自这里。
+- **Blizzard** —— 感谢开放 SC2 的 AI/ML API，让这类项目成为可能。
+- 以及**整个 SC2 AI 社区** —— 十几年过去还在写 bot 的这群人，把很多坑提前替后来者踩完了。
+
+> 这些项目的**协议与合规**说明在 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)——
+> 那是法律义务；这一节是想说的话。
+
+---
+
 ## 许可 / License
 
 - **VibeCraft 自身源码：MIT**（见 [`LICENSE`](LICENSE)）。

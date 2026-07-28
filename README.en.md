@@ -579,6 +579,39 @@ may be brief, but you won't be ignored. Please read [`CONTRIBUTING.md`](CONTRIBU
 
 ---
 
+## Acknowledgements
+
+VibeCraft is built on other people's work. These aren't entries in a dependency list — **without
+them there is no project**:
+
+- **[sharpy-sc2](https://github.com/DrInfy/sharpy-sc2) (DrInfy)** — the skeleton of the whole bot.
+  381 files ship inside this repository, 27 of them with our "player override" hooks patched in.
+  Combat micro, build management, army movement — the genuinely hard parts — were already solved
+  by DrInfy; what VibeCraft really does is **wire a human's voice into them**. The same author's
+  **[sc2-pathlib](https://github.com/DrInfy/sc2-pathlib)** does the pathfinding — the bot won't
+  even start without its compiled module, which tells you how deep the dependency runs.
+- **[python-sc2](https://github.com/BurnySc2/python-sc2) (BurnySc2; we use august-k's fork)** —
+  every conversation with the game goes through it.
+- **[ares-sc2](https://github.com/AresSC2/ares-sc2) (AresSC2)** — the project originally ran on
+  this before migrating wholesale to sharpy, and the hook-point design still comes from here.
+- **[SC2MapAnalysis](https://github.com/spudde123/SC2MapAnalysis) (spudde123)** — terrain analysis.
+- **[FunASR](https://github.com/modelscope/FunASR) (DAMO Academy / ModelScope)** — Chinese and
+  English speech recognition. Push-to-talk only works because of it.
+- **[aiortc](https://github.com/aiortc/aiortc)** — WebRTC in pure Python; the live video on your
+  phone.
+- **[Liquipedia](https://liquipedia.net/starcraft2/)** — hotkey tables and pro build orders. The
+  vocabulary players use to talk to the bot largely comes from there.
+- **Blizzard** — for keeping StarCraft II's AI/ML API open, which is what makes projects like this
+  possible at all.
+- And the **StarCraft II AI community** at large — people still writing bots more than a decade
+  on, who walked into most of these traps first so the rest of us didn't have to.
+
+> The **licensing and compliance** details for all of the above live in
+> [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — that's the legal obligation. This section
+> is the thank-you.
+
+---
+
 ## License
 
 - **VibeCraft's own source: MIT** (see [`LICENSE`](LICENSE)).

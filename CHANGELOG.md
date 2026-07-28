@@ -19,6 +19,22 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-07-29 补「致谢」——之前只有法律合规，没有一句道谢
+
+**新增 (Added)**：
+- 两个 README 加 **致谢 / Acknowledgements** 一节。此前仓库里只有
+  `THIRD_PARTY_NOTICES.md`，那是**协议合规**（"MIT 要求保留版权声明，我们保留了"）——
+  是义务，不是道谢。而这个项目 vendored 了 **381 个** sharpy 文件、就地改了其中 **27 个**，
+  整个 bot 骨架都建在别人的工作上，却没有一处说过谢谢。
+- 致谢写的是**各自给了我们什么**，不是列依赖清单：sharpy-sc2 与 sc2-pathlib（DrInfy）——
+  战斗微操/建造管理/兵力调度这些最难的部分早已解决，VibeCraft 做的其实只是把玩家的话接进去，
+  而且 sc2-pathlib 的编译产物一缺 bot 就起不来（刚踩过），足见依赖之深；
+  python-sc2（BurnySc2 / august-k fork）；ares-sc2（早期框架，hook 点设计源头）；
+  SC2MapAnalysis（spudde123）；FunASR（达摩院 / ModelScope，"按住说话"能成立全靠它）；
+  aiortc；Liquipedia（玩家那套黑话的词汇表来源）；Blizzard 开放 AI/ML API；以及整个 SC2 AI 社区。
+- 末尾点明两者分工：合规说明在 `THIRD_PARTY_NOTICES.md`，**那是法律义务；这一节是想说的话。**
+  外链已逐个校验可达（7/7 HTTP 200）。
+
 ### 2026-07-28 TASKS 补上 SC2 5.0.16「八农民版本」的冲击评估 + 鉴权开放问题
 
 **新增 (Added)**：
