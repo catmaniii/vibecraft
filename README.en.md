@@ -40,6 +40,21 @@ This document is organised by audience:
 
 ---
 
+## Demo videos
+
+Seven episodes showing it in action (English AI-dub over the original Chinese commentary, subtitles
+burned in). [**Full playlist**](https://www.youtube.com/playlist?list=PLX4yIrCbhGJs):
+
+1. [Playing SC2 with my voice: 4-Gate with a proxy, all from my phone](https://youtu.be/HFqAZ_KWm1U)
+2. [Protoss openings, real-time tactics, and a Dark Templar harass called out loud](https://youtu.be/rHetKwC7AN0)
+3. [Voice-made control groups, proxy Stargates, and a Void Ray harass](https://youtu.be/9-YHQI1aMDM)
+4. [Two players, two phones, one PC: a voice-controlled 1v1 (Protoss vs Terran)](https://youtu.be/2vyl0IE68UM)
+5. [Terran Battlecruiser opener with auto-harass, commanded entirely by voice](https://youtu.be/VMZ6jxJ0WBo)
+6. [4-Rax proxy Marine rush and a fast Battlecruiser](https://youtu.be/H8fw4bA_qDE)
+7. [Zerg Nydus Worm rush, called out loud, on a new widescreen UI](https://youtu.be/cQTZ-2fd7lg)
+
+---
+
 # Part 1 — Players: how to play
 
 ### The easy case: someone else is hosting
