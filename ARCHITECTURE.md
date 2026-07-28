@@ -4,7 +4,7 @@ VibeCraft 当前代码里**实际**的形态。
 
 - **WHY**（为什么这样设计）→ `docs/plans/2026-05-14-vibecraft-design.md`（14 节真理源）
 - **WHAT IS**（代码现状，跟代码同步）→ 本文档
-- **WHAT NEXT**（待办 + 进度）→ `TASKS.md`
+- **WHAT NEXT**（还要做什么）→ `TASKS.md`
 - **HOW TO WORK**（约定 + 指针）→ `CLAUDE.md`
 
 本文档每次结构性改动（新增子包 / 改变数据流 / 改不变量）都要同步。

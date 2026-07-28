@@ -199,7 +199,8 @@ pytest 配置（`pyproject.toml`）开了 `filterwarnings = ["error", ...]` —�
 |---|---|---|
 | `docs/plans/2026-05-14-vibecraft-design.md` | WHY：14 节完整设计真理源 | 任何架构层面工作 |
 | `ARCHITECTURE.md` | WHAT IS：当前代码 + 不变量 + 数据流 | **动代码前必看** |
-| `TASKS.md` | WHAT NEXT：里程碑 + 当前状态 + 用户环境 | **新 session 起手必看** |
+| `TASKS.md` / `TASKS.en.md` | WHAT NEXT：给贡献者的公开路线图 | 规划下一步工作时 |
+| `SESSION.local.md`（不入库） | 会话交接：停在哪 + 本机环境事实 | **新 session 起手必看** |
 | `USER_GUIDE.md` | 玩家入门 + 话语示例 + FAQ | 改面向玩家功能时 |
 | `CHANGELOG.md` | 已发版历史 | 打 tag 时 |
 
@@ -863,26 +864,31 @@ Phase 1 重新定位，尤其检查"这条数据流里有没有哪一段的**目
 
 ## 会话交接协议（permanent，不要删）
 
-**交接载体**：`TASKS.md` 顶部的「当前状态」+「用户环境关键事实」两段。这两段
-取代了原 CLAUDE.md 末尾 HANDOFF 块的角色 —— TASKS.md 本身就是高频更新的，进度
-变动天然落在那里，不污染 CLAUDE.md history。
+**交接载体**：`SESSION.local.md` 的「当前状态」+「本机环境事实」两段。
+**这个文件不入库**（`.gitignore` 已排除）—— 仓库 2026-07-27 开源后，`TASKS.md` 变成了
+给贡献者看的公开路线图，而交接状态（临时的）和个人机器配置（安装路径 / token / 测试习惯）
+两样都没理由发到公网，所以从 TASKS.md 搬了出来。
+
+**三份文件各管一层，别混**：
+- `SESSION.local.md`（不入库）= 我停在哪、下一步、在等什么、这台机器的环境事实
+- `TASKS.md` / `TASKS.en.md`（公开）= **将来要做什么**，给贡献者看的路线图
+- `CHANGELOG.md`（公开）= 已经做完了什么
 
 **新 session 起手流程**：
-1. 启动时把 `TASKS.md` 顶部的「当前状态」+「用户环境关键事实」当权威上下文读
+1. 启动时把 `SESSION.local.md` 当权威上下文读（文件不在就说明是新克隆，按 TASKS.md 走）
 2. 至少完成一次有意义的动作（读文件 / 答用户首个问题 / 跑首条命令）
 
 **session 结束 / 切换 / 用户明示要交接时**：
-- 更新 `TASKS.md` 顶部「当前状态」段：
-  - "最近更新" 日期
-  - 当前里程碑（"现在在哪个 commit" 用 `git log` 看，不在 TASKS.md 里记 hash）
-  - 阻塞 / 等待事项
-  - 下一步动作
-- 如有新的用户环境事实（路径变了、装了新东西），更新「用户环境关键事实」段
-- 当前里程碑的待办勾掉已完成项，列出剩余
-- commit message：`TASKS.md：更新 M{n} 状态 / session 交接`
+- 更新 `SESSION.local.md` 的「当前状态」：最近更新日期 / 刚做完什么 / 下一步 / 在等用户什么
+  （"现在在哪个 commit" 用 `git log` 看，不往文件里记 hash）
+- 环境有变化（路径变了、装了新东西）→ 更新「本机环境事实」
+- **路线图层面的变化**（做完了一个方向、发现了新的大方向）→ 更新 `TASKS.md` **和** `TASKS.en.md`
+  （两份必须同步改，它们是同一份内容的中英版）
+- `SESSION.local.md` 不入库，所以不需要 commit；改了 TASKS 才需要
 
 **不要写进交接**：
 - 代码细节、架构决策（→ `ARCHITECTURE.md` 或 `docs/adr/`）
 - 用户偏好（→ Claude memory）
 - 调试日志、思考过程（→ 不要持久化）
+- 已完成的历史（→ `CHANGELOG.md`）
 

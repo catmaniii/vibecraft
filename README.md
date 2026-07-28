@@ -527,7 +527,7 @@ tests/{unit,integration,e2e}/
 | [`docs/plans/2026-05-14-vibecraft-design.md`](docs/plans/2026-05-14-vibecraft-design.md) | 14 节完整设计真理源 |
 | [`USER_GUIDE.md`](USER_GUIDE.md) | 玩家入门 + 话语示例 + FAQ |
 | [`CLAUDE.md`](CLAUDE.md) | 约定 + 指针（AI 协作上下文） |
-| [`TASKS.md`](TASKS.md) / [`CHANGELOG.md`](CHANGELOG.md) | 当前状态 / 版本历史 |
+| [`TASKS.md`](TASKS.md) / [`CHANGELOG.md`](CHANGELOG.md) | 接下来要做什么 / 版本历史 |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md) | 怎么参与 / 怎么报安全问题 |
 
 ---

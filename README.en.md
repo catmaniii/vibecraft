@@ -554,6 +554,7 @@ tests/{unit,integration,e2e}/
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Module map / data flow / invariants / hooks / deployment diagrams |
 | [`USER_GUIDE_EN.md`](USER_GUIDE_EN.md) | Player guide, example phrasings, FAQ (English) |
+| [`TASKS.en.md`](TASKS.en.md) | What's next — the public roadmap and where to start |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, conventions, how to submit changes |
 | [`SECURITY.md`](SECURITY.md) | Reporting vulnerabilities + this project's threat model |
 | [`CLAUDE.md`](CLAUDE.md) | Working conventions (also the AI-collaboration context file) |

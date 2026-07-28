@@ -106,3 +106,7 @@ vendor/sharpy/maps/*.SC2Map
 # USER_GUIDE.md 导出的 PDF —— 派生产物,没有任何文档引用它,入库只会跟 md 漂移。要发给别人时
 # 自己现导一份即可。(同"单一数据源"纪律:能生成的别手工同步。)
 docs/USER_GUIDE.pdf
+
+# 会话交接 + 本机环境事实(维护者本地用)。仓库开源后 TASKS.md 是给贡献者的路线图,
+# 这两样(临时状态 + 个人机器配置:安装路径/token/测试习惯)没理由发到公网。
+SESSION.local.md
