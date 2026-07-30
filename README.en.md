@@ -11,6 +11,16 @@ push-to-talk in the app) while an AI bot does every click: workers, supply, expa
 production, attacks, and basic combat. You watch, you judge, you give orders at the moments that
 matter — **you are the commander, the AI is your Adjutant.**
 
+![The phone cockpit in landscape: live SC2 view on the left; macro strategy, tactical decision and economy panels on the right; command input along the bottom](docs/images/cockpit-live.jpg)
+
+*The cockpit on a phone, in landscape, during a real game. Left: the live SC2 view — drag anywhere
+to move the camera. Right, top to bottom: **macro strategy** (this player picked the Phoenix-control
+doctrine, and its parameters are laid out for you), **the bot's current tactical decision** (it is
+taking a fourth base right now, and it tells you why), and **economy toggles** (gas priority, worker
+production — flip them mid-game). Along the bottom: tech, production and army at a glance, plus the
+command box and the push-to-talk key. Frame taken from the [demo videos](#demo-videos), hence the
+burned-in subtitles.*
+
 > **Good fit:** returning veterans who lost the mechanics but kept the game sense; playing a few
 > games with old friends without an APM contest.
 > **Not a fit:** ladder players chasing APM; complete newcomers to SC2.
