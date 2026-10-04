@@ -63,6 +63,15 @@ burned in). [**Full playlist**](https://www.youtube.com/playlist?list=PLX4yIrCbh
 6. [4-Rax proxy Marine rush and a fast Battlecruiser](https://youtu.be/H8fw4bA_qDE)
 7. [Zerg Nydus Worm rush, called out loud, on a new widescreen UI](https://youtu.be/cQTZ-2fd7lg)
 
+There is also a theme song, *Commander, Come Back* (3:16, sung in Chinese with Chinese subtitles).
+Click the cover to watch it on Bilibili:
+
+[![Commander, Come Back: the VibeCraft theme song music video. Click to watch on Bilibili](docs/images/mv-cover.jpg)](https://www.bilibili.com/video/BV1sLHk6UEXg)
+
+Claude Opus 5.5 wrote the lyrics and did the storyboard, editing and rendering; Suno V6 composed and
+sang the song. Every gameplay shot in it is a real VibeCraft match recorded live, and the phone
+screens show the real cockpit UI.
+
 ---
 
 # Part 1 — Players: how to play

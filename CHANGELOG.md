@@ -19,6 +19,14 @@ VibeCraft 的 milestone 与版本对应（详见 `docs/plans/2026-05-14-vibecraf
 
 ## [Unreleased]
 
+### 2026-10-04 README 挂上主题曲 MV《指挥官，回来》
+
+**新增 (Added)**：
+- 中文 README 开头（驾驶舱实拍图下面）和英文 README 的 Demo videos 一节，各加一张主题曲 MV 的
+  封面，点击跳到 B 站播放页（BV1sLHk6UEXg）。GitHub 会过滤 README 里的 iframe，B 站播放器嵌不进来，
+  所以用"带播放按钮的封面 + 链接"代替。
+- `docs/images/mv-cover.jpg`：MV 的 B 站封面缩到 1280×720，右下角加了播放按钮（JPEG，约 260 KB）。
+
 ### 2026-07-30 README 加驾驶舱实拍图（之前只有 ASCII 框图，没人知道它长什么样）
 
 **新增 (Added)**：

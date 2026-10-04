@@ -17,6 +17,13 @@ AI 是参谋副官**。
 输入框和语音键。截图取自[演示视频](https://www.youtube.com/playlist?list=PLX4yIrCbhGJs)，所以画面
 里带着英文字幕。*
 
+**主题曲 MV《指挥官，回来》**（点封面去 B 站看，3 分 16 秒）：
+
+[![《指挥官，回来》—— VibeCraft 用嘴打星际项目主题曲 MV，点击在 B 站观看](docs/images/mv-cover.jpg)](https://www.bilibili.com/video/BV1sLHk6UEXg)
+
+*写给操作跟不上、但心还没老的老星际玩家。作词、分镜、剪辑和渲染是 Claude Opus 5.5 做的，作曲演唱是
+Suno V6；里面的游戏画面全部是 VibeCraft 真实对局的实机录像，手机里的驾驶舱也是真实界面。*
+
 > 适合：战略还在线但手不行了的老玩家、想跟老朋友再开几把又不拼操作的人。
 > 不适合：想拼 APM 的天梯玩家、完全没玩过 SC2 的新手。
 
